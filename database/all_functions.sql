@@ -52,6 +52,8 @@ DROP FUNCTION IF EXISTS update_reputation(UUID, DECIMAL, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS get_cooling_items() CASCADE;
 DROP FUNCTION IF EXISTS get_player_cooling(UUID) CASCADE;
 DROP FUNCTION IF EXISTS install_cooling(UUID, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS buy_cooling(UUID, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS buy_rig(UUID, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS get_prepaid_cards() CASCADE;
 DROP FUNCTION IF EXISTS get_player_cards(UUID) CASCADE;
 DROP FUNCTION IF EXISTS buy_prepaid_card(UUID, TEXT) CASCADE;
@@ -426,6 +428,69 @@ BEGIN
 END;
 $$;
 
+-- Comprar rig
+CREATE OR REPLACE FUNCTION buy_rig(p_player_id UUID, p_rig_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_rig rigs%ROWTYPE;
+  v_existing_count INT;
+BEGIN
+  -- Verificar jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Verificar rig
+  SELECT * INTO v_rig FROM rigs WHERE id = p_rig_id;
+  IF v_rig IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
+  END IF;
+
+  -- Verificar que no sea el rig gratuito
+  IF v_rig.base_price <= 0 THEN
+    RETURN json_build_object('success', false, 'error', 'Este rig no está a la venta');
+  END IF;
+
+  -- Verificar si ya lo tiene
+  SELECT COUNT(*) INTO v_existing_count
+  FROM player_rigs
+  WHERE player_id = p_player_id AND rig_id = p_rig_id;
+
+  IF v_existing_count > 0 THEN
+    RETURN json_build_object('success', false, 'error', 'Ya tienes este rig');
+  END IF;
+
+  -- Verificar balance
+  IF v_player.gamecoin_balance < v_rig.base_price THEN
+    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+  END IF;
+
+  -- Descontar GameCoin
+  UPDATE players
+  SET gamecoin_balance = gamecoin_balance - v_rig.base_price
+  WHERE id = p_player_id;
+
+  -- Registrar transacción
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'rig_purchase', -v_rig.base_price, 'gamecoin',
+          'Compra de rig: ' || v_rig.name);
+
+  -- Dar el rig al jugador
+  INSERT INTO player_rigs (player_id, rig_id, condition, is_active, temperature)
+  VALUES (p_player_id, p_rig_id, 100, false, 25);
+
+  RETURN json_build_object(
+    'success', true,
+    'rig', row_to_json(v_rig)
+  );
+END;
+$$;
+
 -- =====================================================
 -- 4. FUNCIONES DE RECURSOS
 -- =====================================================
@@ -700,8 +765,13 @@ BEGIN
     FROM players p
     WHERE EXISTS (SELECT 1 FROM player_rigs pr WHERE pr.player_id = p.id AND pr.is_active = true)
   LOOP
-    -- Calcular consumo total de energía e internet
-    SELECT COALESCE(SUM(r.power_consumption), 0), COALESCE(SUM(r.internet_consumption), 0)
+    -- Calcular consumo total de energía e internet CON PENALIZACIÓN POR TEMPERATURA
+    -- Temperatura alta = más consumo de energía (hasta 50% extra a 100°C)
+    SELECT
+      COALESCE(SUM(
+        r.power_consumption * (1 + GREATEST(0, (pr.temperature - 40)) * 0.0125)
+      ), 0),
+      COALESCE(SUM(r.internet_consumption), 0)
     INTO v_total_power, v_total_internet
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
@@ -824,9 +894,10 @@ BEGIN
   SELECT COALESCE(ns.difficulty, 1000) INTO v_difficulty FROM network_stats ns WHERE ns.id = 'current';
   IF v_difficulty IS NULL THEN v_difficulty := 1000; END IF;
 
-  -- Calcular hashrate total
+  -- Calcular hashrate total (con penalización por temperatura)
+  -- Temperatura > 60°C reduce hashrate progresivamente (hasta -50% a 100°C)
   FOR v_rig IN
-    SELECT pr.player_id, pr.condition, r.hashrate, p.reputation_score
+    SELECT pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
@@ -839,7 +910,19 @@ BEGIN
     ELSE
       v_rep_multiplier := 1;
     END IF;
-    v_effective_hashrate := v_rig.hashrate * (v_rig.condition / 100.0) * v_rep_multiplier;
+
+    -- Penalización por temperatura: reduce hashrate cuando temp > 60°C
+    -- A 60°C: 100% hashrate, a 100°C: 50% hashrate
+    DECLARE
+      v_temp_penalty NUMERIC := 1;
+    BEGIN
+      IF v_rig.temperature > 60 THEN
+        v_temp_penalty := 1 - ((v_rig.temperature - 60) * 0.0125);
+        v_temp_penalty := GREATEST(0.5, v_temp_penalty);  -- Mínimo 50% hashrate
+      END IF;
+      v_effective_hashrate := v_rig.hashrate * (v_rig.condition / 100.0) * v_rep_multiplier * v_temp_penalty;
+    END;
+
     v_network_hashrate := v_network_hashrate + v_effective_hashrate;
   END LOOP;
 
@@ -862,12 +945,12 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Seleccionar ganador
+  -- Seleccionar ganador (con misma penalización por temperatura)
   v_random_pick := random() * v_network_hashrate;
   v_hashrate_sum := 0;
 
   FOR v_rig IN
-    SELECT pr.player_id, pr.condition, r.hashrate, p.reputation_score
+    SELECT pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
@@ -880,7 +963,18 @@ BEGIN
     ELSE
       v_rep_multiplier := 1;
     END IF;
-    v_effective_hashrate := v_rig.hashrate * (v_rig.condition / 100.0) * v_rep_multiplier;
+
+    -- Misma penalización por temperatura
+    DECLARE
+      v_temp_penalty NUMERIC := 1;
+    BEGIN
+      IF v_rig.temperature > 60 THEN
+        v_temp_penalty := 1 - ((v_rig.temperature - 60) * 0.0125);
+        v_temp_penalty := GREATEST(0.5, v_temp_penalty);
+      END IF;
+      v_effective_hashrate := v_rig.hashrate * (v_rig.condition / 100.0) * v_rep_multiplier * v_temp_penalty;
+    END;
+
     v_hashrate_sum := v_hashrate_sum + v_effective_hashrate;
 
     IF v_hashrate_sum >= v_random_pick THEN
@@ -1354,6 +1448,17 @@ BEGIN
     'cooling_level', v_new_cooling_level,
     'item', row_to_json(v_cooling)
   );
+END;
+$$;
+
+-- Alias para buy_cooling (llama a install_cooling)
+CREATE OR REPLACE FUNCTION buy_cooling(p_player_id UUID, p_cooling_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN install_cooling(p_player_id, p_cooling_id);
 END;
 $$;
 

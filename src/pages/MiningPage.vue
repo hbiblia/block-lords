@@ -3,9 +3,12 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
 import { getPlayerRigs, getNetworkStats, getRecentBlocks, toggleRig } from '@/utils/api';
+import MarketModal from '@/components/MarketModal.vue';
 
 const authStore = useAuthStore();
 const miningStore = useMiningStore();
+
+const showMarket = ref(false);
 
 const loading = ref(true);
 const rigs = ref<Array<{
@@ -39,17 +42,33 @@ const miningInterval = ref<number | null>(null);
 const lastBlockFound = ref<any>(null);
 const showBlockFound = ref(false);
 
-// Calcular hashrate total del jugador
+// Calcular hashrate base del jugador (sin penalizaciones)
 const totalHashrate = computed(() => {
   return rigs.value
     .filter(r => r.is_active)
     .reduce((sum, r) => sum + r.rig.hashrate, 0);
 });
 
-// Calcular probabilidad de minar
+// Calcular hashrate efectivo (con penalización por temperatura y condición)
+const effectiveHashrate = computed(() => {
+  return rigs.value
+    .filter(r => r.is_active)
+    .reduce((sum, r) => {
+      const temp = r.temperature ?? 25;
+      const condition = r.condition ?? 100;
+      // Penalización por temperatura: >60°C reduce hashrate (hasta -50% a 100°C)
+      let tempPenalty = 1;
+      if (temp > 60) {
+        tempPenalty = Math.max(0.5, 1 - ((temp - 60) * 0.0125));
+      }
+      return sum + (r.rig.hashrate * (condition / 100) * tempPenalty);
+    }, 0);
+});
+
+// Calcular probabilidad de minar (usa hashrate efectivo)
 const miningChance = computed(() => {
   if (networkStats.value.hashrate === 0) return 0;
-  return (totalHashrate.value / networkStats.value.hashrate) * 100;
+  return (effectiveHashrate.value / networkStats.value.hashrate) * 100;
 });
 
 // Número de rigs activos
@@ -203,6 +222,23 @@ function getTempBarColor(temp: number): string {
   return 'bg-status-success';
 }
 
+function getRigEffectiveHashrate(rig: typeof rigs.value[0]): number {
+  const temp = rig.temperature ?? 25;
+  const condition = rig.condition ?? 100;
+  let tempPenalty = 1;
+  if (temp > 60) {
+    tempPenalty = Math.max(0.5, 1 - ((temp - 60) * 0.0125));
+  }
+  return rig.rig.hashrate * (condition / 100) * tempPenalty;
+}
+
+function getRigPenaltyPercent(rig: typeof rigs.value[0]): number {
+  const effective = getRigEffectiveHashrate(rig);
+  const base = rig.rig.hashrate;
+  if (base === 0) return 0;
+  return Math.round(((base - effective) / base) * 100);
+}
+
 onMounted(() => {
   loadData();
   startMiningSimulation();
@@ -228,10 +264,10 @@ onUnmounted(() => {
         <span class="badge" :class="activeRigsCount > 0 ? 'badge-success' : 'badge-warning'">
           {{ activeRigsCount }} rig{{ activeRigsCount !== 1 ? 's' : '' }} activo{{ activeRigsCount !== 1 ? 's' : '' }}
         </span>
-        <RouterLink to="/market" class="btn-primary flex items-center gap-2">
+        <button @click="showMarket = true" class="btn-primary flex items-center gap-2">
           <span>🛒</span>
           <span>Mercado</span>
-        </RouterLink>
+        </button>
       </div>
     </div>
 
@@ -269,10 +305,19 @@ onUnmounted(() => {
             </div>
 
             <div class="text-right">
-              <div class="text-3xl font-bold font-mono" :class="totalHashrate > 0 ? 'gradient-text' : 'text-text-muted'">
-                {{ totalHashrate.toLocaleString() }}
+              <div class="text-3xl font-bold font-mono" :class="effectiveHashrate > 0 ? 'gradient-text' : 'text-text-muted'">
+                {{ Math.round(effectiveHashrate).toLocaleString() }}
               </div>
-              <div class="text-xs text-text-muted">H/s Total</div>
+              <div class="text-xs text-text-muted flex items-center justify-end gap-1">
+                <span>H/s Efectivo</span>
+                <span
+                  v-if="effectiveHashrate < totalHashrate"
+                  class="text-status-danger"
+                  :title="`Base: ${totalHashrate.toLocaleString()} H/s - Reducido por temperatura/condición`"
+                >
+                  (↓{{ Math.round(((totalHashrate - effectiveHashrate) / totalHashrate) * 100) }}%)
+                </span>
+              </div>
             </div>
           </div>
 
@@ -341,9 +386,9 @@ onUnmounted(() => {
           <div v-if="rigs.length === 0" class="card text-center py-12">
             <div class="text-4xl mb-4">🛒</div>
             <p class="text-text-muted mb-4">No tienes rigs. Compra uno en el mercado.</p>
-            <RouterLink to="/market" class="btn-primary">
+            <button @click="showMarket = true" class="btn-primary">
               Ir al Mercado
-            </RouterLink>
+            </button>
           </div>
 
           <div v-else class="grid sm:grid-cols-2 gap-4">
@@ -388,9 +433,18 @@ onUnmounted(() => {
                       class="text-3xl font-bold font-mono"
                       :class="playerRig.is_active ? 'text-white' : 'text-text-muted'"
                     >
-                      {{ playerRig.rig.hashrate.toLocaleString() }}
+                      {{ Math.round(getRigEffectiveHashrate(playerRig)).toLocaleString() }}
                     </div>
-                    <div class="text-xs text-text-muted">HASHRATE (H/s)</div>
+                    <div class="text-xs text-text-muted flex items-center justify-center gap-1">
+                      <span>HASHRATE (H/s)</span>
+                      <span
+                        v-if="getRigPenaltyPercent(playerRig) > 0"
+                        class="text-status-danger"
+                        :title="`Base: ${playerRig.rig.hashrate.toLocaleString()} H/s`"
+                      >
+                        ↓{{ getRigPenaltyPercent(playerRig) }}%
+                      </span>
+                    </div>
                   </div>
 
                   <!-- Mini progress when active -->
@@ -542,6 +596,13 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Market Modal -->
+    <MarketModal
+      :show="showMarket"
+      @close="showMarket = false"
+      @purchased="loadData"
+    />
   </div>
 </template>
 
