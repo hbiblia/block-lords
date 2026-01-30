@@ -7,8 +7,14 @@ export const useRealtimeStore = defineStore('realtime', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const channels = ref<Map<string, any>>(new Map());
   const connected = ref(false);
+  const wasConnected = ref(false); // Track if we were ever connected
+  const reconnecting = ref(false);
+  const reconnectAttempts = ref(0);
+  const maxReconnectAttempts = 5;
+  let reconnectTimeout: number | null = null;
 
   const isConnected = computed(() => connected.value);
+  const showDisconnectedModal = computed(() => wasConnected.value && !connected.value && !reconnecting.value);
 
   function connect() {
     const authStore = useAuthStore();
@@ -21,6 +27,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
     // Suscribirse a cambios en el jugador actual
     subscribeToPlayer(authStore.player.id);
 
+    // Suscribirse a cambios en los rigs del jugador
+    subscribeToPlayerRigs(authStore.player.id);
+
+    // Suscribirse a cambios en el cooling de rigs
+    subscribeToRigCooling(authStore.player.id);
+
     // Suscribirse a nuevos bloques
     subscribeToBlocks();
 
@@ -28,6 +40,40 @@ export const useRealtimeStore = defineStore('realtime', () => {
     subscribeToNetworkStats();
 
     connected.value = true;
+    wasConnected.value = true;
+    reconnecting.value = false;
+    reconnectAttempts.value = 0;
+  }
+
+  function handleChannelError() {
+    connected.value = false;
+
+    if (reconnectAttempts.value < maxReconnectAttempts) {
+      reconnecting.value = true;
+      reconnectAttempts.value++;
+
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.value), 30000);
+      console.log(`Intentando reconectar en ${delay / 1000}s (intento ${reconnectAttempts.value}/${maxReconnectAttempts})`);
+
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+
+      reconnectTimeout = window.setTimeout(() => {
+        disconnect();
+        connect();
+      }, delay);
+    } else {
+      reconnecting.value = false;
+      console.error('Se agotaron los intentos de reconexión');
+    }
+  }
+
+  function manualReconnect() {
+    reconnectAttempts.value = 0;
+    reconnecting.value = true;
+    disconnect();
+    connect();
   }
 
   function disconnect() {
@@ -57,6 +103,14 @@ export const useRealtimeStore = defineStore('realtime', () => {
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log('Suscrito a cambios del jugador');
+          connected.value = true;
+          reconnecting.value = false;
+          reconnectAttempts.value = 0;
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Error en canal del jugador:', status);
+          handleChannelError();
+        } else if (status === 'CLOSED') {
+          connected.value = false;
         }
       });
 
@@ -122,6 +176,63 @@ export const useRealtimeStore = defineStore('realtime', () => {
     channels.value.set('network_stats', channel);
   }
 
+  function subscribeToPlayerRigs(playerId: string) {
+    const channel = supabase
+      .channel(`player_rigs:${playerId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'player_rigs',
+          filter: `player_id=eq.${playerId}`,
+        },
+        (payload) => {
+          console.log('Rig actualizado:', payload.eventType);
+          window.dispatchEvent(
+            new CustomEvent('player-rigs-updated', {
+              detail: payload,
+            })
+          );
+        }
+      )
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Suscrito a cambios de rigs');
+        }
+      });
+
+    channels.value.set(`player_rigs:${playerId}`, channel);
+  }
+
+  function subscribeToRigCooling(playerId: string) {
+    const channel = supabase
+      .channel(`rig_cooling:${playerId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'rig_cooling',
+        },
+        (payload) => {
+          console.log('Cooling actualizado:', payload.eventType);
+          window.dispatchEvent(
+            new CustomEvent('rig-cooling-updated', {
+              detail: payload,
+            })
+          );
+        }
+      )
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Suscrito a cambios de cooling');
+        }
+      });
+
+    channels.value.set(`rig_cooling:${playerId}`, channel);
+  }
+
   function subscribeToMarketOrders(itemType: string) {
     const channelName = `market:${itemType}`;
 
@@ -164,8 +275,11 @@ export const useRealtimeStore = defineStore('realtime', () => {
     channels,
     connected,
     isConnected,
+    showDisconnectedModal,
+    reconnecting,
     connect,
     disconnect,
+    manualReconnect,
     subscribeToMarketOrders,
     unsubscribeFromMarketOrders,
   };

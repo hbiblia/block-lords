@@ -85,11 +85,18 @@ export const useAuthStore = defineStore('auth', () => {
         player.value = result.player;
         needsUsername.value = false;
 
-        // Marcar como online
-        await supabase
-          .from('players')
-          .update({ is_online: true, last_seen: new Date().toISOString() })
-          .eq('id', user.value.id);
+        // Marcar como online (no bloquear, ejecutar en background)
+        const userId = user.value.id;
+        (async () => {
+          try {
+            await supabase
+              .from('players')
+              .update({ is_online: true, last_seen: new Date().toISOString() })
+              .eq('id', userId);
+          } catch (e) {
+            console.warn('Error updating online status:', e);
+          }
+        })();
       } else {
         // Usuario de OAuth sin perfil, necesita crear username
         needsUsername.value = true;
@@ -162,11 +169,19 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true;
 
     try {
+      // Update offline status in background (don't block logout)
       if (user.value) {
-        await supabase
-          .from('players')
-          .update({ is_online: false, last_seen: new Date().toISOString() })
-          .eq('id', user.value.id);
+        const userId = user.value.id;
+        (async () => {
+          try {
+            await supabase
+              .from('players')
+              .update({ is_online: false, last_seen: new Date().toISOString() })
+              .eq('id', userId);
+          } catch (e) {
+            console.warn('Error updating offline status:', e);
+          }
+        })();
       }
 
       await supabase.auth.signOut();

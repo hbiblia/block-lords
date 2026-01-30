@@ -95,11 +95,11 @@ async function loadData() {
     networkStats.value = networkData;
     recentBlocks.value = blocksData ?? [];
 
-    // Load cooling data for each rig
-    await loadRigsCooling();
-
     // Sync active rigs to mining store for resource consumption display
     syncMiningStore();
+
+    // Load cooling data in background (don't block initial render)
+    loadRigsCooling();
   } catch (e) {
     console.error('Error loading mining data:', e);
   } finally {
@@ -168,6 +168,7 @@ function stopMiningSimulation() {
 
 async function handleToggleRig(rigId: string) {
   const rig = rigs.value.find(r => r.id === rigId);
+
   if (rig) {
     rig.is_active = !rig.is_active;
     // Immediately update mining store for visual feedback
@@ -178,16 +179,15 @@ async function handleToggleRig(rigId: string) {
     const result = await toggleRig(authStore.player!.id, rigId);
 
     if (!result.success) {
-      if (rig) rig.is_active = !rig.is_active;
-      // Revert mining store on failure
-      syncMiningStore();
+      // Revert and resync from server to ensure UI matches DB state
+      await loadData();
       alert(result.error ?? 'Error al cambiar estado del rig');
     }
   } catch (e) {
-    if (rig) rig.is_active = !rig.is_active;
-    // Revert mining store on error
-    syncMiningStore();
+    // Revert and resync from server on error
+    await loadData();
     console.error('Error toggling rig:', e);
+    alert('Error de conexión al cambiar estado del rig');
   }
 }
 
@@ -331,12 +331,24 @@ function handleInventoryUsed() {
   loadData();
 }
 
+function handleRigsUpdated() {
+  // Refresh rig data when realtime update is received
+  loadData();
+}
+
+function handleCoolingUpdated() {
+  // Refresh cooling data when realtime update is received
+  loadRigsCooling();
+}
+
 onMounted(() => {
   loadData();
   startMiningSimulation();
   startUptimeTimer();
   window.addEventListener('block-mined', handleBlockMined as EventListener);
   window.addEventListener('inventory-used', handleInventoryUsed as EventListener);
+  window.addEventListener('player-rigs-updated', handleRigsUpdated as EventListener);
+  window.addEventListener('rig-cooling-updated', handleCoolingUpdated as EventListener);
 });
 
 onUnmounted(() => {
@@ -344,6 +356,8 @@ onUnmounted(() => {
   stopUptimeTimer();
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
   window.removeEventListener('inventory-used', handleInventoryUsed as EventListener);
+  window.removeEventListener('player-rigs-updated', handleRigsUpdated as EventListener);
+  window.removeEventListener('rig-cooling-updated', handleCoolingUpdated as EventListener);
   // Clear mining store when leaving page
   miningStore.clearRigs();
 });
@@ -632,18 +646,15 @@ onUnmounted(() => {
                 <div class="flex gap-2">
                   <button
                     @click="handleToggleRig(playerRig.id)"
-                    class="flex-1 py-2.5 rounded-xl font-medium transition-all"
-                    :class="playerRig.is_active
-                      ? 'bg-status-danger/20 text-status-danger hover:bg-status-danger/30'
-                      : 'bg-status-success/20 text-status-success hover:bg-status-success/30'"
+                    :disabled="playerRig.condition <= 0"
+                    class="flex-1 py-2.5 rounded-xl font-medium transition-all disabled:opacity-50"
+                    :class="playerRig.condition <= 0
+                      ? 'bg-status-danger/20 text-status-danger cursor-not-allowed'
+                      : playerRig.is_active
+                        ? 'bg-status-danger/20 text-status-danger hover:bg-status-danger/30'
+                        : 'bg-status-success/20 text-status-success hover:bg-status-success/30'"
                   >
-                    {{ playerRig.is_active ? '⏹ Detener' : '▶ Iniciar' }}
-                  </button>
-                  <button
-                    v-if="playerRig.condition < 100"
-                    class="px-4 py-2.5 rounded-xl bg-status-warning/20 text-status-warning hover:bg-status-warning/30 transition-all"
-                  >
-                    🔧
+                    {{ playerRig.condition <= 0 ? '🔧 Reparar en Inventario' : (playerRig.is_active ? '⏹ Detener' : '▶ Iniciar') }}
                   </button>
                 </div>
               </div>

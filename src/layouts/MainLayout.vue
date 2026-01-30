@@ -6,6 +6,7 @@ import NavBar from '@/components/NavBar.vue';
 import PrepaidCardsPanel from '@/components/PrepaidCardsPanel.vue';
 import InventoryModal from '@/components/InventoryModal.vue';
 import ExchangeModal from '@/components/ExchangeModal.vue';
+import ConnectionLostModal from '@/components/ConnectionLostModal.vue';
 
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
@@ -65,6 +66,9 @@ function handleExchanged() {
       @close="showExchange = false"
       @exchanged="handleExchanged"
     />
+
+    <!-- Connection Lost Modal -->
+    <ConnectionLostModal />
 
     <!-- Main Content -->
     <main class="flex-1 container mx-auto px-4 py-6 mt-16">
