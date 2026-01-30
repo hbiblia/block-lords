@@ -32,6 +32,16 @@ const loading = ref(false);
 const buying = ref(false);
 const activeTab = ref<'rigs' | 'cooling' | 'cards'>('rigs');
 
+// Confirmation dialog state
+const showConfirm = ref(false);
+const confirmAction = ref<{
+  type: 'rig' | 'cooling' | 'card';
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+} | null>(null);
+
 // Catálogos
 const availableRigs = ref<Array<{
   id: string;
@@ -155,6 +165,17 @@ async function loadData() {
   }
 }
 
+function requestBuyRig(rig: typeof availableRigs.value[0]) {
+  confirmAction.value = {
+    type: 'rig',
+    id: rig.id,
+    name: rig.name,
+    price: rig.base_price,
+    description: `${rig.hashrate.toLocaleString()} H/s - ${rig.tier}`,
+  };
+  showConfirm.value = true;
+}
+
 async function buyRig(rigId: string) {
   if (!authStore.player) return;
   buying.value = true;
@@ -180,6 +201,17 @@ async function buyRig(rigId: string) {
   } finally {
     buying.value = false;
   }
+}
+
+function requestBuyCooling(item: typeof coolingItems.value[0]) {
+  confirmAction.value = {
+    type: 'cooling',
+    id: item.id,
+    name: item.name,
+    price: item.base_price,
+    description: `-${item.cooling_power}°C refrigeracion - ${item.tier}`,
+  };
+  showConfirm.value = true;
 }
 
 async function buyCooling(coolingId: string) {
@@ -209,6 +241,17 @@ async function buyCooling(coolingId: string) {
   }
 }
 
+function requestBuyCard(card: typeof prepaidCards.value[0]) {
+  confirmAction.value = {
+    type: 'card',
+    id: card.id,
+    name: card.name,
+    price: card.base_price,
+    description: `+${card.amount}% ${card.card_type === 'energy' ? 'Energia' : 'Internet'}`,
+  };
+  showConfirm.value = true;
+}
+
 async function buyCard(cardId: string) {
   if (!authStore.player) return;
   buying.value = true;
@@ -234,6 +277,28 @@ async function buyCard(cardId: string) {
   } finally {
     buying.value = false;
   }
+}
+
+async function confirmPurchase() {
+  if (!confirmAction.value) return;
+
+  const { type, id } = confirmAction.value;
+  showConfirm.value = false;
+
+  if (type === 'rig') {
+    await buyRig(id);
+  } else if (type === 'cooling') {
+    await buyCooling(id);
+  } else if (type === 'card') {
+    await buyCard(id);
+  }
+
+  confirmAction.value = null;
+}
+
+function cancelPurchase() {
+  showConfirm.value = false;
+  confirmAction.value = null;
 }
 
 onMounted(() => {
@@ -375,7 +440,7 @@ watch(() => props.show, (newVal) => {
                 </div>
 
                 <button
-                  @click="buyRig(rig.id)"
+                  @click="requestBuyRig(rig)"
                   class="w-full py-2.5 rounded-lg font-medium transition-all"
                   :class="balance >= rig.base_price
                     ? 'bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30'
@@ -440,7 +505,7 @@ watch(() => props.show, (newVal) => {
                 </button>
                 <button
                   v-else
-                  @click="buyCooling(item.id)"
+                  @click="requestBuyCooling(item)"
                   class="w-full py-2.5 rounded-lg font-medium transition-all"
                   :class="balance >= item.base_price
                     ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
@@ -476,7 +541,7 @@ watch(() => props.show, (newVal) => {
                   </div>
                   <p class="text-xs text-text-muted mb-3">{{ card.description }}</p>
                   <button
-                    @click="buyCard(card.id)"
+                    @click="requestBuyCard(card)"
                     class="w-full py-2 rounded-lg font-medium transition-all"
                     :class="balance >= card.base_price
                       ? 'bg-status-warning/20 text-status-warning hover:bg-status-warning/30'
@@ -506,7 +571,7 @@ watch(() => props.show, (newVal) => {
                   </div>
                   <p class="text-xs text-text-muted mb-3">{{ card.description }}</p>
                   <button
-                    @click="buyCard(card.id)"
+                    @click="requestBuyCard(card)"
                     class="w-full py-2 rounded-lg font-medium transition-all"
                     :class="balance >= card.base_price
                       ? 'bg-accent-tertiary/20 text-accent-tertiary hover:bg-accent-tertiary/30'
@@ -518,6 +583,57 @@ watch(() => props.show, (newVal) => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Confirmation Dialog -->
+      <div
+        v-if="showConfirm && confirmAction"
+        class="absolute inset-0 flex items-center justify-center bg-black/50 z-10"
+      >
+        <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
+          <div class="text-center mb-4">
+            <div class="text-4xl mb-3">
+              {{ confirmAction.type === 'rig' ? '⛏️' : confirmAction.type === 'cooling' ? '❄️' : '💳' }}
+            </div>
+            <h3 class="text-lg font-bold mb-1">Confirmar Compra</h3>
+            <p class="text-text-muted text-sm">¿Deseas comprar este item?</p>
+          </div>
+
+          <div class="bg-bg-primary rounded-lg p-4 mb-4">
+            <div class="font-medium text-white mb-1">{{ confirmAction.name }}</div>
+            <div class="text-xs text-text-muted mb-2">{{ confirmAction.description }}</div>
+            <div class="flex items-center justify-between">
+              <span class="text-text-muted text-sm">Precio:</span>
+              <span class="font-bold text-status-warning">{{ confirmAction.price.toLocaleString() }} 🪙</span>
+            </div>
+            <div class="flex items-center justify-between mt-1">
+              <span class="text-text-muted text-sm">Tu balance:</span>
+              <span class="font-mono" :class="balance >= confirmAction.price ? 'text-status-success' : 'text-status-danger'">
+                {{ balance.toFixed(0) }} 🪙
+              </span>
+            </div>
+            <div class="flex items-center justify-between mt-1 pt-2 border-t border-border/50">
+              <span class="text-text-muted text-sm">Despues:</span>
+              <span class="font-mono text-white">{{ (balance - confirmAction.price).toFixed(0) }} 🪙</span>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <button
+              @click="cancelPurchase"
+              class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              @click="confirmPurchase"
+              :disabled="buying"
+              class="flex-1 py-2.5 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/80 transition-colors disabled:opacity-50"
+            >
+              {{ buying ? 'Comprando...' : 'Confirmar' }}
+            </button>
           </div>
         </div>
       </div>

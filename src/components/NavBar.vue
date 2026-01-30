@@ -21,17 +21,23 @@ const username = computed(() => authStore.player?.username ?? 'Jugador');
 // Resource values
 const energy = computed(() => authStore.player?.energy ?? 100);
 const internet = computed(() => authStore.player?.internet ?? 100);
+const maxEnergy = computed(() => authStore.player?.max_energy ?? 100);
+const maxInternet = computed(() => authStore.player?.max_internet ?? 100);
 
-// Status colors
+// Percentage for bar display
+const energyPercent = computed(() => maxEnergy.value > 0 ? (energy.value / maxEnergy.value) * 100 : 0);
+const internetPercent = computed(() => maxInternet.value > 0 ? (internet.value / maxInternet.value) * 100 : 0);
+
+// Status colors (based on percentage of max)
 const energyStatus = computed(() => {
-  if (energy.value <= 10) return 'critical';
-  if (energy.value <= 25) return 'warning';
+  if (energyPercent.value <= 10) return 'critical';
+  if (energyPercent.value <= 25) return 'warning';
   return 'normal';
 });
 
 const internetStatus = computed(() => {
-  if (internet.value <= 10) return 'critical';
-  if (internet.value <= 25) return 'warning';
+  if (internetPercent.value <= 10) return 'critical';
+  if (internetPercent.value <= 25) return 'warning';
   return 'normal';
 });
 
@@ -70,7 +76,7 @@ async function handleLogout() {
             </div>
 
             <!-- Energy Bar -->
-            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg min-w-[120px]">
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg min-w-[140px]">
               <span :class="{ 'animate-pulse': miningStore.isMining }">⚡</span>
               <div class="flex-1">
                 <div
@@ -87,21 +93,21 @@ async function handleLogout() {
                       'bg-status-danger': energyStatus === 'critical',
                       'bg-gradient-to-r from-status-warning to-yellow-400': energyStatus !== 'critical'
                     }"
-                    :style="{ width: `${energy}%` }"
+                    :style="{ width: `${energyPercent}%` }"
                   ></div>
                 </div>
               </div>
               <span
-                class="text-xs font-mono font-bold w-10 text-right"
+                class="text-xs font-mono font-bold text-right"
                 :class="{
                   'text-status-danger animate-pulse': energyStatus === 'critical',
                   'text-status-warning': energyStatus !== 'critical'
                 }"
-              >{{ energy.toFixed(0) }}%</span>
+              >{{ energy.toFixed(0) }}/{{ maxEnergy.toFixed(0) }}</span>
             </div>
 
             <!-- Internet Bar -->
-            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg min-w-[120px]">
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg min-w-[140px]">
               <span :class="{ 'animate-pulse': miningStore.isMining }">📡</span>
               <div class="flex-1">
                 <div
@@ -118,17 +124,17 @@ async function handleLogout() {
                       'bg-status-danger': internetStatus === 'critical',
                       'bg-gradient-to-r from-accent-tertiary to-cyan-400': internetStatus !== 'critical'
                     }"
-                    :style="{ width: `${internet}%` }"
+                    :style="{ width: `${internetPercent}%` }"
                   ></div>
                 </div>
               </div>
               <span
-                class="text-xs font-mono font-bold w-10 text-right"
+                class="text-xs font-mono font-bold text-right"
                 :class="{
                   'text-status-danger animate-pulse': internetStatus === 'critical',
                   'text-accent-tertiary': internetStatus !== 'critical'
                 }"
-              >{{ internet.toFixed(0) }}%</span>
+              >{{ internet.toFixed(0) }}/{{ maxInternet.toFixed(0) }}</span>
             </div>
 
             <!-- Recharge Button -->

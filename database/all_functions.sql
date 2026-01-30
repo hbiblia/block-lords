@@ -41,6 +41,10 @@ ALTER TABLE cooling_items ADD COLUMN IF NOT EXISTS energy_cost NUMERIC DEFAULT 0
 -- Agregar columna para rastrear cuando se encendió el rig
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
 
+-- Agregar columnas de capacidad máxima de recursos
+ALTER TABLE players ADD COLUMN IF NOT EXISTS max_energy NUMERIC DEFAULT 100;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS max_internet NUMERIC DEFAULT 100;
+
 -- =====================================================
 -- ELIMINAR FUNCIONES EXISTENTES
 -- =====================================================
@@ -556,7 +560,7 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_cost);
   END IF;
 
-  v_new_energy := LEAST(100, v_player.energy + p_amount);
+  v_new_energy := LEAST(v_player.max_energy, v_player.energy + p_amount);
 
   UPDATE players
   SET gamecoin_balance = gamecoin_balance - v_cost, energy = v_new_energy
@@ -591,7 +595,7 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_cost);
   END IF;
 
-  v_new_internet := LEAST(100, v_player.internet + p_amount);
+  v_new_internet := LEAST(v_player.max_internet, v_player.internet + p_amount);
 
   UPDATE players
   SET gamecoin_balance = gamecoin_balance - v_cost, internet = v_new_internet
@@ -836,17 +840,29 @@ BEGIN
 
       -- Calcular aumento de temperatura basado en consumo de energía
       -- Más consumo = más calor generado
-      v_temp_increase := v_rig.power_consumption * 0.8;
-
-      -- La refrigeración del rig reduce el aumento de temperatura
-      v_temp_increase := GREATEST(0, v_temp_increase - v_rig_cooling_power);
+      -- SIN REFRIGERACIÓN: el rig se calienta MUCHO más rápido (3x)
+      IF v_rig_cooling_power <= 0 THEN
+        -- Sin cooling: calentamiento agresivo
+        v_temp_increase := v_rig.power_consumption * 2.5;
+      ELSE
+        -- Con cooling: calentamiento normal menos el poder de refrigeración
+        v_temp_increase := v_rig.power_consumption * 0.8;
+        v_temp_increase := GREATEST(0, v_temp_increase - v_rig_cooling_power);
+      END IF;
 
       -- Calcular nueva temperatura
       v_new_temp := v_rig.temperature + v_temp_increase;
 
       -- Enfriamiento pasivo hacia temperatura ambiente
+      -- Sin refrigeración: enfriamiento pasivo muy reducido
       IF v_new_temp > v_ambient_temp THEN
-        v_new_temp := v_new_temp - (0.5 + (v_rig_cooling_power * 0.2));
+        IF v_rig_cooling_power <= 0 THEN
+          -- Sin cooling: enfriamiento pasivo mínimo (0.2 por tick)
+          v_new_temp := v_new_temp - 0.2;
+        ELSE
+          -- Con cooling: enfriamiento pasivo normal + bonus por refrigeración
+          v_new_temp := v_new_temp - (0.5 + (v_rig_cooling_power * 0.2));
+        END IF;
         v_new_temp := GREATEST(v_ambient_temp, v_new_temp);
       END IF;
 
@@ -1867,10 +1883,10 @@ BEGIN
   -- Obtener datos de la tarjeta
   SELECT * INTO v_card FROM prepaid_cards WHERE id = v_player_card.card_id;
 
-  -- Aplicar recarga según tipo
+  -- Aplicar recarga según tipo (respetando máximo del jugador)
   IF v_card.card_type = 'energy' THEN
     UPDATE players
-    SET energy = LEAST(100, energy + v_card.amount)
+    SET energy = LEAST(max_energy, energy + v_card.amount)
     WHERE id = p_player_id
     RETURNING energy INTO v_new_value;
 
@@ -1879,7 +1895,7 @@ BEGIN
             'Recarga de energía: ' || v_card.name);
   ELSE
     UPDATE players
-    SET internet = LEAST(100, internet + v_card.amount)
+    SET internet = LEAST(max_internet, internet + v_card.amount)
     WHERE id = p_player_id
     RETURNING internet INTO v_new_value;
 

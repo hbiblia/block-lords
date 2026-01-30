@@ -37,6 +37,24 @@ const using = ref(false);
 const activeTab = ref<'rigs' | 'cooling' | 'cards'>('rigs');
 const selectedRigForCooling = ref<string | null>(null);
 
+// Confirmation dialog state
+const showConfirm = ref(false);
+const confirmAction = ref<{
+  type: 'redeem' | 'install' | 'toggle';
+  data: {
+    rigId?: string;
+    rigName?: string;
+    coolingId?: string;
+    coolingName?: string;
+    coolingPower?: number;
+    cardCode?: string;
+    cardName?: string;
+    cardType?: 'energy' | 'internet';
+    cardAmount?: number;
+    isActive?: boolean;
+  };
+} | null>(null);
+
 interface InstalledCoolingItem {
   id: string;
   durability: number;
@@ -111,6 +129,20 @@ async function loadInventory() {
   }
 }
 
+function requestInstallCooling(rig: RigItem, cooling: CoolingItem) {
+  confirmAction.value = {
+    type: 'install',
+    data: {
+      rigId: rig.id,
+      rigName: rig.name,
+      coolingId: cooling.id,
+      coolingName: cooling.name,
+      coolingPower: cooling.cooling_power,
+    },
+  };
+  showConfirm.value = true;
+}
+
 async function handleInstallCooling(rigId: string, coolingId: string) {
   if (!authStore.player || using.value) return;
   using.value = true;
@@ -131,6 +163,19 @@ async function handleInstallCooling(rigId: string, coolingId: string) {
   } finally {
     using.value = false;
   }
+}
+
+function requestRedeemCard(card: CardItem) {
+  confirmAction.value = {
+    type: 'redeem',
+    data: {
+      cardCode: card.code,
+      cardName: card.name,
+      cardType: card.card_type,
+      cardAmount: card.amount,
+    },
+  };
+  showConfirm.value = true;
 }
 
 async function handleRedeemCard(code: string) {
@@ -154,6 +199,18 @@ async function handleRedeemCard(code: string) {
   }
 }
 
+function requestToggleRig(rig: RigItem) {
+  confirmAction.value = {
+    type: 'toggle',
+    data: {
+      rigId: rig.id,
+      rigName: rig.name,
+      isActive: rig.is_active,
+    },
+  };
+  showConfirm.value = true;
+}
+
 async function handleToggleRig(rigId: string) {
   if (!authStore.player || using.value) return;
   using.value = true;
@@ -172,6 +229,28 @@ async function handleToggleRig(rigId: string) {
   } finally {
     using.value = false;
   }
+}
+
+async function confirmUse() {
+  if (!confirmAction.value) return;
+
+  const { type, data } = confirmAction.value;
+  showConfirm.value = false;
+
+  if (type === 'install' && data.rigId && data.coolingId) {
+    await handleInstallCooling(data.rigId, data.coolingId);
+  } else if (type === 'redeem' && data.cardCode) {
+    await handleRedeemCard(data.cardCode);
+  } else if (type === 'toggle' && data.rigId) {
+    await handleToggleRig(data.rigId);
+  }
+
+  confirmAction.value = null;
+}
+
+function cancelUse() {
+  showConfirm.value = false;
+  confirmAction.value = null;
 }
 
 function getTierColor(tier: string) {
@@ -449,7 +528,7 @@ onMounted(() => {
                       <button
                         v-for="cooling in coolingItems"
                         :key="cooling.id"
-                        @click="handleInstallCooling(rig.id, cooling.id)"
+                        @click="requestInstallCooling(rig, cooling)"
                         :disabled="using"
                         class="px-3 py-1.5 text-xs rounded-lg bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 transition-all disabled:opacity-50"
                       >
@@ -467,7 +546,7 @@ onMounted(() => {
 
                 <!-- Toggle Button -->
                 <button
-                  @click="handleToggleRig(rig.id)"
+                  @click="requestToggleRig(rig)"
                   :disabled="using || rig.condition <= 0"
                   class="w-full py-2 rounded-lg font-medium transition-all disabled:opacity-50"
                   :class="rig.is_active
@@ -558,7 +637,7 @@ onMounted(() => {
                 </div>
 
                 <button
-                  @click="handleRedeemCard(card.code)"
+                  @click="requestRedeemCard(card)"
                   :disabled="using"
                   class="w-full py-2 rounded-lg font-medium transition-all"
                   :class="card.card_type === 'energy'
@@ -569,6 +648,89 @@ onMounted(() => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Confirmation Dialog -->
+      <div
+        v-if="showConfirm && confirmAction"
+        class="absolute inset-0 flex items-center justify-center bg-black/50 z-10"
+      >
+        <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
+          <div class="text-center mb-4">
+            <div class="text-4xl mb-3">
+              {{ confirmAction.type === 'install' ? '❄️' : confirmAction.type === 'redeem' ? '💳' : '🖥️' }}
+            </div>
+            <h3 class="text-lg font-bold mb-1">
+              {{ confirmAction.type === 'install' ? 'Instalar Refrigeracion' : confirmAction.type === 'redeem' ? 'Canjear Tarjeta' : (confirmAction.data.isActive ? 'Apagar Rig' : 'Encender Rig') }}
+            </h3>
+            <p class="text-text-muted text-sm">¿Estas seguro de realizar esta accion?</p>
+          </div>
+
+          <div class="bg-bg-primary rounded-lg p-4 mb-4">
+            <!-- Install cooling details -->
+            <template v-if="confirmAction.type === 'install'">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Rig:</span>
+                <span class="font-medium text-white">{{ confirmAction.data.rigName }}</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Refrigeracion:</span>
+                <span class="font-medium text-cyan-400">{{ confirmAction.data.coolingName }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-text-muted text-sm">Poder:</span>
+                <span class="font-bold text-cyan-400">+{{ confirmAction.data.coolingPower }}</span>
+              </div>
+            </template>
+
+            <!-- Redeem card details -->
+            <template v-else-if="confirmAction.type === 'redeem'">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Tarjeta:</span>
+                <span class="font-medium text-white">{{ confirmAction.data.cardName }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-text-muted text-sm">Recarga:</span>
+                <span class="font-bold" :class="confirmAction.data.cardType === 'energy' ? 'text-status-warning' : 'text-accent-tertiary'">
+                  +{{ confirmAction.data.cardAmount }}% {{ confirmAction.data.cardType === 'energy' ? 'Energia' : 'Internet' }}
+                </span>
+              </div>
+            </template>
+
+            <!-- Toggle rig details -->
+            <template v-else-if="confirmAction.type === 'toggle'">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Rig:</span>
+                <span class="font-medium text-white">{{ confirmAction.data.rigName }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-text-muted text-sm">Accion:</span>
+                <span class="font-bold" :class="confirmAction.data.isActive ? 'text-status-danger' : 'text-status-success'">
+                  {{ confirmAction.data.isActive ? 'Apagar mineria' : 'Iniciar mineria' }}
+                </span>
+              </div>
+            </template>
+          </div>
+
+          <div class="flex gap-3">
+            <button
+              @click="cancelUse"
+              class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              @click="confirmUse"
+              :disabled="using"
+              class="flex-1 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+              :class="confirmAction.type === 'toggle' && confirmAction.data.isActive
+                ? 'bg-status-danger text-white hover:bg-status-danger/80'
+                : 'bg-accent-primary text-white hover:bg-accent-primary/80'"
+            >
+              {{ using ? 'Procesando...' : 'Confirmar' }}
+            </button>
           </div>
         </div>
       </div>

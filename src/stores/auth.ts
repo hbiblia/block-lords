@@ -14,6 +14,8 @@ interface Player {
   crypto_balance: number;
   energy: number;
   internet: number;
+  max_energy: number;
+  max_internet: number;
   reputation_score: number;
   region: string;
 }
