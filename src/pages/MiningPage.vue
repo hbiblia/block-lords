@@ -16,6 +16,7 @@ const rigs = ref<Array<{
   is_active: boolean;
   condition: number;
   temperature: number;
+  activated_at: string | null;
   rig: {
     id: string;
     name: string;
@@ -239,14 +240,57 @@ function getRigPenaltyPercent(rig: typeof rigs.value[0]): number {
   return Math.round(((base - effective) / base) * 100);
 }
 
+function formatUptime(activatedAt: string | null): string {
+  if (!activatedAt) return '0s';
+
+  const start = new Date(activatedAt).getTime();
+  const now = Date.now();
+  const diff = Math.max(0, now - start);
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) {
+    return `${days}d ${hours % 24}h`;
+  } else if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  } else if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`;
+  } else {
+    return `${seconds}s`;
+  }
+}
+
+// Reactive uptime - update every second
+const uptimeKey = ref(0);
+let uptimeInterval: number | null = null;
+
+function startUptimeTimer() {
+  if (uptimeInterval) return;
+  uptimeInterval = window.setInterval(() => {
+    uptimeKey.value++;
+  }, 1000);
+}
+
+function stopUptimeTimer() {
+  if (uptimeInterval) {
+    clearInterval(uptimeInterval);
+    uptimeInterval = null;
+  }
+}
+
 onMounted(() => {
   loadData();
   startMiningSimulation();
+  startUptimeTimer();
   window.addEventListener('block-mined', handleBlockMined as EventListener);
 });
 
 onUnmounted(() => {
   stopMiningSimulation();
+  stopUptimeTimer();
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
   // Clear mining store when leaving page
   miningStore.clearRigs();
@@ -430,20 +474,24 @@ onUnmounted(() => {
                 <div class="bg-bg-primary/50 rounded-xl p-4 mb-4">
                   <div class="text-center">
                     <div
-                      class="text-3xl font-bold font-mono"
+                      class="text-2xl font-bold font-mono flex items-baseline justify-center gap-1"
                       :class="playerRig.is_active ? 'text-white' : 'text-text-muted'"
+                      :key="uptimeKey"
                     >
-                      {{ Math.round(getRigEffectiveHashrate(playerRig)).toLocaleString() }}
-                    </div>
-                    <div class="text-xs text-text-muted flex items-center justify-center gap-1">
-                      <span>HASHRATE (H/s)</span>
-                      <span
-                        v-if="getRigPenaltyPercent(playerRig) > 0"
-                        class="text-status-danger"
-                        :title="`Base: ${playerRig.rig.hashrate.toLocaleString()} H/s`"
-                      >
-                        ↓{{ getRigPenaltyPercent(playerRig) }}%
+                      <span :class="getRigPenaltyPercent(playerRig) > 0 ? 'text-status-warning' : ''">
+                        {{ Math.round(getRigEffectiveHashrate(playerRig)).toLocaleString() }}
                       </span>
+                      <span class="text-text-muted text-lg">/</span>
+                      <span class="text-text-muted text-lg">{{ playerRig.rig.hashrate.toLocaleString() }}</span>
+                    </div>
+                    <div class="text-xs text-text-muted">HASHRATE (H/s)</div>
+                  </div>
+
+                  <!-- Uptime display when active -->
+                  <div v-if="playerRig.is_active && playerRig.activated_at" class="mt-3 text-center" :key="uptimeKey">
+                    <div class="text-xs text-text-muted mb-1">Tiempo encendido</div>
+                    <div class="text-sm font-mono text-accent-primary">
+                      ⏱️ {{ formatUptime(playerRig.activated_at) }}
                     </div>
                   </div>
 
@@ -580,8 +628,12 @@ onUnmounted(() => {
             </h3>
             <div class="space-y-3">
               <div class="flex justify-between items-center">
-                <span class="text-text-muted">Hashrate Total</span>
-                <span class="font-mono font-medium">{{ totalHashrate.toLocaleString() }} H/s</span>
+                <span class="text-text-muted">Hashrate</span>
+                <span class="font-mono font-medium">
+                  <span :class="effectiveHashrate < totalHashrate ? 'text-status-warning' : ''">{{ Math.round(effectiveHashrate).toLocaleString() }}</span>
+                  <span class="text-text-muted">/{{ totalHashrate.toLocaleString() }}</span>
+                  <span class="text-xs text-text-muted ml-1">H/s</span>
+                </span>
               </div>
               <div class="flex justify-between items-center">
                 <span class="text-text-muted">Rigs Activos</span>

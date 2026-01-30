@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { supabase } from '@/utils/supabase';
 
@@ -13,6 +13,20 @@ const emit = defineEmits<{
   close: [];
   purchased: [];
 }>();
+
+// Bloquear scroll del body cuando el modal está abierto
+watch(() => props.show, (isOpen) => {
+  if (isOpen) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+});
+
+// Limpiar al desmontar
+onUnmounted(() => {
+  document.body.style.overflow = '';
+});
 
 const loading = ref(false);
 const buying = ref(false);
@@ -52,8 +66,10 @@ const prepaidCards = ref<Array<{
 
 // Rigs que ya tiene el jugador
 const playerRigIds = ref<string[]>([]);
-// Cooling que ya tiene el jugador
+// Cooling que ya tiene el jugador (instalado)
 const playerCoolingIds = ref<string[]>([]);
+// Cooling en inventario (comprado pero no instalado)
+const inventoryCoolingIds = ref<string[]>([]);
 
 const balance = computed(() => authStore.player?.gamecoin_balance ?? 0);
 
@@ -117,11 +133,20 @@ async function loadData() {
         .eq('player_id', authStore.player.id);
       playerRigIds.value = (playerRigs ?? []).map(r => r.rig_id);
 
+      // Cooling instalado
       const { data: playerCooling } = await supabase
         .from('player_cooling')
-        .select('cooling_id')
+        .select('cooling_item_id')
         .eq('player_id', authStore.player.id);
-      playerCoolingIds.value = (playerCooling ?? []).map(c => c.cooling_id);
+      playerCoolingIds.value = (playerCooling ?? []).map(c => c.cooling_item_id);
+
+      // Cooling en inventario
+      const { data: inventoryCooling } = await supabase
+        .from('player_inventory')
+        .select('item_id')
+        .eq('player_id', authStore.player.id)
+        .eq('item_type', 'cooling');
+      inventoryCoolingIds.value = (inventoryCooling ?? []).map(c => c.item_id);
     }
   } catch (e) {
     console.error('Error loading market data:', e);
@@ -366,7 +391,7 @@ watch(() => props.show, (newVal) => {
           <!-- Cooling Tab -->
           <div v-else-if="activeTab === 'cooling'" class="space-y-4">
             <p class="text-sm text-text-muted mb-4">
-              La refrigeración reduce la temperatura de tus rigs, mejorando su eficiencia y reduciendo el consumo de energía.
+              La refrigeración reduce la temperatura de tus rigs. Los items comprados van a tu <span class="text-accent-primary">inventario</span> donde puedes instalarlos.
             </p>
 
             <div class="grid sm:grid-cols-2 gap-4">
@@ -407,6 +432,13 @@ watch(() => props.show, (newVal) => {
                   ✓ Instalado
                 </button>
                 <button
+                  v-else-if="inventoryCoolingIds.includes(item.id)"
+                  class="w-full py-2.5 rounded-lg font-medium bg-accent-primary/20 text-accent-primary cursor-default"
+                  disabled
+                >
+                  🎒 En inventario
+                </button>
+                <button
                   v-else
                   @click="buyCooling(item.id)"
                   class="w-full py-2.5 rounded-lg font-medium transition-all"
@@ -424,7 +456,7 @@ watch(() => props.show, (newVal) => {
           <!-- Cards Tab -->
           <div v-else-if="activeTab === 'cards'" class="space-y-6">
             <p class="text-sm text-text-muted mb-4">
-              Las tarjetas prepago te permiten recargar energía e internet. Después de comprar, ve a "Mis Tarjetas" para canjearlas.
+              Las tarjetas prepago te permiten recargar energía e internet. Después de comprar, ve a tu <span class="text-accent-primary">inventario</span> para canjearlas.
             </p>
 
             <!-- Energy Cards -->

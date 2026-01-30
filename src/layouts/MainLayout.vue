@@ -1,24 +1,31 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
-import { useMiningStore } from '@/stores/mining';
 import NavBar from '@/components/NavBar.vue';
-import ResourceBars from '@/components/ResourceBars.vue';
 import PrepaidCardsPanel from '@/components/PrepaidCardsPanel.vue';
+import InventoryModal from '@/components/InventoryModal.vue';
 
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
-const miningStore = useMiningStore();
 
-const showResourceBars = computed(() => authStore.isAuthenticated);
 const showPrepaidCards = ref(false);
+const showInventory = ref(false);
 
 function handleRecharge() {
   showPrepaidCards.value = true;
 }
 
+function handleOpenInventory() {
+  showInventory.value = true;
+}
+
 function handleCardRedeemed() {
+  // Refrescar datos del jugador
+  authStore.fetchPlayer();
+}
+
+function handleInventoryUsed() {
   // Refrescar datos del jugador
   authStore.fetchPlayer();
 }
@@ -26,19 +33,7 @@ function handleCardRedeemed() {
 
 <template>
   <div class="min-h-screen flex flex-col bg-bg-primary">
-    <NavBar />
-
-    <!-- Resource Bars (solo si está autenticado) -->
-    <div v-if="showResourceBars" class="fixed top-16 left-0 right-0 z-40 glass border-b border-border/30">
-      <div class="container mx-auto px-4 py-3">
-        <ResourceBars
-          :show-consumption="miningStore.isMining"
-          :energy-consumption="miningStore.totalEnergyConsumption"
-          :internet-consumption="miningStore.totalInternetConsumption"
-          @recharge="handleRecharge"
-        />
-      </div>
-    </div>
+    <NavBar @recharge="handleRecharge" @inventory="handleOpenInventory" />
 
     <!-- Prepaid Cards Panel -->
     <PrepaidCardsPanel
@@ -47,8 +42,15 @@ function handleCardRedeemed() {
       @redeemed="handleCardRedeemed"
     />
 
+    <!-- Inventory Modal -->
+    <InventoryModal
+      :show="showInventory"
+      @close="showInventory = false"
+      @used="handleInventoryUsed"
+    />
+
     <!-- Main Content -->
-    <main class="flex-1 container mx-auto px-4 py-6" :class="{ 'mt-32': showResourceBars, 'mt-16': !showResourceBars }">
+    <main class="flex-1 container mx-auto px-4 py-6 mt-16">
       <slot />
     </main>
 

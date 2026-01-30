@@ -8,6 +8,39 @@
 -- Agregar columna blocks_mined si no existe
 ALTER TABLE players ADD COLUMN IF NOT EXISTS blocks_mined INTEGER DEFAULT 0;
 
+-- Crear tabla de inventario si no existe
+CREATE TABLE IF NOT EXISTS player_inventory (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  item_type TEXT NOT NULL, -- 'cooling', 'rig', etc.
+  item_id TEXT NOT NULL,
+  quantity INTEGER DEFAULT 1,
+  purchased_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(player_id, item_type, item_id)
+);
+
+-- Índice para búsquedas
+CREATE INDEX IF NOT EXISTS idx_player_inventory_player ON player_inventory(player_id);
+
+-- Crear tabla de refrigeración de rigs (cooling instalado en rigs específicos)
+CREATE TABLE IF NOT EXISTS rig_cooling (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_rig_id UUID NOT NULL REFERENCES player_rigs(id) ON DELETE CASCADE,
+  cooling_item_id TEXT NOT NULL REFERENCES cooling_items(id),
+  durability NUMERIC DEFAULT 100, -- 0-100, se consume con uso
+  installed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(player_rig_id, cooling_item_id)
+);
+
+-- Índice para búsquedas
+CREATE INDEX IF NOT EXISTS idx_rig_cooling_rig ON rig_cooling(player_rig_id);
+
+-- Agregar columna de consumo de energía extra a cooling_items si no existe
+ALTER TABLE cooling_items ADD COLUMN IF NOT EXISTS energy_cost NUMERIC DEFAULT 0.5;
+
+-- Agregar columna para rastrear cuando se encendió el rig
+ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+
 -- =====================================================
 -- ELIMINAR FUNCIONES EXISTENTES
 -- =====================================================
@@ -58,6 +91,10 @@ DROP FUNCTION IF EXISTS get_prepaid_cards() CASCADE;
 DROP FUNCTION IF EXISTS get_player_cards(UUID) CASCADE;
 DROP FUNCTION IF EXISTS buy_prepaid_card(UUID, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS redeem_prepaid_card(UUID, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS get_player_inventory(UUID) CASCADE;
+DROP FUNCTION IF EXISTS install_cooling_from_inventory(UUID, UUID) CASCADE;
+DROP FUNCTION IF EXISTS install_cooling_to_rig(UUID, UUID, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS get_rig_cooling(UUID) CASCADE;
 
 -- =====================================================
 -- 1. FUNCIONES DE UTILIDAD
@@ -333,7 +370,7 @@ BEGIN
   RETURN (
     SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
     FROM (
-      SELECT pr.id, pr.is_active, pr.condition, pr.temperature, pr.acquired_at,
+      SELECT pr.id, pr.is_active, pr.condition, pr.temperature, pr.acquired_at, pr.activated_at,
              json_build_object(
                'id', r.id, 'name', r.name, 'description', r.description,
                'hashrate', r.hashrate, 'power_consumption', r.power_consumption,
@@ -373,13 +410,15 @@ BEGIN
   END IF;
 
   UPDATE player_rigs
-  SET is_active = NOT is_active
+  SET is_active = NOT is_active,
+      activated_at = CASE WHEN NOT is_active THEN NOW() ELSE NULL END
   WHERE id = p_rig_id
   RETURNING * INTO v_rig;
 
   RETURN json_build_object(
     'success', true,
     'isActive', v_rig.is_active,
+    'activatedAt', v_rig.activated_at,
     'message', CASE WHEN v_rig.is_active THEN 'Rig activado' ELSE 'Rig desactivado' END
   );
 END;
@@ -754,83 +793,78 @@ DECLARE
   v_new_energy NUMERIC;
   v_new_internet NUMERIC;
   v_processed INT := 0;
-  v_cooling_power NUMERIC;
+  v_rig_cooling_power NUMERIC;
+  v_rig_cooling_energy NUMERIC;
   v_temp_increase NUMERIC;
   v_new_temp NUMERIC;
   v_deterioration NUMERIC;
+  v_base_deterioration NUMERIC;
   v_ambient_temp NUMERIC := 25;  -- Temperatura ambiente base
 BEGIN
   FOR v_player IN
-    SELECT p.id, p.energy, p.internet, p.cooling_level
+    SELECT p.id, p.energy, p.internet
     FROM players p
     WHERE EXISTS (SELECT 1 FROM player_rigs pr WHERE pr.player_id = p.id AND pr.is_active = true)
   LOOP
-    -- Calcular consumo total de energía e internet CON PENALIZACIÓN POR TEMPERATURA
-    -- Temperatura alta = más consumo de energía (hasta 50% extra a 100°C)
-    SELECT
-      COALESCE(SUM(
-        r.power_consumption * (1 + GREATEST(0, (pr.temperature - 40)) * 0.0125)
-      ), 0),
-      COALESCE(SUM(r.internet_consumption), 0)
-    INTO v_total_power, v_total_internet
-    FROM player_rigs pr
-    JOIN rigs r ON r.id = pr.rig_id
-    WHERE pr.player_id = v_player.id AND pr.is_active = true;
+    v_total_power := 0;
+    v_total_internet := 0;
 
-    -- Calcular nuevo nivel de energía e internet
-    v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.1));
-    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.05));
-
-    -- Calcular poder de refrigeración total del jugador
-    SELECT COALESCE(SUM(ci.cooling_power), 0)
-    INTO v_cooling_power
-    FROM player_cooling pc
-    JOIN cooling_items ci ON ci.id = pc.cooling_item_id
-    WHERE pc.player_id = v_player.id;
-
-    -- Actualizar cooling_level del jugador
-    UPDATE players
-    SET energy = v_new_energy,
-        internet = v_new_internet,
-        cooling_level = v_cooling_power
-    WHERE id = v_player.id;
-
-    -- Procesar temperatura y deterioro de cada rig activo
+    -- Procesar cada rig activo individualmente
     FOR v_rig IN
-      SELECT pr.id, pr.temperature, pr.condition, r.power_consumption
+      SELECT pr.id, pr.temperature, pr.condition, r.power_consumption, r.internet_consumption, r.hashrate
       FROM player_rigs pr
       JOIN rigs r ON r.id = pr.rig_id
       WHERE pr.player_id = v_player.id AND pr.is_active = true
     LOOP
+      -- Obtener refrigeración instalada en este rig específico
+      SELECT
+        COALESCE(SUM(ci.cooling_power * (rc.durability / 100.0)), 0),
+        COALESCE(SUM(ci.energy_cost * (rc.durability / 100.0)), 0)
+      INTO v_rig_cooling_power, v_rig_cooling_energy
+      FROM rig_cooling rc
+      JOIN cooling_items ci ON ci.id = rc.cooling_item_id
+      WHERE rc.player_rig_id = v_rig.id AND rc.durability > 0;
+
+      -- Calcular consumo de energía del rig:
+      -- Base + penalización por temperatura + consumo de refrigeración
+      -- Temperatura > 40°C aumenta consumo hasta 50% extra a 100°C
+      v_total_power := v_total_power +
+        (v_rig.power_consumption * (1 + GREATEST(0, (v_rig.temperature - 40)) * 0.0083)) +
+        v_rig_cooling_energy;
+
+      v_total_internet := v_total_internet + v_rig.internet_consumption;
+
       -- Calcular aumento de temperatura basado en consumo de energía
       -- Más consumo = más calor generado
-      v_temp_increase := v_rig.power_consumption * 0.5;
+      v_temp_increase := v_rig.power_consumption * 0.8;
 
-      -- La refrigeración reduce el aumento de temperatura
-      -- Cada punto de cooling_power reduce 1 grado el aumento
-      v_temp_increase := GREATEST(0, v_temp_increase - (v_cooling_power * 0.3));
+      -- La refrigeración del rig reduce el aumento de temperatura
+      v_temp_increase := GREATEST(0, v_temp_increase - v_rig_cooling_power);
 
-      -- Calcular nueva temperatura (tiende hacia temperatura ambiente cuando no hay calentamiento)
+      -- Calcular nueva temperatura
       v_new_temp := v_rig.temperature + v_temp_increase;
 
-      -- Enfriamiento pasivo hacia temperatura ambiente (más lento sin refrigeración)
+      -- Enfriamiento pasivo hacia temperatura ambiente
       IF v_new_temp > v_ambient_temp THEN
-        v_new_temp := v_new_temp - (0.5 + (v_cooling_power * 0.1));
+        v_new_temp := v_new_temp - (0.5 + (v_rig_cooling_power * 0.2));
         v_new_temp := GREATEST(v_ambient_temp, v_new_temp);
       END IF;
 
       -- Limitar temperatura máxima a 100
       v_new_temp := LEAST(100, v_new_temp);
 
-      -- Calcular deterioro basado en temperatura
-      -- Temperatura > 60°C empieza a causar daño
-      -- Temperatura > 80°C causa daño severo
-      IF v_new_temp > 80 THEN
-        v_deterioration := 0.5 + ((v_new_temp - 80) * 0.1);  -- Daño severo
-      ELSIF v_new_temp > 60 THEN
-        v_deterioration := 0.1 + ((v_new_temp - 60) * 0.02);  -- Daño moderado
+      -- Calcular deterioro BASE por uso (siempre hay un poco de desgaste)
+      v_base_deterioration := 0.02;  -- 0.02% por tick base
+
+      -- Deterioro EXTRA basado en temperatura
+      -- Temperatura > 50°C empieza a causar daño adicional
+      -- Temperatura > 70°C causa daño severo
+      IF v_new_temp > 70 THEN
+        v_deterioration := v_base_deterioration + 0.3 + ((v_new_temp - 70) * 0.05);  -- Daño severo
+      ELSIF v_new_temp > 50 THEN
+        v_deterioration := v_base_deterioration + 0.05 + ((v_new_temp - 50) * 0.01);  -- Daño moderado
       ELSE
-        v_deterioration := 0;  -- Sin daño
+        v_deterioration := v_base_deterioration;  -- Solo desgaste base
       END IF;
 
       -- Aplicar deterioro y actualizar temperatura
@@ -839,16 +873,35 @@ BEGIN
           condition = GREATEST(0, condition - v_deterioration)
       WHERE id = v_rig.id;
 
+      -- Consumir durabilidad de la refrigeración instalada en este rig
+      -- La refrigeración se desgasta más rápido si la temperatura es alta
+      UPDATE rig_cooling
+      SET durability = GREATEST(0, durability - (0.1 + (GREATEST(0, v_new_temp - 40) * 0.005)))
+      WHERE player_rig_id = v_rig.id AND durability > 0;
+
+      -- Eliminar refrigeración agotada
+      DELETE FROM rig_cooling WHERE player_rig_id = v_rig.id AND durability <= 0;
+
       -- Si condición llega a 0, apagar el rig
       IF (v_rig.condition - v_deterioration) <= 0 THEN
         UPDATE player_rigs SET is_active = false WHERE id = v_rig.id;
         INSERT INTO player_events (player_id, type, data)
         VALUES (v_player.id, 'rig_broken', json_build_object(
           'rig_id', v_rig.id,
-          'reason', 'overheat'
+          'reason', 'wear_and_tear'
         ));
       END IF;
     END LOOP;
+
+    -- Calcular nuevo nivel de energía e internet
+    v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.1));
+    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.05));
+
+    -- Actualizar recursos del jugador
+    UPDATE players
+    SET energy = v_new_energy,
+        internet = v_new_internet
+    WHERE id = v_player.id;
 
     -- Apagar rigs si no hay energía o internet
     IF v_new_energy = 0 OR v_new_internet = 0 THEN
@@ -890,19 +943,21 @@ DECLARE
   v_rep_multiplier NUMERIC;
   v_hashrate_sum NUMERIC := 0;
   v_random_pick NUMERIC;
+  v_temp_penalty NUMERIC;
+  v_condition_penalty NUMERIC;
 BEGIN
   SELECT COALESCE(ns.difficulty, 1000) INTO v_difficulty FROM network_stats ns WHERE ns.id = 'current';
   IF v_difficulty IS NULL THEN v_difficulty := 1000; END IF;
 
-  -- Calcular hashrate total (con penalización por temperatura)
-  -- Temperatura > 60°C reduce hashrate progresivamente (hasta -50% a 100°C)
+  -- Calcular hashrate total con penalizaciones por temperatura y condición
   FOR v_rig IN
-    SELECT pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score
+    SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
     WHERE pr.is_active = true AND p.energy > 0 AND p.internet > 0
   LOOP
+    -- Multiplicador de reputación
     IF v_rig.reputation_score >= 80 THEN
       v_rep_multiplier := 1 + (v_rig.reputation_score - 80) * 0.01;
     ELSIF v_rig.reputation_score < 50 THEN
@@ -911,18 +966,19 @@ BEGIN
       v_rep_multiplier := 1;
     END IF;
 
-    -- Penalización por temperatura: reduce hashrate cuando temp > 60°C
-    -- A 60°C: 100% hashrate, a 100°C: 50% hashrate
-    DECLARE
-      v_temp_penalty NUMERIC := 1;
-    BEGIN
-      IF v_rig.temperature > 60 THEN
-        v_temp_penalty := 1 - ((v_rig.temperature - 60) * 0.0125);
-        v_temp_penalty := GREATEST(0.5, v_temp_penalty);  -- Mínimo 50% hashrate
-      END IF;
-      v_effective_hashrate := v_rig.hashrate * (v_rig.condition / 100.0) * v_rep_multiplier * v_temp_penalty;
-    END;
+    -- Penalización por temperatura: reduce hashrate cuando temp > 50°C
+    -- A 50°C: 100% hashrate, a 100°C: 30% hashrate
+    v_temp_penalty := 1;
+    IF v_rig.temperature > 50 THEN
+      v_temp_penalty := 1 - ((v_rig.temperature - 50) * 0.014);
+      v_temp_penalty := GREATEST(0.3, v_temp_penalty);  -- Mínimo 30% hashrate
+    END IF;
 
+    -- Penalización por condición: condición baja reduce hashrate
+    -- 100% condición = 100% hashrate, 0% condición = 20% hashrate
+    v_condition_penalty := 0.2 + (v_rig.condition / 100.0) * 0.8;
+
+    v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty;
     v_network_hashrate := v_network_hashrate + v_effective_hashrate;
   END LOOP;
 
@@ -945,12 +1001,12 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Seleccionar ganador (con misma penalización por temperatura)
+  -- Seleccionar ganador (con mismas penalizaciones)
   v_random_pick := random() * v_network_hashrate;
   v_hashrate_sum := 0;
 
   FOR v_rig IN
-    SELECT pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score
+    SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
@@ -964,17 +1020,15 @@ BEGIN
       v_rep_multiplier := 1;
     END IF;
 
-    -- Misma penalización por temperatura
-    DECLARE
-      v_temp_penalty NUMERIC := 1;
-    BEGIN
-      IF v_rig.temperature > 60 THEN
-        v_temp_penalty := 1 - ((v_rig.temperature - 60) * 0.0125);
-        v_temp_penalty := GREATEST(0.5, v_temp_penalty);
-      END IF;
-      v_effective_hashrate := v_rig.hashrate * (v_rig.condition / 100.0) * v_rep_multiplier * v_temp_penalty;
-    END;
+    v_temp_penalty := 1;
+    IF v_rig.temperature > 50 THEN
+      v_temp_penalty := 1 - ((v_rig.temperature - 50) * 0.014);
+      v_temp_penalty := GREATEST(0.3, v_temp_penalty);
+    END IF;
 
+    v_condition_penalty := 0.2 + (v_rig.condition / 100.0) * 0.8;
+
+    v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty;
     v_hashrate_sum := v_hashrate_sum + v_effective_hashrate;
 
     IF v_hashrate_sum >= v_random_pick THEN
@@ -1451,19 +1505,240 @@ BEGIN
 END;
 $$;
 
--- Alias para buy_cooling (llama a install_cooling)
+-- Comprar refrigeración (va al inventario)
 CREATE OR REPLACE FUNCTION buy_cooling(p_player_id UUID, p_cooling_id TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_cooling cooling_items%ROWTYPE;
+  v_existing_installed INT;
 BEGIN
-  RETURN install_cooling(p_player_id, p_cooling_id);
+  -- Verificar jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Verificar item de refrigeración
+  SELECT * INTO v_cooling FROM cooling_items WHERE id = p_cooling_id;
+  IF v_cooling IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Item de refrigeración no encontrado');
+  END IF;
+
+  -- Verificar si ya lo tiene instalado
+  SELECT COUNT(*) INTO v_existing_installed
+  FROM player_cooling
+  WHERE player_id = p_player_id AND cooling_item_id = p_cooling_id;
+
+  IF v_existing_installed > 0 THEN
+    RETURN json_build_object('success', false, 'error', 'Ya tienes este item instalado');
+  END IF;
+
+  -- Verificar balance
+  IF v_player.gamecoin_balance < v_cooling.base_price THEN
+    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+  END IF;
+
+  -- Descontar GameCoin
+  UPDATE players
+  SET gamecoin_balance = gamecoin_balance - v_cooling.base_price
+  WHERE id = p_player_id;
+
+  -- Registrar transacción
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'cooling_purchase', -v_cooling.base_price, 'gamecoin',
+          'Compra de refrigeración: ' || v_cooling.name);
+
+  -- Agregar al inventario
+  INSERT INTO player_inventory (player_id, item_type, item_id)
+  VALUES (p_player_id, 'cooling', p_cooling_id)
+  ON CONFLICT (player_id, item_type, item_id)
+  DO UPDATE SET quantity = player_inventory.quantity + 1;
+
+  RETURN json_build_object(
+    'success', true,
+    'item', row_to_json(v_cooling),
+    'message', 'Item agregado al inventario'
+  );
+END;
+$$;
+
+-- Instalar refrigeración desde inventario (DEPRECADO - usar install_cooling_to_rig)
+CREATE OR REPLACE FUNCTION install_cooling_from_inventory(p_player_id UUID, p_cooling_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN json_build_object('success', false, 'error', 'Usa install_cooling_to_rig para instalar refrigeración en un rig específico');
+END;
+$$;
+
+-- Instalar refrigeración en un rig específico
+CREATE OR REPLACE FUNCTION install_cooling_to_rig(p_player_id UUID, p_rig_id UUID, p_cooling_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_inventory_item player_inventory%ROWTYPE;
+  v_cooling cooling_items%ROWTYPE;
+  v_rig player_rigs%ROWTYPE;
+  v_existing_cooling INT;
+BEGIN
+  -- Verificar que el rig pertenece al jugador
+  SELECT * INTO v_rig
+  FROM player_rigs
+  WHERE id = p_rig_id AND player_id = p_player_id;
+
+  IF v_rig IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
+  END IF;
+
+  -- Verificar que el item está en inventario
+  SELECT * INTO v_inventory_item
+  FROM player_inventory
+  WHERE player_id = p_player_id AND item_type = 'cooling' AND item_id = p_cooling_id;
+
+  IF v_inventory_item IS NULL OR v_inventory_item.quantity <= 0 THEN
+    RETURN json_build_object('success', false, 'error', 'No tienes este item en tu inventario');
+  END IF;
+
+  -- Verificar si este tipo de cooling ya está instalado en este rig
+  SELECT COUNT(*) INTO v_existing_cooling
+  FROM rig_cooling
+  WHERE player_rig_id = p_rig_id AND cooling_item_id = p_cooling_id;
+
+  IF v_existing_cooling > 0 THEN
+    RETURN json_build_object('success', false, 'error', 'Este rig ya tiene este tipo de refrigeración instalado');
+  END IF;
+
+  -- Obtener datos del item
+  SELECT * INTO v_cooling FROM cooling_items WHERE id = p_cooling_id;
+
+  -- Remover del inventario
+  IF v_inventory_item.quantity > 1 THEN
+    UPDATE player_inventory
+    SET quantity = quantity - 1
+    WHERE id = v_inventory_item.id;
+  ELSE
+    DELETE FROM player_inventory WHERE id = v_inventory_item.id;
+  END IF;
+
+  -- Instalar refrigeración en el rig
+  INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability)
+  VALUES (p_rig_id, p_cooling_id, 100);
+
+  RETURN json_build_object(
+    'success', true,
+    'message', 'Refrigeración instalada en el rig',
+    'item', row_to_json(v_cooling)
+  );
+END;
+$$;
+
+-- Obtener refrigeración instalada en un rig
+CREATE OR REPLACE FUNCTION get_rig_cooling(p_rig_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT rc.id, rc.durability, rc.installed_at,
+             ci.id as item_id, ci.name, ci.description, ci.cooling_power, ci.energy_cost, ci.tier
+      FROM rig_cooling rc
+      JOIN cooling_items ci ON ci.id = rc.cooling_item_id
+      WHERE rc.player_rig_id = p_rig_id
+      ORDER BY rc.installed_at DESC
+    ) t
+  );
 END;
 $$;
 
 -- =====================================================
--- 8. FUNCIONES DE TARJETAS PREPAGO
+-- 8. FUNCIONES DE INVENTARIO
+-- =====================================================
+
+-- Obtener inventario del jugador
+CREATE OR REPLACE FUNCTION get_player_inventory(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN json_build_object(
+    'cooling', (
+      SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+      FROM (
+        SELECT pi.id as inventory_id, pi.quantity, pi.purchased_at,
+               ci.id, ci.name, ci.description, ci.cooling_power, ci.energy_cost, ci.base_price, ci.tier
+        FROM player_inventory pi
+        JOIN cooling_items ci ON ci.id = pi.item_id
+        WHERE pi.player_id = p_player_id AND pi.item_type = 'cooling'
+        ORDER BY pi.purchased_at DESC
+      ) t
+    ),
+    'cards', (
+      SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+      FROM (
+        SELECT pc.id, pc.code, pc.is_redeemed, pc.purchased_at,
+               p.id as card_id, p.name, p.description, p.card_type, p.amount, p.tier
+        FROM player_cards pc
+        JOIN prepaid_cards p ON p.id = pc.card_id
+        WHERE pc.player_id = p_player_id AND pc.is_redeemed = false
+        ORDER BY pc.purchased_at DESC
+      ) t
+    ),
+    'rigs', (
+      SELECT COALESCE(json_agg(row_to_json(rig_data)), '[]'::JSON)
+      FROM (
+        SELECT
+          pr.id,
+          pr.is_active,
+          pr.condition,
+          pr.temperature,
+          pr.acquired_at,
+          pr.activated_at,
+          r.id as rig_id,
+          r.name,
+          r.description,
+          r.hashrate,
+          r.power_consumption,
+          r.internet_consumption,
+          r.tier,
+          (
+            SELECT COALESCE(json_agg(json_build_object(
+              'id', rc.id,
+              'durability', rc.durability,
+              'installed_at', rc.installed_at,
+              'item_id', ci.id,
+              'name', ci.name,
+              'cooling_power', ci.cooling_power,
+              'energy_cost', ci.energy_cost,
+              'tier', ci.tier
+            )), '[]'::JSON)
+            FROM rig_cooling rc
+            JOIN cooling_items ci ON ci.id = rc.cooling_item_id
+            WHERE rc.player_rig_id = pr.id
+          ) as installed_cooling
+        FROM player_rigs pr
+        JOIN rigs r ON r.id = pr.rig_id
+        WHERE pr.player_id = p_player_id
+        ORDER BY pr.acquired_at DESC
+      ) rig_data
+    )
+  );
+END;
+$$;
+
+-- =====================================================
+-- 9. FUNCIONES DE TARJETAS PREPAGO
 -- =====================================================
 
 -- Obtener tarjetas prepago disponibles

@@ -3,13 +3,37 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
+import { useMiningStore } from '@/stores/mining';
+
+const emit = defineEmits<{
+  recharge: [];
+  inventory: [];
+}>();
 
 const router = useRouter();
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
+const miningStore = useMiningStore();
 
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 const username = computed(() => authStore.player?.username ?? 'Jugador');
+
+// Resource values
+const energy = computed(() => authStore.player?.energy ?? 100);
+const internet = computed(() => authStore.player?.internet ?? 100);
+
+// Status colors
+const energyStatus = computed(() => {
+  if (energy.value <= 10) return 'critical';
+  if (energy.value <= 25) return 'warning';
+  return 'normal';
+});
+
+const internetStatus = computed(() => {
+  if (internet.value <= 10) return 'critical';
+  if (internet.value <= 25) return 'warning';
+  return 'normal';
+});
 
 async function handleLogout() {
   realtimeStore.disconnect();
@@ -33,8 +57,9 @@ async function handleLogout() {
       <!-- User Menu -->
       <div class="flex items-center gap-4">
         <template v-if="isAuthenticated">
-          <!-- Balances -->
-          <div class="hidden md:flex items-center gap-4 text-sm">
+          <!-- Balances & Resources -->
+          <div class="hidden md:flex items-center gap-3 text-sm">
+            <!-- Coins -->
             <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg">
               <span class="text-status-warning">🪙</span>
               <span class="font-medium">{{ authStore.player?.gamecoin_balance?.toFixed(2) ?? '0.00' }}</span>
@@ -43,6 +68,89 @@ async function handleLogout() {
               <span class="text-accent-tertiary">₿</span>
               <span class="font-medium">{{ authStore.player?.crypto_balance?.toFixed(4) ?? '0.0000' }}</span>
             </div>
+
+            <!-- Energy Bar -->
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg min-w-[120px]">
+              <span :class="{ 'animate-pulse': miningStore.isMining }">⚡</span>
+              <div class="flex-1">
+                <div
+                  class="h-2 rounded-full overflow-hidden"
+                  :class="{
+                    'bg-status-danger/20': energyStatus === 'critical',
+                    'bg-status-warning/20': energyStatus === 'warning',
+                    'bg-bg-tertiary': energyStatus === 'normal'
+                  }"
+                >
+                  <div
+                    class="h-full rounded-full transition-all duration-200"
+                    :class="{
+                      'bg-status-danger': energyStatus === 'critical',
+                      'bg-gradient-to-r from-status-warning to-yellow-400': energyStatus !== 'critical'
+                    }"
+                    :style="{ width: `${energy}%` }"
+                  ></div>
+                </div>
+              </div>
+              <span
+                class="text-xs font-mono font-bold w-10 text-right"
+                :class="{
+                  'text-status-danger animate-pulse': energyStatus === 'critical',
+                  'text-status-warning': energyStatus !== 'critical'
+                }"
+              >{{ energy.toFixed(0) }}%</span>
+            </div>
+
+            <!-- Internet Bar -->
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg min-w-[120px]">
+              <span :class="{ 'animate-pulse': miningStore.isMining }">📡</span>
+              <div class="flex-1">
+                <div
+                  class="h-2 rounded-full overflow-hidden"
+                  :class="{
+                    'bg-status-danger/20': internetStatus === 'critical',
+                    'bg-status-warning/20': internetStatus === 'warning',
+                    'bg-bg-tertiary': internetStatus === 'normal'
+                  }"
+                >
+                  <div
+                    class="h-full rounded-full transition-all duration-200"
+                    :class="{
+                      'bg-status-danger': internetStatus === 'critical',
+                      'bg-gradient-to-r from-accent-tertiary to-cyan-400': internetStatus !== 'critical'
+                    }"
+                    :style="{ width: `${internet}%` }"
+                  ></div>
+                </div>
+              </div>
+              <span
+                class="text-xs font-mono font-bold w-10 text-right"
+                :class="{
+                  'text-status-danger animate-pulse': internetStatus === 'critical',
+                  'text-accent-tertiary': internetStatus !== 'critical'
+                }"
+              >{{ internet.toFixed(0) }}%</span>
+            </div>
+
+            <!-- Recharge Button -->
+            <button
+              @click="emit('recharge')"
+              class="px-2 py-1.5 text-xs font-medium rounded-lg transition-all"
+              :class="energyStatus === 'critical' || internetStatus === 'critical'
+                ? 'bg-status-danger text-white animate-pulse'
+                : 'bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30'"
+              title="Recargar recursos"
+            >
+              +
+            </button>
+
+            <!-- Inventory Button -->
+            <button
+              @click="emit('inventory')"
+              class="px-2 py-1.5 text-sm rounded-lg transition-all bg-bg-tertiary hover:bg-bg-tertiary/80"
+              title="Inventario"
+            >
+              🎒
+            </button>
           </div>
 
           <!-- Profile Dropdown -->

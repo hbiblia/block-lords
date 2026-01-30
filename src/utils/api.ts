@@ -275,3 +275,68 @@ export async function redeemPrepaidCard(playerId: string, code: string) {
   if (error) throw error;
   return data;
 }
+
+// === INVENTORY (INVENTARIO) ===
+
+export async function getPlayerInventory(playerId: string) {
+  const { data, error } = await supabase.rpc('get_player_inventory', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function installCoolingFromInventory(playerId: string, coolingId: string) {
+  const { data, error } = await supabase.rpc('install_cooling_from_inventory', {
+    p_player_id: playerId,
+    p_cooling_id: coolingId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Instalar cooling en un rig específico
+export async function installCoolingToRig(playerId: string, rigId: string, coolingId: string) {
+  const { data, error } = await supabase.rpc('install_cooling_to_rig', {
+    p_player_id: playerId,
+    p_rig_id: rigId,
+    p_cooling_id: coolingId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Obtener cooling instalado en un rig
+export async function getRigCooling(rigId: string) {
+  const { data, error } = await supabase.rpc('get_rig_cooling', {
+    p_rig_id: rigId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Comprar cooling (va al inventario)
+export async function buyCooling(playerId: string, coolingId: string) {
+  const { data, error } = await supabase.rpc('buy_cooling', {
+    p_player_id: playerId,
+    p_cooling_id: coolingId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Comprar rig
+export async function buyRig(playerId: string, rigId: string) {
+  const { data, error } = await supabase.rpc('buy_rig', {
+    p_player_id: playerId,
+    p_rig_id: rigId,
+  });
+
+  if (error) throw error;
+  return data;
+}

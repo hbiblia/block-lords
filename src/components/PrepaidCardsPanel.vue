@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { getPrepaidCards, getPlayerCards, buyPrepaidCard, redeemPrepaidCard } from '@/utils/api';
 
@@ -13,6 +13,20 @@ const emit = defineEmits<{
   close: [];
   redeemed: [type: string, amount: number];
 }>();
+
+// Bloquear scroll del body cuando el modal está abierto
+watch(() => props.show, (isOpen) => {
+  if (isOpen) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+});
+
+// Limpiar al desmontar
+onUnmounted(() => {
+  document.body.style.overflow = '';
+});
 
 const loading = ref(false);
 const activeTab = ref<'my-cards' | 'buy'>('my-cards');
@@ -141,7 +155,6 @@ onMounted(() => {
 });
 
 // Recargar cuando se muestra
-import { watch } from 'vue';
 watch(() => props.show, (newVal) => {
   if (newVal) {
     loadData();
