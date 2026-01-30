@@ -209,3 +209,31 @@ export async function getMiningLeaderboard(limit = 100) {
   if (error) throw error;
   return data;
 }
+
+// === COOLING (REFRIGERACIÓN) ===
+
+export async function getCoolingItems() {
+  const { data, error } = await supabase.rpc('get_cooling_items');
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getPlayerCooling(playerId: string) {
+  const { data, error } = await supabase.rpc('get_player_cooling', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function installCooling(playerId: string, coolingId: string) {
+  const { data, error } = await supabase.rpc('install_cooling', {
+    p_player_id: playerId,
+    p_cooling_id: coolingId,
+  });
+
+  if (error) throw error;
+  return data;
+}

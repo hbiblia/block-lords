@@ -12,6 +12,7 @@ const rigs = ref<Array<{
   id: string;
   is_active: boolean;
   condition: number;
+  temperature: number;
   rig: {
     id: string;
     name: string;
@@ -179,6 +180,27 @@ function getTierBg(tier: string): string {
     case 'standard': return 'from-gray-400/20 to-gray-500/20';
     default: return 'from-amber-600/20 to-amber-700/20';
   }
+}
+
+function getTempColor(temp: number): string {
+  if (temp >= 80) return 'text-status-danger';
+  if (temp >= 60) return 'text-status-warning';
+  if (temp >= 40) return 'text-yellow-400';
+  return 'text-status-success';
+}
+
+function getTempStatus(temp: number): string {
+  if (temp >= 80) return 'CRÍTICO';
+  if (temp >= 60) return 'Alto';
+  if (temp >= 40) return 'Normal';
+  return 'Óptimo';
+}
+
+function getTempBarColor(temp: number): string {
+  if (temp >= 80) return 'bg-status-danger';
+  if (temp >= 60) return 'bg-status-warning';
+  if (temp >= 40) return 'bg-yellow-400';
+  return 'bg-status-success';
 }
 
 onMounted(() => {
@@ -380,14 +402,40 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Stats -->
-                <div class="grid grid-cols-2 gap-3 mb-4 text-sm">
-                  <div class="flex items-center gap-2">
+                <div class="grid grid-cols-3 gap-2 mb-4 text-sm">
+                  <div class="flex items-center gap-1">
                     <span class="text-status-warning">⚡</span>
-                    <span class="text-text-muted">{{ playerRig.rig.power_consumption }}/tick</span>
+                    <span class="text-text-muted text-xs">{{ playerRig.rig.power_consumption }}/t</span>
                   </div>
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-1">
                     <span class="text-accent-tertiary">📡</span>
-                    <span class="text-text-muted">{{ playerRig.rig.internet_consumption }}/tick</span>
+                    <span class="text-text-muted text-xs">{{ playerRig.rig.internet_consumption }}/t</span>
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <span>🌡️</span>
+                    <span
+                      class="text-xs font-medium"
+                      :class="getTempColor(playerRig.temperature ?? 25)"
+                    >
+                      {{ (playerRig.temperature ?? 25).toFixed(0) }}°C
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Temperature Bar -->
+                <div class="mb-3">
+                  <div class="flex justify-between text-xs mb-1">
+                    <span class="text-text-muted">Temperatura</span>
+                    <span :class="getTempColor(playerRig.temperature ?? 25)">
+                      {{ getTempStatus(playerRig.temperature ?? 25) }}
+                    </span>
+                  </div>
+                  <div class="progress-bar h-2">
+                    <div
+                      class="progress-bar-fill transition-all"
+                      :class="getTempBarColor(playerRig.temperature ?? 25)"
+                      :style="{ width: `${playerRig.temperature ?? 25}%` }"
+                    ></div>
                   </div>
                 </div>
 

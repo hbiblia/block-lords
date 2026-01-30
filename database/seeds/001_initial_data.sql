@@ -43,6 +43,24 @@ ON CONFLICT (id) DO UPDATE SET
   description = EXCLUDED.description,
   icon = EXCLUDED.icon;
 
+-- Insertar items de refrigeración
+INSERT INTO cooling_items (id, name, description, cooling_power, base_price, tier)
+VALUES
+  ('fan_basic', 'Ventilador Básico', 'Un ventilador simple para reducir la temperatura.', 5, 20, 'basic'),
+  ('fan_dual', 'Ventilador Dual', 'Dos ventiladores para mejor circulación de aire.', 10, 50, 'basic'),
+  ('heatsink', 'Disipador de Calor', 'Disipador de aluminio para transferir calor.', 15, 100, 'standard'),
+  ('liquid_cooler', 'Refrigeración Líquida', 'Sistema de refrigeración líquida cerrado.', 25, 250, 'standard'),
+  ('aio_cooler', 'AIO Premium', 'All-in-one de alta gama con radiador de 240mm.', 35, 500, 'advanced'),
+  ('custom_loop', 'Loop Personalizado', 'Sistema de refrigeración líquida custom.', 50, 1000, 'advanced'),
+  ('industrial_ac', 'A/C Industrial', 'Sistema de aire acondicionado industrial.', 70, 2500, 'elite'),
+  ('cryo_system', 'Sistema Criogénico', 'Refrigeración criogénica de última generación.', 90, 5000, 'elite')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  cooling_power = EXCLUDED.cooling_power,
+  base_price = EXCLUDED.base_price,
+  tier = EXCLUDED.tier;
+
 -- Insertar estadísticas iniciales de la red
 INSERT INTO network_stats (id, difficulty, hashrate)
 VALUES ('current', 1000, 0)
