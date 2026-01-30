@@ -326,17 +326,24 @@ function stopUptimeTimer() {
   }
 }
 
+function handleInventoryUsed() {
+  // Refresh rig data when something is installed/used from inventory
+  loadData();
+}
+
 onMounted(() => {
   loadData();
   startMiningSimulation();
   startUptimeTimer();
   window.addEventListener('block-mined', handleBlockMined as EventListener);
+  window.addEventListener('inventory-used', handleInventoryUsed as EventListener);
 });
 
 onUnmounted(() => {
   stopMiningSimulation();
   stopUptimeTimer();
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
+  window.removeEventListener('inventory-used', handleInventoryUsed as EventListener);
   // Clear mining store when leaving page
   miningStore.clearRigs();
 });
@@ -587,9 +594,12 @@ onUnmounted(() => {
                 <!-- Temperature Bar -->
                 <div class="mb-3">
                   <div class="flex justify-between text-xs mb-1">
-                    <span class="text-text-muted">Temperatura</span>
+                    <span class="text-text-muted flex items-center gap-1">
+                      🌡️ Temperatura
+                    </span>
                     <span :class="getTempColor(playerRig.temperature ?? 25)">
-                      {{ getTempStatus(playerRig.temperature ?? 25) }}
+                      {{ (playerRig.temperature ?? 25).toFixed(1) }}°C
+                      <span class="text-text-muted ml-1">({{ getTempStatus(playerRig.temperature ?? 25) }})</span>
                     </span>
                   </div>
                   <div class="progress-bar h-2">

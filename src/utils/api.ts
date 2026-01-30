@@ -57,6 +57,16 @@ export async function repairRig(playerId: string, rigId: string) {
   return data;
 }
 
+export async function deleteRig(playerId: string, rigId: string) {
+  const { data, error } = await supabase.rpc('delete_rig', {
+    p_player_id: playerId,
+    p_rig_id: rigId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 export async function rechargeEnergy(playerId: string, amount: number) {
   const { data, error } = await supabase.rpc('recharge_energy', {
     p_player_id: playerId,

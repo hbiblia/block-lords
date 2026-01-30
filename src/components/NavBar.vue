@@ -81,10 +81,10 @@ async function handleLogout() {
             </div>
             <button
               @click="emit('exchange')"
-              class="px-2 py-1.5 text-xs font-medium rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-all"
+              class="px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-all flex items-center gap-1"
               title="Exchange Crypto"
             >
-              💱
+              💱 <span class="hidden lg:inline">Exchange</span>
             </button>
 
             <!-- Energy Bar -->
@@ -152,22 +152,22 @@ async function handleLogout() {
             <!-- Recharge Button -->
             <button
               @click="emit('recharge')"
-              class="px-2 py-1.5 text-xs font-medium rounded-lg transition-all"
+              class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1"
               :class="energyStatus === 'critical' || internetStatus === 'critical'
                 ? 'bg-status-danger text-white animate-pulse'
                 : 'bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30'"
               title="Recargar recursos"
             >
-              +
+              + <span class="hidden lg:inline">Recargar</span>
             </button>
 
             <!-- Inventory Button -->
             <button
               @click="emit('inventory')"
-              class="px-2 py-1.5 text-sm rounded-lg transition-all bg-bg-tertiary hover:bg-bg-tertiary/80"
+              class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-bg-tertiary hover:bg-bg-tertiary/80 flex items-center gap-1"
               title="Inventario"
             >
-              🎒
+              🎒 <span class="hidden lg:inline">Inventario</span>
             </button>
           </div>
 

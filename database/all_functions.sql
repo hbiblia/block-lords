@@ -45,6 +45,10 @@ ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP WITH TIM
 ALTER TABLE players ADD COLUMN IF NOT EXISTS max_energy NUMERIC DEFAULT 100;
 ALTER TABLE players ADD COLUMN IF NOT EXISTS max_internet NUMERIC DEFAULT 100;
 
+-- Agregar columnas para degradación de rigs
+ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS max_condition NUMERIC DEFAULT 100;
+ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS times_repaired INTEGER DEFAULT 0;
+
 -- =====================================================
 -- ELIMINAR FUNCIONES EXISTENTES
 -- =====================================================
@@ -55,6 +59,7 @@ DROP FUNCTION IF EXISTS get_rank_for_score(NUMERIC) CASCADE;
 DROP FUNCTION IF EXISTS get_player_rigs(UUID) CASCADE;
 DROP FUNCTION IF EXISTS toggle_rig(UUID, UUID) CASCADE;
 DROP FUNCTION IF EXISTS repair_rig(UUID, UUID) CASCADE;
+DROP FUNCTION IF EXISTS delete_rig(UUID, UUID) CASCADE;
 DROP FUNCTION IF EXISTS recharge_energy(UUID, NUMERIC) CASCADE;
 DROP FUNCTION IF EXISTS recharge_internet(UUID, NUMERIC) CASCADE;
 DROP FUNCTION IF EXISTS get_player_transactions(UUID, INTEGER) CASCADE;
@@ -378,6 +383,8 @@ BEGIN
     SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
     FROM (
       SELECT pr.id, pr.is_active, pr.condition, pr.temperature, pr.acquired_at, pr.activated_at,
+             COALESCE(pr.max_condition, 100) as max_condition,
+             COALESCE(pr.times_repaired, 0) as times_repaired,
              json_build_object(
                'id', r.id, 'name', r.name, 'description', r.description,
                'hashrate', r.hashrate, 'power_consumption', r.power_consumption,
@@ -409,7 +416,13 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
   END IF;
 
+  -- Verificar si se quiere encender un rig roto
   IF NOT v_rig.is_active THEN
+    -- No permitir encender si condición es 0
+    IF v_rig.condition <= 0 THEN
+      RETURN json_build_object('success', false, 'error', 'El rig está roto. Debes repararlo o eliminarlo.');
+    END IF;
+
     SELECT * INTO v_player FROM players WHERE id = p_player_id;
     IF v_player.energy <= 0 OR v_player.internet <= 0 THEN
       RETURN json_build_object('success', false, 'error', 'Recursos insuficientes para activar el rig');
@@ -431,7 +444,9 @@ BEGIN
 END;
 $$;
 
--- Reparar rig
+-- Reparar rig (con degradación permanente)
+-- Cada reparación reduce max_condition en 5%
+-- Cuando max_condition <= 10%, el rig ya no se puede reparar
 CREATE OR REPLACE FUNCTION repair_rig(p_player_id UUID, p_rig_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -441,8 +456,11 @@ DECLARE
   v_rig RECORD;
   v_player players%ROWTYPE;
   v_repair_cost NUMERIC;
+  v_current_max NUMERIC;
+  v_new_max NUMERIC;
+  v_degradation NUMERIC := 5;  -- 5% de degradación por reparación
 BEGIN
-  SELECT pr.*, r.repair_cost as base_repair_cost
+  SELECT pr.*, r.repair_cost as base_repair_cost, r.name as rig_name
   INTO v_rig
   FROM player_rigs pr
   JOIN rigs r ON r.id = pr.rig_id
@@ -452,11 +470,21 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
   END IF;
 
-  IF v_rig.condition >= 100 THEN
-    RETURN json_build_object('success', false, 'error', 'El rig ya está en condición perfecta');
+  -- Obtener max_condition actual (default 100 si es NULL)
+  v_current_max := COALESCE(v_rig.max_condition, 100);
+
+  -- Verificar si el rig ya no se puede reparar
+  IF v_current_max <= 10 THEN
+    RETURN json_build_object('success', false, 'error', 'Este rig está demasiado dañado para reparar. Debes eliminarlo.');
   END IF;
 
-  v_repair_cost := ((100 - v_rig.condition) / 100.0) * v_rig.base_repair_cost;
+  -- Verificar si ya está en su máxima condición posible
+  IF v_rig.condition >= v_current_max THEN
+    RETURN json_build_object('success', false, 'error', 'El rig ya está en su máxima condición posible');
+  END IF;
+
+  -- Calcular costo basado en max_condition actual
+  v_repair_cost := ((v_current_max - v_rig.condition) / 100.0) * v_rig.base_repair_cost;
 
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
 
@@ -464,13 +492,75 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_repair_cost);
   END IF;
 
+  -- Calcular nueva max_condition (se reduce con cada reparación)
+  v_new_max := GREATEST(10, v_current_max - v_degradation);
+
+  -- Aplicar reparación
   UPDATE players SET gamecoin_balance = gamecoin_balance - v_repair_cost WHERE id = p_player_id;
-  UPDATE player_rigs SET condition = 100 WHERE id = p_rig_id;
+  UPDATE player_rigs
+  SET condition = v_current_max,  -- Repara hasta el máximo actual
+      max_condition = v_new_max,  -- Reduce el máximo para futuras reparaciones
+      times_repaired = COALESCE(times_repaired, 0) + 1
+  WHERE id = p_rig_id;
 
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'rig_repair', -v_repair_cost, 'gamecoin', 'Reparación de rig');
+  VALUES (p_player_id, 'rig_repair', -v_repair_cost, 'gamecoin',
+          'Reparación de ' || v_rig.rig_name || ' (max: ' || v_new_max || '%)');
 
-  RETURN json_build_object('success', true, 'cost', v_repair_cost);
+  RETURN json_build_object(
+    'success', true,
+    'cost', v_repair_cost,
+    'new_condition', v_current_max,
+    'new_max_condition', v_new_max,
+    'times_repaired', COALESCE(v_rig.times_repaired, 0) + 1,
+    'warning', CASE
+      WHEN v_new_max <= 30 THEN 'El rig está muy desgastado. Considera reemplazarlo pronto.'
+      WHEN v_new_max <= 50 THEN 'El rig muestra signos de desgaste permanente.'
+      ELSE NULL
+    END
+  );
+END;
+$$;
+
+-- Eliminar/Descartar rig (cuando ya no sirve)
+CREATE OR REPLACE FUNCTION delete_rig(p_player_id UUID, p_rig_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rig RECORD;
+BEGIN
+  SELECT pr.*, r.name as rig_name
+  INTO v_rig
+  FROM player_rigs pr
+  JOIN rigs r ON r.id = pr.rig_id
+  WHERE pr.id = p_rig_id AND pr.player_id = p_player_id;
+
+  IF v_rig IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
+  END IF;
+
+  -- No permitir eliminar si está activo
+  IF v_rig.is_active THEN
+    RETURN json_build_object('success', false, 'error', 'Debes apagar el rig antes de eliminarlo');
+  END IF;
+
+  -- Eliminar cooling instalado en el rig
+  DELETE FROM rig_cooling WHERE player_rig_id = p_rig_id;
+
+  -- Eliminar el rig
+  DELETE FROM player_rigs WHERE id = p_rig_id;
+
+  -- Registrar en transacciones
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'rig_deleted', 0, 'gamecoin', 'Rig descartado: ' || v_rig.rig_name);
+
+  RETURN json_build_object(
+    'success', true,
+    'message', 'Rig eliminado correctamente',
+    'rig_name', v_rig.rig_name
+  );
 END;
 $$;
 
@@ -1732,6 +1822,8 @@ BEGIN
           pr.temperature,
           pr.acquired_at,
           pr.activated_at,
+          COALESCE(pr.max_condition, 100) as max_condition,
+          COALESCE(pr.times_repaired, 0) as times_repaired,
           r.id as rig_id,
           r.name,
           r.description,
@@ -1739,6 +1831,7 @@ BEGIN
           r.power_consumption,
           r.internet_consumption,
           r.tier,
+          r.repair_cost,
           (
             SELECT COALESCE(json_agg(json_build_object(
               'id', rc.id,

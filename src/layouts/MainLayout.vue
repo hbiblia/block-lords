@@ -32,6 +32,8 @@ function handleCardRedeemed() {
 
 function handleInventoryUsed() {
   authStore.fetchPlayer();
+  // Emit global event so MiningPage can refresh its data
+  window.dispatchEvent(new CustomEvent('inventory-used'));
 }
 
 function handleExchanged() {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
-import { getPlayerInventory, installCoolingToRig, redeemPrepaidCard, toggleRig } from '@/utils/api';
+import { getPlayerInventory, installCoolingToRig, redeemPrepaidCard, toggleRig, repairRig, deleteRig } from '@/utils/api';
 
 const authStore = useAuthStore();
 
@@ -40,10 +40,13 @@ const selectedRigForCooling = ref<string | null>(null);
 // Confirmation dialog state
 const showConfirm = ref(false);
 const confirmAction = ref<{
-  type: 'redeem' | 'install' | 'toggle';
+  type: 'redeem' | 'install' | 'toggle' | 'repair' | 'delete';
   data: {
     rigId?: string;
     rigName?: string;
+    rigCondition?: number;
+    rigMaxCondition?: number;
+    repairCost?: number;
     coolingId?: string;
     coolingName?: string;
     coolingPower?: number;
@@ -99,6 +102,8 @@ interface RigItem {
   temperature: number;
   acquired_at: string;
   activated_at: string | null;
+  max_condition: number;
+  times_repaired: number;
   rig_id: string;
   name: string;
   description: string;
@@ -106,6 +111,7 @@ interface RigItem {
   power_consumption: number;
   internet_consumption: number;
   tier: string;
+  repair_cost: number;
   installed_cooling: InstalledCoolingItem[];
 }
 
@@ -231,6 +237,74 @@ async function handleToggleRig(rigId: string) {
   }
 }
 
+function requestRepairRig(rig: RigItem) {
+  confirmAction.value = {
+    type: 'repair',
+    data: {
+      rigId: rig.id,
+      rigName: rig.name,
+      rigCondition: rig.condition,
+      rigMaxCondition: rig.max_condition,
+      repairCost: rig.repair_cost,
+    },
+  };
+  showConfirm.value = true;
+}
+
+async function handleRepairRig(rigId: string) {
+  if (!authStore.player || using.value) return;
+  using.value = true;
+
+  try {
+    const result = await repairRig(authStore.player.id, rigId);
+    if (result.success) {
+      await loadInventory();
+      await authStore.fetchPlayer();
+      emit('used');
+    } else {
+      alert(result.error || 'Error al reparar rig');
+    }
+  } catch (e) {
+    console.error('Error repairing rig:', e);
+    alert('Error al reparar rig');
+  } finally {
+    using.value = false;
+  }
+}
+
+function requestDeleteRig(rig: RigItem) {
+  confirmAction.value = {
+    type: 'delete',
+    data: {
+      rigId: rig.id,
+      rigName: rig.name,
+      rigCondition: rig.condition,
+      rigMaxCondition: rig.max_condition,
+    },
+  };
+  showConfirm.value = true;
+}
+
+async function handleDeleteRig(rigId: string) {
+  if (!authStore.player || using.value) return;
+  using.value = true;
+
+  try {
+    const result = await deleteRig(authStore.player.id, rigId);
+    if (result.success) {
+      await loadInventory();
+      emit('used');
+    } else {
+      alert(result.error || 'Error al eliminar rig');
+    }
+  } catch (e) {
+    console.error('Error deleting rig:', e);
+    alert('Error al eliminar rig');
+  } finally {
+    using.value = false;
+  }
+}
+
 async function confirmUse() {
   if (!confirmAction.value) return;
 
@@ -243,6 +317,10 @@ async function confirmUse() {
     await handleRedeemCard(data.cardCode);
   } else if (type === 'toggle' && data.rigId) {
     await handleToggleRig(data.rigId);
+  } else if (type === 'repair' && data.rigId) {
+    await handleRepairRig(data.rigId);
+  } else if (type === 'delete' && data.rigId) {
+    await handleDeleteRig(data.rigId);
   }
 
   confirmAction.value = null;
@@ -450,7 +528,7 @@ onMounted(() => {
                 </div>
 
                 <!-- Stats Grid -->
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" :key="uptimeKey">
+                <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4" :key="uptimeKey">
                   <div class="bg-bg-primary/50 rounded-lg p-2 text-center">
                     <div class="text-xs text-text-muted mb-1">Hashrate</div>
                     <div class="font-mono font-bold">
@@ -473,6 +551,12 @@ onMounted(() => {
                     </div>
                   </div>
                   <div class="bg-bg-primary/50 rounded-lg p-2 text-center">
+                    <div class="text-xs text-text-muted mb-1">Max Cond.</div>
+                    <div class="font-mono font-bold" :class="Number(rig.max_condition ?? 100) <= 10 ? 'text-status-danger' : (Number(rig.max_condition ?? 100) < 50 ? 'text-status-warning' : 'text-text-primary')">
+                      {{ Number(rig.max_condition ?? 100).toFixed(0) }}%
+                    </div>
+                  </div>
+                  <div class="bg-bg-primary/50 rounded-lg p-2 text-center">
                     <div class="text-xs text-text-muted mb-1">Refrigeracion</div>
                     <div class="font-mono font-bold text-cyan-400">
                       {{ getTotalCoolingPower(rig).toFixed(0) }}
@@ -484,6 +568,20 @@ onMounted(() => {
                       {{ rig.is_active && rig.activated_at ? formatUptime(rig.activated_at) : '--' }}
                     </div>
                   </div>
+                </div>
+
+                <!-- Degradation Warning -->
+                <div
+                  v-if="Number(rig.max_condition ?? 100) <= 10"
+                  class="mb-3 p-2 rounded-lg bg-status-danger/20 border border-status-danger/50 text-status-danger text-sm"
+                >
+                  ⚠️ Este rig está muy degradado y no puede repararse. Debes eliminarlo.
+                </div>
+                <div
+                  v-else-if="Number(rig.max_condition ?? 100) < 50"
+                  class="mb-3 p-2 rounded-lg bg-status-warning/20 border border-status-warning/50 text-status-warning text-xs"
+                >
+                  ⚠️ Rig degradado ({{ rig.times_repaired || 0 }} reparaciones). Max condición: {{ Number(rig.max_condition ?? 100).toFixed(0) }}%
                 </div>
 
                 <!-- Installed Cooling -->
@@ -544,17 +642,41 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <!-- Toggle Button -->
-                <button
-                  @click="requestToggleRig(rig)"
-                  :disabled="using || rig.condition <= 0"
-                  class="w-full py-2 rounded-lg font-medium transition-all disabled:opacity-50"
-                  :class="rig.is_active
-                    ? 'bg-status-danger/20 text-status-danger hover:bg-status-danger/30'
-                    : 'bg-status-success/20 text-status-success hover:bg-status-success/30'"
-                >
-                  {{ rig.condition <= 0 ? 'Necesita Reparacion' : (rig.is_active ? 'Apagar' : 'Encender') }}
-                </button>
+                <!-- Action Buttons -->
+                <div class="flex gap-2">
+                  <!-- Toggle Button -->
+                  <button
+                    @click="requestToggleRig(rig)"
+                    :disabled="using || rig.condition <= 0"
+                    class="flex-1 py-2 rounded-lg font-medium transition-all disabled:opacity-50"
+                    :class="rig.is_active
+                      ? 'bg-status-danger/20 text-status-danger hover:bg-status-danger/30'
+                      : 'bg-status-success/20 text-status-success hover:bg-status-success/30'"
+                  >
+                    {{ rig.condition <= 0 ? 'Roto' : (rig.is_active ? 'Apagar' : 'Encender') }}
+                  </button>
+
+                  <!-- Repair Button -->
+                  <button
+                    v-if="rig.condition < (rig.max_condition ?? 100) && Number(rig.max_condition ?? 100) > 10"
+                    @click="requestRepairRig(rig)"
+                    :disabled="using || rig.is_active"
+                    class="px-4 py-2 rounded-lg font-medium transition-all bg-status-warning/20 text-status-warning hover:bg-status-warning/30 disabled:opacity-50"
+                    :title="rig.is_active ? 'Apaga el rig primero' : `Reparar por ${rig.repair_cost} GC`"
+                  >
+                    🔧 Reparar
+                  </button>
+
+                  <!-- Delete Button -->
+                  <button
+                    @click="requestDeleteRig(rig)"
+                    :disabled="using || rig.is_active"
+                    class="px-4 py-2 rounded-lg font-medium transition-all bg-red-500/20 text-red-400 hover:bg-red-500/30 disabled:opacity-50"
+                    :title="rig.is_active ? 'Apaga el rig primero' : 'Eliminar rig'"
+                  >
+                    🗑️
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -660,10 +782,10 @@ onMounted(() => {
         <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
           <div class="text-center mb-4">
             <div class="text-4xl mb-3">
-              {{ confirmAction.type === 'install' ? '❄️' : confirmAction.type === 'redeem' ? '💳' : '🖥️' }}
+              {{ confirmAction.type === 'install' ? '❄️' : confirmAction.type === 'redeem' ? '💳' : confirmAction.type === 'repair' ? '🔧' : confirmAction.type === 'delete' ? '🗑️' : '🖥️' }}
             </div>
             <h3 class="text-lg font-bold mb-1">
-              {{ confirmAction.type === 'install' ? 'Instalar Refrigeracion' : confirmAction.type === 'redeem' ? 'Canjear Tarjeta' : (confirmAction.data.isActive ? 'Apagar Rig' : 'Encender Rig') }}
+              {{ confirmAction.type === 'install' ? 'Instalar Refrigeracion' : confirmAction.type === 'redeem' ? 'Canjear Tarjeta' : confirmAction.type === 'repair' ? 'Reparar Rig' : confirmAction.type === 'delete' ? 'Eliminar Rig' : (confirmAction.data.isActive ? 'Apagar Rig' : 'Encender Rig') }}
             </h3>
             <p class="text-text-muted text-sm">¿Estas seguro de realizar esta accion?</p>
           </div>
@@ -712,6 +834,48 @@ onMounted(() => {
                 </span>
               </div>
             </template>
+
+            <!-- Repair rig details -->
+            <template v-else-if="confirmAction.type === 'repair'">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Rig:</span>
+                <span class="font-medium text-white">{{ confirmAction.data.rigName }}</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Condicion actual:</span>
+                <span class="font-bold text-status-danger">{{ Number(confirmAction.data.rigCondition ?? 0).toFixed(0) }}%</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Reparar a:</span>
+                <span class="font-bold text-status-warning">{{ Number((confirmAction.data.rigMaxCondition ?? 100) - 5).toFixed(0) }}%</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-text-muted text-sm">Costo:</span>
+                <span class="font-bold text-accent-primary">{{ confirmAction.data.repairCost }} GC</span>
+              </div>
+              <p class="text-xs text-status-warning mt-2">
+                ⚠️ La condicion maxima se reducira en 5% despues de cada reparacion.
+              </p>
+            </template>
+
+            <!-- Delete rig details -->
+            <template v-else-if="confirmAction.type === 'delete'">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Rig:</span>
+                <span class="font-medium text-white">{{ confirmAction.data.rigName }}</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Condicion actual:</span>
+                <span class="font-bold text-status-danger">{{ Number(confirmAction.data.rigCondition ?? 0).toFixed(0) }}%</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-text-muted text-sm">Max condicion:</span>
+                <span class="font-bold text-status-danger">{{ Number(confirmAction.data.rigMaxCondition ?? 100).toFixed(0) }}%</span>
+              </div>
+              <p class="text-xs text-status-danger mt-2">
+                ⚠️ Esta accion no se puede deshacer. El rig sera eliminado permanentemente.
+              </p>
+            </template>
           </div>
 
           <div class="flex gap-3">
@@ -725,11 +889,13 @@ onMounted(() => {
               @click="confirmUse"
               :disabled="using"
               class="flex-1 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50"
-              :class="confirmAction.type === 'toggle' && confirmAction.data.isActive
+              :class="(confirmAction.type === 'toggle' && confirmAction.data.isActive) || confirmAction.type === 'delete'
                 ? 'bg-status-danger text-white hover:bg-status-danger/80'
-                : 'bg-accent-primary text-white hover:bg-accent-primary/80'"
+                : confirmAction.type === 'repair'
+                  ? 'bg-status-warning text-white hover:bg-status-warning/80'
+                  : 'bg-accent-primary text-white hover:bg-accent-primary/80'"
             >
-              {{ using ? 'Procesando...' : 'Confirmar' }}
+              {{ using ? 'Procesando...' : (confirmAction.type === 'delete' ? 'Eliminar' : 'Confirmar') }}
             </button>
           </div>
         </div>
