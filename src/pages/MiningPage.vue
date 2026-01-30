@@ -202,10 +202,14 @@ onUnmounted(() => {
       <h1 class="text-2xl font-display font-bold">
         <span class="gradient-text">Minería</span>
       </h1>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-3">
         <span class="badge" :class="activeRigsCount > 0 ? 'badge-success' : 'badge-warning'">
           {{ activeRigsCount }} rig{{ activeRigsCount !== 1 ? 's' : '' }} activo{{ activeRigsCount !== 1 ? 's' : '' }}
         </span>
+        <RouterLink to="/market" class="btn-primary flex items-center gap-2">
+          <span>🛒</span>
+          <span>Mercado</span>
+        </RouterLink>
       </div>
     </div>
 

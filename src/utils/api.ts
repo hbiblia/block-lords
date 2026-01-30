@@ -114,6 +114,14 @@ export async function getPlayerMiningStats(playerId: string) {
   return data;
 }
 
+// Procesar tick de minería (normalmente llamado por cron/scheduler)
+export async function processMiningTick() {
+  const { data, error } = await supabase.rpc('process_mining_tick');
+
+  if (error) throw error;
+  return data;
+}
+
 // === MARKET ===
 
 export async function getOrderBook(itemType: string) {

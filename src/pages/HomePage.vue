@@ -26,8 +26,8 @@ const isAuthenticated = computed(() => authStore.isAuthenticated);
         </RouterLink>
       </div>
       <div v-else>
-        <RouterLink to="/dashboard" class="btn-primary text-lg px-8 py-4">
-          Ir al Dashboard
+        <RouterLink to="/mining" class="btn-primary text-lg px-8 py-4">
+          Comenzar a Minar
         </RouterLink>
       </div>
     </div>

@@ -80,7 +80,7 @@ router.beforeEach((to, _from, next) => {
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'login', query: { redirect: to.fullPath } });
   } else if (to.meta.guest && authStore.isAuthenticated) {
-    next({ name: 'dashboard' });
+    next({ name: 'mining' });
   } else {
     next();
   }

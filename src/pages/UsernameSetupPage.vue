@@ -36,7 +36,7 @@ onMounted(() => {
   }
 
   if (authStore.isAuthenticated) {
-    router.push('/dashboard');
+    router.push('/mining');
     return;
   }
 

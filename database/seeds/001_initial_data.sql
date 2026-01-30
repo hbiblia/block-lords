@@ -1,6 +1,8 @@
 -- =====================================================
--- CRYPTO ARCADE MMO - Datos Iniciales
+-- BLOCK LORDS - Datos Iniciales
 -- =====================================================
+-- Este archivo es seguro de ejecutar múltiples veces
+-- Usa ON CONFLICT para evitar duplicados
 
 -- Insertar rigs base
 INSERT INTO rigs (id, name, description, hashrate, power_consumption, internet_consumption, repair_cost, tier, base_price)
@@ -12,7 +14,16 @@ VALUES
   ('asic_s19', 'ASIC S19', 'ASIC de última generación.', 2500, 5.0, 1.5, 200, 'advanced', 1000),
   ('mining_farm_small', 'Mini Granja', 'Pequeña granja de minería.', 5000, 8.0, 2.0, 400, 'advanced', 2500),
   ('mining_farm_large', 'Gran Granja', 'Granja de minería industrial.', 10000, 12.0, 3.0, 750, 'elite', 5000),
-  ('quantum_miner', 'Minero Cuántico', 'Tecnología experimental de minería.', 25000, 15.0, 4.0, 1500, 'elite', 15000);
+  ('quantum_miner', 'Minero Cuántico', 'Tecnología experimental de minería.', 25000, 15.0, 4.0, 1500, 'elite', 15000)
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  hashrate = EXCLUDED.hashrate,
+  power_consumption = EXCLUDED.power_consumption,
+  internet_consumption = EXCLUDED.internet_consumption,
+  repair_cost = EXCLUDED.repair_cost,
+  tier = EXCLUDED.tier,
+  base_price = EXCLUDED.base_price;
 
 -- Insertar insignias
 INSERT INTO badges (id, name, description, icon)
@@ -26,21 +37,27 @@ VALUES
   ('trade_master', 'Maestro del Comercio', 'Completaste 100 trades', '💰'),
   ('community_helper', 'Ayudante Comunitario', 'Ayudaste a 10 jugadores nuevos', '🤝'),
   ('event_champion', 'Campeón de Eventos', 'Ganaste un evento global', '🏅'),
-  ('early_adopter', 'Pionero', 'Te uniste durante la beta', '🚀');
+  ('early_adopter', 'Pionero', 'Te uniste durante la beta', '🚀')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  icon = EXCLUDED.icon;
 
 -- Insertar estadísticas iniciales de la red
 INSERT INTO network_stats (id, difficulty, hashrate)
 VALUES ('current', 1000, 0)
 ON CONFLICT (id) DO NOTHING;
 
--- Insertar bloque génesis
-INSERT INTO blocks (id, height, hash, previous_hash, miner_id, difficulty, network_hashrate)
+-- Insertar bloque génesis (solo si no existe y hay jugadores)
+-- Nota: El bloque génesis se crea automáticamente cuando el primer jugador mina
+-- o puedes ejecutar esto después de que exista al menos un jugador en 'players'
+INSERT INTO blocks (height, hash, previous_hash, miner_id, difficulty, network_hashrate)
 SELECT
-  uuid_generate_v4(),
   0,
   '0000000000000000000000000000000000000000000000000000000000000000',
   '0000000000000000000000000000000000000000000000000000000000000000',
-  (SELECT id FROM auth.users LIMIT 1),
+  (SELECT id FROM players LIMIT 1),
   1000,
   0
-WHERE EXISTS (SELECT 1 FROM auth.users LIMIT 1);
+WHERE EXISTS (SELECT 1 FROM players LIMIT 1)
+  AND NOT EXISTS (SELECT 1 FROM blocks WHERE height = 0);

@@ -24,7 +24,7 @@ onMounted(async () => {
 });
 
 function enterGame() {
-  router.push('/dashboard');
+  router.push('/mining');
 }
 
 function getRankName(score: number): string {

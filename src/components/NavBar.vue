@@ -22,55 +22,13 @@ async function handleLogout() {
   <nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-border/50">
     <div class="container mx-auto px-4 h-16 flex items-center justify-between">
       <!-- Logo -->
-      <RouterLink to="/" class="flex items-center gap-3 group">
+      <RouterLink :to="isAuthenticated ? '/mining' : '/'" class="flex items-center gap-3 group">
         <div class="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
           ⛏️
         </div>
         <span class="font-display font-bold text-lg hidden sm:inline gradient-text">BLOCK LORDS</span>
       </RouterLink>
 
-      <!-- Navigation Links -->
-      <div class="flex items-center gap-2">
-        <template v-if="isAuthenticated">
-          <RouterLink
-            to="/dashboard"
-            class="px-4 py-2 rounded-lg text-text-secondary hover:text-white hover:bg-bg-tertiary transition-all"
-            active-class="!text-white bg-bg-tertiary"
-          >
-            Dashboard
-          </RouterLink>
-          <RouterLink
-            to="/mining"
-            class="px-4 py-2 rounded-lg text-text-secondary hover:text-white hover:bg-bg-tertiary transition-all"
-            active-class="!text-white bg-bg-tertiary"
-          >
-            Minería
-          </RouterLink>
-          <RouterLink
-            to="/market"
-            class="px-4 py-2 rounded-lg text-text-secondary hover:text-white hover:bg-bg-tertiary transition-all"
-            active-class="!text-white bg-bg-tertiary"
-          >
-            Mercado
-          </RouterLink>
-          <RouterLink
-            to="/leaderboard"
-            class="px-4 py-2 rounded-lg text-text-secondary hover:text-white hover:bg-bg-tertiary transition-all"
-            active-class="!text-white bg-bg-tertiary"
-          >
-            Ranking
-          </RouterLink>
-        </template>
-
-        <template v-else>
-          <RouterLink
-            to="/leaderboard"
-            class="px-4 py-2 rounded-lg text-text-secondary hover:text-white hover:bg-bg-tertiary transition-all"
-          >
-            Ranking
-          </RouterLink>
-        </template>
-      </div>
 
       <!-- User Menu -->
       <div class="flex items-center gap-4">
