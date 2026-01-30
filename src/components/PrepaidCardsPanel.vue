@@ -52,7 +52,6 @@ const redeeming = ref(false);
 const buying = ref(false);
 
 const unredeemedCards = computed(() => playerCards.value.filter(c => !c.is_redeemed));
-const redeemedCards = computed(() => playerCards.value.filter(c => c.is_redeemed));
 
 const energyCards = computed(() => availableCards.value.filter(c => c.card_type === 'energy'));
 const internetCards = computed(() => availableCards.value.filter(c => c.card_type === 'internet'));
