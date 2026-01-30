@@ -36,7 +36,7 @@ CREATE TABLE rigs (
   internet_consumption DECIMAL(5, 2) NOT NULL CHECK (internet_consumption > 0),
   repair_cost DECIMAL(10, 2) NOT NULL CHECK (repair_cost >= 0),
   tier TEXT NOT NULL CHECK (tier IN ('basic', 'standard', 'advanced', 'elite')),
-  base_price DECIMAL(10, 2) NOT NULL CHECK (base_price > 0),
+  base_price DECIMAL(10, 2) NOT NULL CHECK (base_price >= 0),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

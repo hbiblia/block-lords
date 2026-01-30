@@ -247,9 +247,224 @@ body {
   }
 }
 
+/* === ANIMACIONES DE JUEGO === */
+@layer components {
+  /* Efecto de brillo en hover */
+  .shine-effect {
+    @apply relative overflow-hidden;
+  }
+
+  .shine-effect::after {
+    content: '';
+    @apply absolute inset-0 pointer-events-none;
+    background: linear-gradient(
+      120deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      transparent 100%
+    );
+    transform: translateX(-100%);
+  }
+
+  .shine-effect:hover::after {
+    animation: shine 0.6s ease-out;
+  }
+
+  @keyframes shine {
+    to { transform: translateX(100%); }
+  }
+
+  /* Pulso de notificación */
+  .notification-pulse {
+    @apply relative;
+  }
+
+  .notification-pulse::before {
+    content: '';
+    @apply absolute -inset-1 rounded-full bg-accent-primary/30;
+    animation: notification-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes notification-ping {
+    75%, 100% {
+      transform: scale(1.5);
+      opacity: 0;
+    }
+  }
+
+  /* Floating animation para iconos */
+  .float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  /* Shake animation */
+  .shake {
+    animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+  }
+
+  @keyframes shake {
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-3px); }
+    40%, 60% { transform: translateX(3px); }
+  }
+
+  /* Typing cursor effect */
+  .typing-cursor::after {
+    content: '|';
+    @apply text-accent-primary ml-1;
+    animation: blink 1s infinite;
+  }
+
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+
+  /* Level up effect */
+  .level-up {
+    animation: level-up 0.6s ease-out;
+  }
+
+  @keyframes level-up {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+
+  /* Coin drop animation */
+  .coin-drop {
+    animation: coin-drop 0.5s ease-out;
+  }
+
+  @keyframes coin-drop {
+    0% { transform: translateY(-20px); opacity: 0; }
+    60% { transform: translateY(5px); }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+
+  /* Particle burst */
+  .particle-burst {
+    @apply relative;
+  }
+
+  .particle-burst::before,
+  .particle-burst::after {
+    content: '✨';
+    @apply absolute text-xs pointer-events-none;
+    animation: particle 0.6s ease-out forwards;
+    opacity: 0;
+  }
+
+  .particle-burst::before {
+    top: -10px;
+    left: 20%;
+  }
+
+  .particle-burst::after {
+    top: -15px;
+    right: 20%;
+    animation-delay: 0.1s;
+  }
+
+  .particle-burst.active::before,
+  .particle-burst.active::after {
+    opacity: 1;
+  }
+
+  @keyframes particle {
+    0% { transform: translateY(0) scale(0); opacity: 1; }
+    100% { transform: translateY(-30px) scale(1.5); opacity: 0; }
+  }
+
+  /* Rig card gaming style */
+  .rig-card {
+    @apply card relative overflow-hidden;
+    @apply border-2 border-transparent;
+    @apply transition-all duration-300;
+  }
+
+  .rig-card:hover {
+    @apply border-accent-primary/50;
+    transform: translateY(-2px);
+  }
+
+  .rig-card.mining {
+    @apply border-status-success;
+    box-shadow: 0 0 30px rgba(34, 197, 94, 0.2);
+  }
+
+  .rig-card.mining::before {
+    content: '';
+    @apply absolute inset-0 pointer-events-none;
+    background: linear-gradient(
+      0deg,
+      transparent 0%,
+      rgba(34, 197, 94, 0.05) 50%,
+      transparent 100%
+    );
+    animation: mining-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes mining-pulse {
+    0%, 100% { opacity: 0.5; transform: translateY(100%); }
+    50% { opacity: 1; transform: translateY(-100%); }
+  }
+
+  /* XP bar style */
+  .xp-bar {
+    @apply h-2 bg-bg-tertiary rounded-full overflow-hidden relative;
+  }
+
+  .xp-bar-fill {
+    @apply h-full rounded-full;
+    background: linear-gradient(90deg, #8b5cf6 0%, #ec4899 50%, #8b5cf6 100%);
+    background-size: 200% 100%;
+    animation: xp-shimmer 2s linear infinite;
+  }
+
+  @keyframes xp-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+}
+
 /* === UTILIDADES ADICIONALES === */
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Animaciones de entrada */
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-out;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.5s ease-out;
+  }
+
+  @keyframes slide-up {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.3s ease-out;
+  }
+
+  @keyframes scale-in {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
   }
 }
