@@ -237,3 +237,41 @@ export async function installCooling(playerId: string, coolingId: string) {
   if (error) throw error;
   return data;
 }
+
+// === PREPAID CARDS (TARJETAS PREPAGO) ===
+
+export async function getPrepaidCards() {
+  const { data, error } = await supabase.rpc('get_prepaid_cards');
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getPlayerCards(playerId: string) {
+  const { data, error } = await supabase.rpc('get_player_cards', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function buyPrepaidCard(playerId: string, cardId: string) {
+  const { data, error } = await supabase.rpc('buy_prepaid_card', {
+    p_player_id: playerId,
+    p_card_id: cardId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function redeemPrepaidCard(playerId: string, code: string) {
+  const { data, error } = await supabase.rpc('redeem_prepaid_card', {
+    p_player_id: playerId,
+    p_code: code,
+  });
+
+  if (error) throw error;
+  return data;
+}

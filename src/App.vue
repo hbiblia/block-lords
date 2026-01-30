@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 import MainLayout from '@/layouts/MainLayout.vue';
@@ -7,12 +7,18 @@ import MainLayout from '@/layouts/MainLayout.vue';
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
 
-onMounted(async () => {
-  await authStore.checkAuth();
-  if (authStore.isAuthenticated) {
-    realtimeStore.connect();
-  }
-});
+// Conectar realtime cuando el usuario esté autenticado
+watch(
+  () => authStore.isAuthenticated,
+  (isAuth) => {
+    if (isAuth) {
+      realtimeStore.connect();
+    } else {
+      realtimeStore.disconnect();
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <template>

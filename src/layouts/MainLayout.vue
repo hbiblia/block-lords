@@ -1,16 +1,27 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 import { useMiningStore } from '@/stores/mining';
 import NavBar from '@/components/NavBar.vue';
 import ResourceBars from '@/components/ResourceBars.vue';
+import PrepaidCardsPanel from '@/components/PrepaidCardsPanel.vue';
 
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
 const miningStore = useMiningStore();
 
 const showResourceBars = computed(() => authStore.isAuthenticated);
+const showPrepaidCards = ref(false);
+
+function handleRecharge() {
+  showPrepaidCards.value = true;
+}
+
+function handleCardRedeemed() {
+  // Refrescar datos del jugador
+  authStore.fetchPlayer();
+}
 </script>
 
 <template>
@@ -24,9 +35,17 @@ const showResourceBars = computed(() => authStore.isAuthenticated);
           :show-consumption="miningStore.isMining"
           :energy-consumption="miningStore.totalEnergyConsumption"
           :internet-consumption="miningStore.totalInternetConsumption"
+          @recharge="handleRecharge"
         />
       </div>
     </div>
+
+    <!-- Prepaid Cards Panel -->
+    <PrepaidCardsPanel
+      :show="showPrepaidCards"
+      @close="showPrepaidCards = false"
+      @redeemed="handleCardRedeemed"
+    />
 
     <!-- Main Content -->
     <main class="flex-1 container mx-auto px-4 py-6" :class="{ 'mt-32': showResourceBars, 'mt-16': !showResourceBars }">

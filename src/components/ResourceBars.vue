@@ -8,6 +8,10 @@ const props = defineProps<{
   internetConsumption?: number;
 }>();
 
+const emit = defineEmits<{
+  recharge: [type: 'energy' | 'internet'];
+}>();
+
 const authStore = useAuthStore();
 
 const energy = computed(() => authStore.player?.energy ?? 100);
@@ -218,21 +222,23 @@ const internetStatus = computed(() => {
     <!-- Recharge Buttons -->
     <div class="flex items-center gap-2">
       <button
+        @click="emit('recharge', 'energy')"
         class="px-3 py-2 text-xs font-medium rounded-xl transition-all relative overflow-hidden group"
         :class="energyStatus === 'critical'
           ? 'bg-status-danger text-white animate-pulse'
           : 'bg-status-warning/20 text-status-warning hover:bg-status-warning/30'"
-        :disabled="displayEnergy >= 100"
+        title="Recargar Energía"
       >
         <span class="relative z-10">+ ⚡</span>
         <div v-if="energyStatus === 'critical'" class="absolute inset-0 bg-white/20 animate-ping"></div>
       </button>
       <button
+        @click="emit('recharge', 'internet')"
         class="px-3 py-2 text-xs font-medium rounded-xl transition-all relative overflow-hidden"
         :class="internetStatus === 'critical'
           ? 'bg-status-danger text-white animate-pulse'
           : 'bg-accent-tertiary/20 text-accent-tertiary hover:bg-accent-tertiary/30'"
-        :disabled="displayInternet >= 100"
+        title="Recargar Internet"
       >
         <span class="relative z-10">+ 📡</span>
         <div v-if="internetStatus === 'critical'" class="absolute inset-0 bg-white/20 animate-ping"></div>

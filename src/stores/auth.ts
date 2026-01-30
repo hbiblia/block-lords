@@ -25,6 +25,7 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false);
   const error = ref<string | null>(null);
   const needsUsername = ref(false);
+  const initialized = ref(false);
 
   const isAuthenticated = computed(() => !!user.value && !!session.value && !!player.value);
   const token = computed(() => session.value?.access_token ?? null);
@@ -43,7 +44,14 @@ export const useAuthStore = defineStore('auth', () => {
       console.error('Error checking auth:', e);
     } finally {
       loading.value = false;
+      initialized.value = true;
     }
+  }
+
+  // Esperar a que auth esté inicializado
+  async function waitForInit() {
+    if (initialized.value) return;
+    await checkAuth();
   }
 
   async function fetchPlayer() {
@@ -180,8 +188,10 @@ export const useAuthStore = defineStore('auth', () => {
     error,
     needsUsername,
     isAuthenticated,
+    initialized,
     token,
     checkAuth,
+    waitForInit,
     fetchPlayer,
     loginWithGoogle,
     completeProfile,

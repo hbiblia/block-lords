@@ -68,8 +68,11 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore();
+
+  // Esperar a que auth esté inicializado antes de verificar
+  await authStore.waitForInit();
 
   // Permitir acceso al callback y setup sin restricciones
   if (to.name === 'auth-callback' || to.name === 'setup-username') {

@@ -52,6 +52,10 @@ DROP FUNCTION IF EXISTS update_reputation(UUID, DECIMAL, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS get_cooling_items() CASCADE;
 DROP FUNCTION IF EXISTS get_player_cooling(UUID) CASCADE;
 DROP FUNCTION IF EXISTS install_cooling(UUID, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS get_prepaid_cards() CASCADE;
+DROP FUNCTION IF EXISTS get_player_cards(UUID) CASCADE;
+DROP FUNCTION IF EXISTS buy_prepaid_card(UUID, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS redeem_prepaid_card(UUID, TEXT) CASCADE;
 
 -- =====================================================
 -- 1. FUNCIONES DE UTILIDAD
@@ -1354,7 +1358,172 @@ END;
 $$;
 
 -- =====================================================
--- 8. FUNCIONES DE LEADERBOARD
+-- 8. FUNCIONES DE TARJETAS PREPAGO
+-- =====================================================
+
+-- Obtener tarjetas prepago disponibles
+CREATE OR REPLACE FUNCTION get_prepaid_cards()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT id, name, description, card_type, amount, base_price, tier
+      FROM prepaid_cards
+      ORDER BY card_type, base_price ASC
+    ) t
+  );
+END;
+$$;
+
+-- Obtener tarjetas del jugador (no canjeadas)
+CREATE OR REPLACE FUNCTION get_player_cards(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT pc.id, pc.code, pc.is_redeemed, pc.purchased_at, pc.redeemed_at,
+             p.id as card_id, p.name, p.description, p.card_type, p.amount, p.tier
+      FROM player_cards pc
+      JOIN prepaid_cards p ON p.id = pc.card_id
+      WHERE pc.player_id = p_player_id
+      ORDER BY pc.is_redeemed ASC, pc.purchased_at DESC
+    ) t
+  );
+END;
+$$;
+
+-- Comprar tarjeta prepago
+CREATE OR REPLACE FUNCTION buy_prepaid_card(p_player_id UUID, p_card_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_card prepaid_cards%ROWTYPE;
+  v_code TEXT;
+  v_new_card_id UUID;
+BEGIN
+  -- Verificar jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Verificar tarjeta
+  SELECT * INTO v_card FROM prepaid_cards WHERE id = p_card_id;
+  IF v_card IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Tarjeta no encontrada');
+  END IF;
+
+  -- Verificar balance
+  IF v_player.gamecoin_balance < v_card.base_price THEN
+    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+  END IF;
+
+  -- Generar código único
+  v_code := generate_card_code();
+
+  -- Descontar GameCoin
+  UPDATE players
+  SET gamecoin_balance = gamecoin_balance - v_card.base_price
+  WHERE id = p_player_id;
+
+  -- Registrar transacción
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'card_purchase', -v_card.base_price, 'gamecoin',
+          'Compra de tarjeta: ' || v_card.name);
+
+  -- Crear tarjeta para el jugador
+  INSERT INTO player_cards (player_id, card_id, code)
+  VALUES (p_player_id, p_card_id, v_code)
+  RETURNING id INTO v_new_card_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'card', json_build_object(
+      'id', v_new_card_id,
+      'code', v_code,
+      'name', v_card.name,
+      'card_type', v_card.card_type,
+      'amount', v_card.amount
+    )
+  );
+END;
+$$;
+
+-- Canjear tarjeta prepago
+CREATE OR REPLACE FUNCTION redeem_prepaid_card(p_player_id UUID, p_code TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_card player_cards%ROWTYPE;
+  v_card prepaid_cards%ROWTYPE;
+  v_new_value NUMERIC;
+BEGIN
+  -- Buscar tarjeta por código
+  SELECT * INTO v_player_card
+  FROM player_cards
+  WHERE code = UPPER(TRIM(p_code)) AND player_id = p_player_id;
+
+  IF v_player_card IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Código inválido o no te pertenece');
+  END IF;
+
+  IF v_player_card.is_redeemed THEN
+    RETURN json_build_object('success', false, 'error', 'Esta tarjeta ya fue canjeada');
+  END IF;
+
+  -- Obtener datos de la tarjeta
+  SELECT * INTO v_card FROM prepaid_cards WHERE id = v_player_card.card_id;
+
+  -- Aplicar recarga según tipo
+  IF v_card.card_type = 'energy' THEN
+    UPDATE players
+    SET energy = LEAST(100, energy + v_card.amount)
+    WHERE id = p_player_id
+    RETURNING energy INTO v_new_value;
+
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'energy_recharge', v_card.amount, 'gamecoin',
+            'Recarga de energía: ' || v_card.name);
+  ELSE
+    UPDATE players
+    SET internet = LEAST(100, internet + v_card.amount)
+    WHERE id = p_player_id
+    RETURNING internet INTO v_new_value;
+
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'internet_recharge', v_card.amount, 'gamecoin',
+            'Recarga de internet: ' || v_card.name);
+  END IF;
+
+  -- Marcar tarjeta como canjeada
+  UPDATE player_cards
+  SET is_redeemed = true, redeemed_at = NOW()
+  WHERE id = v_player_card.id;
+
+  RETURN json_build_object(
+    'success', true,
+    'card_type', v_card.card_type,
+    'amount', v_card.amount,
+    'new_value', v_new_value
+  );
+END;
+$$;
+
+-- =====================================================
+-- 9. FUNCIONES DE LEADERBOARD
 -- =====================================================
 
 -- Leaderboard de reputación
