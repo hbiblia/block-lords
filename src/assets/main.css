@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === ESTILOS BASE === */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 100%);
+}
+
+/* === SCROLLBAR PERSONALIZADA === */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #12122a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a4a;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a5a;
+}
+
+/* === COMPONENTES ARCADE === */
+@layer components {
+  .arcade-panel {
+    @apply bg-arcade-panel border border-arcade-border rounded-lg p-4;
+    box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
+  }
+
+  .arcade-button {
+    @apply px-4 py-2 bg-arcade-primary text-arcade-bg font-bold rounded transition-all duration-200;
+    @apply hover:shadow-lg hover:shadow-arcade-primary/50 hover:scale-105;
+    @apply active:scale-95;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+  }
+
+  .arcade-button-secondary {
+    @apply arcade-button bg-arcade-secondary;
+    @apply hover:shadow-arcade-secondary/50;
+  }
+
+  .arcade-button-danger {
+    @apply arcade-button bg-arcade-danger;
+    @apply hover:shadow-arcade-danger/50;
+  }
+
+  .arcade-input {
+    @apply w-full px-4 py-2 bg-arcade-bg border border-arcade-border rounded;
+    @apply focus:outline-none focus:border-arcade-primary focus:ring-1 focus:ring-arcade-primary;
+    @apply placeholder:text-gray-500;
+  }
+
+  .arcade-card {
+    @apply arcade-panel hover:border-arcade-primary/50 transition-colors cursor-pointer;
+  }
+
+  .arcade-badge {
+    @apply inline-flex items-center px-2 py-1 rounded text-xs font-bold;
+  }
+
+  /* Barras de recursos */
+  .resource-bar {
+    @apply h-4 bg-arcade-bg rounded-full overflow-hidden border border-arcade-border;
+  }
+
+  .resource-bar-fill {
+    @apply h-full transition-all duration-300 ease-out;
+  }
+
+  .resource-bar-energy .resource-bar-fill {
+    @apply bg-gradient-to-r from-yellow-500 to-yellow-300;
+  }
+
+  .resource-bar-internet .resource-bar-fill {
+    @apply bg-gradient-to-r from-blue-500 to-blue-300;
+  }
+
+  /* Rangos de reputación */
+  .rank-bronze { @apply text-rank-bronze; }
+  .rank-silver { @apply text-rank-silver; }
+  .rank-gold { @apply text-rank-gold; }
+  .rank-platinum { @apply text-rank-platinum; }
+  .rank-diamond { @apply text-rank-diamond; }
+
+  /* Rig card */
+  .rig-card {
+    @apply arcade-card relative overflow-hidden;
+  }
+
+  .rig-card.active {
+    @apply border-arcade-primary;
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+  }
+
+  .rig-card.inactive {
+    @apply opacity-60;
+  }
+
+  /* Animación de minería */
+  .mining-animation {
+    @apply absolute inset-0 pointer-events-none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 255, 136, 0.03) 2px,
+      rgba(0, 255, 136, 0.03) 4px
+    );
+    animation: scan 2s linear infinite;
+  }
+
+  @keyframes scan {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(100%); }
+  }
+
+  /* Notificaciones */
+  .notification {
+    @apply fixed bottom-4 right-4 arcade-panel border-l-4 animate-shake;
+  }
+
+  .notification-success {
+    @apply border-l-arcade-success;
+  }
+
+  .notification-warning {
+    @apply border-l-arcade-warning;
+  }
+
+  .notification-danger {
+    @apply border-l-arcade-danger;
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "crypto-arcade-mmo",
+  "version": "0.1.0",
+  "description": "Arcade MMO Persistente de Minería de Criptomonedas",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.3",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.15",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/tsconfig": "^0.7.0",
+    "autoprefixer": "^10.4.17",
+    "postcss": "^8.4.33",
+    "tailwindcss": "^3.4.1",
+    "typescript": "~5.6.0",
+    "vite": "^6.0.7",
+    "vue-tsc": "^2.2.0"
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  }
+}
