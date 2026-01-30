@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
+import { computed, ref, watch, onUnmounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 
 const props = defineProps<{
@@ -104,8 +104,7 @@ const internetStatus = computed(() => {
           class="font-mono font-bold"
           :class="{
             'text-status-danger animate-pulse': energyStatus === 'critical',
-            'text-status-warning': energyStatus === 'warning',
-            'text-status-warning': energyStatus === 'normal'
+            'text-status-warning': energyStatus !== 'critical'
           }"
         >
           {{ displayEnergy.toFixed(1) }}%
