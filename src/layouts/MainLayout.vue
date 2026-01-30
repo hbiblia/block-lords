@@ -5,12 +5,14 @@ import { useRealtimeStore } from '@/stores/realtime';
 import NavBar from '@/components/NavBar.vue';
 import PrepaidCardsPanel from '@/components/PrepaidCardsPanel.vue';
 import InventoryModal from '@/components/InventoryModal.vue';
+import ExchangeModal from '@/components/ExchangeModal.vue';
 
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
 
 const showPrepaidCards = ref(false);
 const showInventory = ref(false);
+const showExchange = ref(false);
 
 function handleRecharge() {
   showPrepaidCards.value = true;
@@ -20,20 +22,26 @@ function handleOpenInventory() {
   showInventory.value = true;
 }
 
+function handleOpenExchange() {
+  showExchange.value = true;
+}
+
 function handleCardRedeemed() {
-  // Refrescar datos del jugador
   authStore.fetchPlayer();
 }
 
 function handleInventoryUsed() {
-  // Refrescar datos del jugador
+  authStore.fetchPlayer();
+}
+
+function handleExchanged() {
   authStore.fetchPlayer();
 }
 </script>
 
 <template>
   <div class="min-h-screen flex flex-col bg-bg-primary">
-    <NavBar @recharge="handleRecharge" @inventory="handleOpenInventory" />
+    <NavBar @recharge="handleRecharge" @inventory="handleOpenInventory" @exchange="handleOpenExchange" />
 
     <!-- Prepaid Cards Panel -->
     <PrepaidCardsPanel
@@ -47,6 +55,13 @@ function handleInventoryUsed() {
       :show="showInventory"
       @close="showInventory = false"
       @used="handleInventoryUsed"
+    />
+
+    <!-- Exchange Modal -->
+    <ExchangeModal
+      :show="showExchange"
+      @close="showExchange = false"
+      @exchanged="handleExchanged"
     />
 
     <!-- Main Content -->

@@ -99,6 +99,9 @@ DROP FUNCTION IF EXISTS get_player_inventory(UUID) CASCADE;
 DROP FUNCTION IF EXISTS install_cooling_from_inventory(UUID, UUID) CASCADE;
 DROP FUNCTION IF EXISTS install_cooling_to_rig(UUID, UUID, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS get_rig_cooling(UUID) CASCADE;
+DROP FUNCTION IF EXISTS exchange_crypto_to_gamecoin(UUID, NUMERIC) CASCADE;
+DROP FUNCTION IF EXISTS exchange_crypto_to_ron(UUID, NUMERIC) CASCADE;
+DROP FUNCTION IF EXISTS get_exchange_rates() CASCADE;
 
 -- =====================================================
 -- 1. FUNCIONES DE UTILIDAD
@@ -1978,6 +1981,132 @@ BEGIN
       ORDER BY COALESCE(p.blocks_mined, 0) DESC
       LIMIT p_limit
     ) t
+  );
+END;
+$$;
+
+-- =====================================================
+-- 10. FUNCIONES DE EXCHANGE (CRYPTO)
+-- =====================================================
+
+-- Agregar columna ron_balance si no existe
+ALTER TABLE players ADD COLUMN IF NOT EXISTS ron_balance NUMERIC DEFAULT 0;
+
+-- Tasa de cambio: 1 crypto = 10 GameCoin (ajustable)
+-- Tasa de conversión RON: 100 crypto = 1 RON (ajustable)
+
+-- Exchange: Crypto → GameCoin
+CREATE OR REPLACE FUNCTION exchange_crypto_to_gamecoin(p_player_id UUID, p_crypto_amount NUMERIC)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_exchange_rate NUMERIC := 10;  -- 1 crypto = 10 GameCoin
+  v_gamecoin_received NUMERIC;
+BEGIN
+  -- Validar cantidad
+  IF p_crypto_amount <= 0 THEN
+    RETURN json_build_object('success', false, 'error', 'La cantidad debe ser mayor a 0');
+  END IF;
+
+  -- Verificar jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Verificar balance de crypto
+  IF v_player.crypto_balance < p_crypto_amount THEN
+    RETURN json_build_object('success', false, 'error', 'Crypto insuficiente', 'balance', v_player.crypto_balance);
+  END IF;
+
+  -- Calcular GameCoin a recibir
+  v_gamecoin_received := p_crypto_amount * v_exchange_rate;
+
+  -- Realizar el exchange
+  UPDATE players
+  SET crypto_balance = crypto_balance - p_crypto_amount,
+      gamecoin_balance = gamecoin_balance + v_gamecoin_received
+  WHERE id = p_player_id;
+
+  -- Registrar transacción
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'crypto_to_gamecoin', -p_crypto_amount, 'crypto',
+          'Exchange: ' || p_crypto_amount || ' crypto → ' || v_gamecoin_received || ' GameCoin');
+
+  RETURN json_build_object(
+    'success', true,
+    'crypto_spent', p_crypto_amount,
+    'gamecoin_received', v_gamecoin_received,
+    'exchange_rate', v_exchange_rate
+  );
+END;
+$$;
+
+-- Exchange: Crypto → RON (retiro)
+CREATE OR REPLACE FUNCTION exchange_crypto_to_ron(p_player_id UUID, p_crypto_amount NUMERIC)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_exchange_rate NUMERIC := 0.00001;  -- 1000 crypto = 0.01 RON
+  v_min_amount NUMERIC := 100000;  -- Mínimo 100000 crypto para convertir (= 1 RON)
+  v_ron_received NUMERIC;
+BEGIN
+  -- Validar cantidad mínima
+  IF p_crypto_amount < v_min_amount THEN
+    RETURN json_build_object('success', false, 'error', 'Mínimo ' || v_min_amount || ' crypto para convertir a RON');
+  END IF;
+
+  -- Verificar jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Verificar balance de crypto
+  IF v_player.crypto_balance < p_crypto_amount THEN
+    RETURN json_build_object('success', false, 'error', 'Crypto insuficiente', 'balance', v_player.crypto_balance);
+  END IF;
+
+  -- Calcular RON a recibir
+  v_ron_received := p_crypto_amount * v_exchange_rate;
+
+  -- Realizar el exchange
+  UPDATE players
+  SET crypto_balance = crypto_balance - p_crypto_amount,
+      ron_balance = COALESCE(ron_balance, 0) + v_ron_received
+  WHERE id = p_player_id;
+
+  -- Registrar transacción
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'crypto_to_ron', -p_crypto_amount, 'crypto',
+          'Exchange: ' || p_crypto_amount || ' crypto → ' || v_ron_received || ' RON');
+
+  RETURN json_build_object(
+    'success', true,
+    'crypto_spent', p_crypto_amount,
+    'ron_received', v_ron_received,
+    'exchange_rate', v_exchange_rate
+  );
+END;
+$$;
+
+-- Obtener tasas de exchange actuales
+CREATE OR REPLACE FUNCTION get_exchange_rates()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN json_build_object(
+    'crypto_to_gamecoin', 10,  -- 1 crypto = 10 GameCoin
+    'crypto_to_ron', 0.00001,  -- 1000 crypto = 0.01 RON
+    'min_crypto_for_ron', 100000  -- Mínimo para convertir a RON (= 1 RON)
   );
 END;
 $$;

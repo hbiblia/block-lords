@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
-import { getPlayerRigs, getNetworkStats, getRecentBlocks, toggleRig } from '@/utils/api';
+import { getPlayerRigs, getNetworkStats, getRecentBlocks, toggleRig, getRigCooling } from '@/utils/api';
 import MarketModal from '@/components/MarketModal.vue';
 
 const authStore = useAuthStore();
@@ -35,6 +35,14 @@ const networkStats = ref({
 });
 
 const recentBlocks = ref<any[]>([]);
+
+// Cooling data per rig
+const rigCooling = ref<Record<string, Array<{
+  id: string;
+  durability: number;
+  name: string;
+  cooling_power: number;
+}>>>({});
 
 // Mining simulation
 const miningProgress = ref(0);
@@ -87,6 +95,9 @@ async function loadData() {
     networkStats.value = networkData;
     recentBlocks.value = blocksData ?? [];
 
+    // Load cooling data for each rig
+    await loadRigsCooling();
+
     // Sync active rigs to mining store for resource consumption display
     syncMiningStore();
   } catch (e) {
@@ -94,6 +105,24 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
+}
+
+async function loadRigsCooling() {
+  const coolingPromises = rigs.value.map(async (rig) => {
+    try {
+      const cooling = await getRigCooling(rig.id);
+      return { rigId: rig.id, cooling: cooling ?? [] };
+    } catch {
+      return { rigId: rig.id, cooling: [] };
+    }
+  });
+
+  const results = await Promise.all(coolingPromises);
+  const coolingMap: Record<string, any[]> = {};
+  results.forEach(({ rigId, cooling }) => {
+    coolingMap[rigId] = cooling;
+  });
+  rigCooling.value = coolingMap;
 }
 
 // Sync active rigs to the mining store
@@ -520,12 +549,12 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Stats -->
-                <div class="grid grid-cols-3 gap-2 mb-4 text-sm">
+                <div class="grid grid-cols-2 gap-2 mb-4 text-sm">
                   <div class="flex items-center gap-1">
                     <span class="text-status-warning">⚡</span>
-                    <span class="text-xs" :class="getPowerPenaltyPercent(playerRig) > 0 ? 'text-status-danger' : 'text-text-muted'">
-                      {{ getRigEffectivePower(playerRig).toFixed(1) }}<span class="text-text-muted">/{{ playerRig.rig.power_consumption }}</span>/t
-                      <span v-if="getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger text-[10px]">
+                    <span class="text-xs text-text-muted">
+                      {{ playerRig.rig.power_consumption }}/t
+                      <span v-if="getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger font-medium">
                         (+{{ getPowerPenaltyPercent(playerRig) }}%)
                       </span>
                     </span>
@@ -534,15 +563,25 @@ onUnmounted(() => {
                     <span class="text-accent-tertiary">📡</span>
                     <span class="text-text-muted text-xs">{{ playerRig.rig.internet_consumption }}/t</span>
                   </div>
-                  <div class="flex items-center gap-1">
-                    <span>🌡️</span>
-                    <span
-                      class="text-xs font-medium"
-                      :class="getTempColor(playerRig.temperature ?? 25)"
-                    >
-                      {{ (playerRig.temperature ?? 25).toFixed(0) }}°C
+                </div>
+
+                <!-- Cooling Display -->
+                <div class="flex items-center justify-between mb-3 px-2 py-1.5 rounded-lg"
+                     :class="rigCooling[playerRig.id]?.length > 0 ? 'bg-cyan-500/10' : 'bg-bg-tertiary/50'">
+                  <div class="flex items-center gap-1.5">
+                    <span>❄️</span>
+                    <span class="text-xs" :class="rigCooling[playerRig.id]?.length > 0 ? 'text-cyan-400' : 'text-text-muted'">
+                      {{ rigCooling[playerRig.id]?.length > 0 ? 'Refrigeración' : 'Sin cooling' }}
                     </span>
                   </div>
+                  <div v-if="rigCooling[playerRig.id]?.length > 0" class="flex items-center gap-2">
+                    <div v-for="cooling in rigCooling[playerRig.id]" :key="cooling.id"
+                         class="flex items-center gap-1 text-xs"
+                         :title="cooling.name">
+                      <span class="text-cyan-400 font-medium">{{ cooling.durability.toFixed(0) }}%</span>
+                    </div>
+                  </div>
+                  <span v-else class="text-xs text-status-danger">⚠️</span>
                 </div>
 
                 <!-- Temperature Bar -->

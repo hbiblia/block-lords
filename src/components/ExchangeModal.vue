@@ -1,0 +1,277 @@
+<script setup lang="ts">
+import { ref, computed, watch, onMounted } from 'vue';
+import { useAuthStore } from '@/stores/auth';
+import { exchangeCryptoToGamecoin, exchangeCryptoToRon, getExchangeRates } from '@/utils/api';
+
+const props = defineProps<{
+  show: boolean;
+}>();
+
+const emit = defineEmits<{
+  close: [];
+  exchanged: [];
+}>();
+
+const authStore = useAuthStore();
+
+const loading = ref(false);
+const exchanging = ref(false);
+const activeTab = ref<'gamecoin' | 'ron'>('gamecoin');
+const amount = ref('');
+
+const rates = ref({
+  crypto_to_gamecoin: 10,
+  crypto_to_ron: 0.01,
+  min_crypto_for_ron: 10,
+});
+
+const cryptoBalance = computed(() => authStore.player?.crypto_balance ?? 0);
+const ronBalance = computed(() => authStore.player?.ron_balance ?? 0);
+
+const numericAmount = computed(() => {
+  const val = parseFloat(amount.value);
+  return isNaN(val) ? 0 : val;
+});
+
+const estimatedReceive = computed(() => {
+  if (activeTab.value === 'gamecoin') {
+    return numericAmount.value * rates.value.crypto_to_gamecoin;
+  } else {
+    return numericAmount.value * rates.value.crypto_to_ron;
+  }
+});
+
+const canExchange = computed(() => {
+  if (numericAmount.value <= 0) return false;
+  if (numericAmount.value > cryptoBalance.value) return false;
+  if (activeTab.value === 'ron' && numericAmount.value < rates.value.min_crypto_for_ron) return false;
+  return true;
+});
+
+const errorMessage = computed(() => {
+  if (numericAmount.value <= 0) return '';
+  if (numericAmount.value > cryptoBalance.value) return 'Crypto insuficiente';
+  if (activeTab.value === 'ron' && numericAmount.value < rates.value.min_crypto_for_ron) {
+    return `Minimo ${rates.value.min_crypto_for_ron} crypto para RON`;
+  }
+  return '';
+});
+
+async function loadRates() {
+  try {
+    const data = await getExchangeRates();
+    if (data) {
+      rates.value = data;
+    }
+  } catch (e) {
+    console.error('Error loading rates:', e);
+  }
+}
+
+async function handleExchange() {
+  if (!canExchange.value || !authStore.player) return;
+
+  exchanging.value = true;
+
+  try {
+    let result;
+    if (activeTab.value === 'gamecoin') {
+      result = await exchangeCryptoToGamecoin(authStore.player.id, numericAmount.value);
+    } else {
+      result = await exchangeCryptoToRon(authStore.player.id, numericAmount.value);
+    }
+
+    if (result?.success) {
+      await authStore.fetchPlayer();
+      amount.value = '';
+      emit('exchanged');
+    } else {
+      alert(result?.error ?? 'Error en el exchange');
+    }
+  } catch (e) {
+    console.error('Error exchanging:', e);
+    alert('Error al realizar el exchange');
+  } finally {
+    exchanging.value = false;
+  }
+}
+
+function setMaxAmount() {
+  amount.value = cryptoBalance.value.toString();
+}
+
+function setPercentAmount(percent: number) {
+  amount.value = (cryptoBalance.value * percent).toFixed(4);
+}
+
+watch(() => props.show, (newVal) => {
+  if (newVal) {
+    loadRates();
+    amount.value = '';
+  }
+});
+
+onMounted(() => {
+  if (props.show) {
+    loadRates();
+  }
+});
+</script>
+
+<template>
+  <Teleport to="body">
+    <div
+      v-if="show"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      @click.self="emit('close')"
+    >
+      <div class="bg-bg-secondary rounded-2xl w-full max-w-md mx-4 border border-border overflow-hidden">
+        <!-- Header -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <h2 class="text-lg font-bold flex items-center gap-2">
+            <span class="text-2xl">💱</span>
+            Exchange
+          </h2>
+          <button
+            @click="emit('close')"
+            class="p-2 hover:bg-bg-tertiary rounded-lg transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        <!-- Balance Display -->
+        <div class="p-4 bg-bg-primary/50">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="text-center">
+              <div class="text-xs text-text-muted mb-1">Tu Crypto</div>
+              <div class="text-xl font-bold text-accent-tertiary font-mono">
+                {{ cryptoBalance.toFixed(4) }} ₿
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="text-xs text-text-muted mb-1">Tu RON</div>
+              <div class="text-xl font-bold text-purple-400 font-mono">
+                {{ ronBalance.toFixed(4) }} RON
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex border-b border-border">
+          <button
+            @click="activeTab = 'gamecoin'"
+            class="flex-1 py-3 text-sm font-medium transition-colors"
+            :class="activeTab === 'gamecoin'
+              ? 'bg-status-warning/10 text-status-warning border-b-2 border-status-warning'
+              : 'text-text-muted hover:bg-bg-tertiary'"
+          >
+            🪙 Crypto → GameCoin
+          </button>
+          <button
+            @click="activeTab = 'ron'"
+            class="flex-1 py-3 text-sm font-medium transition-colors"
+            :class="activeTab === 'ron'
+              ? 'bg-purple-500/10 text-purple-400 border-b-2 border-purple-400'
+              : 'text-text-muted hover:bg-bg-tertiary'"
+          >
+            💎 Crypto → RON
+          </button>
+        </div>
+
+        <!-- Content -->
+        <div class="p-4 space-y-4">
+          <!-- Rate Info -->
+          <div class="bg-bg-tertiary rounded-lg p-3 text-center text-sm">
+            <span class="text-text-muted">Tasa: </span>
+            <span v-if="activeTab === 'gamecoin'" class="text-status-warning font-medium">
+              1 ₿ = {{ rates.crypto_to_gamecoin }} 🪙
+            </span>
+            <span v-else class="text-purple-400 font-medium">
+              {{ (1 / rates.crypto_to_ron).toFixed(0) }} ₿ = 1 RON
+            </span>
+          </div>
+
+          <!-- Amount Input -->
+          <div>
+            <label class="text-xs text-text-muted mb-2 block">Cantidad de Crypto</label>
+            <div class="relative">
+              <input
+                v-model="amount"
+                type="number"
+                step="0.0001"
+                min="0"
+                :max="cryptoBalance"
+                placeholder="0.0000"
+                class="w-full bg-bg-tertiary border border-border rounded-lg px-4 py-3 pr-16 font-mono text-lg focus:outline-none focus:border-accent-primary"
+              />
+              <span class="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted">₿</span>
+            </div>
+          </div>
+
+          <!-- Quick Amount Buttons -->
+          <div class="flex gap-2">
+            <button
+              @click="setPercentAmount(0.25)"
+              class="flex-1 py-2 text-xs font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 rounded-lg transition-colors"
+            >
+              25%
+            </button>
+            <button
+              @click="setPercentAmount(0.5)"
+              class="flex-1 py-2 text-xs font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 rounded-lg transition-colors"
+            >
+              50%
+            </button>
+            <button
+              @click="setPercentAmount(0.75)"
+              class="flex-1 py-2 text-xs font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 rounded-lg transition-colors"
+            >
+              75%
+            </button>
+            <button
+              @click="setMaxAmount"
+              class="flex-1 py-2 text-xs font-medium bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30 rounded-lg transition-colors"
+            >
+              MAX
+            </button>
+          </div>
+
+          <!-- Error Message -->
+          <div v-if="errorMessage" class="text-status-danger text-sm text-center">
+            {{ errorMessage }}
+          </div>
+
+          <!-- Estimated Receive -->
+          <div class="bg-bg-primary rounded-xl p-4">
+            <div class="text-xs text-text-muted mb-2 text-center">Recibiras</div>
+            <div class="text-3xl font-bold text-center font-mono" :class="activeTab === 'gamecoin' ? 'text-status-warning' : 'text-purple-400'">
+              {{ estimatedReceive.toFixed(activeTab === 'gamecoin' ? 2 : 4) }}
+              <span class="text-lg">{{ activeTab === 'gamecoin' ? '🪙' : 'RON' }}</span>
+            </div>
+          </div>
+
+          <!-- Min Amount Warning for RON -->
+          <div v-if="activeTab === 'ron'" class="text-xs text-text-muted text-center">
+            Minimo {{ rates.min_crypto_for_ron }} crypto para convertir a RON
+          </div>
+
+          <!-- Exchange Button -->
+          <button
+            @click="handleExchange"
+            :disabled="!canExchange || exchanging"
+            class="w-full py-3 rounded-xl font-bold text-lg transition-all"
+            :class="canExchange && !exchanging
+              ? (activeTab === 'gamecoin'
+                  ? 'bg-gradient-to-r from-status-warning to-yellow-500 text-black hover:opacity-90'
+                  : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90')
+              : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
+          >
+            {{ exchanging ? 'Procesando...' : (activeTab === 'gamecoin' ? 'Convertir a GameCoin' : 'Convertir a RON') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+</template>

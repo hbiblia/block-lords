@@ -341,3 +341,32 @@ export async function buyRig(playerId: string, rigId: string) {
   return data;
 }
 
+// === EXCHANGE (CRYPTO) ===
+
+export async function exchangeCryptoToGamecoin(playerId: string, cryptoAmount: number) {
+  const { data, error } = await supabase.rpc('exchange_crypto_to_gamecoin', {
+    p_player_id: playerId,
+    p_crypto_amount: cryptoAmount,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function exchangeCryptoToRon(playerId: string, cryptoAmount: number) {
+  const { data, error } = await supabase.rpc('exchange_crypto_to_ron', {
+    p_player_id: playerId,
+    p_crypto_amount: cryptoAmount,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getExchangeRates() {
+  const { data, error } = await supabase.rpc('get_exchange_rates');
+
+  if (error) throw error;
+  return data;
+}
+

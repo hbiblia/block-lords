@@ -8,6 +8,7 @@ import { useMiningStore } from '@/stores/mining';
 const emit = defineEmits<{
   recharge: [];
   inventory: [];
+  exchange: [];
 }>();
 
 const router = useRouter();
@@ -74,6 +75,17 @@ async function handleLogout() {
               <span class="text-accent-tertiary">₿</span>
               <span class="font-medium">{{ authStore.player?.crypto_balance?.toFixed(4) ?? '0.0000' }}</span>
             </div>
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg">
+              <span class="text-purple-400">💎</span>
+              <span class="font-medium">{{ authStore.player?.ron_balance?.toFixed(4) ?? '0.0000' }}</span>
+            </div>
+            <button
+              @click="emit('exchange')"
+              class="px-2 py-1.5 text-xs font-medium rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-all"
+              title="Exchange Crypto"
+            >
+              💱
+            </button>
 
             <!-- Energy Bar -->
             <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg min-w-[140px]">

@@ -12,6 +12,7 @@ interface Player {
   username: string;
   gamecoin_balance: number;
   crypto_balance: number;
+  ron_balance: number;
   energy: number;
   internet: number;
   max_energy: number;
