@@ -14,7 +14,6 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore();
 
-const loading = ref(false);
 const exchanging = ref(false);
 const activeTab = ref<'gamecoin' | 'ron'>('gamecoin');
 const amount = ref('');

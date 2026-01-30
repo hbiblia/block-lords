@@ -2122,42 +2122,21 @@ ON CONFLICT (id) DO NOTHING;
 -- =====================================================
 -- 10. CRON JOBS (pg_cron)
 -- =====================================================
--- Ejecutar en Supabase Dashboard -> SQL Editor
--- Requiere que pg_cron esté habilitado (viene por defecto en Supabase)
+-- NOTA: En Supabase, pg_cron ya está habilitado.
+-- Configurar el cron job manualmente desde Supabase Dashboard:
+-- 1. Ir a Database -> Extensions -> Verificar que pg_cron esté habilitado
+-- 2. Ir a SQL Editor y ejecutar:
+--    SELECT cron.schedule('game_tick_job', '* * * * *', 'SELECT run_decay_cycle()');
+-- 3. Para verificar: SELECT * FROM cron.job;
+-- 4. Para eliminar: SELECT cron.unschedule('game_tick_job');
 
--- Habilitar la extensión pg_cron si no está habilitada
-CREATE EXTENSION IF NOT EXISTS pg_cron;
-
--- Dar permisos a pg_cron para ejecutar funciones
-GRANT USAGE ON SCHEMA cron TO postgres;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA cron TO postgres;
-
--- Eliminar job existente si existe (para poder recrearlo)
-SELECT cron.unschedule('process_resource_decay_job')
-WHERE EXISTS (
-  SELECT 1 FROM cron.job WHERE jobname = 'process_resource_decay_job'
-);
-
--- Programar process_resource_decay() para ejecutarse cada 10 segundos
--- Nota: pg_cron mínimo es 1 minuto, así que usamos un truco con múltiples jobs
--- Job 1: segundo 0 de cada minuto
-SELECT cron.schedule(
-  'process_resource_decay_job',
-  '* * * * *',  -- Cada minuto
-  $$SELECT process_resource_decay()$$
-);
-
--- Para simular ejecución cada 10 segundos, creamos jobs adicionales con pg_sleep
--- Alternativamente, ajustar los valores de decay en la función para compensar
-
--- Job que ejecuta el decay 6 veces por minuto (cada ~10 segundos)
+-- Función que ejecuta el decay 6 veces por minuto (cada ~10 segundos)
 CREATE OR REPLACE FUNCTION run_decay_cycle()
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  -- Ejecutar 6 veces con 10 segundos de espera entre cada una
   PERFORM process_resource_decay();
   PERFORM pg_sleep(10);
   PERFORM process_resource_decay();
@@ -2171,18 +2150,3 @@ BEGIN
   PERFORM process_resource_decay();
 END;
 $$;
-
--- Actualizar el job para usar el ciclo completo
-SELECT cron.unschedule('process_resource_decay_job')
-WHERE EXISTS (
-  SELECT 1 FROM cron.job WHERE jobname = 'process_resource_decay_job'
-);
-
-SELECT cron.schedule(
-  'process_resource_decay_job',
-  '* * * * *',  -- Cada minuto, ejecuta 6 ciclos internamente
-  $$SELECT run_decay_cycle()$$
-);
-
--- Verificar que el job está programado
--- SELECT * FROM cron.job;
