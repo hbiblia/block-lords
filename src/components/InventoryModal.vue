@@ -462,14 +462,14 @@ onMounted(() => {
                   </div>
                   <div class="bg-bg-primary/50 rounded-lg p-2 text-center">
                     <div class="text-xs text-text-muted mb-1">Temperatura</div>
-                    <div class="font-mono font-bold" :class="rig.temperature > 50 ? (rig.temperature > 70 ? 'text-status-danger' : 'text-status-warning') : 'text-status-success'">
-                      {{ rig.temperature.toFixed(1) }}°C
+                    <div class="font-mono font-bold" :class="Number(rig.temperature ?? 25) > 50 ? (Number(rig.temperature ?? 25) > 70 ? 'text-status-danger' : 'text-status-warning') : 'text-status-success'">
+                      {{ Number(rig.temperature ?? 25).toFixed(1) }}°C
                     </div>
                   </div>
                   <div class="bg-bg-primary/50 rounded-lg p-2 text-center">
                     <div class="text-xs text-text-muted mb-1">Condicion</div>
-                    <div class="font-mono font-bold" :class="rig.condition < 30 ? 'text-status-danger' : (rig.condition < 60 ? 'text-status-warning' : 'text-status-success')">
-                      {{ rig.condition.toFixed(0) }}%
+                    <div class="font-mono font-bold" :class="Number(rig.condition ?? 0) < 30 ? 'text-status-danger' : (Number(rig.condition ?? 0) < 60 ? 'text-status-warning' : 'text-status-success')">
+                      {{ Number(rig.condition ?? 0).toFixed(0) }}%
                     </div>
                   </div>
                   <div class="bg-bg-primary/50 rounded-lg p-2 text-center">

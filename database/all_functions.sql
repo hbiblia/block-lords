@@ -872,13 +872,21 @@ BEGIN
       -- Calcular deterioro BASE por uso (siempre hay un poco de desgaste)
       v_base_deterioration := 0.02;  -- 0.02% por tick base
 
-      -- Deterioro EXTRA basado en temperatura
-      -- Temperatura > 50°C empieza a causar daño adicional
-      -- Temperatura > 70°C causa daño severo
-      IF v_new_temp > 70 THEN
-        v_deterioration := v_base_deterioration + 0.3 + ((v_new_temp - 70) * 0.05);  -- Daño severo
-      ELSIF v_new_temp > 50 THEN
-        v_deterioration := v_base_deterioration + 0.05 + ((v_new_temp - 50) * 0.01);  -- Daño moderado
+      -- Deterioro EXTRA basado en temperatura (ESCALADO AGRESIVO)
+      -- Cuanto más caliente, exponencialmente más daño
+      -- < 50°C: solo desgaste base (0.02%)
+      -- 50-70°C: daño moderado que escala (hasta ~0.5%)
+      -- 70-85°C: daño severo (hasta ~2%)
+      -- 85-100°C: daño CRÍTICO exponencial (hasta ~7% a 100°C)
+      IF v_new_temp >= 85 THEN
+        -- Daño crítico: escala exponencialmente - a 100°C = ~7% por tick
+        v_deterioration := v_base_deterioration + 2.0 + POWER((v_new_temp - 85) / 15.0, 2) * 5.0;
+      ELSIF v_new_temp >= 70 THEN
+        -- Daño severo: escala rápidamente
+        v_deterioration := v_base_deterioration + 0.5 + ((v_new_temp - 70) * 0.1);
+      ELSIF v_new_temp >= 50 THEN
+        -- Daño moderado
+        v_deterioration := v_base_deterioration + 0.05 + ((v_new_temp - 50) * 0.02);
       ELSE
         v_deterioration := v_base_deterioration;  -- Solo desgaste base
       END IF;
@@ -1981,3 +1989,71 @@ $$;
 INSERT INTO network_stats (id, difficulty, hashrate)
 VALUES ('current', 1000, 0)
 ON CONFLICT (id) DO NOTHING;
+
+-- =====================================================
+-- 10. CRON JOBS (pg_cron)
+-- =====================================================
+-- Ejecutar en Supabase Dashboard -> SQL Editor
+-- Requiere que pg_cron esté habilitado (viene por defecto en Supabase)
+
+-- Habilitar la extensión pg_cron si no está habilitada
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+-- Dar permisos a pg_cron para ejecutar funciones
+GRANT USAGE ON SCHEMA cron TO postgres;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA cron TO postgres;
+
+-- Eliminar job existente si existe (para poder recrearlo)
+SELECT cron.unschedule('process_resource_decay_job')
+WHERE EXISTS (
+  SELECT 1 FROM cron.job WHERE jobname = 'process_resource_decay_job'
+);
+
+-- Programar process_resource_decay() para ejecutarse cada 10 segundos
+-- Nota: pg_cron mínimo es 1 minuto, así que usamos un truco con múltiples jobs
+-- Job 1: segundo 0 de cada minuto
+SELECT cron.schedule(
+  'process_resource_decay_job',
+  '* * * * *',  -- Cada minuto
+  $$SELECT process_resource_decay()$$
+);
+
+-- Para simular ejecución cada 10 segundos, creamos jobs adicionales con pg_sleep
+-- Alternativamente, ajustar los valores de decay en la función para compensar
+
+-- Job que ejecuta el decay 6 veces por minuto (cada ~10 segundos)
+CREATE OR REPLACE FUNCTION run_decay_cycle()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Ejecutar 6 veces con 10 segundos de espera entre cada una
+  PERFORM process_resource_decay();
+  PERFORM pg_sleep(10);
+  PERFORM process_resource_decay();
+  PERFORM pg_sleep(10);
+  PERFORM process_resource_decay();
+  PERFORM pg_sleep(10);
+  PERFORM process_resource_decay();
+  PERFORM pg_sleep(10);
+  PERFORM process_resource_decay();
+  PERFORM pg_sleep(10);
+  PERFORM process_resource_decay();
+END;
+$$;
+
+-- Actualizar el job para usar el ciclo completo
+SELECT cron.unschedule('process_resource_decay_job')
+WHERE EXISTS (
+  SELECT 1 FROM cron.job WHERE jobname = 'process_resource_decay_job'
+);
+
+SELECT cron.schedule(
+  'process_resource_decay_job',
+  '* * * * *',  -- Cada minuto, ejecuta 6 ciclos internamente
+  $$SELECT run_decay_cycle()$$
+);
+
+-- Verificar que el job está programado
+-- SELECT * FROM cron.job;

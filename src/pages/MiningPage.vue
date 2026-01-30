@@ -240,6 +240,22 @@ function getRigPenaltyPercent(rig: typeof rigs.value[0]): number {
   return Math.round(((base - effective) / base) * 100);
 }
 
+// Calcular consumo de energía efectivo (con penalización por temperatura)
+// Fórmula: power_consumption * (1 + max(0, (temp - 40)) * 0.0083)
+// A 100°C = +50% de consumo extra
+function getRigEffectivePower(rig: typeof rigs.value[0]): number {
+  const temp = rig.temperature ?? 25;
+  const tempPenalty = 1 + Math.max(0, (temp - 40)) * 0.0083;
+  return rig.rig.power_consumption * tempPenalty;
+}
+
+function getPowerPenaltyPercent(rig: typeof rigs.value[0]): number {
+  const effective = getRigEffectivePower(rig);
+  const base = rig.rig.power_consumption;
+  if (base === 0) return 0;
+  return Math.round(((effective - base) / base) * 100);
+}
+
 function formatUptime(activatedAt: string | null): string {
   if (!activatedAt) return '0s';
 
@@ -507,7 +523,12 @@ onUnmounted(() => {
                 <div class="grid grid-cols-3 gap-2 mb-4 text-sm">
                   <div class="flex items-center gap-1">
                     <span class="text-status-warning">⚡</span>
-                    <span class="text-text-muted text-xs">{{ playerRig.rig.power_consumption }}/t</span>
+                    <span class="text-xs" :class="getPowerPenaltyPercent(playerRig) > 0 ? 'text-status-danger' : 'text-text-muted'">
+                      {{ getRigEffectivePower(playerRig).toFixed(1) }}<span class="text-text-muted">/{{ playerRig.rig.power_consumption }}</span>/t
+                      <span v-if="getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger text-[10px]">
+                        (+{{ getPowerPenaltyPercent(playerRig) }}%)
+                      </span>
+                    </span>
                   </div>
                   <div class="flex items-center gap-1">
                     <span class="text-accent-tertiary">📡</span>

@@ -340,3 +340,4 @@ export async function buyRig(playerId: string, rigId: string) {
   if (error) throw error;
   return data;
 }
+
