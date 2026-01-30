@@ -1,7 +1,7 @@
 {
-  "name": "crypto-arcade-mmo",
+  "name": "block-lords",
   "version": "0.1.0",
-  "description": "Arcade MMO Persistente de Minería de Criptomonedas",
+  "description": "Block Lords - MMO de Minería de Criptomonedas",
   "private": true,
   "type": "module",
   "scripts": {

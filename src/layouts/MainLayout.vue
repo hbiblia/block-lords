@@ -43,7 +43,7 @@ const showResourceBars = computed(() => authStore.isAuthenticated);
 
     <!-- Footer -->
     <footer class="border-t border-arcade-border py-4 text-center text-gray-500 text-sm">
-      <p>Crypto Arcade MMO &copy; 2024 - Economía Zero-Sum</p>
+      <p>Block Lords &copy; 2025 - Economía Zero-Sum</p>
     </footer>
   </div>
 </template>

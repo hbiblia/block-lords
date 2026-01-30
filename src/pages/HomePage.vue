@@ -11,19 +11,16 @@ const isAuthenticated = computed(() => authStore.isAuthenticated);
     <!-- Hero Section -->
     <div class="mb-16">
       <h1 class="font-arcade text-3xl md:text-5xl text-arcade-primary mb-6 animate-glow">
-        CRYPTO ARCADE
+        BLOCK LORDS
       </h1>
       <p class="text-xl text-gray-400 max-w-2xl mx-auto mb-8">
-        Juego MMO persistente de minería de criptomonedas.
+        MMO de minería de criptomonedas.
         Economía zero-sum, mercado libre y sistema de reputación.
       </p>
 
-      <div v-if="!isAuthenticated" class="flex justify-center gap-4">
-        <RouterLink to="/register" class="arcade-button text-lg px-8 py-3">
+      <div v-if="!isAuthenticated" class="flex justify-center">
+        <RouterLink to="/login" class="arcade-button text-lg px-8 py-3">
           Comenzar a Minar
-        </RouterLink>
-        <RouterLink to="/login" class="arcade-button-secondary text-lg px-8 py-3">
-          Iniciar Sesión
         </RouterLink>
       </div>
       <div v-else>

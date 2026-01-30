@@ -24,7 +24,7 @@ async function handleLogout() {
       <!-- Logo -->
       <RouterLink to="/" class="flex items-center gap-3">
         <span class="text-2xl">⛏️</span>
-        <span class="font-arcade text-sm text-arcade-primary hidden sm:inline">CRYPTO ARCADE</span>
+        <span class="font-arcade text-sm text-arcade-primary hidden sm:inline">BLOCK LORDS</span>
       </RouterLink>
 
       <!-- Navigation Links -->
@@ -110,11 +110,8 @@ async function handleLogout() {
         </template>
 
         <template v-else>
-          <RouterLink to="/login" class="text-gray-400 hover:text-white transition-colors">
+          <RouterLink to="/login" class="arcade-button text-sm">
             Iniciar Sesión
-          </RouterLink>
-          <RouterLink to="/register" class="arcade-button text-sm">
-            Registrarse
           </RouterLink>
         </template>
       </div>
