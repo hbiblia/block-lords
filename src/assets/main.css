@@ -9,7 +9,8 @@
 
 body {
   min-height: 100vh;
-  background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 100%);
+  background: #1a1b2e;
+  font-family: 'Inter', sans-serif;
 }
 
 /* === SCROLLBAR PERSONALIZADA === */
@@ -19,71 +20,114 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #12122a;
+  background: #1e1f36;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a2a4a;
+  background: #3f3f5c;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a5a;
+  background: #4f4f6f;
 }
 
-/* === COMPONENTES ARCADE === */
+/* === COMPONENTES === */
 @layer components {
-  .arcade-panel {
-    @apply bg-arcade-panel border border-arcade-border rounded-lg p-4;
-    box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
+  /* Panel/Card base */
+  .card {
+    @apply bg-bg-card border border-border rounded-xl p-5;
+    @apply transition-all duration-300;
   }
 
-  .arcade-button {
-    @apply px-4 py-2 bg-arcade-primary text-arcade-bg font-bold rounded transition-all duration-200;
-    @apply hover:shadow-lg hover:shadow-arcade-primary/50 hover:scale-105;
-    @apply active:scale-95;
-    @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+  .card-hover {
+    @apply card hover:border-accent-primary/50 hover:shadow-card-hover;
   }
 
-  .arcade-button-secondary {
-    @apply arcade-button bg-arcade-secondary;
-    @apply hover:shadow-arcade-secondary/50;
+  /* Botones */
+  .btn {
+    @apply px-5 py-2.5 font-medium rounded-xl transition-all duration-200;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
-  .arcade-button-danger {
-    @apply arcade-button bg-arcade-danger;
-    @apply hover:shadow-arcade-danger/50;
+  .btn-primary {
+    @apply btn text-white;
+    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+    @apply hover:shadow-glow hover:scale-[1.02] active:scale-[0.98];
   }
 
-  .arcade-input {
-    @apply w-full px-4 py-2 bg-arcade-bg border border-arcade-border rounded;
-    @apply focus:outline-none focus:border-arcade-primary focus:ring-1 focus:ring-arcade-primary;
-    @apply placeholder:text-gray-500;
+  .btn-secondary {
+    @apply btn bg-bg-tertiary text-white border border-border;
+    @apply hover:bg-border hover:border-border-light;
   }
 
-  .arcade-card {
-    @apply arcade-panel hover:border-arcade-primary/50 transition-colors cursor-pointer;
+  .btn-outline {
+    @apply btn bg-transparent text-accent-primary border border-accent-primary;
+    @apply hover:bg-accent-primary/10;
   }
 
-  .arcade-badge {
-    @apply inline-flex items-center px-2 py-1 rounded text-xs font-bold;
+  .btn-danger {
+    @apply btn bg-status-danger text-white;
+    @apply hover:bg-status-danger/80;
   }
 
-  /* Barras de recursos */
-  .resource-bar {
-    @apply h-4 bg-arcade-bg rounded-full overflow-hidden border border-arcade-border;
+  .btn-success {
+    @apply btn bg-status-success text-white;
+    @apply hover:bg-status-success/80;
   }
 
-  .resource-bar-fill {
-    @apply h-full transition-all duration-300 ease-out;
+  /* Inputs */
+  .input {
+    @apply w-full px-4 py-3 bg-bg-secondary border border-border rounded-xl;
+    @apply text-white placeholder:text-text-muted;
+    @apply focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/50;
+    @apply transition-all duration-200;
   }
 
-  .resource-bar-energy .resource-bar-fill {
-    @apply bg-gradient-to-r from-yellow-500 to-yellow-300;
+  .input-error {
+    @apply input border-status-danger focus:border-status-danger focus:ring-status-danger/50;
   }
 
-  .resource-bar-internet .resource-bar-fill {
-    @apply bg-gradient-to-r from-blue-500 to-blue-300;
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .badge-primary {
+    @apply badge bg-accent-primary/20 text-accent-primary;
+  }
+
+  .badge-success {
+    @apply badge bg-status-success/20 text-status-success;
+  }
+
+  .badge-warning {
+    @apply badge bg-status-warning/20 text-status-warning;
+  }
+
+  .badge-danger {
+    @apply badge bg-status-danger/20 text-status-danger;
+  }
+
+  /* Barras de progreso/recursos */
+  .progress-bar {
+    @apply h-3 bg-bg-tertiary rounded-full overflow-hidden;
+  }
+
+  .progress-bar-fill {
+    @apply h-full transition-all duration-500 ease-out rounded-full;
+  }
+
+  .progress-energy .progress-bar-fill {
+    background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
+  }
+
+  .progress-internet .progress-bar-fill {
+    background: linear-gradient(90deg, #06b6d4 0%, #22d3ee 100%);
+  }
+
+  .progress-health .progress-bar-fill {
+    background: linear-gradient(90deg, #22c55e 0%, #4ade80 100%);
   }
 
   /* Rangos de reputación */
@@ -93,52 +137,119 @@ body {
   .rank-platinum { @apply text-rank-platinum; }
   .rank-diamond { @apply text-rank-diamond; }
 
-  /* Rig card */
-  .rig-card {
-    @apply arcade-card relative overflow-hidden;
+  /* Cards de items/rigs */
+  .item-card {
+    @apply card-hover cursor-pointer relative overflow-hidden;
   }
 
-  .rig-card.active {
-    @apply border-arcade-primary;
-    box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+  .item-card.active {
+    @apply border-accent-primary;
+    box-shadow: 0 0 25px rgba(139, 92, 246, 0.25);
   }
 
-  .rig-card.inactive {
-    @apply opacity-60;
+  .item-card.inactive {
+    @apply opacity-50;
   }
 
-  /* Animación de minería */
-  .mining-animation {
-    @apply absolute inset-0 pointer-events-none;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0, 255, 136, 0.03) 2px,
-      rgba(0, 255, 136, 0.03) 4px
+  /* Efecto de minería activa */
+  .mining-effect {
+    @apply absolute inset-0 pointer-events-none opacity-50;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(139, 92, 246, 0.1) 50%,
+      transparent 100%
     );
-    animation: scan 2s linear infinite;
+    animation: mining-scan 2s ease-in-out infinite;
   }
 
-  @keyframes scan {
-    from { transform: translateY(-100%); }
-    to { transform: translateY(100%); }
+  @keyframes mining-scan {
+    0%, 100% { transform: translateY(-100%); }
+    50% { transform: translateY(100%); }
   }
 
-  /* Notificaciones */
-  .notification {
-    @apply fixed bottom-4 right-4 arcade-panel border-l-4 animate-shake;
+  /* Stats grid */
+  .stat-card {
+    @apply card text-center;
   }
 
-  .notification-success {
-    @apply border-l-arcade-success;
+  .stat-value {
+    @apply text-2xl font-bold text-white;
   }
 
-  .notification-warning {
-    @apply border-l-arcade-warning;
+  .stat-label {
+    @apply text-sm text-text-muted mt-1;
   }
 
-  .notification-danger {
-    @apply border-l-arcade-danger;
+  /* Tabs */
+  .tab-list {
+    @apply flex gap-1 p-1 bg-bg-secondary rounded-xl;
+  }
+
+  .tab {
+    @apply px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200;
+    @apply text-text-secondary hover:text-white;
+  }
+
+  .tab.active {
+    @apply bg-bg-tertiary text-white shadow-sm;
+  }
+
+  /* Tables */
+  .table-row {
+    @apply border-b border-border/50 last:border-0;
+  }
+
+  .table-row:hover {
+    @apply bg-bg-secondary/50;
+  }
+
+  /* Notificaciones/Toast */
+  .toast {
+    @apply fixed bottom-4 right-4 card border-l-4 shadow-card;
+    @apply animate-[slideIn_0.3s_ease-out];
+  }
+
+  .toast-success { @apply border-l-status-success; }
+  .toast-warning { @apply border-l-status-warning; }
+  .toast-danger { @apply border-l-status-danger; }
+  .toast-info { @apply border-l-status-info; }
+
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-bg-card/80 backdrop-blur-md border border-border/50;
+  }
+
+  /* Glow effects */
+  .glow-purple {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+  }
+
+  .glow-pink {
+    box-shadow: 0 0 20px rgba(236, 72, 153, 0.4);
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+  }
+}
+
+/* === UTILIDADES ADICIONALES === */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
   }
 }

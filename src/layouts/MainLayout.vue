@@ -12,38 +12,38 @@ const showResourceBars = computed(() => authStore.isAuthenticated);
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col">
+  <div class="min-h-screen flex flex-col bg-bg-primary">
     <NavBar />
 
     <!-- Resource Bars (solo si está autenticado) -->
-    <div v-if="showResourceBars" class="fixed top-16 left-0 right-0 z-40 bg-arcade-bg/90 backdrop-blur-sm border-b border-arcade-border">
-      <div class="container mx-auto px-4 py-2">
+    <div v-if="showResourceBars" class="fixed top-16 left-0 right-0 z-40 glass border-b border-border/30">
+      <div class="container mx-auto px-4 py-3">
         <ResourceBars />
       </div>
     </div>
 
     <!-- Main Content -->
-    <main class="flex-1 container mx-auto px-4 py-6" :class="{ 'mt-24': showResourceBars, 'mt-16': !showResourceBars }">
+    <main class="flex-1 container mx-auto px-4 py-6" :class="{ 'mt-28': showResourceBars, 'mt-16': !showResourceBars }">
       <slot />
     </main>
 
     <!-- Connection Status -->
     <div
       v-if="authStore.isAuthenticated"
-      class="fixed bottom-4 left-4 flex items-center gap-2 text-xs"
+      class="fixed bottom-4 left-4 flex items-center gap-2 px-3 py-2 card text-xs"
     >
       <span
         class="w-2 h-2 rounded-full"
-        :class="realtimeStore.isConnected ? 'bg-arcade-success animate-pulse' : 'bg-arcade-danger'"
+        :class="realtimeStore.isConnected ? 'bg-status-success animate-pulse' : 'bg-status-danger'"
       ></span>
-      <span class="text-gray-400">
+      <span class="text-text-muted">
         {{ realtimeStore.isConnected ? 'Conectado' : 'Desconectado' }}
       </span>
     </div>
 
     <!-- Footer -->
-    <footer class="border-t border-arcade-border py-4 text-center text-gray-500 text-sm">
-      <p>Block Lords &copy; 2025 - Economía Zero-Sum</p>
+    <footer class="border-t border-border/30 py-6 text-center">
+      <p class="text-text-muted text-sm">Block Lords &copy; 2025</p>
     </footer>
   </div>
 </template>

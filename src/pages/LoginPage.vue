@@ -18,7 +18,6 @@ async function handleGoogleLogin() {
       error.value = authStore.error ?? 'Error al conectar con Google';
       loading.value = false;
     }
-    // Si es exitoso, Supabase redirige automáticamente
   } catch (e) {
     error.value = 'Error inesperado. Intenta de nuevo.';
     loading.value = false;
@@ -28,21 +27,25 @@ async function handleGoogleLogin() {
 
 <template>
   <div class="max-w-md mx-auto mt-12">
-    <div class="arcade-panel">
-      <h1 class="text-2xl text-arcade-primary text-center mb-6">Iniciar Sesión</h1>
+    <div class="card">
+      <div class="text-center mb-8">
+        <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-primary flex items-center justify-center text-3xl mb-4">
+          ⛏️
+        </div>
+        <h1 class="text-2xl font-display font-bold gradient-text">Iniciar Sesión</h1>
+        <p class="text-text-muted mt-2">
+          Conecta tu cuenta para comenzar a minar
+        </p>
+      </div>
 
       <div class="space-y-4">
-        <p class="text-center text-gray-400 text-sm">
-          Conecta tu cuenta de Google para comenzar a minar
-        </p>
-
-        <div v-if="error" class="text-arcade-danger text-sm text-center">
+        <div v-if="error" class="p-3 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-sm text-center">
           {{ error }}
         </div>
 
         <button
           @click="handleGoogleLogin"
-          class="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          class="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3.5 px-4 rounded-xl hover:bg-gray-100 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
           :disabled="loading"
         >
           <svg class="w-5 h-5" viewBox="0 0 24 24">
@@ -66,7 +69,7 @@ async function handleGoogleLogin() {
           {{ loading ? 'Conectando...' : 'Continuar con Google' }}
         </button>
 
-        <div class="text-center text-gray-500 text-xs mt-6">
+        <div class="text-center text-text-muted text-xs mt-6">
           Al continuar, aceptas nuestros términos de servicio
         </div>
       </div>
