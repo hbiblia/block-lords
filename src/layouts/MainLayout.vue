@@ -2,11 +2,13 @@
 import { computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
+import { useMiningStore } from '@/stores/mining';
 import NavBar from '@/components/NavBar.vue';
 import ResourceBars from '@/components/ResourceBars.vue';
 
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
+const miningStore = useMiningStore();
 
 const showResourceBars = computed(() => authStore.isAuthenticated);
 </script>
@@ -18,12 +20,16 @@ const showResourceBars = computed(() => authStore.isAuthenticated);
     <!-- Resource Bars (solo si está autenticado) -->
     <div v-if="showResourceBars" class="fixed top-16 left-0 right-0 z-40 glass border-b border-border/30">
       <div class="container mx-auto px-4 py-3">
-        <ResourceBars />
+        <ResourceBars
+          :show-consumption="miningStore.isMining"
+          :energy-consumption="miningStore.totalEnergyConsumption"
+          :internet-consumption="miningStore.totalInternetConsumption"
+        />
       </div>
     </div>
 
     <!-- Main Content -->
-    <main class="flex-1 container mx-auto px-4 py-6" :class="{ 'mt-28': showResourceBars, 'mt-16': !showResourceBars }">
+    <main class="flex-1 container mx-auto px-4 py-6" :class="{ 'mt-32': showResourceBars, 'mt-16': !showResourceBars }">
       <slot />
     </main>
 

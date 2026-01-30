@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
+import { useMiningStore } from '@/stores/mining';
 import { getPlayerRigs, getNetworkStats, getRecentBlocks, toggleRig } from '@/utils/api';
 
 const authStore = useAuthStore();
+const miningStore = useMiningStore();
 
 const loading = ref(true);
 const rigs = ref<Array<{
@@ -63,11 +65,27 @@ async function loadData() {
     rigs.value = rigsData ?? [];
     networkStats.value = networkData;
     recentBlocks.value = blocksData ?? [];
+
+    // Sync active rigs to mining store for resource consumption display
+    syncMiningStore();
   } catch (e) {
     console.error('Error loading mining data:', e);
   } finally {
     loading.value = false;
   }
+}
+
+// Sync active rigs to the mining store
+function syncMiningStore() {
+  const activeRigsList = rigs.value
+    .filter(r => r.is_active)
+    .map(r => ({
+      id: r.id,
+      hashrate: r.rig.hashrate,
+      powerConsumption: r.rig.power_consumption,
+      internetConsumption: r.rig.internet_consumption,
+    }));
+  miningStore.setActiveRigs(activeRigsList);
 }
 
 // Simulación visual de minería
@@ -102,6 +120,8 @@ async function handleToggleRig(rigId: string) {
   const rig = rigs.value.find(r => r.id === rigId);
   if (rig) {
     rig.is_active = !rig.is_active;
+    // Immediately update mining store for visual feedback
+    syncMiningStore();
   }
 
   try {
@@ -109,10 +129,14 @@ async function handleToggleRig(rigId: string) {
 
     if (!result.success) {
       if (rig) rig.is_active = !rig.is_active;
+      // Revert mining store on failure
+      syncMiningStore();
       alert(result.error ?? 'Error al cambiar estado del rig');
     }
   } catch (e) {
     if (rig) rig.is_active = !rig.is_active;
+    // Revert mining store on error
+    syncMiningStore();
     console.error('Error toggling rig:', e);
   }
 }
@@ -166,6 +190,8 @@ onMounted(() => {
 onUnmounted(() => {
   stopMiningSimulation();
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
+  // Clear mining store when leaving page
+  miningStore.clearRigs();
 });
 </script>
 
