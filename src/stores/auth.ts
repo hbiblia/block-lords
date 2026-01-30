@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { supabase } from '@/utils/supabase';
 import { createPlayerProfile, getPlayerProfile } from '@/utils/api';
 import type { User, Session } from '@supabase/supabase-js';
@@ -26,12 +26,17 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref<string | null>(null);
   const needsUsername = ref(false);
   const initialized = ref(false);
+  const isCheckingAuth = ref(false);
 
   const isAuthenticated = computed(() => !!user.value && !!session.value && !!player.value);
   const token = computed(() => session.value?.access_token ?? null);
 
   async function checkAuth() {
+    // Prevenir llamadas concurrentes
+    if (isCheckingAuth.value) return;
+    isCheckingAuth.value = true;
     loading.value = true;
+
     try {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
 
@@ -45,12 +50,25 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       loading.value = false;
       initialized.value = true;
+      isCheckingAuth.value = false;
     }
   }
 
   // Esperar a que auth esté inicializado
   async function waitForInit() {
     if (initialized.value) return;
+    // Si ya está en proceso, esperar a que termine
+    if (isCheckingAuth.value) {
+      // Esperar hasta que initialized sea true
+      return new Promise<void>((resolve) => {
+        const unwatch = watch(initialized, (val: boolean) => {
+          if (val) {
+            unwatch();
+            resolve();
+          }
+        });
+      });
+    }
     await checkAuth();
   }
 
@@ -168,10 +186,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Escuchar cambios de auth (para OAuth callback)
   supabase.auth.onAuthStateChange(async (event, newSession) => {
+    // Ignorar eventos durante la inicialización para evitar race conditions
+    if (isCheckingAuth.value) return;
+
     if (event === 'SIGNED_IN' && newSession) {
       session.value = newSession;
       user.value = newSession.user;
-      await fetchPlayer();
+      // Solo cargar el player si ya estamos inicializados (evita duplicar la carga inicial)
+      if (initialized.value) {
+        await fetchPlayer();
+      }
     } else if (event === 'SIGNED_OUT') {
       user.value = null;
       player.value = null;
