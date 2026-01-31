@@ -24,6 +24,12 @@ ALTER TABLE cooling_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_cooling ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prepaid_cards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_streaks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE streak_rewards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE streak_claims ENABLE ROW LEVEL SECURITY;
+ALTER TABLE missions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_missions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_online_tracking ENABLE ROW LEVEL SECURITY;
 
 -- =====================================================
 -- POLÍTICAS PARA PLAYERS
@@ -308,4 +314,98 @@ CREATE POLICY "Insertar propias tarjetas"
 DROP POLICY IF EXISTS "Actualizar propias tarjetas" ON player_cards;
 CREATE POLICY "Actualizar propias tarjetas"
   ON player_cards FOR UPDATE
+  USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA PLAYER_STREAKS (Rachas de login)
+-- =====================================================
+
+DROP POLICY IF EXISTS "Ver propia racha" ON player_streaks;
+CREATE POLICY "Ver propia racha"
+  ON player_streaks FOR SELECT
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Insertar propia racha" ON player_streaks;
+CREATE POLICY "Insertar propia racha"
+  ON player_streaks FOR INSERT
+  WITH CHECK (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Actualizar propia racha" ON player_streaks;
+CREATE POLICY "Actualizar propia racha"
+  ON player_streaks FOR UPDATE
+  USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA STREAK_REWARDS (catálogo público)
+-- =====================================================
+
+DROP POLICY IF EXISTS "Recompensas de racha públicas" ON streak_rewards;
+CREATE POLICY "Recompensas de racha públicas"
+  ON streak_rewards FOR SELECT
+  USING (true);
+
+-- =====================================================
+-- POLÍTICAS PARA STREAK_CLAIMS (Historial de claims)
+-- =====================================================
+
+DROP POLICY IF EXISTS "Ver propios claims de racha" ON streak_claims;
+CREATE POLICY "Ver propios claims de racha"
+  ON streak_claims FOR SELECT
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Insertar propios claims de racha" ON streak_claims;
+CREATE POLICY "Insertar propios claims de racha"
+  ON streak_claims FOR INSERT
+  WITH CHECK (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA MISSIONS (catálogo público)
+-- =====================================================
+
+DROP POLICY IF EXISTS "Misiones públicas" ON missions;
+CREATE POLICY "Misiones públicas"
+  ON missions FOR SELECT
+  USING (true);
+
+-- =====================================================
+-- POLÍTICAS PARA PLAYER_MISSIONS (Misiones del jugador)
+-- =====================================================
+
+DROP POLICY IF EXISTS "Ver propias misiones" ON player_missions;
+CREATE POLICY "Ver propias misiones"
+  ON player_missions FOR SELECT
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Insertar propias misiones" ON player_missions;
+CREATE POLICY "Insertar propias misiones"
+  ON player_missions FOR INSERT
+  WITH CHECK (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Actualizar propias misiones" ON player_missions;
+CREATE POLICY "Actualizar propias misiones"
+  ON player_missions FOR UPDATE
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Eliminar propias misiones" ON player_missions;
+CREATE POLICY "Eliminar propias misiones"
+  ON player_missions FOR DELETE
+  USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA PLAYER_ONLINE_TRACKING (Tiempo online)
+-- =====================================================
+
+DROP POLICY IF EXISTS "Ver propio tracking online" ON player_online_tracking;
+CREATE POLICY "Ver propio tracking online"
+  ON player_online_tracking FOR SELECT
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Insertar propio tracking online" ON player_online_tracking;
+CREATE POLICY "Insertar propio tracking online"
+  ON player_online_tracking FOR INSERT
+  WITH CHECK (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Actualizar propio tracking online" ON player_online_tracking;
+CREATE POLICY "Actualizar propio tracking online"
+  ON player_online_tracking FOR UPDATE
   USING (auth.uid() = player_id);

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed, onUnmounted } from 'vue';
+import { ref, computed } from 'vue';
 import { getDailyMissions, claimMissionReward, recordOnlineHeartbeat } from '@/utils/api';
 import { useAuthStore } from './auth';
 

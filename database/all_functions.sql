@@ -1032,10 +1032,12 @@ DECLARE
   v_base_deterioration NUMERIC;
   v_ambient_temp NUMERIC := 25;  -- Temperatura ambiente base
 BEGIN
+  -- Solo procesar jugadores que están ONLINE (en el juego)
   FOR v_player IN
     SELECT p.id, p.energy, p.internet
     FROM players p
-    WHERE EXISTS (SELECT 1 FROM player_rigs pr WHERE pr.player_id = p.id AND pr.is_active = true)
+    WHERE p.is_online = true
+      AND EXISTS (SELECT 1 FROM player_rigs pr WHERE pr.player_id = p.id AND pr.is_active = true)
   LOOP
     v_total_power := 0;
     v_total_internet := 0;
@@ -1207,7 +1209,7 @@ BEGIN
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
-    WHERE pr.is_active = true AND p.energy > 0 AND p.internet > 0
+    WHERE pr.is_active = true AND p.is_online = true AND p.energy > 0 AND p.internet > 0
   LOOP
     -- Multiplicador de reputación
     IF v_rig.reputation_score >= 80 THEN
@@ -1262,7 +1264,7 @@ BEGIN
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
-    WHERE pr.is_active = true AND p.energy > 0 AND p.internet > 0
+    WHERE pr.is_active = true AND p.is_online = true AND p.energy > 0 AND p.internet > 0
   LOOP
     IF v_rig.reputation_score >= 80 THEN
       v_rep_multiplier := 1 + (v_rig.reputation_score - 80) * 0.01;
@@ -1403,8 +1405,16 @@ DECLARE
   v_block_mined BOOLEAN := false;
   v_block_height INT;
   v_difficulty_result JSON;
+  v_inactive_marked INT := 0;
 BEGIN
-  -- Procesar decay de recursos
+  -- Marcar como offline a usuarios inactivos (sin heartbeat por más de 5 minutos)
+  UPDATE players
+  SET is_online = false
+  WHERE is_online = true
+    AND last_seen < NOW() - INTERVAL '5 minutes';
+  GET DIAGNOSTICS v_inactive_marked = ROW_COUNT;
+
+  -- Procesar decay de recursos (solo jugadores online)
   v_resources_processed := process_resource_decay();
 
   -- Ajustar dificultad antes de intentar minar
@@ -2986,6 +2996,12 @@ BEGIN
 
   -- Calcular minutos desde el último heartbeat (máximo 5 para evitar trampas)
   v_minutes_since_last := LEAST(5, EXTRACT(EPOCH FROM (NOW() - v_tracking.last_heartbeat)) / 60);
+
+  -- Actualizar is_online y last_seen en players (siempre con cada heartbeat)
+  UPDATE players
+  SET is_online = true,
+      last_seen = NOW()
+  WHERE id = p_player_id;
 
   -- Solo contar si pasó al menos 1 minuto
   IF v_minutes_since_last >= 1 THEN
