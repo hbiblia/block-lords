@@ -150,12 +150,6 @@ function getRigName(id: string): string {
   return translated !== key ? translated : id;
 }
 
-function getRigDescription(id: string): string {
-  const key = `market.items.rigs.${id}.description`;
-  const translated = t(key);
-  return translated !== key ? translated : '';
-}
-
 function getCoolingName(id: string): string {
   const key = `market.items.cooling.${id}.name`;
   const translated = t(key);
@@ -193,12 +187,6 @@ function getBoostName(id: string): string {
   const key = `market.items.boosts.${id}.name`;
   const translated = t(key);
   return translated !== key ? translated : id;
-}
-
-function getBoostDescription(id: string): string {
-  const key = `market.items.boosts.${id}.description`;
-  const translated = t(key);
-  return translated !== key ? translated : '';
 }
 
 function getBoostOwned(id: string): number {
