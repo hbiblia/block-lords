@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 
+const { t } = useI18n();
 const authStore = useAuthStore();
 
 const loading = ref(false);
@@ -15,11 +17,11 @@ async function handleGoogleLogin() {
     const success = await authStore.loginWithGoogle();
 
     if (!success) {
-      error.value = authStore.error ?? 'Error al conectar con Google';
+      error.value = authStore.error ?? t('login.googleError');
       loading.value = false;
     }
   } catch (e) {
-    error.value = 'Error inesperado. Intenta de nuevo.';
+    error.value = t('login.unexpectedError');
     loading.value = false;
   }
 }
@@ -32,9 +34,9 @@ async function handleGoogleLogin() {
         <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-primary flex items-center justify-center text-3xl mb-4">
           ⛏️
         </div>
-        <h1 class="text-2xl font-display font-bold gradient-text">Iniciar Sesión</h1>
+        <h1 class="text-2xl font-display font-bold gradient-text">{{ t('login.title') }}</h1>
         <p class="text-text-muted mt-2">
-          Conecta tu cuenta para comenzar a minar
+          {{ t('login.subtitle') }}
         </p>
       </div>
 
@@ -66,11 +68,11 @@ async function handleGoogleLogin() {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
             />
           </svg>
-          {{ loading ? 'Conectando...' : 'Continuar con Google' }}
+          {{ loading ? t('login.connecting') : t('login.continueGoogle') }}
         </button>
 
         <div class="text-center text-text-muted text-xs mt-6">
-          Al continuar, aceptas nuestros términos de servicio
+          {{ t('login.terms') }}
         </div>
       </div>
     </div>

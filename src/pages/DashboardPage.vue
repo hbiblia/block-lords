@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getPlayerMiningStats, getPlayerTransactions, getNetworkStats } from '@/utils/api';
 
+const { t } = useI18n();
 const authStore = useAuthStore();
 
 const player = computed(() => authStore.player);
@@ -59,22 +61,22 @@ function getRankColor(score: number): string {
 }
 
 function getRankName(score: number): string {
-  if (score >= 85) return 'Diamante';
-  if (score >= 70) return 'Platino';
-  if (score >= 50) return 'Oro';
-  if (score >= 30) return 'Plata';
-  return 'Bronce';
+  if (score >= 85) return t('dashboard.ranks.diamond');
+  if (score >= 70) return t('dashboard.ranks.platinum');
+  if (score >= 50) return t('dashboard.ranks.gold');
+  if (score >= 30) return t('dashboard.ranks.silver');
+  return t('dashboard.ranks.bronze');
 }
 </script>
 
 <template>
   <div>
     <h1 class="text-2xl font-display font-bold mb-6">
-      <span class="gradient-text">Dashboard</span>
+      <span class="gradient-text">{{ t('dashboard.title') }}</span>
     </h1>
 
     <div v-if="loading" class="text-center py-12 text-text-muted">
-      Cargando...
+      {{ t('common.loading') }}
     </div>
 
     <div v-else class="grid lg:grid-cols-3 gap-6">
@@ -107,32 +109,32 @@ function getRankName(score: number): string {
 
         <!-- Mining Stats -->
         <div class="card">
-          <h2 class="text-lg font-semibold mb-4">Estadísticas de Minería</h2>
+          <h2 class="text-lg font-semibold mb-4">{{ t('dashboard.miningStats') }}</h2>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div class="text-center p-4 bg-bg-secondary rounded-xl">
               <div class="text-2xl font-bold text-white">{{ miningStats.blocksMined ?? 0 }}</div>
-              <div class="text-xs text-text-muted mt-1">Bloques Minados</div>
+              <div class="text-xs text-text-muted mt-1">{{ t('dashboard.blocksMined') }}</div>
             </div>
             <div class="text-center p-4 bg-bg-secondary rounded-xl">
               <div class="text-2xl font-bold text-accent-tertiary">{{ (miningStats.totalCryptoMined ?? 0).toFixed(2) }}</div>
-              <div class="text-xs text-text-muted mt-1">Total Crypto</div>
+              <div class="text-xs text-text-muted mt-1">{{ t('dashboard.totalCrypto') }}</div>
             </div>
             <div class="text-center p-4 bg-bg-secondary rounded-xl">
               <div class="text-2xl font-bold text-accent-primary">{{ (miningStats.currentHashrate ?? 0).toFixed(0) }}</div>
-              <div class="text-xs text-text-muted mt-1">Hashrate</div>
+              <div class="text-xs text-text-muted mt-1">{{ t('dashboard.hashrate') }}</div>
             </div>
             <div class="text-center p-4 bg-bg-secondary rounded-xl">
               <div class="text-2xl font-bold text-status-success">{{ miningStats.activeRigs ?? 0 }}</div>
-              <div class="text-xs text-text-muted mt-1">Rigs Activos</div>
+              <div class="text-xs text-text-muted mt-1">{{ t('dashboard.activeRigs') }}</div>
             </div>
           </div>
         </div>
 
         <!-- Recent Activity -->
         <div class="card">
-          <h2 class="text-lg font-semibold mb-4">Actividad Reciente</h2>
+          <h2 class="text-lg font-semibold mb-4">{{ t('dashboard.recentActivity') }}</h2>
           <div v-if="recentActivity.length === 0" class="text-center text-text-muted py-8">
-            Sin actividad reciente
+            {{ t('dashboard.noActivity') }}
           </div>
           <div v-else class="space-y-1">
             <div
@@ -152,7 +154,7 @@ function getRankName(score: number): string {
       <!-- Sidebar -->
       <div class="space-y-6">
         <div class="card">
-          <h2 class="text-lg font-semibold mb-4">Reputación</h2>
+          <h2 class="text-lg font-semibold mb-4">{{ t('dashboard.reputation') }}</h2>
           <div class="text-center">
             <div
               class="text-5xl font-bold mb-2"
@@ -177,30 +179,30 @@ function getRankName(score: number): string {
         </div>
 
         <div class="card">
-          <h2 class="text-lg font-semibold mb-4">Acciones Rápidas</h2>
+          <h2 class="text-lg font-semibold mb-4">{{ t('dashboard.quickActions') }}</h2>
           <div class="space-y-3">
             <RouterLink to="/mining" class="btn-primary w-full text-center block">
-              ⛏️ Ir a Minería
+              ⛏️ {{ t('dashboard.goToMining') }}
             </RouterLink>
             <RouterLink to="/market" class="btn-secondary w-full text-center block">
-              💱 Ir al Mercado
+              💱 {{ t('dashboard.goToMarket') }}
             </RouterLink>
           </div>
         </div>
 
         <div class="card">
-          <h2 class="text-lg font-semibold mb-4">Estado de la Red</h2>
+          <h2 class="text-lg font-semibold mb-4">{{ t('dashboard.networkStatus') }}</h2>
           <div class="space-y-3">
             <div class="flex justify-between items-center p-3 bg-bg-secondary rounded-lg">
-              <span class="text-text-muted text-sm">Dificultad</span>
+              <span class="text-text-muted text-sm">{{ t('dashboard.difficulty') }}</span>
               <span class="font-mono font-medium">{{ (networkStats.difficulty ?? 0).toLocaleString() }}</span>
             </div>
             <div class="flex justify-between items-center p-3 bg-bg-secondary rounded-lg">
-              <span class="text-text-muted text-sm">Hashrate Total</span>
+              <span class="text-text-muted text-sm">{{ t('dashboard.totalHashrate') }}</span>
               <span class="font-mono font-medium">{{ (networkStats.hashrate ?? 0).toLocaleString() }} H/s</span>
             </div>
             <div class="flex justify-between items-center p-3 bg-bg-secondary rounded-lg">
-              <span class="text-text-muted text-sm">Último Bloque</span>
+              <span class="text-text-muted text-sm">{{ t('dashboard.lastBlock') }}</span>
               <span class="font-mono font-medium text-accent-primary">#{{ networkStats.latestBlock?.height ?? '-' }}</span>
             </div>
           </div>

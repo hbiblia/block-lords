@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { watch, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 import MainLayout from '@/layouts/MainLayout.vue';
 
+const { t } = useI18n();
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
 
@@ -33,7 +35,7 @@ watch(
       <div class="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-primary flex items-center justify-center text-3xl animate-pulse">
         ⛏️
       </div>
-      <p class="text-text-muted">Cargando...</p>
+      <p class="text-text-muted">{{ t('common.loading') }}</p>
     </div>
   </div>
 

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 
+const { t } = useI18n();
 const router = useRouter();
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
@@ -23,10 +25,10 @@ const avatarLetter = computed(() => {
 const validation = computed(() => {
   const name = username.value.trim();
   if (!name) return { valid: false, message: '' };
-  if (name.length < 3) return { valid: false, message: 'Mínimo 3 caracteres' };
-  if (name.length > 20) return { valid: false, message: 'Máximo 20 caracteres' };
-  if (!/^[a-zA-Z0-9_]+$/.test(name)) return { valid: false, message: 'Solo letras, números y _' };
-  return { valid: true, message: '¡Nombre válido!' };
+  if (name.length < 3) return { valid: false, message: t('usernameSetup.minChars') };
+  if (name.length > 20) return { valid: false, message: t('usernameSetup.maxChars') };
+  if (!/^[a-zA-Z0-9_]+$/.test(name)) return { valid: false, message: t('usernameSetup.validChars') };
+  return { valid: true, message: t('usernameSetup.validName') };
 });
 
 onMounted(() => {
@@ -47,7 +49,7 @@ onMounted(() => {
 
 async function handleSubmit() {
   if (!validation.value.valid) {
-    error.value = validation.value.message || 'Nombre inválido';
+    error.value = validation.value.message || t('usernameSetup.invalidName');
     return;
   }
 
@@ -68,11 +70,11 @@ async function handleSubmit() {
       router.push('/welcome');
     } else {
       step.value = 1;
-      error.value = authStore.error ?? 'Error al crear perfil';
+      error.value = authStore.error ?? t('usernameSetup.createError');
     }
   } catch (e) {
     step.value = 1;
-    error.value = 'Error inesperado. Intenta de nuevo.';
+    error.value = t('usernameSetup.unexpectedError');
   } finally {
     loading.value = false;
   }
@@ -102,17 +104,17 @@ async function handleSubmit() {
           </div>
 
           <h1 class="text-2xl font-display font-bold mb-2">
-            <span class="gradient-text">Crea tu Minero</span>
+            <span class="gradient-text">{{ t('usernameSetup.title') }}</span>
           </h1>
           <p class="text-text-muted text-sm">
-            Elige un nombre único para tu personaje
+            {{ t('usernameSetup.subtitle') }}
           </p>
         </div>
 
         <form @submit.prevent="handleSubmit" class="space-y-6">
           <div>
             <label class="block text-sm text-text-secondary mb-2 font-medium">
-              Nombre de Minero
+              {{ t('usernameSetup.minerName') }}
             </label>
             <input
               v-model="username"
@@ -136,14 +138,14 @@ async function handleSubmit() {
                 </span>
               </template>
               <template v-else>
-                <span class="text-xs text-text-muted">3-20 caracteres • letras, números, _</span>
+                <span class="text-xs text-text-muted">{{ t('usernameSetup.charHint') }}</span>
               </template>
             </div>
           </div>
 
           <!-- Bonificaciones de nuevo jugador -->
           <div class="bg-bg-secondary rounded-xl p-4 border border-border/50">
-            <div class="text-xs text-text-muted mb-3 text-center">🎁 Bonus de bienvenida</div>
+            <div class="text-xs text-text-muted mb-3 text-center">🎁 {{ t('usernameSetup.welcomeBonus') }}</div>
             <div class="grid grid-cols-3 gap-3 text-center">
               <div>
                 <div class="text-lg font-bold text-status-warning">100</div>
@@ -151,11 +153,11 @@ async function handleSubmit() {
               </div>
               <div>
                 <div class="text-lg font-bold text-accent-primary">1</div>
-                <div class="text-xs text-text-muted">⛏️ Rig Básico</div>
+                <div class="text-xs text-text-muted">⛏️ {{ t('usernameSetup.basicRig') }}</div>
               </div>
               <div>
                 <div class="text-lg font-bold text-status-success">100%</div>
-                <div class="text-xs text-text-muted">⚡ Energía</div>
+                <div class="text-xs text-text-muted">⚡ {{ t('usernameSetup.energy') }}</div>
               </div>
             </div>
           </div>
@@ -169,7 +171,7 @@ async function handleSubmit() {
             class="btn-primary w-full py-4 text-lg relative overflow-hidden group"
             :disabled="loading || !validation.valid"
           >
-            <span class="relative z-10">🚀 Comenzar Aventura</span>
+            <span class="relative z-10">🚀 {{ t('usernameSetup.startAdventure') }}</span>
             <div class="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-500"></div>
           </button>
         </form>
@@ -179,7 +181,7 @@ async function handleSubmit() {
             @click="authStore.logout()"
             class="text-text-muted text-sm hover:text-white transition-colors"
           >
-            ← Usar otra cuenta
+            ← {{ t('usernameSetup.useOtherAccount') }}
           </button>
         </div>
       </div>
@@ -196,19 +198,19 @@ async function handleSubmit() {
         </div>
 
         <h2 class="text-2xl font-display font-bold mb-2">
-          <span class="gradient-text">Creando tu minero...</span>
+          <span class="gradient-text">{{ t('usernameSetup.creating') }}</span>
         </h2>
         <p class="text-text-muted">{{ username }}</p>
 
         <div class="mt-8 space-y-3 text-sm text-text-secondary">
           <div class="flex items-center justify-center gap-2 animate-pulse">
-            <span class="text-status-success">✓</span> Registrando en la blockchain
+            <span class="text-status-success">✓</span> {{ t('usernameSetup.registering') }}
           </div>
           <div class="flex items-center justify-center gap-2 animate-pulse" style="animation-delay: 0.3s;">
-            <span class="text-status-success">✓</span> Asignando recursos iniciales
+            <span class="text-status-success">✓</span> {{ t('usernameSetup.assigningResources') }}
           </div>
           <div class="flex items-center justify-center gap-2 animate-pulse" style="animation-delay: 0.6s;">
-            <span class="text-status-warning">⏳</span> Configurando estación de minería
+            <span class="text-status-warning">⏳</span> {{ t('usernameSetup.configuringStation') }}
           </div>
         </div>
       </div>
@@ -220,9 +222,9 @@ async function handleSubmit() {
         </div>
 
         <h2 class="text-2xl font-display font-bold mb-2">
-          <span class="gradient-text">¡Minero creado!</span>
+          <span class="gradient-text">{{ t('usernameSetup.minerCreated') }}</span>
         </h2>
-        <p class="text-text-secondary">Bienvenido a Block Lords, {{ username }}</p>
+        <p class="text-text-secondary">{{ t('usernameSetup.welcomeTo', { username: username }) }}</p>
       </div>
     </div>
   </div>

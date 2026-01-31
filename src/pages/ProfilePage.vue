@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 
+const { t } = useI18n();
 const authStore = useAuthStore();
 
 const loading = ref(true);
@@ -50,10 +52,10 @@ onMounted(loadData);
 
 <template>
   <div>
-    <h1 class="text-2xl text-arcade-primary mb-6">Mi Perfil</h1>
+    <h1 class="text-2xl text-arcade-primary mb-6">{{ t('profile.title') }}</h1>
 
     <div v-if="loading" class="text-center py-12 text-gray-400">
-      Cargando...
+      {{ t('common.loading') }}
     </div>
 
     <div v-else class="grid lg:grid-cols-3 gap-6">
@@ -61,30 +63,30 @@ onMounted(loadData);
       <div class="lg:col-span-2 space-y-6">
         <!-- Basic Info -->
         <div class="arcade-panel">
-          <h2 class="text-lg text-arcade-primary mb-4">Información</h2>
+          <h2 class="text-lg text-arcade-primary mb-4">{{ t('profile.information') }}</h2>
           <div class="grid sm:grid-cols-2 gap-4">
             <div>
-              <div class="text-sm text-gray-400">Nombre de Usuario</div>
+              <div class="text-sm text-gray-400">{{ t('profile.username') }}</div>
               <div class="text-xl font-bold">{{ player?.username }}</div>
             </div>
             <div>
-              <div class="text-sm text-gray-400">Email</div>
+              <div class="text-sm text-gray-400">{{ t('profile.email') }}</div>
               <div>{{ player?.email }}</div>
             </div>
             <div>
-              <div class="text-sm text-gray-400">Región</div>
+              <div class="text-sm text-gray-400">{{ t('profile.region') }}</div>
               <div>{{ player?.region ?? 'Global' }}</div>
             </div>
             <div>
-              <div class="text-sm text-gray-400">Miembro desde</div>
-              <div>Enero 2024</div>
+              <div class="text-sm text-gray-400">{{ t('profile.memberSince') }}</div>
+              <div>{{ t('profile.january2024') }}</div>
             </div>
           </div>
         </div>
 
         <!-- Balances -->
         <div class="arcade-panel">
-          <h2 class="text-lg text-arcade-primary mb-4">Balances</h2>
+          <h2 class="text-lg text-arcade-primary mb-4">{{ t('profile.balances') }}</h2>
           <div class="grid sm:grid-cols-2 gap-4">
             <div class="p-4 bg-arcade-bg rounded">
               <div class="text-sm text-gray-400">GameCoin</div>
@@ -103,10 +105,10 @@ onMounted(loadData);
 
         <!-- Trade History -->
         <div class="arcade-panel">
-          <h2 class="text-lg text-arcade-primary mb-4">Historial de Trades</h2>
+          <h2 class="text-lg text-arcade-primary mb-4">{{ t('profile.tradeHistory') }}</h2>
 
           <div v-if="tradeHistory.length === 0" class="text-center py-4 text-gray-400">
-            Sin trades recientes
+            {{ t('profile.noTrades') }}
           </div>
 
           <div v-else class="space-y-2">
@@ -119,7 +121,7 @@ onMounted(loadData);
                 <span
                   :class="trade.buyer_id === player?.id ? 'text-arcade-success' : 'text-arcade-danger'"
                 >
-                  {{ trade.buyer_id === player?.id ? 'Compra' : 'Venta' }}
+                  {{ trade.buyer_id === player?.id ? t('profile.buy') : t('profile.sell') }}
                 </span>
                 <span class="text-gray-400 ml-2">
                   {{ trade.quantity }} {{ trade.item_type }}
@@ -140,7 +142,7 @@ onMounted(loadData);
       <div class="space-y-6">
         <!-- Reputation Card -->
         <div class="arcade-panel text-center">
-          <h2 class="text-lg text-arcade-primary mb-4">Reputación</h2>
+          <h2 class="text-lg text-arcade-primary mb-4">{{ t('profile.reputation') }}</h2>
 
           <div
             class="text-6xl font-bold mb-2"
@@ -168,7 +170,7 @@ onMounted(loadData);
 
           <!-- Benefits -->
           <div v-if="reputation.rank.benefits.length > 0" class="text-left">
-            <div class="text-sm text-gray-400 mb-2">Beneficios activos:</div>
+            <div class="text-sm text-gray-400 mb-2">{{ t('profile.activeBenefits') }}</div>
             <ul class="text-xs space-y-1">
               <li
                 v-for="benefit in reputation.rank.benefits"
@@ -183,10 +185,10 @@ onMounted(loadData);
 
         <!-- Badges -->
         <div class="arcade-panel">
-          <h2 class="text-lg text-arcade-primary mb-4">Insignias</h2>
+          <h2 class="text-lg text-arcade-primary mb-4">{{ t('profile.badges') }}</h2>
 
           <div v-if="reputation.badges.length === 0" class="text-center text-gray-400 text-sm">
-            Sin insignias aún
+            {{ t('profile.noBadges') }}
           </div>
 
           <div v-else class="flex flex-wrap gap-2">
@@ -202,10 +204,10 @@ onMounted(loadData);
 
         <!-- Recent Reputation Events -->
         <div class="arcade-panel">
-          <h2 class="text-lg text-arcade-primary mb-4">Eventos Recientes</h2>
+          <h2 class="text-lg text-arcade-primary mb-4">{{ t('profile.recentEvents') }}</h2>
 
           <div v-if="reputation.recentEvents.length === 0" class="text-center text-gray-400 text-sm">
-            Sin eventos recientes
+            {{ t('profile.noEvents') }}
           </div>
 
           <div v-else class="space-y-2 text-sm">

@@ -106,6 +106,13 @@ export async function getNetworkStats() {
   return data;
 }
 
+export async function getHomeStats() {
+  const { data, error } = await supabase.rpc('get_home_stats');
+
+  if (error) throw error;
+  return data;
+}
+
 export async function getRecentBlocks(limit = 20) {
   const { data, error } = await supabase.rpc('get_recent_blocks', {
     p_limit: limit,

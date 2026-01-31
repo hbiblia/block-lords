@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import { useRealtimeStore } from '@/stores/realtime';
 
+const { t } = useI18n();
 const realtimeStore = useRealtimeStore();
 
 function handleReconnect() {
@@ -33,18 +35,18 @@ function handleRefresh() {
 
         <!-- Title -->
         <h2 class="text-xl font-display font-bold text-status-danger mb-2">
-          Conexion Perdida
+          {{ t('connection.title') }}
         </h2>
 
         <!-- Message -->
         <p class="text-text-muted mb-6">
-          Se ha perdido la conexion con el servidor. Tus rigs pueden seguir minando, pero no veras las actualizaciones en tiempo real.
+          {{ t('connection.description') }}
         </p>
 
         <!-- Reconnecting indicator -->
         <div v-if="realtimeStore.reconnecting" class="mb-4 flex items-center justify-center gap-2 text-accent-primary">
           <div class="w-4 h-4 border-2 border-accent-primary border-t-transparent rounded-full animate-spin"></div>
-          <span class="text-sm">Reconectando...</span>
+          <span class="text-sm">{{ t('connection.reconnecting') }}</span>
         </div>
 
         <!-- Actions -->
@@ -54,19 +56,19 @@ function handleRefresh() {
             :disabled="realtimeStore.reconnecting"
             class="flex-1 py-3 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Reconectar
+            {{ t('connection.reconnect') }}
           </button>
           <button
             @click="handleRefresh"
             class="flex-1 py-3 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
           >
-            Recargar Pagina
+            {{ t('connection.reloadPage') }}
           </button>
         </div>
 
         <!-- Help text -->
         <p class="text-xs text-text-muted mt-4">
-          Si el problema persiste, verifica tu conexion a internet.
+          {{ t('connection.persistsNotice') }}
         </p>
       </div>
     </div>

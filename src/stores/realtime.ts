@@ -188,7 +188,10 @@ export const useRealtimeStore = defineStore('realtime', () => {
           filter: `player_id=eq.${playerId}`,
         },
         (payload) => {
-          console.log('Rig actualizado:', payload.eventType);
+          // Solo loguear INSERT/DELETE (no los UPDATE frecuentes del game_tick)
+          if (payload.eventType !== 'UPDATE') {
+            console.log('Rig cambio:', payload.eventType);
+          }
           window.dispatchEvent(
             new CustomEvent('player-rigs-updated', {
               detail: payload,
@@ -216,7 +219,10 @@ export const useRealtimeStore = defineStore('realtime', () => {
           table: 'rig_cooling',
         },
         (payload) => {
-          console.log('Cooling actualizado:', payload.eventType);
+          // Solo loguear INSERT/DELETE (no los UPDATE frecuentes)
+          if (payload.eventType !== 'UPDATE') {
+            console.log('Cooling cambio:', payload.eventType);
+          }
           window.dispatchEvent(
             new CustomEvent('rig-cooling-updated', {
               detail: payload,

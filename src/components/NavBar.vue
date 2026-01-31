@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 import { useMiningStore } from '@/stores/mining';
+import { toggleLocale, getLocale } from '@/plugins/i18n';
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   recharge: [];
@@ -17,7 +21,12 @@ const realtimeStore = useRealtimeStore();
 const miningStore = useMiningStore();
 
 const isAuthenticated = computed(() => authStore.isAuthenticated);
-const username = computed(() => authStore.player?.username ?? 'Jugador');
+const username = computed(() => authStore.player?.username ?? 'Player');
+const currentLocale = computed(() => getLocale());
+
+function handleToggleLocale() {
+  toggleLocale();
+}
 
 // Resource values
 const energy = computed(() => authStore.player?.energy ?? 100);
@@ -82,9 +91,9 @@ async function handleLogout() {
             <button
               @click="emit('exchange')"
               class="px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-all flex items-center gap-1"
-              title="Exchange Crypto"
+              :title="t('nav.exchange')"
             >
-              💱 <span class="hidden lg:inline">Exchange</span>
+              💱 <span class="hidden lg:inline">{{ t('nav.exchange') }}</span>
             </button>
 
             <!-- Energy Bar -->
@@ -156,18 +165,18 @@ async function handleLogout() {
               :class="energyStatus === 'critical' || internetStatus === 'critical'
                 ? 'bg-status-danger text-white animate-pulse'
                 : 'bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30'"
-              title="Recargar recursos"
+              :title="t('nav.recharge')"
             >
-              + <span class="hidden lg:inline">Recargar</span>
+              + <span class="hidden lg:inline">{{ t('nav.recharge') }}</span>
             </button>
 
             <!-- Inventory Button -->
             <button
               @click="emit('inventory')"
               class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-bg-tertiary hover:bg-bg-tertiary/80 flex items-center gap-1"
-              title="Inventario"
+              :title="t('nav.inventory')"
             >
-              🎒 <span class="hidden lg:inline">Inventario</span>
+              🎒 <span class="hidden lg:inline">{{ t('nav.inventory') }}</span>
             </button>
           </div>
 
@@ -191,7 +200,7 @@ async function handleLogout() {
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
-                Perfil
+                {{ t('nav.profile') }}
               </RouterLink>
               <button
                 @click="handleLogout"
@@ -200,7 +209,7 @@ async function handleLogout() {
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-                Cerrar Sesión
+                {{ t('nav.logout') }}
               </button>
             </div>
           </div>
@@ -208,9 +217,18 @@ async function handleLogout() {
 
         <template v-else>
           <RouterLink to="/login" class="btn-primary">
-            Iniciar Sesión
+            {{ t('nav.login') }}
           </RouterLink>
         </template>
+
+        <!-- Language Selector -->
+        <button
+          @click="handleToggleLocale"
+          class="px-2 py-1.5 text-xs font-medium rounded-lg bg-bg-tertiary hover:bg-bg-tertiary/80 transition-all"
+          :title="currentLocale === 'en' ? 'Switch to Spanish' : 'Cambiar a Inglés'"
+        >
+          {{ currentLocale === 'en' ? '🇺🇸 EN' : '🇪🇸 ES' }}
+        </button>
       </div>
     </div>
   </nav>

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 
+const { t } = useI18n();
 const router = useRouter();
 const authStore = useAuthStore();
 
@@ -28,11 +30,11 @@ function enterGame() {
 }
 
 function getRankName(score: number): string {
-  if (score >= 85) return 'Diamante';
-  if (score >= 70) return 'Platino';
-  if (score >= 50) return 'Oro';
-  if (score >= 30) return 'Plata';
-  return 'Bronce';
+  if (score >= 85) return t('welcome.ranks.diamond');
+  if (score >= 70) return t('welcome.ranks.platinum');
+  if (score >= 50) return t('welcome.ranks.gold');
+  if (score >= 30) return t('welcome.ranks.silver');
+  return t('welcome.ranks.bronze');
 }
 
 function getRankIcon(score: number): string {
@@ -64,13 +66,13 @@ function getRankIcon(score: number): string {
 
         <!-- Saludo -->
         <h1 class="text-3xl font-display font-bold mb-2">
-          ¡Bienvenido de vuelta,
+          {{ t('welcome.greeting') }}
         </h1>
         <h2 class="text-4xl font-display font-bold mb-4">
-          <span class="gradient-text">{{ player?.username ?? 'Minero' }}</span>!
+          <span class="gradient-text">{{ player?.username ?? t('welcome.defaultName') }}</span>!
         </h2>
         <p class="text-text-secondary mb-8">
-          Tu estación de minería está lista
+          {{ t('welcome.stationReady') }}
         </p>
       </div>
 
@@ -95,7 +97,7 @@ function getRankIcon(score: number): string {
           <div class="text-2xl font-bold text-accent-primary">
             {{ getRankName(player?.reputation_score ?? 50) }}
           </div>
-          <div class="text-xs text-text-muted mt-1">⭐ Rango</div>
+          <div class="text-xs text-text-muted mt-1">⭐ {{ t('welcome.rank') }}</div>
         </div>
       </div>
 
@@ -107,7 +109,7 @@ function getRankIcon(score: number): string {
         <div class="grid grid-cols-2 gap-6">
           <div>
             <div class="flex justify-between text-sm mb-2">
-              <span class="text-text-muted">⚡ Energía</span>
+              <span class="text-text-muted">⚡ {{ t('welcome.energy') }}</span>
               <span class="text-status-warning font-medium">{{ player?.energy?.toFixed(0) ?? 100 }}%</span>
             </div>
             <div class="progress-bar progress-energy">
@@ -116,7 +118,7 @@ function getRankIcon(score: number): string {
           </div>
           <div>
             <div class="flex justify-between text-sm mb-2">
-              <span class="text-text-muted">📡 Internet</span>
+              <span class="text-text-muted">📡 {{ t('welcome.internet') }}</span>
               <span class="text-accent-tertiary font-medium">{{ player?.internet?.toFixed(0) ?? 100 }}%</span>
             </div>
             <div class="progress-bar progress-internet">
@@ -135,12 +137,12 @@ function getRankIcon(score: number): string {
           @click="enterGame"
           class="btn-primary text-lg px-12 py-4 relative overflow-hidden group"
         >
-          <span class="relative z-10">⛏️ Entrar al Juego</span>
+          <span class="relative z-10">⛏️ {{ t('welcome.enterGame') }}</span>
           <div class="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-500"></div>
         </button>
 
         <p class="text-text-muted text-xs mt-4">
-          Presiona para continuar
+          {{ t('welcome.pressContinue') }}
         </p>
       </div>
     </div>

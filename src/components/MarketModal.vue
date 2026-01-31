@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { supabase } from '@/utils/supabase';
+
+const { t } = useI18n();
 
 const authStore = useAuthStore();
 
@@ -331,11 +334,11 @@ watch(() => props.show, (newVal) => {
         <!-- Header -->
         <div class="flex items-center justify-between p-4 border-b border-border/50">
           <h2 class="text-xl font-display font-bold">
-            <span class="gradient-text">Mercado</span>
+            <span class="gradient-text">{{ t('market.title') }}</span>
           </h2>
           <div class="flex items-center gap-4">
             <span class="text-sm text-text-muted">
-              Balance: <span class="font-bold text-status-warning">{{ balance.toFixed(0) }} 🪙</span>
+              {{ t('market.balance') }} <span class="font-bold text-status-warning">{{ balance.toFixed(0) }} 🪙</span>
             </span>
             <button
               @click="emit('close')"
@@ -357,7 +360,7 @@ watch(() => props.show, (newVal) => {
               ? 'text-accent-primary border-b-2 border-accent-primary'
               : 'text-text-muted hover:text-white'"
           >
-            <span>⛏️</span> Rigs de Minería
+            <span>⛏️</span> {{ t('market.tabs.rigs') }}
           </button>
           <button
             @click="activeTab = 'cooling'"
@@ -366,7 +369,7 @@ watch(() => props.show, (newVal) => {
               ? 'text-accent-primary border-b-2 border-accent-primary'
               : 'text-text-muted hover:text-white'"
           >
-            <span>❄️</span> Refrigeración
+            <span>❄️</span> {{ t('market.tabs.cooling') }}
           </button>
           <button
             @click="activeTab = 'cards'"
@@ -375,7 +378,7 @@ watch(() => props.show, (newVal) => {
               ? 'text-accent-primary border-b-2 border-accent-primary'
               : 'text-text-muted hover:text-white'"
           >
-            <span>💳</span> Tarjetas Prepago
+            <span>💳</span> {{ t('market.tabs.cards') }}
           </button>
         </div>
 
@@ -383,18 +386,18 @@ watch(() => props.show, (newVal) => {
         <div class="p-4 overflow-y-auto max-h-[65vh]">
           <!-- Loading -->
           <div v-if="loading" class="text-center py-12 text-text-muted">
-            Cargando...
+            {{ t('common.loading') }}
           </div>
 
           <!-- Rigs Tab -->
           <div v-else-if="activeTab === 'rigs'" class="space-y-4">
             <p class="text-sm text-text-muted mb-4">
-              Compra nuevos rigs para aumentar tu poder de minería. Cada rig tiene diferentes características de hashrate, consumo y durabilidad.
+              {{ t('market.rigs.description') }}
             </p>
 
             <div v-if="rigsForSale.length === 0" class="text-center py-8 text-text-muted">
               <div class="text-4xl mb-3">🎉</div>
-              <p>¡Ya tienes todos los rigs disponibles!</p>
+              <p>{{ t('market.rigs.allOwned') }}</p>
             </div>
 
             <div v-else class="grid sm:grid-cols-2 gap-4">
@@ -427,15 +430,15 @@ watch(() => props.show, (newVal) => {
                 <div class="grid grid-cols-3 gap-2 text-xs mb-4">
                   <div class="bg-bg-primary rounded-lg p-2 text-center">
                     <div class="text-status-warning">⚡ {{ rig.power_consumption }}</div>
-                    <div class="text-text-muted">Energía/tick</div>
+                    <div class="text-text-muted">{{ t('market.rigs.energyTick') }}</div>
                   </div>
                   <div class="bg-bg-primary rounded-lg p-2 text-center">
                     <div class="text-accent-tertiary">📡 {{ rig.internet_consumption }}</div>
-                    <div class="text-text-muted">Internet/tick</div>
+                    <div class="text-text-muted">{{ t('market.rigs.internetTick') }}</div>
                   </div>
                   <div class="bg-bg-primary rounded-lg p-2 text-center">
                     <div class="text-status-danger">🔧 {{ rig.repair_cost }}</div>
-                    <div class="text-text-muted">Reparación</div>
+                    <div class="text-text-muted">{{ t('market.rigs.repair') }}</div>
                   </div>
                 </div>
 
@@ -456,7 +459,7 @@ watch(() => props.show, (newVal) => {
           <!-- Cooling Tab -->
           <div v-else-if="activeTab === 'cooling'" class="space-y-4">
             <p class="text-sm text-text-muted mb-4">
-              La refrigeración reduce la temperatura de tus rigs. Los items comprados van a tu <span class="text-accent-primary">inventario</span> donde puedes instalarlos.
+              {{ t('market.cooling.description') }}
             </p>
 
             <div class="grid sm:grid-cols-2 gap-4">
@@ -494,14 +497,14 @@ watch(() => props.show, (newVal) => {
                   class="w-full py-2.5 rounded-lg font-medium bg-status-success/20 text-status-success cursor-default"
                   disabled
                 >
-                  ✓ Instalado
+                  ✓ {{ t('market.cooling.installed') }}
                 </button>
                 <button
                   v-else-if="inventoryCoolingIds.includes(item.id)"
                   class="w-full py-2.5 rounded-lg font-medium bg-accent-primary/20 text-accent-primary cursor-default"
                   disabled
                 >
-                  🎒 En inventario
+                  🎒 {{ t('market.cooling.inInventory') }}
                 </button>
                 <button
                   v-else
@@ -521,13 +524,13 @@ watch(() => props.show, (newVal) => {
           <!-- Cards Tab -->
           <div v-else-if="activeTab === 'cards'" class="space-y-6">
             <p class="text-sm text-text-muted mb-4">
-              Las tarjetas prepago te permiten recargar energía e internet. Después de comprar, ve a tu <span class="text-accent-primary">inventario</span> para canjearlas.
+              {{ t('market.cards.description') }}
             </p>
 
             <!-- Energy Cards -->
             <div>
               <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
-                <span class="text-status-warning">⚡</span> Tarjetas de Energía
+                <span class="text-status-warning">⚡</span> {{ t('market.cards.energyCards') }}
               </h3>
               <div class="grid sm:grid-cols-2 gap-3">
                 <div
@@ -557,7 +560,7 @@ watch(() => props.show, (newVal) => {
             <!-- Internet Cards -->
             <div>
               <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
-                <span class="text-accent-tertiary">📡</span> Tarjetas de Internet
+                <span class="text-accent-tertiary">📡</span> {{ t('market.cards.internetCards') }}
               </h3>
               <div class="grid sm:grid-cols-2 gap-3">
                 <div
@@ -597,25 +600,25 @@ watch(() => props.show, (newVal) => {
             <div class="text-4xl mb-3">
               {{ confirmAction.type === 'rig' ? '⛏️' : confirmAction.type === 'cooling' ? '❄️' : '💳' }}
             </div>
-            <h3 class="text-lg font-bold mb-1">Confirmar Compra</h3>
-            <p class="text-text-muted text-sm">¿Deseas comprar este item?</p>
+            <h3 class="text-lg font-bold mb-1">{{ t('market.confirmPurchase.title') }}</h3>
+            <p class="text-text-muted text-sm">{{ t('market.confirmPurchase.question') }}</p>
           </div>
 
           <div class="bg-bg-primary rounded-lg p-4 mb-4">
             <div class="font-medium text-white mb-1">{{ confirmAction.name }}</div>
             <div class="text-xs text-text-muted mb-2">{{ confirmAction.description }}</div>
             <div class="flex items-center justify-between">
-              <span class="text-text-muted text-sm">Precio:</span>
+              <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.price') }}</span>
               <span class="font-bold text-status-warning">{{ confirmAction.price.toLocaleString() }} 🪙</span>
             </div>
             <div class="flex items-center justify-between mt-1">
-              <span class="text-text-muted text-sm">Tu balance:</span>
+              <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.yourBalance') }}</span>
               <span class="font-mono" :class="balance >= confirmAction.price ? 'text-status-success' : 'text-status-danger'">
                 {{ balance.toFixed(0) }} 🪙
               </span>
             </div>
             <div class="flex items-center justify-between mt-1 pt-2 border-t border-border/50">
-              <span class="text-text-muted text-sm">Despues:</span>
+              <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.after') }}</span>
               <span class="font-mono text-white">{{ (balance - confirmAction.price).toFixed(0) }} 🪙</span>
             </div>
           </div>
@@ -625,14 +628,14 @@ watch(() => props.show, (newVal) => {
               @click="cancelPurchase"
               class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
             >
-              Cancelar
+              {{ t('common.cancel') }}
             </button>
             <button
               @click="confirmPurchase"
               :disabled="buying"
               class="flex-1 py-2.5 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/80 transition-colors disabled:opacity-50"
             >
-              {{ buying ? 'Comprando...' : 'Confirmar' }}
+              {{ buying ? t('market.confirmPurchase.buying') : t('common.confirm') }}
             </button>
           </div>
         </div>

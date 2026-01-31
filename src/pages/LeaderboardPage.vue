@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 
+const { t } = useI18n();
 const authStore = useAuthStore();
 
 const loading = ref(true);
@@ -68,7 +70,7 @@ onMounted(loadData);
 
 <template>
   <div>
-    <h1 class="text-2xl text-arcade-primary mb-6">Ranking</h1>
+    <h1 class="text-2xl text-arcade-primary mb-6">{{ t('leaderboard.title') }}</h1>
 
     <!-- Tabs -->
     <div class="flex gap-4 mb-6 border-b border-arcade-border">
@@ -77,26 +79,26 @@ onMounted(loadData);
         class="pb-2 px-4 transition-colors"
         :class="activeTab === 'miners' ? 'text-arcade-primary border-b-2 border-arcade-primary' : 'text-gray-400 hover:text-white'"
       >
-        ⛏️ Top Mineros
+        ⛏️ {{ t('leaderboard.topMiners') }}
       </button>
       <button
         @click="changeTab('reputation')"
         class="pb-2 px-4 transition-colors"
         :class="activeTab === 'reputation' ? 'text-arcade-primary border-b-2 border-arcade-primary' : 'text-gray-400 hover:text-white'"
       >
-        ⭐ Reputación
+        ⭐ {{ t('leaderboard.reputation') }}
       </button>
       <button
         @click="changeTab('traders')"
         class="pb-2 px-4 transition-colors"
         :class="activeTab === 'traders' ? 'text-arcade-primary border-b-2 border-arcade-primary' : 'text-gray-400 hover:text-white'"
       >
-        💰 Top Traders
+        💰 {{ t('leaderboard.topTraders') }}
       </button>
     </div>
 
     <div v-if="loading" class="text-center py-12 text-gray-400">
-      Cargando...
+      {{ t('common.loading') }}
     </div>
 
     <div v-else class="max-w-4xl mx-auto">
@@ -110,7 +112,7 @@ onMounted(loadData);
             {{ activeTab === 'reputation' ? leaderboard[1].value : leaderboard[1].value }}
           </div>
           <div class="text-xs text-gray-400">
-            {{ activeTab === 'miners' ? 'bloques' : activeTab === 'reputation' ? 'puntos' : 'GC' }}
+            {{ activeTab === 'miners' ? t('leaderboard.blocks') : activeTab === 'reputation' ? t('leaderboard.points') : 'GC' }}
           </div>
         </div>
 
@@ -122,7 +124,7 @@ onMounted(loadData);
             {{ leaderboard[0].value }}
           </div>
           <div class="text-xs text-gray-400">
-            {{ activeTab === 'miners' ? 'bloques' : activeTab === 'reputation' ? 'puntos' : 'GC' }}
+            {{ activeTab === 'miners' ? t('leaderboard.blocks') : activeTab === 'reputation' ? t('leaderboard.points') : 'GC' }}
           </div>
         </div>
 
@@ -134,7 +136,7 @@ onMounted(loadData);
             {{ leaderboard[2].value }}
           </div>
           <div class="text-xs text-gray-400">
-            {{ activeTab === 'miners' ? 'bloques' : activeTab === 'reputation' ? 'puntos' : 'GC' }}
+            {{ activeTab === 'miners' ? t('leaderboard.blocks') : activeTab === 'reputation' ? t('leaderboard.points') : 'GC' }}
           </div>
         </div>
       </div>
@@ -145,11 +147,11 @@ onMounted(loadData);
           <thead>
             <tr class="text-left text-gray-400 text-sm border-b border-arcade-border">
               <th class="pb-3 w-16">#</th>
-              <th class="pb-3">Jugador</th>
+              <th class="pb-3">{{ t('leaderboard.player') }}</th>
               <th class="pb-3 text-right">
-                {{ activeTab === 'miners' ? 'Bloques' : activeTab === 'reputation' ? 'Puntos' : 'Volumen' }}
+                {{ activeTab === 'miners' ? t('leaderboard.blocks') : activeTab === 'reputation' ? t('leaderboard.points') : t('leaderboard.volume') }}
               </th>
-              <th v-if="activeTab === 'reputation'" class="pb-3 text-right">Rango</th>
+              <th v-if="activeTab === 'reputation'" class="pb-3 text-right">{{ t('leaderboard.rank') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -167,7 +169,7 @@ onMounted(loadData);
                   {{ player.username }}
                 </span>
                 <span v-if="player.id === authStore.player?.id" class="text-xs text-gray-400 ml-2">
-                  (tú)
+                  ({{ t('leaderboard.you') }})
                 </span>
               </td>
               <td class="py-3 text-right font-mono">
@@ -186,7 +188,7 @@ onMounted(loadData);
         </table>
 
         <div v-if="leaderboard.length === 0" class="text-center py-8 text-gray-400">
-          No hay datos disponibles
+          {{ t('leaderboard.noData') }}
         </div>
       </div>
     </div>

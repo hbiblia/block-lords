@@ -64,6 +64,7 @@ DROP FUNCTION IF EXISTS recharge_energy(UUID, NUMERIC) CASCADE;
 DROP FUNCTION IF EXISTS recharge_internet(UUID, NUMERIC) CASCADE;
 DROP FUNCTION IF EXISTS get_player_transactions(UUID, INTEGER) CASCADE;
 DROP FUNCTION IF EXISTS get_network_stats() CASCADE;
+DROP FUNCTION IF EXISTS get_home_stats() CASCADE;
 DROP FUNCTION IF EXISTS get_recent_blocks(INTEGER) CASCADE;
 DROP FUNCTION IF EXISTS get_recent_blocks() CASCADE;
 DROP FUNCTION IF EXISTS get_player_mining_stats(UUID) CASCADE;
@@ -760,6 +761,47 @@ BEGIN
 END;
 $$;
 
+-- Estadísticas para el Home Page
+CREATE OR REPLACE FUNCTION get_home_stats()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_total_players BIGINT;
+  v_online_players BIGINT;
+  v_total_blocks BIGINT;
+  v_volume_24h NUMERIC;
+  v_difficulty NUMERIC;
+BEGIN
+  -- Total de jugadores registrados
+  SELECT COUNT(*) INTO v_total_players FROM players;
+
+  -- Jugadores online
+  SELECT COUNT(*) INTO v_online_players FROM players WHERE is_online = true;
+
+  -- Total de bloques minados
+  SELECT COUNT(*) INTO v_total_blocks FROM blocks;
+
+  -- Volumen de trades en 24h (suma de todo el valor comerciado)
+  SELECT COALESCE(SUM(total_value), 0) INTO v_volume_24h
+  FROM trades
+  WHERE created_at > NOW() - INTERVAL '24 hours';
+
+  -- Dificultad actual
+  SELECT COALESCE(difficulty, 1000) INTO v_difficulty
+  FROM network_stats WHERE id = 'current';
+
+  RETURN json_build_object(
+    'totalPlayers', v_total_players,
+    'onlinePlayers', v_online_players,
+    'totalBlocks', v_total_blocks,
+    'volume24h', v_volume_24h,
+    'difficulty', v_difficulty
+  );
+END;
+$$;
+
 -- Bloques recientes
 CREATE OR REPLACE FUNCTION get_recent_blocks(p_limit INT DEFAULT 20)
 RETURNS JSON
@@ -1183,6 +1225,80 @@ BEGIN
 END;
 $$;
 
+-- Ajustar dificultad dinámicamente basado en hashrate de red
+-- La dificultad se ajusta para mantener ~10% probabilidad de bloque por tick
+-- Fórmula: nueva_dificultad = hashrate / target_probability
+CREATE OR REPLACE FUNCTION adjust_difficulty()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current_difficulty NUMERIC;
+  v_current_hashrate NUMERIC;
+  v_new_difficulty NUMERIC;
+  v_target_probability NUMERIC := 0.10; -- 10% chance per tick
+  v_min_difficulty NUMERIC := 100;      -- Mínimo para evitar bloques muy fáciles
+  v_max_adjustment NUMERIC := 0.25;     -- Máximo 25% de cambio por ajuste
+  v_adjustment_factor NUMERIC;
+BEGIN
+  -- Obtener valores actuales
+  SELECT difficulty, hashrate INTO v_current_difficulty, v_current_hashrate
+  FROM network_stats WHERE id = 'current';
+
+  IF v_current_difficulty IS NULL THEN v_current_difficulty := 1000; END IF;
+  IF v_current_hashrate IS NULL OR v_current_hashrate = 0 THEN
+    -- Sin hashrate, mantener dificultad mínima
+    RETURN json_build_object(
+      'adjusted', false,
+      'reason', 'No hashrate',
+      'difficulty', v_current_difficulty
+    );
+  END IF;
+
+  -- Calcular dificultad ideal para el target de probabilidad
+  -- Probabilidad = hashrate / dificultad
+  -- Dificultad ideal = hashrate / target_probability
+  v_new_difficulty := v_current_hashrate / v_target_probability;
+
+  -- Aplicar límites de ajuste suave (máx 25% de cambio)
+  v_adjustment_factor := v_new_difficulty / v_current_difficulty;
+
+  IF v_adjustment_factor > (1 + v_max_adjustment) THEN
+    v_new_difficulty := v_current_difficulty * (1 + v_max_adjustment);
+  ELSIF v_adjustment_factor < (1 - v_max_adjustment) THEN
+    v_new_difficulty := v_current_difficulty * (1 - v_max_adjustment);
+  END IF;
+
+  -- Aplicar dificultad mínima
+  v_new_difficulty := GREATEST(v_new_difficulty, v_min_difficulty);
+
+  -- Redondear para evitar decimales excesivos
+  v_new_difficulty := ROUND(v_new_difficulty);
+
+  -- Actualizar si hay cambio significativo (>1%)
+  IF ABS(v_new_difficulty - v_current_difficulty) / v_current_difficulty > 0.01 THEN
+    UPDATE network_stats
+    SET difficulty = v_new_difficulty, updated_at = NOW()
+    WHERE id = 'current';
+
+    RETURN json_build_object(
+      'adjusted', true,
+      'old_difficulty', v_current_difficulty,
+      'new_difficulty', v_new_difficulty,
+      'hashrate', v_current_hashrate,
+      'change_percent', ROUND(((v_new_difficulty - v_current_difficulty) / v_current_difficulty) * 100, 2)
+    );
+  END IF;
+
+  RETURN json_build_object(
+    'adjusted', false,
+    'reason', 'No significant change needed',
+    'difficulty', v_current_difficulty
+  );
+END;
+$$;
+
 -- Game tick principal (ejecutar cada minuto)
 CREATE OR REPLACE FUNCTION game_tick()
 RETURNS JSON
@@ -1193,8 +1309,15 @@ DECLARE
   v_resources_processed INT := 0;
   v_block_mined BOOLEAN := false;
   v_block_height INT;
+  v_difficulty_result JSON;
 BEGIN
+  -- Procesar decay de recursos
   v_resources_processed := process_resource_decay();
+
+  -- Ajustar dificultad antes de intentar minar
+  v_difficulty_result := adjust_difficulty();
+
+  -- Intentar minar bloque
   SELECT * INTO v_block_mined, v_block_height FROM process_mining_tick();
 
   RETURN json_build_object(
@@ -1202,6 +1325,7 @@ BEGIN
     'resourcesProcessed', v_resources_processed,
     'blockMined', v_block_mined,
     'blockHeight', v_block_height,
+    'difficultyAdjusted', (v_difficulty_result->>'adjusted')::BOOLEAN,
     'timestamp', NOW()
   );
 END;

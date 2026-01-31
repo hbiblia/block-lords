@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
 import { getPlayerRigs, getNetworkStats, getRecentBlocks, toggleRig, getRigCooling } from '@/utils/api';
 import MarketModal from '@/components/MarketModal.vue';
 
+const { t } = useI18n();
 const authStore = useAuthStore();
 const miningStore = useMiningStore();
 
@@ -239,10 +241,10 @@ function getTempColor(temp: number): string {
 }
 
 function getTempStatus(temp: number): string {
-  if (temp >= 80) return 'CRÍTICO';
-  if (temp >= 60) return 'Alto';
-  if (temp >= 40) return 'Normal';
-  return 'Óptimo';
+  if (temp >= 80) return t('mining.temp.critical');
+  if (temp >= 60) return t('mining.temp.high');
+  if (temp >= 40) return t('mining.temp.normal');
+  return t('mining.temp.optimal');
 }
 
 function getTempBarColor(temp: number): string {
@@ -331,14 +333,48 @@ function handleInventoryUsed() {
   loadData();
 }
 
-function handleRigsUpdated() {
-  // Refresh rig data when realtime update is received
-  loadData();
+// Debounce timer for cooling updates
+let coolingDebounceTimer: number | null = null;
+
+function handleRigsUpdated(event: CustomEvent) {
+  const { eventType, new: newData, old: oldData } = event.detail;
+
+  // Solo recargar todo si es INSERT o DELETE (rig nuevo o eliminado)
+  if (eventType === 'INSERT' || eventType === 'DELETE') {
+    loadData();
+    return;
+  }
+
+  // Para UPDATE: actualizar directamente el rig específico sin llamar a la API
+  if (eventType === 'UPDATE' && newData) {
+    const rigIndex = rigs.value.findIndex(r => r.id === newData.id);
+    if (rigIndex !== -1) {
+      // Actualizar solo los campos que vienen del servidor
+      const currentRig = rigs.value[rigIndex];
+      rigs.value[rigIndex] = {
+        ...currentRig,
+        is_active: newData.is_active ?? currentRig.is_active,
+        condition: newData.condition ?? currentRig.condition,
+        temperature: newData.temperature ?? currentRig.temperature,
+        activated_at: newData.activated_at ?? currentRig.activated_at,
+      };
+      // Sincronizar mining store si cambió el estado activo
+      if (oldData && newData.is_active !== oldData.is_active) {
+        syncMiningStore();
+      }
+    }
+  }
 }
 
 function handleCoolingUpdated() {
-  // Refresh cooling data when realtime update is received
-  loadRigsCooling();
+  // Debounce: esperar 500ms de inactividad antes de recargar cooling
+  if (coolingDebounceTimer) {
+    clearTimeout(coolingDebounceTimer);
+  }
+  coolingDebounceTimer = window.setTimeout(() => {
+    loadRigsCooling();
+    coolingDebounceTimer = null;
+  }, 500);
 }
 
 onMounted(() => {
@@ -354,6 +390,11 @@ onMounted(() => {
 onUnmounted(() => {
   stopMiningSimulation();
   stopUptimeTimer();
+  // Limpiar debounce timer de cooling
+  if (coolingDebounceTimer) {
+    clearTimeout(coolingDebounceTimer);
+    coolingDebounceTimer = null;
+  }
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
   window.removeEventListener('inventory-used', handleInventoryUsed as EventListener);
   window.removeEventListener('player-rigs-updated', handleRigsUpdated as EventListener);
@@ -368,15 +409,15 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-display font-bold">
-        <span class="gradient-text">Minería</span>
+        <span class="gradient-text">{{ t('mining.title') }}</span>
       </h1>
       <div class="flex items-center gap-3">
         <span class="badge" :class="activeRigsCount > 0 ? 'badge-success' : 'badge-warning'">
-          {{ activeRigsCount }} rig{{ activeRigsCount !== 1 ? 's' : '' }} activo{{ activeRigsCount !== 1 ? 's' : '' }}
+          {{ t('mining.activeRigs', { count: activeRigsCount }) }}
         </span>
         <button @click="showMarket = true" class="btn-primary flex items-center gap-2">
           <span>🛒</span>
-          <span>Mercado</span>
+          <span>{{ t('mining.market') }}</span>
         </button>
       </div>
     </div>
@@ -385,7 +426,7 @@ onUnmounted(() => {
       <div class="w-12 h-12 mx-auto rounded-xl bg-gradient-primary flex items-center justify-center text-2xl animate-pulse mb-4">
         ⛏️
       </div>
-      Cargando estación de minería...
+      {{ t('mining.loadingStation') }}
     </div>
 
     <div v-else class="space-y-6">
@@ -407,9 +448,9 @@ onUnmounted(() => {
                 ⛏️
               </div>
               <div>
-                <h2 class="text-lg font-semibold">Centro de Minería</h2>
+                <h2 class="text-lg font-semibold">{{ t('mining.miningCenter') }}</h2>
                 <p class="text-sm text-text-muted">
-                  {{ totalHashrate > 0 ? 'Minando activamente...' : 'Rigs inactivos' }}
+                  {{ totalHashrate > 0 ? t('mining.activelyMining') : t('mining.rigsInactive') }}
                 </p>
               </div>
             </div>
@@ -419,7 +460,7 @@ onUnmounted(() => {
                 {{ Math.round(effectiveHashrate).toLocaleString() }}
               </div>
               <div class="text-xs text-text-muted flex items-center justify-end gap-1">
-                <span>H/s Efectivo</span>
+                <span>{{ t('mining.effectiveHashrate') }}</span>
                 <span
                   v-if="effectiveHashrate < totalHashrate"
                   class="text-status-danger"
@@ -434,7 +475,7 @@ onUnmounted(() => {
           <!-- Mining Progress Bar -->
           <div class="mb-4">
             <div class="flex justify-between text-sm mb-2">
-              <span class="text-text-muted">Progreso de Hash</span>
+              <span class="text-text-muted">{{ t('mining.hashProgress') }}</span>
               <span class="font-mono text-accent-primary">{{ hashesCalculated.toFixed(0) }} hashes</span>
             </div>
             <div class="h-4 bg-bg-tertiary rounded-full overflow-hidden relative">
@@ -456,19 +497,19 @@ onUnmounted(() => {
           <div class="grid grid-cols-4 gap-4">
             <div class="bg-bg-secondary rounded-xl p-3 text-center">
               <div class="text-xl font-bold text-status-warning">{{ miningChance.toFixed(2) }}%</div>
-              <div class="text-xs text-text-muted">Probabilidad</div>
+              <div class="text-xs text-text-muted">{{ t('mining.probability') }}</div>
             </div>
             <div class="bg-bg-secondary rounded-xl p-3 text-center">
               <div class="text-xl font-bold text-accent-tertiary">{{ networkStats.difficulty?.toLocaleString() ?? 0 }}</div>
-              <div class="text-xs text-text-muted">Dificultad</div>
+              <div class="text-xs text-text-muted">{{ t('mining.difficulty') }}</div>
             </div>
             <div class="bg-bg-secondary rounded-xl p-3 text-center">
               <div class="text-xl font-bold text-accent-primary">{{ networkStats.activeMiners ?? 0 }}</div>
-              <div class="text-xs text-text-muted">Mineros</div>
+              <div class="text-xs text-text-muted">{{ t('mining.miners') }}</div>
             </div>
             <div class="bg-bg-secondary rounded-xl p-3 text-center">
               <div class="text-xl font-bold text-status-success">#{{ networkStats.latestBlock?.height ?? 0 }}</div>
-              <div class="text-xs text-text-muted">Último Bloque</div>
+              <div class="text-xs text-text-muted">{{ t('mining.lastBlock') }}</div>
             </div>
           </div>
         </div>
@@ -480,7 +521,7 @@ onUnmounted(() => {
         >
           <div class="text-center">
             <div class="text-6xl mb-4 animate-bounce">🎉</div>
-            <div class="text-2xl font-bold text-status-success">¡Bloque Minado!</div>
+            <div class="text-2xl font-bold text-status-success">{{ t('mining.blockMined') }}</div>
             <div class="text-lg text-white">#{{ lastBlockFound?.height }}</div>
           </div>
         </div>
@@ -490,14 +531,14 @@ onUnmounted(() => {
         <!-- Rigs Column -->
         <div class="lg:col-span-2 space-y-4">
           <h2 class="text-lg font-semibold flex items-center gap-2">
-            <span>🖥️</span> Tus Rigs
+            <span>🖥️</span> {{ t('mining.yourRigs') }}
           </h2>
 
           <div v-if="rigs.length === 0" class="card text-center py-12">
             <div class="text-4xl mb-4">🛒</div>
-            <p class="text-text-muted mb-4">No tienes rigs. Compra uno en el mercado.</p>
+            <p class="text-text-muted mb-4">{{ t('mining.noRigs') }}</p>
             <button @click="showMarket = true" class="btn-primary">
-              Ir al Mercado
+              {{ t('mining.goToMarket') }}
             </button>
           </div>
 
@@ -532,7 +573,7 @@ onUnmounted(() => {
                       ? 'bg-status-success/20 text-status-success'
                       : 'bg-bg-tertiary text-text-muted'"
                   >
-                    {{ playerRig.is_active ? '● MINANDO' : '○ APAGADO' }}
+                    {{ playerRig.is_active ? '● ' + t('mining.mining') : '○ ' + t('mining.off') }}
                   </div>
                 </div>
 
@@ -555,7 +596,7 @@ onUnmounted(() => {
 
                   <!-- Uptime display when active -->
                   <div v-if="playerRig.is_active && playerRig.activated_at" class="mt-3 text-center" :key="uptimeKey">
-                    <div class="text-xs text-text-muted mb-1">Tiempo encendido</div>
+                    <div class="text-xs text-text-muted mb-1">{{ t('mining.uptime') }}</div>
                     <div class="text-sm font-mono text-accent-primary">
                       ⏱️ {{ formatUptime(playerRig.activated_at) }}
                     </div>
@@ -592,7 +633,7 @@ onUnmounted(() => {
                   <div class="flex items-center gap-1.5">
                     <span>❄️</span>
                     <span class="text-xs" :class="rigCooling[playerRig.id]?.length > 0 ? 'text-cyan-400' : 'text-text-muted'">
-                      {{ rigCooling[playerRig.id]?.length > 0 ? 'Refrigeración' : 'Sin cooling' }}
+                      {{ rigCooling[playerRig.id]?.length > 0 ? t('mining.cooling') : t('mining.noCooling') }}
                     </span>
                   </div>
                   <div v-if="rigCooling[playerRig.id]?.length > 0" class="flex items-center gap-2">
@@ -609,7 +650,7 @@ onUnmounted(() => {
                 <div class="mb-3">
                   <div class="flex justify-between text-xs mb-1">
                     <span class="text-text-muted flex items-center gap-1">
-                      🌡️ Temperatura
+                      🌡️ {{ t('mining.temperature') }}
                     </span>
                     <span :class="getTempColor(playerRig.temperature ?? 25)">
                       {{ (playerRig.temperature ?? 25).toFixed(1) }}°C
@@ -628,7 +669,7 @@ onUnmounted(() => {
                 <!-- Condition Bar -->
                 <div class="mb-4">
                   <div class="flex justify-between text-xs mb-1">
-                    <span class="text-text-muted">Condición</span>
+                    <span class="text-text-muted">{{ t('mining.condition') }}</span>
                     <span :class="playerRig.condition < 30 ? 'text-status-danger' : 'text-white'">
                       {{ playerRig.condition }}%
                     </span>
@@ -654,7 +695,7 @@ onUnmounted(() => {
                         ? 'bg-status-danger/20 text-status-danger hover:bg-status-danger/30'
                         : 'bg-status-success/20 text-status-success hover:bg-status-success/30'"
                   >
-                    {{ playerRig.condition <= 0 ? '🔧 Reparar en Inventario' : (playerRig.is_active ? '⏹ Detener' : '▶ Iniciar') }}
+                    {{ playerRig.condition <= 0 ? '🔧 ' + t('mining.repairInInventory') : (playerRig.is_active ? '⏹ ' + t('mining.stop') : '▶ ' + t('mining.start')) }}
                   </button>
                 </div>
               </div>
@@ -667,11 +708,11 @@ onUnmounted(() => {
           <!-- Recent Blocks -->
           <div class="card">
             <h3 class="font-semibold mb-4 flex items-center gap-2">
-              <span>📦</span> Bloques Recientes
+              <span>📦</span> {{ t('mining.recentBlocks') }}
             </h3>
 
             <div v-if="recentBlocks.length === 0" class="text-center py-6 text-text-muted text-sm">
-              Sin bloques aún
+              {{ t('mining.noBlocks') }}
             </div>
 
             <div v-else class="space-y-2">
@@ -691,7 +732,7 @@ onUnmounted(() => {
                   <div>
                     <div class="font-mono font-medium text-accent-primary">#{{ block.height }}</div>
                     <div class="text-xs text-text-muted">
-                      {{ block.miner?.id === authStore.player?.id ? '¡Tú!' : block.miner?.username ?? 'Desconocido' }}
+                      {{ block.miner?.id === authStore.player?.id ? t('mining.you') : block.miner?.username ?? t('mining.unknown') }}
                     </div>
                   </div>
                 </div>
@@ -705,11 +746,11 @@ onUnmounted(() => {
           <!-- Quick Stats -->
           <div class="card">
             <h3 class="font-semibold mb-4 flex items-center gap-2">
-              <span>📊</span> Tus Estadísticas
+              <span>📊</span> {{ t('mining.yourStats') }}
             </h3>
             <div class="space-y-3">
               <div class="flex justify-between items-center">
-                <span class="text-text-muted">Hashrate</span>
+                <span class="text-text-muted">{{ t('mining.hashrate') }}</span>
                 <span class="font-mono font-medium">
                   <span :class="effectiveHashrate < totalHashrate ? 'text-status-warning' : ''">{{ Math.round(effectiveHashrate).toLocaleString() }}</span>
                   <span class="text-text-muted">/{{ totalHashrate.toLocaleString() }}</span>
@@ -717,11 +758,11 @@ onUnmounted(() => {
                 </span>
               </div>
               <div class="flex justify-between items-center">
-                <span class="text-text-muted">Rigs Activos</span>
+                <span class="text-text-muted">{{ t('mining.activeRigsLabel') }}</span>
                 <span class="font-mono font-medium">{{ activeRigsCount }} / {{ rigs.length }}</span>
               </div>
               <div class="flex justify-between items-center">
-                <span class="text-text-muted">Prob. por Bloque</span>
+                <span class="text-text-muted">{{ t('mining.probPerBlock') }}</span>
                 <span class="font-mono font-medium text-status-warning">{{ miningChance.toFixed(2) }}%</span>
               </div>
             </div>

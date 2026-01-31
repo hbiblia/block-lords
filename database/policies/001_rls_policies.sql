@@ -1,5 +1,6 @@
 -- =====================================================
 -- CRYPTO ARCADE MMO - Políticas RLS
+-- Script idempotente (puede ejecutarse múltiples veces)
 -- =====================================================
 
 -- Habilitar RLS en todas las tablas
@@ -17,17 +18,23 @@ ALTER TABLE player_penalties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rigs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE network_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rig_cooling ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cooling_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_cooling ENABLE ROW LEVEL SECURITY;
+ALTER TABLE prepaid_cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_cards ENABLE ROW LEVEL SECURITY;
 
 -- =====================================================
 -- POLÍTICAS PARA PLAYERS
 -- =====================================================
 
--- Cualquiera puede ver perfiles públicos
+DROP POLICY IF EXISTS "Perfiles públicos visibles" ON players;
 CREATE POLICY "Perfiles públicos visibles"
   ON players FOR SELECT
   USING (true);
 
--- Solo el propio usuario puede actualizar su perfil
+DROP POLICY IF EXISTS "Usuarios actualizan su propio perfil" ON players;
 CREATE POLICY "Usuarios actualizan su propio perfil"
   ON players FOR UPDATE
   USING (auth.uid() = id)
@@ -37,7 +44,7 @@ CREATE POLICY "Usuarios actualizan su propio perfil"
 -- POLÍTICAS PARA RIGS (catálogo)
 -- =====================================================
 
--- Todos pueden ver el catálogo de rigs
+DROP POLICY IF EXISTS "Catálogo de rigs público" ON rigs;
 CREATE POLICY "Catálogo de rigs público"
   ON rigs FOR SELECT
   USING (true);
@@ -46,12 +53,12 @@ CREATE POLICY "Catálogo de rigs público"
 -- POLÍTICAS PARA PLAYER_RIGS
 -- =====================================================
 
--- Usuarios ven sus propios rigs
+DROP POLICY IF EXISTS "Ver propios rigs" ON player_rigs;
 CREATE POLICY "Ver propios rigs"
   ON player_rigs FOR SELECT
   USING (auth.uid() = player_id);
 
--- Usuarios pueden actualizar sus propios rigs
+DROP POLICY IF EXISTS "Actualizar propios rigs" ON player_rigs;
 CREATE POLICY "Actualizar propios rigs"
   ON player_rigs FOR UPDATE
   USING (auth.uid() = player_id);
@@ -60,7 +67,7 @@ CREATE POLICY "Actualizar propios rigs"
 -- POLÍTICAS PARA BLOCKS
 -- =====================================================
 
--- Todos pueden ver bloques
+DROP POLICY IF EXISTS "Bloques públicos" ON blocks;
 CREATE POLICY "Bloques públicos"
   ON blocks FOR SELECT
   USING (true);
@@ -69,17 +76,17 @@ CREATE POLICY "Bloques públicos"
 -- POLÍTICAS PARA MARKET_ORDERS
 -- =====================================================
 
--- Todos pueden ver órdenes activas
+DROP POLICY IF EXISTS "Órdenes activas públicas" ON market_orders;
 CREATE POLICY "Órdenes activas públicas"
   ON market_orders FOR SELECT
   USING (status = 'active' OR auth.uid() = player_id);
 
--- Usuarios crean sus propias órdenes
+DROP POLICY IF EXISTS "Crear propias órdenes" ON market_orders;
 CREATE POLICY "Crear propias órdenes"
   ON market_orders FOR INSERT
   WITH CHECK (auth.uid() = player_id);
 
--- Usuarios actualizan sus propias órdenes
+DROP POLICY IF EXISTS "Actualizar propias órdenes" ON market_orders;
 CREATE POLICY "Actualizar propias órdenes"
   ON market_orders FOR UPDATE
   USING (auth.uid() = player_id);
@@ -88,7 +95,7 @@ CREATE POLICY "Actualizar propias órdenes"
 -- POLÍTICAS PARA TRADES
 -- =====================================================
 
--- Usuarios ven trades donde participaron
+DROP POLICY IF EXISTS "Ver propios trades" ON trades;
 CREATE POLICY "Ver propios trades"
   ON trades FOR SELECT
   USING (auth.uid() = buyer_id OR auth.uid() = seller_id);
@@ -97,7 +104,7 @@ CREATE POLICY "Ver propios trades"
 -- POLÍTICAS PARA TRANSACTIONS
 -- =====================================================
 
--- Usuarios ven sus propias transacciones
+DROP POLICY IF EXISTS "Ver propias transacciones" ON transactions;
 CREATE POLICY "Ver propias transacciones"
   ON transactions FOR SELECT
   USING (auth.uid() = player_id);
@@ -106,7 +113,7 @@ CREATE POLICY "Ver propias transacciones"
 -- POLÍTICAS PARA REPUTATION_EVENTS
 -- =====================================================
 
--- Usuarios ven sus propios eventos de reputación
+DROP POLICY IF EXISTS "Ver propios eventos de reputación" ON reputation_events;
 CREATE POLICY "Ver propios eventos de reputación"
   ON reputation_events FOR SELECT
   USING (auth.uid() = player_id);
@@ -115,7 +122,7 @@ CREATE POLICY "Ver propios eventos de reputación"
 -- POLÍTICAS PARA BADGES
 -- =====================================================
 
--- Todos pueden ver badges
+DROP POLICY IF EXISTS "Badges públicos" ON badges;
 CREATE POLICY "Badges públicos"
   ON badges FOR SELECT
   USING (true);
@@ -124,7 +131,7 @@ CREATE POLICY "Badges públicos"
 -- POLÍTICAS PARA PLAYER_BADGES
 -- =====================================================
 
--- Todos pueden ver badges de jugadores (para mostrar en perfiles)
+DROP POLICY IF EXISTS "Badges de jugadores públicos" ON player_badges;
 CREATE POLICY "Badges de jugadores públicos"
   ON player_badges FOR SELECT
   USING (true);
@@ -133,7 +140,7 @@ CREATE POLICY "Badges de jugadores públicos"
 -- POLÍTICAS PARA PLAYER_EVENTS
 -- =====================================================
 
--- Usuarios ven sus propios eventos
+DROP POLICY IF EXISTS "Ver propios eventos" ON player_events;
 CREATE POLICY "Ver propios eventos"
   ON player_events FOR SELECT
   USING (auth.uid() = player_id);
@@ -142,7 +149,7 @@ CREATE POLICY "Ver propios eventos"
 -- POLÍTICAS PARA PLAYER_PENALTIES
 -- =====================================================
 
--- Usuarios ven sus propias penalizaciones
+DROP POLICY IF EXISTS "Ver propias penalizaciones" ON player_penalties;
 CREATE POLICY "Ver propias penalizaciones"
   ON player_penalties FOR SELECT
   USING (auth.uid() = player_id);
@@ -151,12 +158,12 @@ CREATE POLICY "Ver propias penalizaciones"
 -- POLÍTICAS PARA CHAT_MESSAGES
 -- =====================================================
 
--- Todos pueden ver mensajes del chat global
+DROP POLICY IF EXISTS "Chat global público" ON chat_messages;
 CREATE POLICY "Chat global público"
   ON chat_messages FOR SELECT
   USING (channel = 'global' OR auth.uid() = player_id);
 
--- Usuarios autenticados pueden enviar mensajes
+DROP POLICY IF EXISTS "Enviar mensajes" ON chat_messages;
 CREATE POLICY "Enviar mensajes"
   ON chat_messages FOR INSERT
   WITH CHECK (auth.uid() = player_id);
@@ -165,7 +172,140 @@ CREATE POLICY "Enviar mensajes"
 -- POLÍTICAS PARA NETWORK_STATS
 -- =====================================================
 
--- Todos pueden ver estadísticas de la red
+DROP POLICY IF EXISTS "Stats de red públicas" ON network_stats;
 CREATE POLICY "Stats de red públicas"
   ON network_stats FOR SELECT
   USING (true);
+
+-- =====================================================
+-- POLÍTICAS PARA PLAYER_INVENTORY
+-- =====================================================
+
+DROP POLICY IF EXISTS "Ver propio inventario" ON player_inventory;
+CREATE POLICY "Ver propio inventario"
+  ON player_inventory FOR SELECT
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Insertar en inventario" ON player_inventory;
+CREATE POLICY "Insertar en inventario"
+  ON player_inventory FOR INSERT
+  WITH CHECK (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Actualizar inventario" ON player_inventory;
+CREATE POLICY "Actualizar inventario"
+  ON player_inventory FOR UPDATE
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Eliminar de inventario" ON player_inventory;
+CREATE POLICY "Eliminar de inventario"
+  ON player_inventory FOR DELETE
+  USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA RIG_COOLING
+-- =====================================================
+
+DROP POLICY IF EXISTS "Ver cooling de propios rigs" ON rig_cooling;
+CREATE POLICY "Ver cooling de propios rigs"
+  ON rig_cooling FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM player_rigs pr
+      WHERE pr.id = rig_cooling.player_rig_id
+      AND pr.player_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Insertar cooling en propios rigs" ON rig_cooling;
+CREATE POLICY "Insertar cooling en propios rigs"
+  ON rig_cooling FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM player_rigs pr
+      WHERE pr.id = rig_cooling.player_rig_id
+      AND pr.player_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Actualizar cooling de propios rigs" ON rig_cooling;
+CREATE POLICY "Actualizar cooling de propios rigs"
+  ON rig_cooling FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM player_rigs pr
+      WHERE pr.id = rig_cooling.player_rig_id
+      AND pr.player_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Eliminar cooling de propios rigs" ON rig_cooling;
+CREATE POLICY "Eliminar cooling de propios rigs"
+  ON rig_cooling FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM player_rigs pr
+      WHERE pr.id = rig_cooling.player_rig_id
+      AND pr.player_id = auth.uid()
+    )
+  );
+
+-- =====================================================
+-- POLÍTICAS PARA COOLING_ITEMS (catálogo)
+-- =====================================================
+
+DROP POLICY IF EXISTS "Catálogo de cooling público" ON cooling_items;
+CREATE POLICY "Catálogo de cooling público"
+  ON cooling_items FOR SELECT
+  USING (true);
+
+-- =====================================================
+-- POLÍTICAS PARA PLAYER_COOLING
+-- =====================================================
+
+DROP POLICY IF EXISTS "Ver propio cooling" ON player_cooling;
+CREATE POLICY "Ver propio cooling"
+  ON player_cooling FOR SELECT
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Insertar propio cooling" ON player_cooling;
+CREATE POLICY "Insertar propio cooling"
+  ON player_cooling FOR INSERT
+  WITH CHECK (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Actualizar propio cooling" ON player_cooling;
+CREATE POLICY "Actualizar propio cooling"
+  ON player_cooling FOR UPDATE
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Eliminar propio cooling" ON player_cooling;
+CREATE POLICY "Eliminar propio cooling"
+  ON player_cooling FOR DELETE
+  USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA PREPAID_CARDS (catálogo)
+-- =====================================================
+
+DROP POLICY IF EXISTS "Catálogo de tarjetas público" ON prepaid_cards;
+CREATE POLICY "Catálogo de tarjetas público"
+  ON prepaid_cards FOR SELECT
+  USING (true);
+
+-- =====================================================
+-- POLÍTICAS PARA PLAYER_CARDS
+-- =====================================================
+
+DROP POLICY IF EXISTS "Ver propias tarjetas" ON player_cards;
+CREATE POLICY "Ver propias tarjetas"
+  ON player_cards FOR SELECT
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Insertar propias tarjetas" ON player_cards;
+CREATE POLICY "Insertar propias tarjetas"
+  ON player_cards FOR INSERT
+  WITH CHECK (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Actualizar propias tarjetas" ON player_cards;
+CREATE POLICY "Actualizar propias tarjetas"
+  ON player_cards FOR UPDATE
+  USING (auth.uid() = player_id);

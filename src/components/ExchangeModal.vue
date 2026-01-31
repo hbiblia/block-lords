@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { exchangeCryptoToGamecoin, exchangeCryptoToRon, getExchangeRates } from '@/utils/api';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   show: boolean;
@@ -15,14 +18,15 @@ const emit = defineEmits<{
 const authStore = useAuthStore();
 
 const exchanging = ref(false);
+const loadingRates = ref(false);
 const activeTab = ref<'gamecoin' | 'ron'>('gamecoin');
 const amount = ref('');
 
-const rates = ref({
-  crypto_to_gamecoin: 10,
-  crypto_to_ron: 0.01,
-  min_crypto_for_ron: 10,
-});
+const rates = ref<{
+  crypto_to_gamecoin: number;
+  crypto_to_ron: number;
+  min_crypto_for_ron: number;
+} | null>(null);
 
 const cryptoBalance = computed(() => authStore.player?.crypto_balance ?? 0);
 const ronBalance = computed(() => authStore.player?.ron_balance ?? 0);
@@ -33,6 +37,7 @@ const numericAmount = computed(() => {
 });
 
 const estimatedReceive = computed(() => {
+  if (!rates.value) return 0;
   if (activeTab.value === 'gamecoin') {
     return numericAmount.value * rates.value.crypto_to_gamecoin;
   } else {
@@ -41,6 +46,7 @@ const estimatedReceive = computed(() => {
 });
 
 const canExchange = computed(() => {
+  if (!rates.value) return false;
   if (numericAmount.value <= 0) return false;
   if (numericAmount.value > cryptoBalance.value) return false;
   if (activeTab.value === 'ron' && numericAmount.value < rates.value.min_crypto_for_ron) return false;
@@ -48,15 +54,17 @@ const canExchange = computed(() => {
 });
 
 const errorMessage = computed(() => {
+  if (!rates.value) return '';
   if (numericAmount.value <= 0) return '';
-  if (numericAmount.value > cryptoBalance.value) return 'Crypto insuficiente';
+  if (numericAmount.value > cryptoBalance.value) return t('exchange.insufficientCrypto');
   if (activeTab.value === 'ron' && numericAmount.value < rates.value.min_crypto_for_ron) {
-    return `Minimo ${rates.value.min_crypto_for_ron} crypto para RON`;
+    return t('exchange.minCryptoForRon', { amount: rates.value.min_crypto_for_ron.toLocaleString() });
   }
   return '';
 });
 
 async function loadRates() {
+  loadingRates.value = true;
   try {
     const data = await getExchangeRates();
     if (data) {
@@ -64,6 +72,8 @@ async function loadRates() {
     }
   } catch (e) {
     console.error('Error loading rates:', e);
+  } finally {
+    loadingRates.value = false;
   }
 }
 
@@ -129,7 +139,7 @@ onMounted(() => {
         <div class="flex items-center justify-between p-4 border-b border-border">
           <h2 class="text-lg font-bold flex items-center gap-2">
             <span class="text-2xl">💱</span>
-            Exchange
+            {{ t('exchange.title') }}
           </h2>
           <button
             @click="emit('close')"
@@ -143,13 +153,13 @@ onMounted(() => {
         <div class="p-4 bg-bg-primary/50">
           <div class="grid grid-cols-2 gap-4">
             <div class="text-center">
-              <div class="text-xs text-text-muted mb-1">Tu Crypto</div>
+              <div class="text-xs text-text-muted mb-1">{{ t('exchange.yourCrypto') }}</div>
               <div class="text-xl font-bold text-accent-tertiary font-mono">
                 {{ cryptoBalance.toFixed(4) }} ₿
               </div>
             </div>
             <div class="text-center">
-              <div class="text-xs text-text-muted mb-1">Tu RON</div>
+              <div class="text-xs text-text-muted mb-1">{{ t('exchange.yourRon') }}</div>
               <div class="text-xl font-bold text-purple-400 font-mono">
                 {{ ronBalance.toFixed(4) }} RON
               </div>
@@ -166,7 +176,7 @@ onMounted(() => {
               ? 'bg-status-warning/10 text-status-warning border-b-2 border-status-warning'
               : 'text-text-muted hover:bg-bg-tertiary'"
           >
-            🪙 Crypto → GameCoin
+            🪙 {{ t('exchange.tabs.gamecoin') }}
           </button>
           <button
             @click="activeTab = 'ron'"
@@ -175,26 +185,33 @@ onMounted(() => {
               ? 'bg-purple-500/10 text-purple-400 border-b-2 border-purple-400'
               : 'text-text-muted hover:bg-bg-tertiary'"
           >
-            💎 Crypto → RON
+            💎 {{ t('exchange.tabs.ron') }}
           </button>
         </div>
 
         <!-- Content -->
         <div class="p-4 space-y-4">
+          <!-- Loading State -->
+          <div v-if="loadingRates" class="text-center py-8">
+            <div class="animate-spin w-8 h-8 border-2 border-accent-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+            <p class="text-text-muted text-sm">{{ t('exchange.loadingRates') }}</p>
+          </div>
+
+          <template v-else-if="rates">
           <!-- Rate Info -->
           <div class="bg-bg-tertiary rounded-lg p-3 text-center text-sm">
-            <span class="text-text-muted">Tasa: </span>
+            <span class="text-text-muted">{{ t('exchange.rate') }} </span>
             <span v-if="activeTab === 'gamecoin'" class="text-status-warning font-medium">
               1 ₿ = {{ rates.crypto_to_gamecoin }} 🪙
             </span>
             <span v-else class="text-purple-400 font-medium">
-              {{ (1 / rates.crypto_to_ron).toFixed(0) }} ₿ = 1 RON
+              1000 ₿ = {{ (1000 * rates.crypto_to_ron).toFixed(2) }} RON
             </span>
           </div>
 
           <!-- Amount Input -->
           <div>
-            <label class="text-xs text-text-muted mb-2 block">Cantidad de Crypto</label>
+            <label class="text-xs text-text-muted mb-2 block">{{ t('exchange.cryptoAmount') }}</label>
             <div class="relative">
               <input
                 v-model="amount"
@@ -244,7 +261,7 @@ onMounted(() => {
 
           <!-- Estimated Receive -->
           <div class="bg-bg-primary rounded-xl p-4">
-            <div class="text-xs text-text-muted mb-2 text-center">Recibiras</div>
+            <div class="text-xs text-text-muted mb-2 text-center">{{ t('exchange.youWillReceive') }}</div>
             <div class="text-3xl font-bold text-center font-mono" :class="activeTab === 'gamecoin' ? 'text-status-warning' : 'text-purple-400'">
               {{ estimatedReceive.toFixed(activeTab === 'gamecoin' ? 2 : 4) }}
               <span class="text-lg">{{ activeTab === 'gamecoin' ? '🪙' : 'RON' }}</span>
@@ -253,7 +270,7 @@ onMounted(() => {
 
           <!-- Min Amount Warning for RON -->
           <div v-if="activeTab === 'ron'" class="text-xs text-text-muted text-center">
-            Minimo {{ rates.min_crypto_for_ron }} crypto para convertir a RON
+            {{ t('exchange.minAmountWarning', { amount: rates.min_crypto_for_ron.toLocaleString() }) }}
           </div>
 
           <!-- Exchange Button -->
@@ -267,8 +284,17 @@ onMounted(() => {
                   : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90')
               : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
           >
-            {{ exchanging ? 'Procesando...' : (activeTab === 'gamecoin' ? 'Convertir a GameCoin' : 'Convertir a RON') }}
+            {{ exchanging ? t('common.processing') : (activeTab === 'gamecoin' ? t('exchange.convertToGamecoin') : t('exchange.convertToRon')) }}
           </button>
+          </template>
+
+          <!-- Error loading rates -->
+          <div v-else class="text-center py-8 text-status-danger">
+            <p>{{ t('exchange.errorLoadingRates') }}</p>
+            <button @click="loadRates" class="mt-2 text-sm text-accent-primary hover:underline">
+              {{ t('common.retry') }}
+            </button>
+          </div>
         </div>
       </div>
     </div>

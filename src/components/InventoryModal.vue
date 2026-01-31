@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getPlayerInventory, installCoolingToRig, redeemPrepaidCard, toggleRig, repairRig, deleteRig } from '@/utils/api';
+
+const { t } = useI18n();
 
 const authStore = useAuthStore();
 
@@ -441,7 +444,7 @@ onMounted(() => {
         <div class="flex items-center justify-between p-4 border-b border-border">
           <h2 class="text-xl font-display font-bold flex items-center gap-2">
             <span>🎒</span>
-            <span class="gradient-text">Inventario</span>
+            <span class="gradient-text">{{ t('inventory.title') }}</span>
           </h2>
           <button
             @click="emit('close')"
@@ -463,7 +466,7 @@ onMounted(() => {
               : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
           >
             <span class="mr-2">🖥️</span>
-            Rigs ({{ rigItems.length }})
+            {{ t('inventory.tabs.rigs') }} ({{ rigItems.length }})
           </button>
           <button
             @click="activeTab = 'cooling'"
@@ -473,7 +476,7 @@ onMounted(() => {
               : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
           >
             <span class="mr-2">❄️</span>
-            Refrigeración ({{ coolingItems.length }})
+            {{ t('inventory.tabs.cooling') }} ({{ coolingItems.length }})
           </button>
           <button
             @click="activeTab = 'cards'"
@@ -483,7 +486,7 @@ onMounted(() => {
               : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
           >
             <span class="mr-2">💳</span>
-            Tarjetas ({{ cardItems.length }})
+            {{ t('inventory.tabs.cards') }} ({{ cardItems.length }})
           </button>
         </div>
 
@@ -492,17 +495,17 @@ onMounted(() => {
           <!-- Loading -->
           <div v-if="loading" class="text-center py-12 text-text-muted">
             <div class="animate-spin w-8 h-8 border-2 border-accent-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-            Cargando inventario...
+            {{ t('inventory.loading') }}
           </div>
 
           <!-- Rigs Tab -->
           <div v-else-if="activeTab === 'rigs'">
             <p class="text-sm text-text-muted mb-4">
-              Gestiona tus rigs y la refrigeración instalada. La condición baja con el uso y la temperatura afecta el rendimiento.
+              {{ t('inventory.rigs.description') }}
             </p>
             <div v-if="rigItems.length === 0" class="text-center py-12 text-text-muted">
               <div class="text-4xl mb-4">🖥️</div>
-              <p>No tienes rigs. Compra uno en el mercado.</p>
+              <p>{{ t('inventory.rigs.noRigs') }}</p>
             </div>
             <div v-else class="space-y-4">
               <div
@@ -523,14 +526,14 @@ onMounted(() => {
                     class="px-2 py-1 text-xs font-medium rounded-full"
                     :class="rig.is_active ? 'bg-status-success/20 text-status-success' : 'bg-bg-tertiary text-text-muted'"
                   >
-                    {{ rig.is_active ? 'Minando' : 'Inactivo' }}
+                    {{ rig.is_active ? t('inventory.rigs.status.mining') : t('inventory.rigs.status.inactive') }}
                   </span>
                 </div>
 
                 <!-- Stats Grid -->
                 <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4" :key="uptimeKey">
                   <div class="bg-bg-primary/50 rounded-lg p-2 text-center">
-                    <div class="text-xs text-text-muted mb-1">Hashrate</div>
+                    <div class="text-xs text-text-muted mb-1">{{ t('inventory.rigs.stats.hashrate') }}</div>
                     <div class="font-mono font-bold">
                       <span :class="getRigEffectiveHashrate(rig) < rig.hashrate ? 'text-status-warning' : 'text-accent-primary'">
                         {{ Math.round(getRigEffectiveHashrate(rig)) }}
@@ -539,31 +542,31 @@ onMounted(() => {
                     </div>
                   </div>
                   <div class="bg-bg-primary/50 rounded-lg p-2 text-center">
-                    <div class="text-xs text-text-muted mb-1">Temperatura</div>
+                    <div class="text-xs text-text-muted mb-1">{{ t('inventory.rigs.stats.temperature') }}</div>
                     <div class="font-mono font-bold" :class="Number(rig.temperature ?? 25) > 50 ? (Number(rig.temperature ?? 25) > 70 ? 'text-status-danger' : 'text-status-warning') : 'text-status-success'">
                       {{ Number(rig.temperature ?? 25).toFixed(1) }}°C
                     </div>
                   </div>
                   <div class="bg-bg-primary/50 rounded-lg p-2 text-center">
-                    <div class="text-xs text-text-muted mb-1">Condicion</div>
+                    <div class="text-xs text-text-muted mb-1">{{ t('inventory.rigs.stats.condition') }}</div>
                     <div class="font-mono font-bold" :class="Number(rig.condition ?? 0) < 30 ? 'text-status-danger' : (Number(rig.condition ?? 0) < 60 ? 'text-status-warning' : 'text-status-success')">
                       {{ Number(rig.condition ?? 0).toFixed(0) }}%
                     </div>
                   </div>
                   <div class="bg-bg-primary/50 rounded-lg p-2 text-center">
-                    <div class="text-xs text-text-muted mb-1">Max Cond.</div>
+                    <div class="text-xs text-text-muted mb-1">{{ t('inventory.rigs.stats.maxCondition') }}</div>
                     <div class="font-mono font-bold" :class="Number(rig.max_condition ?? 100) <= 10 ? 'text-status-danger' : (Number(rig.max_condition ?? 100) < 50 ? 'text-status-warning' : 'text-text-primary')">
                       {{ Number(rig.max_condition ?? 100).toFixed(0) }}%
                     </div>
                   </div>
                   <div class="bg-bg-primary/50 rounded-lg p-2 text-center">
-                    <div class="text-xs text-text-muted mb-1">Refrigeracion</div>
+                    <div class="text-xs text-text-muted mb-1">{{ t('inventory.rigs.stats.cooling') }}</div>
                     <div class="font-mono font-bold text-cyan-400">
                       {{ getTotalCoolingPower(rig).toFixed(0) }}
                     </div>
                   </div>
                   <div class="bg-bg-primary/50 rounded-lg p-2 text-center">
-                    <div class="text-xs text-text-muted mb-1">Encendido</div>
+                    <div class="text-xs text-text-muted mb-1">{{ t('inventory.rigs.stats.uptime') }}</div>
                     <div class="font-mono font-bold" :class="rig.is_active ? 'text-accent-primary' : 'text-text-muted'">
                       {{ rig.is_active && rig.activated_at ? formatUptime(rig.activated_at) : '--' }}
                     </div>
@@ -575,19 +578,19 @@ onMounted(() => {
                   v-if="Number(rig.max_condition ?? 100) <= 10"
                   class="mb-3 p-2 rounded-lg bg-status-danger/20 border border-status-danger/50 text-status-danger text-sm"
                 >
-                  ⚠️ Este rig está muy degradado y no puede repararse. Debes eliminarlo.
+                  {{ t('inventory.rigs.degradationWarning') }}
                 </div>
                 <div
                   v-else-if="Number(rig.max_condition ?? 100) < 50"
                   class="mb-3 p-2 rounded-lg bg-status-warning/20 border border-status-warning/50 text-status-warning text-xs"
                 >
-                  ⚠️ Rig degradado ({{ rig.times_repaired || 0 }} reparaciones). Max condición: {{ Number(rig.max_condition ?? 100).toFixed(0) }}%
+                  {{ t('inventory.rigs.degraded', { repairs: rig.times_repaired || 0, max: Number(rig.max_condition ?? 100).toFixed(0) }) }}
                 </div>
 
                 <!-- Installed Cooling -->
                 <div v-if="rig.installed_cooling && rig.installed_cooling.length > 0" class="mb-4">
                   <h4 class="text-xs font-medium text-text-muted mb-2 flex items-center gap-1">
-                    <span>❄️</span> Refrigeracion Instalada
+                    <span>❄️</span> {{ t('inventory.rigs.installedCooling') }}
                   </h4>
                   <div class="flex flex-wrap gap-2">
                     <div
@@ -618,10 +621,10 @@ onMounted(() => {
                     @click="selectedRigForCooling = rig.id"
                     class="text-xs px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 transition-all"
                   >
-                    + Instalar Refrigeracion
+                    {{ t('inventory.rigs.installCooling') }}
                   </button>
                   <div v-else class="space-y-2">
-                    <p class="text-xs text-text-muted">Selecciona refrigeracion a instalar:</p>
+                    <p class="text-xs text-text-muted">{{ t('inventory.rigs.selectCooling') }}</p>
                     <div class="flex flex-wrap gap-2">
                       <button
                         v-for="cooling in coolingItems"
@@ -636,7 +639,7 @@ onMounted(() => {
                         @click="selectedRigForCooling = null"
                         class="px-3 py-1.5 text-xs rounded-lg bg-bg-tertiary text-text-muted hover:bg-bg-tertiary/80"
                       >
-                        Cancelar
+                        {{ t('common.cancel') }}
                       </button>
                     </div>
                   </div>
@@ -653,7 +656,7 @@ onMounted(() => {
                       ? 'bg-status-danger/20 text-status-danger hover:bg-status-danger/30'
                       : 'bg-status-success/20 text-status-success hover:bg-status-success/30'"
                   >
-                    {{ rig.condition <= 0 ? 'Roto' : (rig.is_active ? 'Apagar' : 'Encender') }}
+                    {{ rig.condition <= 0 ? t('inventory.rigs.status.broken') : (rig.is_active ? t('inventory.rigs.actions.turnOff') : t('inventory.rigs.actions.turnOn')) }}
                   </button>
 
                   <!-- Repair Button -->
@@ -662,9 +665,8 @@ onMounted(() => {
                     @click="requestRepairRig(rig)"
                     :disabled="using || rig.is_active"
                     class="px-4 py-2 rounded-lg font-medium transition-all bg-status-warning/20 text-status-warning hover:bg-status-warning/30 disabled:opacity-50"
-                    :title="rig.is_active ? 'Apaga el rig primero' : `Reparar por ${rig.repair_cost} GC`"
                   >
-                    🔧 Reparar
+                    🔧 {{ t('inventory.rigs.actions.repair') }}
                   </button>
 
                   <!-- Delete Button -->
@@ -684,12 +686,11 @@ onMounted(() => {
           <!-- Cooling Tab -->
           <div v-else-if="activeTab === 'cooling'">
             <p class="text-sm text-text-muted mb-4">
-              Los items de refrigeracion se instalan en rigs especificos. La durabilidad se consume mientras el rig esta activo.
+              {{ t('inventory.cooling.description') }}
             </p>
             <div v-if="coolingItems.length === 0" class="text-center py-12 text-text-muted bg-bg-secondary rounded-lg">
               <div class="text-4xl mb-4">❄️</div>
-              <p>No tienes items de refrigeracion en el inventario.</p>
-              <p class="text-xs mt-2">Compra en el mercado y vuelve para instalarlos en tus rigs.</p>
+              <p>{{ t('inventory.cooling.noItems') }}</p>
             </div>
             <div v-else class="grid sm:grid-cols-2 gap-4">
               <div
@@ -705,17 +706,17 @@ onMounted(() => {
                   </div>
                   <div class="text-right">
                     <div class="text-lg font-mono text-cyan-400">+{{ item.cooling_power }}</div>
-                    <div class="text-xs text-text-muted">poder</div>
+                    <div class="text-xs text-text-muted">{{ t('inventory.cooling.power') }}</div>
                   </div>
                 </div>
                 <p class="text-xs text-text-muted mb-2">{{ item.description }}</p>
                 <div class="flex items-center gap-2 text-xs mb-3">
-                  <span class="text-status-warning">+{{ item.energy_cost }} energia/tick</span>
+                  <span class="text-status-warning">+{{ item.energy_cost }} {{ t('inventory.cooling.energyTick') }}</span>
                   <span class="text-text-muted">|</span>
-                  <span class="text-text-muted">Cantidad: {{ item.quantity }}</span>
+                  <span class="text-text-muted">{{ item.quantity }}</span>
                 </div>
                 <p class="text-xs text-accent-primary">
-                  Ve a la pestana de Rigs para instalar en un rig especifico
+                  {{ t('inventory.cooling.goToRigs') }}
                 </p>
               </div>
             </div>
@@ -723,9 +724,12 @@ onMounted(() => {
 
           <!-- Cards Tab -->
           <div v-else-if="activeTab === 'cards'">
+            <p class="text-sm text-text-muted mb-4">
+              {{ t('inventory.cards.description') }}
+            </p>
             <div v-if="cardItems.length === 0" class="text-center py-12 text-text-muted">
               <div class="text-4xl mb-4">💳</div>
-              <p>No tienes tarjetas prepago. Compra una en el mercado.</p>
+              <p>{{ t('inventory.cards.noCards') }}</p>
             </div>
             <div v-else class="grid sm:grid-cols-2 gap-4">
               <div
@@ -752,9 +756,9 @@ onMounted(() => {
                 </div>
 
                 <div class="flex items-center justify-between mb-3 text-sm">
-                  <span class="text-text-muted">Recarga:</span>
+                  <span class="text-text-muted">{{ t('inventory.cards.recharge') }}:</span>
                   <span class="font-bold" :class="card.card_type === 'energy' ? 'text-status-warning' : 'text-accent-tertiary'">
-                    +{{ card.amount }}% {{ card.card_type === 'energy' ? 'Energia' : 'Internet' }}
+                    +{{ card.amount }}% {{ card.card_type === 'energy' ? t('welcome.energy') : t('welcome.internet') }}
                   </span>
                 </div>
 
@@ -766,7 +770,7 @@ onMounted(() => {
                     ? 'bg-status-warning/20 text-status-warning hover:bg-status-warning/30'
                     : 'bg-accent-tertiary/20 text-accent-tertiary hover:bg-accent-tertiary/30'"
                 >
-                  {{ using ? 'Canjeando...' : 'Canjear Ahora' }}
+                  {{ using ? t('common.processing') : t('inventory.cards.recharge') }}
                 </button>
               </div>
             </div>
@@ -785,24 +789,24 @@ onMounted(() => {
               {{ confirmAction.type === 'install' ? '❄️' : confirmAction.type === 'redeem' ? '💳' : confirmAction.type === 'repair' ? '🔧' : confirmAction.type === 'delete' ? '🗑️' : '🖥️' }}
             </div>
             <h3 class="text-lg font-bold mb-1">
-              {{ confirmAction.type === 'install' ? 'Instalar Refrigeracion' : confirmAction.type === 'redeem' ? 'Canjear Tarjeta' : confirmAction.type === 'repair' ? 'Reparar Rig' : confirmAction.type === 'delete' ? 'Eliminar Rig' : (confirmAction.data.isActive ? 'Apagar Rig' : 'Encender Rig') }}
+              {{ confirmAction.type === 'install' ? t('inventory.confirm.installCooling') : confirmAction.type === 'redeem' ? t('inventory.confirm.redeemCard') : confirmAction.type === 'repair' ? t('inventory.confirm.repairRig') : confirmAction.type === 'delete' ? t('inventory.confirm.deleteRig') : (confirmAction.data.isActive ? t('inventory.confirm.turnOffRig') : t('inventory.confirm.turnOnRig')) }}
             </h3>
-            <p class="text-text-muted text-sm">¿Estas seguro de realizar esta accion?</p>
+            <p class="text-text-muted text-sm">{{ t('inventory.confirm.areYouSure') }}</p>
           </div>
 
           <div class="bg-bg-primary rounded-lg p-4 mb-4">
             <!-- Install cooling details -->
             <template v-if="confirmAction.type === 'install'">
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">Rig:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.rig') }}</span>
                 <span class="font-medium text-white">{{ confirmAction.data.rigName }}</span>
               </div>
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">Refrigeracion:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.cooling') }}</span>
                 <span class="font-medium text-cyan-400">{{ confirmAction.data.coolingName }}</span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-text-muted text-sm">Poder:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.power') }}</span>
                 <span class="font-bold text-cyan-400">+{{ confirmAction.data.coolingPower }}</span>
               </div>
             </template>
@@ -810,13 +814,13 @@ onMounted(() => {
             <!-- Redeem card details -->
             <template v-else-if="confirmAction.type === 'redeem'">
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">Tarjeta:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.card') }}</span>
                 <span class="font-medium text-white">{{ confirmAction.data.cardName }}</span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-text-muted text-sm">Recarga:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.rechargeAmount') }}</span>
                 <span class="font-bold" :class="confirmAction.data.cardType === 'energy' ? 'text-status-warning' : 'text-accent-tertiary'">
-                  +{{ confirmAction.data.cardAmount }}% {{ confirmAction.data.cardType === 'energy' ? 'Energia' : 'Internet' }}
+                  +{{ confirmAction.data.cardAmount }}% {{ confirmAction.data.cardType === 'energy' ? t('welcome.energy') : t('welcome.internet') }}
                 </span>
               </div>
             </template>
@@ -824,13 +828,13 @@ onMounted(() => {
             <!-- Toggle rig details -->
             <template v-else-if="confirmAction.type === 'toggle'">
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">Rig:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.rig') }}</span>
                 <span class="font-medium text-white">{{ confirmAction.data.rigName }}</span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-text-muted text-sm">Accion:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.action') }}</span>
                 <span class="font-bold" :class="confirmAction.data.isActive ? 'text-status-danger' : 'text-status-success'">
-                  {{ confirmAction.data.isActive ? 'Apagar mineria' : 'Iniciar mineria' }}
+                  {{ confirmAction.data.isActive ? t('inventory.confirm.stopMining') : t('inventory.confirm.startMining') }}
                 </span>
               </div>
             </template>
@@ -838,42 +842,42 @@ onMounted(() => {
             <!-- Repair rig details -->
             <template v-else-if="confirmAction.type === 'repair'">
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">Rig:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.rig') }}</span>
                 <span class="font-medium text-white">{{ confirmAction.data.rigName }}</span>
               </div>
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">Condicion actual:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.currentCondition') }}</span>
                 <span class="font-bold text-status-danger">{{ Number(confirmAction.data.rigCondition ?? 0).toFixed(0) }}%</span>
               </div>
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">Reparar a:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.repairTo') }}</span>
                 <span class="font-bold text-status-warning">{{ Number((confirmAction.data.rigMaxCondition ?? 100) - 5).toFixed(0) }}%</span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-text-muted text-sm">Costo:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.cost') }}</span>
                 <span class="font-bold text-accent-primary">{{ confirmAction.data.repairCost }} GC</span>
               </div>
               <p class="text-xs text-status-warning mt-2">
-                ⚠️ La condicion maxima se reducira en 5% despues de cada reparacion.
+                {{ t('inventory.confirm.maxConditionWarning') }}
               </p>
             </template>
 
             <!-- Delete rig details -->
             <template v-else-if="confirmAction.type === 'delete'">
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">Rig:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.rig') }}</span>
                 <span class="font-medium text-white">{{ confirmAction.data.rigName }}</span>
               </div>
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">Condicion actual:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.confirm.currentCondition') }}</span>
                 <span class="font-bold text-status-danger">{{ Number(confirmAction.data.rigCondition ?? 0).toFixed(0) }}%</span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-text-muted text-sm">Max condicion:</span>
+                <span class="text-text-muted text-sm">{{ t('inventory.rigs.stats.maxCondition') }}</span>
                 <span class="font-bold text-status-danger">{{ Number(confirmAction.data.rigMaxCondition ?? 100).toFixed(0) }}%</span>
               </div>
               <p class="text-xs text-status-danger mt-2">
-                ⚠️ Esta accion no se puede deshacer. El rig sera eliminado permanentemente.
+                {{ t('inventory.confirm.deleteWarning') }}
               </p>
             </template>
           </div>
@@ -883,7 +887,7 @@ onMounted(() => {
               @click="cancelUse"
               class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
             >
-              Cancelar
+              {{ t('common.cancel') }}
             </button>
             <button
               @click="confirmUse"
@@ -895,7 +899,7 @@ onMounted(() => {
                   ? 'bg-status-warning text-white hover:bg-status-warning/80'
                   : 'bg-accent-primary text-white hover:bg-accent-primary/80'"
             >
-              {{ using ? 'Procesando...' : (confirmAction.type === 'delete' ? 'Eliminar' : 'Confirmar') }}
+              {{ using ? t('common.processing') : (confirmAction.type === 'delete' ? t('common.delete') : t('common.confirm')) }}
             </button>
           </div>
         </div>

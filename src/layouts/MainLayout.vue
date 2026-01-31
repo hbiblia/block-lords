@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
+
+const { t } = useI18n();
 import NavBar from '@/components/NavBar.vue';
 import PrepaidCardsPanel from '@/components/PrepaidCardsPanel.vue';
 import InventoryModal from '@/components/InventoryModal.vue';
@@ -85,7 +88,7 @@ function handleExchanged() {
         :class="realtimeStore.isConnected ? 'bg-status-success animate-pulse' : 'bg-status-danger'"
       ></span>
       <span class="text-text-muted">
-        {{ realtimeStore.isConnected ? 'Conectado' : 'Desconectado' }}
+        {{ realtimeStore.isConnected ? t('nav.connected') : t('nav.disconnected') }}
       </span>
     </div>
 
