@@ -531,6 +531,28 @@ function stopUptimeTimer() {
   }
 }
 
+// Auto-refresh polling (cada 10 segundos)
+let autoRefreshInterval: number | null = null;
+const AUTO_REFRESH_INTERVAL = 10000; // 10 segundos
+
+function startAutoRefresh() {
+  if (autoRefreshInterval) return;
+  autoRefreshInterval = window.setInterval(async () => {
+    try {
+      await loadData();
+    } catch (e) {
+      console.error('Auto-refresh error:', e);
+    }
+  }, AUTO_REFRESH_INTERVAL);
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
+}
+
 function handleInventoryUsed() {
   // Refresh rig data when something is installed/used from inventory
   loadData();
@@ -584,6 +606,7 @@ onMounted(() => {
   loadData();
   startMiningSimulation();
   startUptimeTimer();
+  startAutoRefresh(); // Auto-refresh cada 10 segundos
   window.addEventListener('block-mined', handleBlockMined as EventListener);
   window.addEventListener('inventory-used', handleInventoryUsed as EventListener);
   window.addEventListener('player-rigs-updated', handleRigsUpdated as EventListener);
@@ -593,6 +616,7 @@ onMounted(() => {
 onUnmounted(() => {
   stopMiningSimulation();
   stopUptimeTimer();
+  stopAutoRefresh(); // Detener auto-refresh
   // Limpiar debounce timer de cooling
   if (coolingDebounceTimer) {
     clearTimeout(coolingDebounceTimer);

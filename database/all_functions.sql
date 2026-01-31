@@ -535,7 +535,9 @@ BEGIN
 
   UPDATE player_rigs
   SET is_active = NOT is_active,
-      activated_at = CASE WHEN NOT is_active THEN NOW() ELSE NULL END
+      activated_at = CASE WHEN NOT is_active THEN NOW() ELSE NULL END,
+      -- Cuando se apaga: temperatura a 0. Cuando se enciende: empieza en 0 y sube gradualmente
+      temperature = CASE WHEN NOT is_active THEN 0 ELSE 0 END
   WHERE id = p_rig_id
   RETURNING * INTO v_rig;
 
@@ -1228,38 +1230,36 @@ BEGIN
       -- Limitar temperatura máxima a 100
       v_new_temp := LEAST(100, v_new_temp);
 
-      -- Calcular deterioro BASE por uso según consumo de energía
-      -- SIN COOLING: 5-10 min según power_consumption
-      --   power=1: 1.7% por tick = ~10 min
-      --   power=10: 3.5% por tick = ~5 min
-      -- CON COOLING: 20-40 min (reduce desgaste 4x)
-      --   power=1: 0.4% por tick = ~40 min
-      --   power=10: 0.9% por tick = ~20 min
-      v_base_deterioration := 1.5 + (v_rig.power_consumption * 0.2);
+      -- Calcular deterioro BASADO EN TEMPERATURA
+      -- Si temperatura = 0: SIN deterioro
+      -- El deterioro escala con la temperatura de forma progresiva
+      -- 0°C: 0% deterioro
+      -- 1-50°C: deterioro bajo (0.02% por °C)
+      -- 50-70°C: deterioro moderado (0.05% por °C extra)
+      -- 70-85°C: deterioro severo (0.1% por °C extra)
+      -- 85-100°C: deterioro crítico exponencial
 
-      -- Con cooling instalado: reducir desgaste significativamente (4x menos)
-      IF v_rig_cooling_power > 0 THEN
-        v_base_deterioration := v_base_deterioration / 4.0;
+      IF v_new_temp <= 0 THEN
+        -- Sin temperatura, sin deterioro
+        v_deterioration := 0;
+      ELSIF v_new_temp <= 50 THEN
+        -- Deterioro bajo: 0.02% por cada °C
+        v_deterioration := v_new_temp * 0.02;
+      ELSIF v_new_temp <= 70 THEN
+        -- Deterioro moderado: base de 50°C + extra por cada °C sobre 50
+        v_deterioration := (50 * 0.02) + ((v_new_temp - 50) * 0.05);
+      ELSIF v_new_temp <= 85 THEN
+        -- Deterioro severo: base hasta 70°C + extra por cada °C sobre 70
+        v_deterioration := (50 * 0.02) + (20 * 0.05) + ((v_new_temp - 70) * 0.1);
+      ELSE
+        -- Deterioro crítico: base hasta 85°C + escala exponencial
+        v_deterioration := (50 * 0.02) + (20 * 0.05) + (15 * 0.1) +
+                          POWER((v_new_temp - 85) / 15.0, 2) * 3.0;
       END IF;
 
-      -- Deterioro EXTRA basado en temperatura (ESCALADO AGRESIVO)
-      -- Cuanto más caliente, exponencialmente más daño
-      -- < 50°C: solo desgaste base
-      -- 50-70°C: daño moderado (+10-50%)
-      -- 70-85°C: daño severo (+50-150%)
-      -- 85-100°C: daño CRÍTICO exponencial
-      -- Aplicar multiplicador de boost de durability_shield al final
-      IF v_new_temp >= 85 THEN
-        -- Daño crítico: escala exponencialmente
-        v_deterioration := v_base_deterioration * (1.5 + POWER((v_new_temp - 85) / 15.0, 2) * 3.0);
-      ELSIF v_new_temp >= 70 THEN
-        -- Daño severo: escala rápidamente
-        v_deterioration := v_base_deterioration * (1.0 + 0.5 + ((v_new_temp - 70) * 0.07));
-      ELSIF v_new_temp >= 50 THEN
-        -- Daño moderado
-        v_deterioration := v_base_deterioration * (1.0 + ((v_new_temp - 50) * 0.025));
-      ELSE
-        v_deterioration := v_base_deterioration;  -- Solo desgaste base
+      -- Con cooling instalado: reducir desgaste (2x menos)
+      IF v_rig_cooling_power > 0 AND v_deterioration > 0 THEN
+        v_deterioration := v_deterioration / 2.0;
       END IF;
 
       -- Aplicar multiplicador de boost de durability_shield
@@ -1272,11 +1272,17 @@ BEGIN
       WHERE id = v_rig.id;
 
       -- Consumir durabilidad de la refrigeración instalada en este rig
-      -- La refrigeración se desgasta más rápido si la temperatura es alta
+      -- La refrigeración se desgasta más rápido si:
+      -- 1. La temperatura es alta (>40°C)
+      -- 2. El rig genera más calor del que el cooling puede manejar (exceso de calor)
       -- ~30 min de duración a temperatura normal (0.5% base = ~33 min)
-      -- A alta temperatura se degrada más rápido
+      -- Exceso de calor = (power_consumption * 0.3) - cooling_power
       UPDATE rig_cooling
-      SET durability = GREATEST(0, durability - (0.5 + (GREATEST(0, v_new_temp - 40) * 0.02)))
+      SET durability = GREATEST(0, durability - (
+        0.5 +  -- Base
+        (GREATEST(0, v_new_temp - 40) * 0.02) +  -- Por temperatura alta
+        (GREATEST(0, (v_rig.power_consumption * 0.3) - v_rig_cooling_power) * 0.15)  -- Por exceso de calor
+      ))
       WHERE player_rig_id = v_rig.id AND durability > 0;
 
       -- Eliminar refrigeración agotada
