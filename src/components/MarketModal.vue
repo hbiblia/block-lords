@@ -143,23 +143,32 @@ function getTierBorder(tier: string) {
   }
 }
 
-// Translation helpers for market items
+// Translation helpers for market items - fallback to DB name if no translation
 function getRigName(id: string): string {
   const key = `market.items.rigs.${id}.name`;
   const translated = t(key);
-  return translated !== key ? translated : id;
+  if (translated !== key) return translated;
+  // Fallback to DB name
+  const rig = rigsForSale.value.find(r => r.id === id);
+  return rig?.name ?? id;
 }
 
 function getCoolingName(id: string): string {
   const key = `market.items.cooling.${id}.name`;
   const translated = t(key);
-  return translated !== key ? translated : id;
+  if (translated !== key) return translated;
+  // Fallback to DB name
+  const item = coolingItems.value.find(c => c.id === id);
+  return item?.name ?? id;
 }
 
 function getCoolingDescription(id: string): string {
   const key = `market.items.cooling.${id}.description`;
   const translated = t(key);
-  return translated !== key ? translated : '';
+  if (translated !== key) return translated;
+  // Fallback to DB description
+  const item = coolingItems.value.find(c => c.id === id);
+  return item?.description ?? '';
 }
 
 function getCoolingOwned(id: string): { installed: number; inventory: number; total: number } {

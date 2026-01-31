@@ -38,6 +38,7 @@ interface CoolingItem {
 
 interface InstalledCooling {
   id: string;
+  cooling_item_id: string;
   durability: number;
   name: string;
   cooling_power: number;
@@ -149,10 +150,22 @@ function getRigName(id: string): string {
   return translated !== key ? translated : id;
 }
 
-function getCoolingName(id: string): string {
+function getCoolingName(id: string, fallbackName?: string): string {
+  // Skip translation for UUIDs - use fallback directly
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  if (isUUID) {
+    if (fallbackName) return fallbackName;
+    const item = coolingItems.value.find(c => c.id === id);
+    return item?.name ?? id;
+  }
+
   const key = `market.items.cooling.${id}.name`;
   const translated = t(key);
-  return translated !== key ? translated : id;
+  if (translated !== key) return translated;
+  // Fallback to provided name or item name from inventory
+  if (fallbackName) return fallbackName;
+  const item = coolingItems.value.find(c => c.id === id);
+  return item?.name ?? id;
 }
 
 // Request actions
@@ -352,7 +365,7 @@ function closeProcessingModal() {
                     :key="cooling.id"
                     class="flex items-center gap-2 px-3 py-1.5 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-sm"
                   >
-                    <span class="text-cyan-400">{{ getCoolingName(cooling.id) }}</span>
+                    <span class="text-cyan-400">{{ getCoolingName(cooling.cooling_item_id, cooling.name) }}</span>
                     <span class="text-text-muted">-{{ cooling.cooling_power }}°</span>
                     <span class="text-xs text-text-muted">({{ cooling.durability.toFixed(0) }}%)</span>
                   </div>

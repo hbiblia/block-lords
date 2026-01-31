@@ -269,11 +269,23 @@ function getTierBorder(tier: string) {
   }
 }
 
-// Translation helpers for inventory items
-function getCoolingName(id: string): string {
+// Translation helpers for inventory items - fallback to DB name
+function getCoolingName(id: string, fallbackName?: string): string {
+  // Skip translation for UUIDs - use fallback directly
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  if (isUUID) {
+    if (fallbackName) return fallbackName;
+    const item = coolingItems.value.find(c => c.id === id);
+    return item?.name ?? id;
+  }
+
   const key = `market.items.cooling.${id}.name`;
   const translated = t(key);
-  return translated !== key ? translated : id;
+  if (translated !== key) return translated;
+  // Fallback to provided name or item name from data
+  if (fallbackName) return fallbackName;
+  const item = coolingItems.value.find(c => c.id === id);
+  return item?.name ?? id;
 }
 
 function getCardName(id: string): string {

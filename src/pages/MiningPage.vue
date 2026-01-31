@@ -239,7 +239,10 @@ function getTierColor(tier: string): string {
 function getRigName(id: string): string {
   const key = `market.items.rigs.${id}.name`;
   const translated = t(key);
-  return translated !== key ? translated : id;
+  if (translated !== key) return translated;
+  // Fallback to rig name from store data
+  const playerRig = rigs.value.find(r => r.rig.id === id);
+  return playerRig?.rig.name ?? id;
 }
 
 function getTempColor(temp: number): string {

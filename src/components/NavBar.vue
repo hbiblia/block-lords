@@ -212,7 +212,7 @@ async function handleLogout() {
             </button>
 
             <Transition name="dropdown">
-              <div v-if="showProfileMenu" class="absolute right-0 top-full mt-2 w-48 card shadow-card">
+              <div v-if="showProfileMenu" class="absolute right-0 top-full mt-2 w-max card shadow-card px-[5px] py-[10px]">
                 <RouterLink
                   to="/profile"
                   @click="closeProfileMenu"

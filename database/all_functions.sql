@@ -2220,8 +2220,8 @@ BEGIN
   RETURN (
     SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
     FROM (
-      SELECT rc.id, rc.durability, rc.installed_at,
-             ci.id as item_id, ci.name, ci.description, ci.cooling_power, ci.energy_cost, ci.tier
+      SELECT rc.id, rc.cooling_item_id, rc.durability, rc.installed_at,
+             ci.name, ci.description, ci.cooling_power, ci.energy_cost, ci.tier
       FROM rig_cooling rc
       JOIN cooling_items ci ON ci.id = rc.cooling_item_id
       WHERE rc.player_rig_id = p_rig_id
