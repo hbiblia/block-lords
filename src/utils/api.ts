@@ -67,26 +67,6 @@ export async function deleteRig(playerId: string, rigId: string) {
   return data;
 }
 
-export async function rechargeEnergy(playerId: string, amount: number) {
-  const { data, error } = await supabase.rpc('recharge_energy', {
-    p_player_id: playerId,
-    p_amount: amount,
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-export async function rechargeInternet(playerId: string, amount: number) {
-  const { data, error } = await supabase.rpc('recharge_internet', {
-    p_player_id: playerId,
-    p_amount: amount,
-  });
-
-  if (error) throw error;
-  return data;
-}
-
 export async function getPlayerTransactions(playerId: string, limit = 50) {
   const { data, error } = await supabase.rpc('get_player_transactions', {
     p_player_id: playerId,

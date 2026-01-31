@@ -60,8 +60,6 @@ DROP FUNCTION IF EXISTS get_player_rigs(UUID) CASCADE;
 DROP FUNCTION IF EXISTS toggle_rig(UUID, UUID) CASCADE;
 DROP FUNCTION IF EXISTS repair_rig(UUID, UUID) CASCADE;
 DROP FUNCTION IF EXISTS delete_rig(UUID, UUID) CASCADE;
-DROP FUNCTION IF EXISTS recharge_energy(UUID, NUMERIC) CASCADE;
-DROP FUNCTION IF EXISTS recharge_internet(UUID, NUMERIC) CASCADE;
 DROP FUNCTION IF EXISTS get_player_transactions(UUID, INTEGER) CASCADE;
 DROP FUNCTION IF EXISTS get_network_stats() CASCADE;
 DROP FUNCTION IF EXISTS get_home_stats() CASCADE;
@@ -273,15 +271,25 @@ DECLARE
   v_new_internet NUMERIC;
   v_energy_gained NUMERIC := 0;
   v_internet_gained NUMERIC := 0;
+  v_was_offline BOOLEAN;
 BEGIN
-  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  -- LOCK: Seleccionar con FOR UPDATE para evitar race conditions
+  SELECT * INTO v_player FROM players WHERE id = p_player_id FOR UPDATE;
 
   IF v_player IS NULL THEN
     RETURN json_build_object('success', false, 'error', 'Player not found');
   END IF;
 
+  -- Guardar estado offline ANTES de marcarlo online
+  v_was_offline := (v_player.is_online = false AND v_player.last_seen IS NOT NULL);
+
+  -- Marcar como online INMEDIATAMENTE para evitar múltiples regeneraciones
+  UPDATE players
+  SET is_online = true, last_seen = NOW()
+  WHERE id = p_player_id;
+
   -- Calcular minutos offline (solo si estaba offline)
-  IF v_player.is_online = false AND v_player.last_seen IS NOT NULL THEN
+  IF v_was_offline THEN
     v_minutes_offline := EXTRACT(EPOCH FROM (NOW() - v_player.last_seen)) / 60.0;
 
     -- Cap a 24 horas (1440 minutos) para evitar regeneración masiva
@@ -313,7 +321,7 @@ BEGIN
         WHERE id = p_player_id;
       END IF;
     END IF;
-  END IF;
+  END IF; -- v_was_offline
 
   RETURN json_build_object(
     'success', true,
@@ -723,76 +731,6 @@ $$;
 -- =====================================================
 -- 4. FUNCIONES DE RECURSOS
 -- =====================================================
-
--- Recargar energía
-CREATE OR REPLACE FUNCTION recharge_energy(p_player_id UUID, p_amount NUMERIC)
-RETURNS JSON
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_cost NUMERIC;
-  v_player players%ROWTYPE;
-  v_new_energy NUMERIC;
-BEGIN
-  v_cost := p_amount * 0.5;
-  SELECT * INTO v_player FROM players WHERE id = p_player_id;
-
-  IF v_player IS NULL THEN
-    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
-  END IF;
-
-  IF v_player.gamecoin_balance < v_cost THEN
-    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_cost);
-  END IF;
-
-  v_new_energy := LEAST(v_player.max_energy, v_player.energy + p_amount);
-
-  UPDATE players
-  SET gamecoin_balance = gamecoin_balance - v_cost, energy = v_new_energy
-  WHERE id = p_player_id;
-
-  INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'energy_recharge', -v_cost, 'gamecoin', 'Recarga de ' || p_amount || ' unidades de energía');
-
-  RETURN json_build_object('success', true, 'newEnergy', v_new_energy, 'cost', v_cost);
-END;
-$$;
-
--- Recargar internet
-CREATE OR REPLACE FUNCTION recharge_internet(p_player_id UUID, p_amount NUMERIC)
-RETURNS JSON
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_cost NUMERIC;
-  v_player players%ROWTYPE;
-  v_new_internet NUMERIC;
-BEGIN
-  v_cost := p_amount * 0.3;
-  SELECT * INTO v_player FROM players WHERE id = p_player_id;
-
-  IF v_player IS NULL THEN
-    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
-  END IF;
-
-  IF v_player.gamecoin_balance < v_cost THEN
-    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_cost);
-  END IF;
-
-  v_new_internet := LEAST(v_player.max_internet, v_player.internet + p_amount);
-
-  UPDATE players
-  SET gamecoin_balance = gamecoin_balance - v_cost, internet = v_new_internet
-  WHERE id = p_player_id;
-
-  INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'internet_recharge', -v_cost, 'gamecoin', 'Recarga de ' || p_amount || ' unidades de internet');
-
-  RETURN json_build_object('success', true, 'newInternet', v_new_internet, 'cost', v_cost);
-END;
-$$;
 
 -- Obtener transacciones
 CREATE OR REPLACE FUNCTION get_player_transactions(p_player_id UUID, p_limit INT DEFAULT 50)

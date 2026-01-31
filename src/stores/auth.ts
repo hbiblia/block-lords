@@ -31,6 +31,8 @@ export const useAuthStore = defineStore('auth', () => {
   const needsUsername = ref(false);
   const initialized = ref(false);
   const isCheckingAuth = ref(false);
+  // Flag para evitar aplicar regeneración múltiples veces en la misma sesión
+  const hasAppliedRegeneration = ref(false);
 
   const isAuthenticated = computed(() => !!user.value && !!session.value && !!player.value);
   const token = computed(() => session.value?.access_token ?? null);
@@ -80,13 +82,18 @@ export const useAuthStore = defineStore('auth', () => {
     if (!user.value) return;
 
     try {
-      // Aplicar regeneración pasiva antes de cargar el perfil
       const userId = user.value.id;
       let regenResult: { success: boolean; energyGained?: number; internetGained?: number } | null = null;
-      try {
-        regenResult = await applyPassiveRegeneration(userId);
-      } catch (e) {
-        console.warn('Error applying passive regeneration:', e);
+
+      // Solo aplicar regeneración pasiva UNA VEZ por sesión (al hacer login)
+      if (!hasAppliedRegeneration.value) {
+        try {
+          regenResult = await applyPassiveRegeneration(userId);
+          hasAppliedRegeneration.value = true; // Marcar como aplicada
+        } catch (e) {
+          console.warn('Error applying passive regeneration:', e);
+          hasAppliedRegeneration.value = true; // Marcar incluso si falla para no reintentar
+        }
       }
 
       const result = await getPlayerProfile(userId);
@@ -95,7 +102,7 @@ export const useAuthStore = defineStore('auth', () => {
         player.value = result.player;
         needsUsername.value = false;
 
-        // Mostrar notificación de regeneración si ganó recursos
+        // Mostrar notificación de regeneración si ganó recursos (solo en el primer fetch)
         if (regenResult?.success && (regenResult.energyGained || regenResult.internetGained)) {
           const notificationsStore = useNotificationsStore();
           const energyMsg = regenResult.energyGained ? `+${regenResult.energyGained.toFixed(0)} ⚡` : '';
@@ -219,6 +226,7 @@ export const useAuthStore = defineStore('auth', () => {
       player.value = null;
       session.value = null;
       needsUsername.value = false;
+      hasAppliedRegeneration.value = false; // Reset para próxima sesión
       loading.value = false;
     }
   }
