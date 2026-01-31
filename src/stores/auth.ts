@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { supabase } from '@/utils/supabase';
-import { createPlayerProfile, getPlayerProfile } from '@/utils/api';
+import { createPlayerProfile, getPlayerProfile, applyPassiveRegeneration } from '@/utils/api';
+import { useNotificationsStore } from './notifications';
 import type { User, Session } from '@supabase/supabase-js';
 
 
@@ -79,14 +80,40 @@ export const useAuthStore = defineStore('auth', () => {
     if (!user.value) return;
 
     try {
-      const result = await getPlayerProfile(user.value.id);
+      // Aplicar regeneración pasiva antes de cargar el perfil
+      const userId = user.value.id;
+      let regenResult: { success: boolean; energyGained?: number; internetGained?: number } | null = null;
+      try {
+        regenResult = await applyPassiveRegeneration(userId);
+      } catch (e) {
+        console.warn('Error applying passive regeneration:', e);
+      }
+
+      const result = await getPlayerProfile(userId);
 
       if (result.success && result.player) {
         player.value = result.player;
         needsUsername.value = false;
 
+        // Mostrar notificación de regeneración si ganó recursos
+        if (regenResult?.success && (regenResult.energyGained || regenResult.internetGained)) {
+          const notificationsStore = useNotificationsStore();
+          const energyMsg = regenResult.energyGained ? `+${regenResult.energyGained.toFixed(0)} ⚡` : '';
+          const internetMsg = regenResult.internetGained ? `+${regenResult.internetGained.toFixed(0)} 📡` : '';
+          const resources = [energyMsg, internetMsg].filter(Boolean).join(' ');
+          if (resources) {
+            notificationsStore.addNotification({
+              type: 'welcome_back',
+              title: 'notifications.welcomeBack.title',
+              message: 'notifications.welcomeBack.message',
+              icon: '🔋',
+              severity: 'success',
+              data: { resources },
+            });
+          }
+        }
+
         // Marcar como online (no bloquear, ejecutar en background)
-        const userId = user.value.id;
         (async () => {
           try {
             await supabase
@@ -129,7 +156,7 @@ export const useAuthStore = defineStore('auth', () => {
       // La redirección se maneja automáticamente
       return true;
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Error al conectar con Google';
+      error.value = e instanceof Error ? e.message : 'errors.googleConnection';
       loading.value = false;
       return false;
     }
@@ -138,7 +165,7 @@ export const useAuthStore = defineStore('auth', () => {
   // Completar registro después de OAuth (crear username)
   async function completeProfile(username: string) {
     if (!user.value) {
-      error.value = 'No hay usuario autenticado';
+      error.value = 'errors.noAuthenticatedUser';
       return false;
     }
 
@@ -150,7 +177,7 @@ export const useAuthStore = defineStore('auth', () => {
       const result = await createPlayerProfile(user.value.id, email, username);
 
       if (!result.success) {
-        throw new Error(result.error ?? 'Error al crear perfil');
+        throw new Error(result.error ?? 'errors.createProfile');
       }
 
       player.value = result.player;
@@ -158,7 +185,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       return true;
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Error al crear perfil';
+      error.value = e instanceof Error ? e.message : 'errors.createProfile';
       return false;
     } finally {
       loading.value = false;
@@ -198,7 +225,74 @@ export const useAuthStore = defineStore('auth', () => {
 
   function updatePlayer(updates: Partial<Player>) {
     if (player.value) {
+      const oldEnergy = player.value.energy;
+      const oldInternet = player.value.internet;
+      const oldMaxEnergy = player.value.max_energy;
+      const oldMaxInternet = player.value.max_internet;
+
       player.value = { ...player.value, ...updates };
+
+      // Check for resource depletion and trigger notifications
+      checkResourceNotifications(
+        oldEnergy,
+        oldInternet,
+        oldMaxEnergy,
+        oldMaxInternet,
+        player.value.energy,
+        player.value.internet,
+        player.value.max_energy,
+        player.value.max_internet
+      );
+    }
+  }
+
+  function checkResourceNotifications(
+    oldEnergy: number,
+    oldInternet: number,
+    oldMaxEnergy: number,
+    oldMaxInternet: number,
+    newEnergy: number,
+    newInternet: number,
+    newMaxEnergy: number,
+    newMaxInternet: number
+  ) {
+    const notificationsStore = useNotificationsStore();
+    const LOW_THRESHOLD = 0.1; // 10%
+
+    // Energy depleted
+    if (newEnergy <= 0 && oldEnergy > 0) {
+      notificationsStore.notifyEnergyDepleted();
+    }
+    // Energy recovered - reset the notification state
+    else if (newEnergy > 0 && oldEnergy <= 0) {
+      notificationsStore.resetNotificationState('energy_depleted');
+      notificationsStore.resetNotificationState('low_energy');
+    }
+    // Low energy warning (when crossing the 10% threshold)
+    else if (newEnergy > 0 && newMaxEnergy > 0) {
+      const newPercent = newEnergy / newMaxEnergy;
+      const oldPercent = oldMaxEnergy > 0 ? oldEnergy / oldMaxEnergy : 1;
+      if (newPercent <= LOW_THRESHOLD && oldPercent > LOW_THRESHOLD) {
+        notificationsStore.notifyLowEnergy(Math.round(newPercent * 100));
+      }
+    }
+
+    // Internet depleted
+    if (newInternet <= 0 && oldInternet > 0) {
+      notificationsStore.notifyInternetDepleted();
+    }
+    // Internet recovered - reset the notification state
+    else if (newInternet > 0 && oldInternet <= 0) {
+      notificationsStore.resetNotificationState('internet_depleted');
+      notificationsStore.resetNotificationState('low_internet');
+    }
+    // Low internet warning (when crossing the 10% threshold)
+    else if (newInternet > 0 && newMaxInternet > 0) {
+      const newPercent = newInternet / newMaxInternet;
+      const oldPercent = oldMaxInternet > 0 ? oldInternet / oldMaxInternet : 1;
+      if (newPercent <= LOW_THRESHOLD && oldPercent > LOW_THRESHOLD) {
+        notificationsStore.notifyLowInternet(Math.round(newPercent * 100));
+      }
     }
   }
 

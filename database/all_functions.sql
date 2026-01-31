@@ -108,6 +108,14 @@ DROP FUNCTION IF EXISTS get_rig_cooling(UUID) CASCADE;
 DROP FUNCTION IF EXISTS exchange_crypto_to_gamecoin(UUID, NUMERIC) CASCADE;
 DROP FUNCTION IF EXISTS exchange_crypto_to_ron(UUID, NUMERIC) CASCADE;
 DROP FUNCTION IF EXISTS get_exchange_rates() CASCADE;
+DROP FUNCTION IF EXISTS apply_passive_regeneration(UUID) CASCADE;
+DROP FUNCTION IF EXISTS get_streak_status(UUID) CASCADE;
+DROP FUNCTION IF EXISTS claim_daily_streak(UUID) CASCADE;
+DROP FUNCTION IF EXISTS get_daily_missions(UUID) CASCADE;
+DROP FUNCTION IF EXISTS assign_daily_missions(UUID) CASCADE;
+DROP FUNCTION IF EXISTS update_mission_progress(UUID, TEXT, NUMERIC) CASCADE;
+DROP FUNCTION IF EXISTS claim_mission_reward(UUID, UUID) CASCADE;
+DROP FUNCTION IF EXISTS record_online_heartbeat(UUID) CASCADE;
 
 -- =====================================================
 -- 1. FUNCIONES DE UTILIDAD
@@ -242,6 +250,81 @@ BEGIN
   VALUES (p_player_id, p_delta, p_reason, old_score, new_score);
 
   RETURN new_score;
+END;
+$$;
+
+-- Regeneración pasiva de recursos (se aplica al login)
+-- Energía: +1 cada 10 minutos offline
+-- Internet: +1 cada 15 minutos offline
+-- Cap: 50% de max_energy/max_internet
+CREATE OR REPLACE FUNCTION apply_passive_regeneration(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_minutes_offline NUMERIC;
+  v_energy_regen NUMERIC;
+  v_internet_regen NUMERIC;
+  v_max_energy_cap NUMERIC;
+  v_max_internet_cap NUMERIC;
+  v_new_energy NUMERIC;
+  v_new_internet NUMERIC;
+  v_energy_gained NUMERIC := 0;
+  v_internet_gained NUMERIC := 0;
+BEGIN
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+
+  -- Calcular minutos offline (solo si estaba offline)
+  IF v_player.is_online = false AND v_player.last_seen IS NOT NULL THEN
+    v_minutes_offline := EXTRACT(EPOCH FROM (NOW() - v_player.last_seen)) / 60.0;
+
+    -- Cap a 24 horas (1440 minutos) para evitar regeneración masiva
+    v_minutes_offline := LEAST(v_minutes_offline, 1440);
+
+    -- Solo regenerar si estuvo offline al menos 10 minutos
+    IF v_minutes_offline >= 10 THEN
+      -- Calcular regeneración: +1 energía por 10 min, +1 internet por 15 min
+      v_energy_regen := FLOOR(v_minutes_offline / 10.0);
+      v_internet_regen := FLOOR(v_minutes_offline / 15.0);
+
+      -- Calcular cap de 50%
+      v_max_energy_cap := COALESCE(v_player.max_energy, 100) * 0.5;
+      v_max_internet_cap := COALESCE(v_player.max_internet, 100) * 0.5;
+
+      -- Aplicar regeneración con cap
+      v_new_energy := LEAST(v_max_energy_cap, v_player.energy + v_energy_regen);
+      v_new_internet := LEAST(v_max_internet_cap, v_player.internet + v_internet_regen);
+
+      -- Calcular ganancia real
+      v_energy_gained := GREATEST(0, v_new_energy - v_player.energy);
+      v_internet_gained := GREATEST(0, v_new_internet - v_player.internet);
+
+      -- Solo actualizar si hay algo que ganar
+      IF v_energy_gained > 0 OR v_internet_gained > 0 THEN
+        UPDATE players
+        SET energy = v_new_energy,
+            internet = v_new_internet
+        WHERE id = p_player_id;
+      END IF;
+    END IF;
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'energyGained', COALESCE(v_energy_gained, 0),
+    'internetGained', COALESCE(v_internet_gained, 0),
+    'minutesOffline', COALESCE(v_minutes_offline, 0),
+    'currentEnergy', COALESCE(v_new_energy, v_player.energy),
+    'currentInternet', COALESCE(v_new_internet, v_player.internet),
+    'energyCap', v_max_energy_cap,
+    'internetCap', v_max_internet_cap
+  );
 END;
 $$;
 
@@ -409,6 +492,7 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_rig player_rigs%ROWTYPE;
+  v_rig_info rigs%ROWTYPE;
   v_player players%ROWTYPE;
 BEGIN
   SELECT * INTO v_rig FROM player_rigs WHERE id = p_rig_id AND player_id = p_player_id;
@@ -417,16 +501,24 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
   END IF;
 
-  -- Verificar si se quiere encender un rig roto
+  -- Verificar si se quiere encender un rig
   IF NOT v_rig.is_active THEN
     -- No permitir encender si condición es 0
     IF v_rig.condition <= 0 THEN
       RETURN json_build_object('success', false, 'error', 'El rig está roto. Debes repararlo o eliminarlo.');
     END IF;
 
+    -- Obtener información del rig para saber consumo
+    SELECT * INTO v_rig_info FROM rigs WHERE id = v_rig.rig_id;
     SELECT * INTO v_player FROM players WHERE id = p_player_id;
-    IF v_player.energy <= 0 OR v_player.internet <= 0 THEN
-      RETURN json_build_object('success', false, 'error', 'Recursos insuficientes para activar el rig');
+
+    -- Verificar que hay suficientes recursos para al menos un tick
+    IF v_player.energy < v_rig_info.power_consumption THEN
+      RETURN json_build_object('success', false, 'error', 'Energía insuficiente. Necesitas al menos ' || v_rig_info.power_consumption || ' para este rig.');
+    END IF;
+
+    IF v_player.internet < v_rig_info.internet_consumption THEN
+      RETURN json_build_object('success', false, 'error', 'Internet insuficiente. Necesitas al menos ' || v_rig_info.internet_consumption || ' para este rig.');
     END IF;
   END IF;
 
@@ -1053,8 +1145,9 @@ BEGIN
     END LOOP;
 
     -- Calcular nuevo nivel de energía e internet
+    -- Internet consume más rápido que energía (incentiva comprar tarjetas de internet)
     v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.1));
-    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.05));
+    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.15));
 
     -- Actualizar recursos del jugador
     UPDATE players
@@ -2035,6 +2128,7 @@ DECLARE
   v_card prepaid_cards%ROWTYPE;
   v_code TEXT;
   v_new_card_id UUID;
+  v_currency TEXT;
 BEGIN
   -- Verificar jugador
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
@@ -2048,22 +2142,37 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Tarjeta no encontrada');
   END IF;
 
-  -- Verificar balance
-  IF v_player.gamecoin_balance < v_card.base_price THEN
-    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+  -- Obtener moneda (default gamecoin para compatibilidad)
+  v_currency := COALESCE(v_card.currency, 'gamecoin');
+
+  -- Verificar balance según la moneda
+  IF v_currency = 'crypto' THEN
+    IF v_player.crypto_balance < v_card.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'Crypto insuficiente');
+    END IF;
+  ELSE
+    IF v_player.gamecoin_balance < v_card.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+    END IF;
   END IF;
 
   -- Generar código único
   v_code := generate_card_code();
 
-  -- Descontar GameCoin
-  UPDATE players
-  SET gamecoin_balance = gamecoin_balance - v_card.base_price
-  WHERE id = p_player_id;
+  -- Descontar según la moneda
+  IF v_currency = 'crypto' THEN
+    UPDATE players
+    SET crypto_balance = crypto_balance - v_card.base_price
+    WHERE id = p_player_id;
+  ELSE
+    UPDATE players
+    SET gamecoin_balance = gamecoin_balance - v_card.base_price
+    WHERE id = p_player_id;
+  END IF;
 
   -- Registrar transacción
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'card_purchase', -v_card.base_price, 'gamecoin',
+  VALUES (p_player_id, 'card_purchase', -v_card.base_price, v_currency,
           'Compra de tarjeta: ' || v_card.name);
 
   -- Crear tarjeta para el jugador
@@ -2220,7 +2329,7 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_player players%ROWTYPE;
-  v_exchange_rate NUMERIC := 10;  -- 1 crypto = 10 GameCoin
+  v_exchange_rate NUMERIC := 0.5;  -- 1 crypto = 10 GameCoin
   v_gamecoin_received NUMERIC;
 BEGIN
   -- Validar cantidad
@@ -2321,7 +2430,7 @@ SECURITY DEFINER
 AS $$
 BEGIN
   RETURN json_build_object(
-    'crypto_to_gamecoin', 10,  -- 1 crypto = 10 GameCoin
+    'crypto_to_gamecoin', 0.5,  -- 1 crypto = 10 GameCoin
     'crypto_to_ron', 0.00001,  -- 1000 crypto = 0.01 RON
     'min_crypto_for_ron', 100000  -- Mínimo para convertir a RON (= 1 RON)
   );
@@ -2365,5 +2474,534 @@ BEGIN
   PERFORM process_resource_decay();
   PERFORM pg_sleep(10);
   PERFORM process_resource_decay();
+END;
+$$;
+
+-- =====================================================
+-- 11. SISTEMA DE RACHA (STREAK)
+-- =====================================================
+
+-- Obtener estado de racha del jugador
+CREATE OR REPLACE FUNCTION get_streak_status(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_streak player_streaks%ROWTYPE;
+  v_reward streak_rewards%ROWTYPE;
+  v_can_claim BOOLEAN := false;
+  v_is_expired BOOLEAN := false;
+  v_next_day INTEGER;
+  v_all_rewards JSON;
+BEGIN
+  -- Obtener o crear registro de streak
+  SELECT * INTO v_streak FROM player_streaks WHERE player_id = p_player_id;
+
+  IF v_streak IS NULL THEN
+    -- Crear registro inicial
+    INSERT INTO player_streaks (player_id, current_streak, longest_streak)
+    VALUES (p_player_id, 0, 0)
+    RETURNING * INTO v_streak;
+  END IF;
+
+  -- Verificar si la racha expiró (más de 48h sin claim)
+  IF v_streak.streak_expires_at IS NOT NULL AND NOW() > v_streak.streak_expires_at THEN
+    v_is_expired := true;
+    -- Resetear racha
+    UPDATE player_streaks
+    SET current_streak = 0,
+        next_claim_available = NULL,
+        streak_expires_at = NULL,
+        updated_at = NOW()
+    WHERE player_id = p_player_id
+    RETURNING * INTO v_streak;
+  END IF;
+
+  -- Verificar si puede reclamar (pasaron 20h desde el último claim o nunca ha reclamado)
+  IF v_streak.next_claim_available IS NULL OR NOW() >= v_streak.next_claim_available THEN
+    v_can_claim := true;
+  END IF;
+
+  -- Calcular siguiente día de recompensa
+  v_next_day := COALESCE(v_streak.current_streak, 0) + 1;
+
+  -- Obtener recompensa del siguiente día (o la más cercana disponible)
+  SELECT * INTO v_reward
+  FROM streak_rewards
+  WHERE day_number <= v_next_day
+  ORDER BY day_number DESC
+  LIMIT 1;
+
+  -- Si no hay recompensa específica, usar día 1 como base y escalar
+  IF v_reward IS NULL THEN
+    v_reward.gamecoin_reward := 10 * v_next_day; -- 10 por día base
+    v_reward.crypto_reward := 0;
+    v_reward.item_type := NULL;
+    v_reward.item_id := NULL;
+  END IF;
+
+  -- Obtener todas las recompensas para mostrar calendario
+  SELECT json_agg(
+    json_build_object(
+      'day', day_number,
+      'gamecoin', gamecoin_reward,
+      'crypto', crypto_reward,
+      'itemType', item_type,
+      'itemId', item_id,
+      'description', description
+    ) ORDER BY day_number
+  ) INTO v_all_rewards
+  FROM streak_rewards;
+
+  RETURN json_build_object(
+    'success', true,
+    'currentStreak', v_streak.current_streak,
+    'longestStreak', v_streak.longest_streak,
+    'canClaim', v_can_claim,
+    'isExpired', v_is_expired,
+    'nextDay', v_next_day,
+    'nextReward', json_build_object(
+      'gamecoin', COALESCE(v_reward.gamecoin_reward, 10 * v_next_day),
+      'crypto', COALESCE(v_reward.crypto_reward, 0),
+      'itemType', v_reward.item_type,
+      'itemId', v_reward.item_id
+    ),
+    'lastClaimDate', v_streak.last_claim_date,
+    'nextClaimAvailable', v_streak.next_claim_available,
+    'streakExpiresAt', v_streak.streak_expires_at,
+    'allRewards', v_all_rewards
+  );
+END;
+$$;
+
+-- Reclamar recompensa diaria de racha
+CREATE OR REPLACE FUNCTION claim_daily_streak(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_streak player_streaks%ROWTYPE;
+  v_reward streak_rewards%ROWTYPE;
+  v_new_streak INTEGER;
+  v_gamecoin_reward DECIMAL(10, 2);
+  v_crypto_reward DECIMAL(10, 4);
+  v_item_type TEXT;
+  v_item_id TEXT;
+BEGIN
+  -- Obtener streak actual
+  SELECT * INTO v_streak FROM player_streaks WHERE player_id = p_player_id;
+
+  IF v_streak IS NULL THEN
+    -- Crear registro inicial
+    INSERT INTO player_streaks (player_id, current_streak, longest_streak)
+    VALUES (p_player_id, 0, 0)
+    RETURNING * INTO v_streak;
+  END IF;
+
+  -- Verificar si la racha expiró
+  IF v_streak.streak_expires_at IS NOT NULL AND NOW() > v_streak.streak_expires_at THEN
+    -- Resetear racha
+    UPDATE player_streaks
+    SET current_streak = 0,
+        next_claim_available = NULL,
+        streak_expires_at = NULL,
+        updated_at = NOW()
+    WHERE player_id = p_player_id
+    RETURNING * INTO v_streak;
+  END IF;
+
+  -- Verificar si puede reclamar
+  IF v_streak.next_claim_available IS NOT NULL AND NOW() < v_streak.next_claim_available THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'Debes esperar para reclamar la siguiente recompensa',
+      'nextClaimAvailable', v_streak.next_claim_available
+    );
+  END IF;
+
+  -- Calcular nuevo streak
+  v_new_streak := COALESCE(v_streak.current_streak, 0) + 1;
+
+  -- Obtener recompensa del día
+  SELECT * INTO v_reward
+  FROM streak_rewards
+  WHERE day_number = v_new_streak;
+
+  -- Si no hay recompensa específica, calcular basado en día
+  IF v_reward IS NULL THEN
+    -- Buscar la recompensa más cercana menor
+    SELECT * INTO v_reward
+    FROM streak_rewards
+    WHERE day_number < v_new_streak
+    ORDER BY day_number DESC
+    LIMIT 1;
+
+    -- Escalar recompensa base
+    v_gamecoin_reward := 10 * v_new_streak;
+    v_crypto_reward := 0;
+    v_item_type := NULL;
+    v_item_id := NULL;
+  ELSE
+    v_gamecoin_reward := v_reward.gamecoin_reward;
+    v_crypto_reward := v_reward.crypto_reward;
+    v_item_type := v_reward.item_type;
+    v_item_id := v_reward.item_id;
+  END IF;
+
+  -- Dar recompensas
+  UPDATE players
+  SET gamecoin_balance = gamecoin_balance + v_gamecoin_reward,
+      crypto_balance = crypto_balance + v_crypto_reward
+  WHERE id = p_player_id;
+
+  -- Dar item si corresponde
+  IF v_item_type = 'prepaid_card' AND v_item_id IS NOT NULL THEN
+    -- Crear tarjeta prepago para el jugador
+    INSERT INTO player_cards (player_id, card_id, code)
+    VALUES (p_player_id, v_item_id, generate_card_code());
+  ELSIF v_item_type = 'cooling' AND v_item_id IS NOT NULL THEN
+    -- Agregar cooling al inventario
+    INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+    VALUES (p_player_id, 'cooling', v_item_id, 1)
+    ON CONFLICT (player_id, item_type, item_id)
+    DO UPDATE SET quantity = player_inventory.quantity + 1;
+  ELSIF v_item_type = 'rig' AND v_item_id IS NOT NULL THEN
+    -- Agregar rig al inventario
+    INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+    VALUES (p_player_id, 'rig', v_item_id, 1)
+    ON CONFLICT (player_id, item_type, item_id)
+    DO UPDATE SET quantity = player_inventory.quantity + 1;
+  END IF;
+
+  -- Actualizar streak
+  UPDATE player_streaks
+  SET current_streak = v_new_streak,
+      longest_streak = GREATEST(COALESCE(longest_streak, 0), v_new_streak),
+      last_claim_date = CURRENT_DATE,
+      next_claim_available = NOW() + INTERVAL '20 hours', -- Puede reclamar en 20h
+      streak_expires_at = NOW() + INTERVAL '48 hours',    -- Racha expira en 48h
+      updated_at = NOW()
+  WHERE player_id = p_player_id;
+
+  -- Registrar claim
+  INSERT INTO streak_claims (player_id, day_number, gamecoin_earned, crypto_earned, item_type, item_id)
+  VALUES (p_player_id, v_new_streak, v_gamecoin_reward, v_crypto_reward, v_item_type, v_item_id);
+
+  -- Registrar transacción
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'streak_reward', v_gamecoin_reward, 'gamecoin',
+          'Recompensa de racha día ' || v_new_streak);
+
+  IF v_crypto_reward > 0 THEN
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'streak_reward', v_crypto_reward, 'crypto',
+            'Bonus crypto racha día ' || v_new_streak);
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'newStreak', v_new_streak,
+    'gamecoinEarned', v_gamecoin_reward,
+    'cryptoEarned', v_crypto_reward,
+    'itemType', v_item_type,
+    'itemId', v_item_id,
+    'nextClaimAvailable', NOW() + INTERVAL '20 hours',
+    'streakExpiresAt', NOW() + INTERVAL '48 hours'
+  );
+END;
+$$;
+
+-- =====================================================
+-- 12. SISTEMA DE MISIONES DIARIAS
+-- =====================================================
+
+-- Asignar misiones diarias a un jugador
+CREATE OR REPLACE FUNCTION assign_daily_missions(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_today DATE := CURRENT_DATE;
+  v_existing_count INTEGER;
+  v_easy_mission missions%ROWTYPE;
+  v_medium_missions missions[];
+  v_hard_mission missions%ROWTYPE;
+  v_mission missions%ROWTYPE;
+  v_assigned_count INTEGER := 0;
+BEGIN
+  -- Verificar si ya tiene misiones asignadas hoy
+  SELECT COUNT(*) INTO v_existing_count
+  FROM player_missions
+  WHERE player_id = p_player_id AND assigned_date = v_today;
+
+  IF v_existing_count >= 4 THEN
+    RETURN json_build_object('success', true, 'message', 'Ya tienes misiones asignadas hoy', 'count', v_existing_count);
+  END IF;
+
+  -- Eliminar misiones anteriores no completadas (limpieza)
+  DELETE FROM player_missions
+  WHERE player_id = p_player_id
+    AND assigned_date < v_today
+    AND is_claimed = false;
+
+  -- Seleccionar 1 misión fácil aleatoria
+  SELECT * INTO v_easy_mission
+  FROM missions
+  WHERE difficulty = 'easy'
+  ORDER BY RANDOM()
+  LIMIT 1;
+
+  IF v_easy_mission.id IS NOT NULL THEN
+    INSERT INTO player_missions (player_id, mission_id, assigned_date)
+    VALUES (p_player_id, v_easy_mission.id, v_today)
+    ON CONFLICT (player_id, mission_id, assigned_date) DO NOTHING;
+    v_assigned_count := v_assigned_count + 1;
+  END IF;
+
+  -- Seleccionar 2 misiones medias aleatorias
+  FOR v_mission IN
+    SELECT * FROM missions
+    WHERE difficulty = 'medium'
+    ORDER BY RANDOM()
+    LIMIT 2
+  LOOP
+    INSERT INTO player_missions (player_id, mission_id, assigned_date)
+    VALUES (p_player_id, v_mission.id, v_today)
+    ON CONFLICT (player_id, mission_id, assigned_date) DO NOTHING;
+    v_assigned_count := v_assigned_count + 1;
+  END LOOP;
+
+  -- Seleccionar 1 misión difícil aleatoria
+  SELECT * INTO v_hard_mission
+  FROM missions
+  WHERE difficulty = 'hard'
+  ORDER BY RANDOM()
+  LIMIT 1;
+
+  IF v_hard_mission.id IS NOT NULL THEN
+    INSERT INTO player_missions (player_id, mission_id, assigned_date)
+    VALUES (p_player_id, v_hard_mission.id, v_today)
+    ON CONFLICT (player_id, mission_id, assigned_date) DO NOTHING;
+    v_assigned_count := v_assigned_count + 1;
+  END IF;
+
+  RETURN json_build_object('success', true, 'assigned', v_assigned_count);
+END;
+$$;
+
+-- Obtener misiones diarias del jugador
+CREATE OR REPLACE FUNCTION get_daily_missions(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_today DATE := CURRENT_DATE;
+  v_missions JSON;
+  v_online_minutes INTEGER := 0;
+BEGIN
+  -- Primero asegurarse de que tenga misiones asignadas
+  PERFORM assign_daily_missions(p_player_id);
+
+  -- Obtener minutos online de hoy
+  SELECT COALESCE(minutes_online, 0) INTO v_online_minutes
+  FROM player_online_tracking
+  WHERE player_id = p_player_id AND tracking_date = v_today;
+
+  -- Obtener misiones con detalles
+  SELECT json_agg(
+    json_build_object(
+      'id', pm.id,
+      'missionId', m.id,
+      'name', m.name,
+      'description', m.description,
+      'missionType', m.mission_type,
+      'targetValue', m.target_value,
+      'progress', pm.progress,
+      'isCompleted', pm.is_completed,
+      'isClaimed', pm.is_claimed,
+      'rewardType', m.reward_type,
+      'rewardAmount', m.reward_amount,
+      'difficulty', m.difficulty,
+      'icon', m.icon,
+      'progressPercent', LEAST(100, ROUND((pm.progress / m.target_value) * 100))
+    ) ORDER BY
+      CASE m.difficulty WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 WHEN 'hard' THEN 3 END,
+      m.name
+  ) INTO v_missions
+  FROM player_missions pm
+  JOIN missions m ON m.id = pm.mission_id
+  WHERE pm.player_id = p_player_id AND pm.assigned_date = v_today;
+
+  RETURN json_build_object(
+    'success', true,
+    'missions', COALESCE(v_missions, '[]'::json),
+    'date', v_today,
+    'onlineMinutes', v_online_minutes
+  );
+END;
+$$;
+
+-- Actualizar progreso de misión
+CREATE OR REPLACE FUNCTION update_mission_progress(
+  p_player_id UUID,
+  p_mission_type TEXT,
+  p_increment NUMERIC
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_today DATE := CURRENT_DATE;
+  v_mission RECORD;
+  v_updated_count INTEGER := 0;
+BEGIN
+  -- Actualizar todas las misiones del tipo especificado
+  FOR v_mission IN
+    SELECT pm.id, pm.progress, m.target_value
+    FROM player_missions pm
+    JOIN missions m ON m.id = pm.mission_id
+    WHERE pm.player_id = p_player_id
+      AND pm.assigned_date = v_today
+      AND pm.is_completed = false
+      AND m.mission_type = p_mission_type
+  LOOP
+    -- Actualizar progreso
+    UPDATE player_missions
+    SET progress = LEAST(v_mission.target_value, progress + p_increment),
+        is_completed = (LEAST(v_mission.target_value, progress + p_increment) >= v_mission.target_value),
+        completed_at = CASE
+          WHEN LEAST(v_mission.target_value, progress + p_increment) >= v_mission.target_value THEN NOW()
+          ELSE completed_at
+        END
+    WHERE id = v_mission.id;
+
+    v_updated_count := v_updated_count + 1;
+  END LOOP;
+
+  RETURN json_build_object('success', true, 'updated', v_updated_count);
+END;
+$$;
+
+-- Reclamar recompensa de misión
+CREATE OR REPLACE FUNCTION claim_mission_reward(p_player_id UUID, p_mission_uuid UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_pm player_missions%ROWTYPE;
+  v_mission missions%ROWTYPE;
+BEGIN
+  -- Obtener misión del jugador
+  SELECT * INTO v_pm
+  FROM player_missions
+  WHERE id = p_mission_uuid AND player_id = p_player_id;
+
+  IF v_pm IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Misión no encontrada');
+  END IF;
+
+  IF NOT v_pm.is_completed THEN
+    RETURN json_build_object('success', false, 'error', 'La misión no está completada');
+  END IF;
+
+  IF v_pm.is_claimed THEN
+    RETURN json_build_object('success', false, 'error', 'Ya reclamaste esta recompensa');
+  END IF;
+
+  -- Obtener detalles de la misión
+  SELECT * INTO v_mission FROM missions WHERE id = v_pm.mission_id;
+
+  -- Dar recompensa
+  IF v_mission.reward_type = 'gamecoin' THEN
+    UPDATE players
+    SET gamecoin_balance = gamecoin_balance + v_mission.reward_amount
+    WHERE id = p_player_id;
+  ELSIF v_mission.reward_type = 'crypto' THEN
+    UPDATE players
+    SET crypto_balance = crypto_balance + v_mission.reward_amount
+    WHERE id = p_player_id;
+  ELSIF v_mission.reward_type = 'energy' THEN
+    UPDATE players
+    SET energy = LEAST(max_energy, energy + v_mission.reward_amount)
+    WHERE id = p_player_id;
+  ELSIF v_mission.reward_type = 'internet' THEN
+    UPDATE players
+    SET internet = LEAST(max_internet, internet + v_mission.reward_amount)
+    WHERE id = p_player_id;
+  END IF;
+
+  -- Marcar como reclamada
+  UPDATE player_missions
+  SET is_claimed = true, claimed_at = NOW()
+  WHERE id = p_mission_uuid;
+
+  -- Registrar transacción
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'mission_reward', v_mission.reward_amount, v_mission.reward_type,
+          'Recompensa de misión: ' || v_mission.name);
+
+  RETURN json_build_object(
+    'success', true,
+    'rewardType', v_mission.reward_type,
+    'rewardAmount', v_mission.reward_amount,
+    'missionName', v_mission.name
+  );
+END;
+$$;
+
+-- Registrar heartbeat de tiempo online
+CREATE OR REPLACE FUNCTION record_online_heartbeat(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_today DATE := CURRENT_DATE;
+  v_tracking player_online_tracking%ROWTYPE;
+  v_minutes_since_last INTEGER;
+  v_new_minutes INTEGER;
+BEGIN
+  -- Obtener o crear registro de tracking
+  SELECT * INTO v_tracking
+  FROM player_online_tracking
+  WHERE player_id = p_player_id AND tracking_date = v_today;
+
+  IF v_tracking IS NULL THEN
+    -- Crear nuevo registro
+    INSERT INTO player_online_tracking (player_id, tracking_date, minutes_online, last_heartbeat)
+    VALUES (p_player_id, v_today, 1, NOW())
+    RETURNING * INTO v_tracking;
+
+    -- Actualizar progreso de misiones de tiempo online
+    PERFORM update_mission_progress(p_player_id, 'online_time', 1);
+
+    RETURN json_build_object('success', true, 'minutesOnline', 1);
+  END IF;
+
+  -- Calcular minutos desde el último heartbeat (máximo 5 para evitar trampas)
+  v_minutes_since_last := LEAST(5, EXTRACT(EPOCH FROM (NOW() - v_tracking.last_heartbeat)) / 60);
+
+  -- Solo contar si pasó al menos 1 minuto
+  IF v_minutes_since_last >= 1 THEN
+    v_new_minutes := v_tracking.minutes_online + v_minutes_since_last;
+
+    UPDATE player_online_tracking
+    SET minutes_online = v_new_minutes,
+        last_heartbeat = NOW()
+    WHERE id = v_tracking.id;
+
+    -- Actualizar progreso de misiones de tiempo online
+    PERFORM update_mission_progress(p_player_id, 'online_time', v_minutes_since_last);
+
+    RETURN json_build_object('success', true, 'minutesOnline', v_new_minutes, 'added', v_minutes_since_last);
+  END IF;
+
+  RETURN json_build_object('success', true, 'minutesOnline', v_tracking.minutes_online, 'added', 0);
 END;
 $$;

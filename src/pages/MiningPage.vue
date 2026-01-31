@@ -3,14 +3,35 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
+import { useNotificationsStore } from '@/stores/notifications';
 import { getPlayerRigs, getNetworkStats, getRecentBlocks, toggleRig, getRigCooling } from '@/utils/api';
 import MarketModal from '@/components/MarketModal.vue';
+import InventoryModal from '@/components/InventoryModal.vue';
+import ExchangeModal from '@/components/ExchangeModal.vue';
+import PrepaidCardsPanel from '@/components/PrepaidCardsPanel.vue';
+import RigManageModal from '@/components/RigManageModal.vue';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
 const miningStore = useMiningStore();
+const notificationsStore = useNotificationsStore();
 
 const showMarket = ref(false);
+const showInventory = ref(false);
+const showExchange = ref(false);
+const showRecharge = ref(false);
+const showRigManage = ref(false);
+const selectedRigForManage = ref<typeof rigs.value[0] | null>(null);
+
+function openRigManage(rig: typeof rigs.value[0]) {
+  selectedRigForManage.value = rig;
+  showRigManage.value = true;
+}
+
+function closeRigManage() {
+  showRigManage.value = false;
+  selectedRigForManage.value = null;
+}
 
 const loading = ref(true);
 const rigs = ref<Array<{
@@ -19,6 +40,8 @@ const rigs = ref<Array<{
   condition: number;
   temperature: number;
   activated_at: string | null;
+  max_condition?: number;
+  times_repaired?: number;
   rig: {
     id: string;
     name: string;
@@ -26,6 +49,7 @@ const rigs = ref<Array<{
     power_consumption: number;
     internet_consumption: number;
     tier: string;
+    repair_cost: number;
   };
 }>>([]);
 
@@ -171,11 +195,42 @@ function stopMiningSimulation() {
 async function handleToggleRig(rigId: string) {
   const rig = rigs.value.find(r => r.id === rigId);
 
-  if (rig) {
-    rig.is_active = !rig.is_active;
-    // Immediately update mining store for visual feedback
-    syncMiningStore();
+  if (!rig) return;
+
+  // Pre-check: If trying to turn ON, verify resources are sufficient for at least one tick
+  if (!rig.is_active) {
+    const player = authStore.player;
+    if (player) {
+      const requiredEnergy = rig.rig.power_consumption;
+      const requiredInternet = rig.rig.internet_consumption;
+
+      if (player.energy < requiredEnergy) {
+        // Use addNotification directly to bypass deduplication (user-initiated action)
+        notificationsStore.addNotification({
+          type: 'energy_depleted',
+          title: 'notifications.energyDepleted.title',
+          message: 'notifications.energyDepleted.message',
+          icon: '⚡',
+          severity: 'error',
+        });
+        return;
+      }
+      if (player.internet < requiredInternet) {
+        notificationsStore.addNotification({
+          type: 'internet_depleted',
+          title: 'notifications.internetDepleted.title',
+          message: 'notifications.internetDepleted.message',
+          icon: '📡',
+          severity: 'error',
+        });
+        return;
+      }
+    }
   }
+
+  // Optimistic update for visual feedback
+  rig.is_active = !rig.is_active;
+  syncMiningStore();
 
   try {
     const result = await toggleRig(authStore.player!.id, rigId);
@@ -183,13 +238,27 @@ async function handleToggleRig(rigId: string) {
     if (!result.success) {
       // Revert and resync from server to ensure UI matches DB state
       await loadData();
-      alert(result.error ?? 'Error al cambiar estado del rig');
+      // Use notification system instead of alert
+      notificationsStore.addNotification({
+        type: 'rig_broken',
+        title: 'common.error',
+        message: 'mining.toggleError',
+        icon: '⚠️',
+        severity: 'error',
+        data: { error: result.error },
+      });
     }
   } catch (e) {
     // Revert and resync from server on error
     await loadData();
     console.error('Error toggling rig:', e);
-    alert('Error de conexión al cambiar estado del rig');
+    notificationsStore.addNotification({
+      type: 'rig_broken',
+      title: 'common.error',
+      message: 'mining.connectionError',
+      icon: '⚠️',
+      severity: 'error',
+    });
   }
 }
 
@@ -224,13 +293,11 @@ function getTierColor(tier: string): string {
   }
 }
 
-function getTierBg(tier: string): string {
-  switch (tier) {
-    case 'elite': return 'from-purple-500/20 to-cyan-500/20';
-    case 'advanced': return 'from-yellow-500/20 to-orange-500/20';
-    case 'standard': return 'from-gray-400/20 to-gray-500/20';
-    default: return 'from-amber-600/20 to-amber-700/20';
-  }
+// Translation helper for rig names
+function getRigName(id: string): string {
+  const key = `market.items.rigs.${id}.name`;
+  const translated = t(key);
+  return translated !== key ? translated : id;
 }
 
 function getTempColor(temp: number): string {
@@ -238,13 +305,6 @@ function getTempColor(temp: number): string {
   if (temp >= 60) return 'text-status-warning';
   if (temp >= 40) return 'text-yellow-400';
   return 'text-status-success';
-}
-
-function getTempStatus(temp: number): string {
-  if (temp >= 80) return t('mining.temp.critical');
-  if (temp >= 60) return t('mining.temp.high');
-  if (temp >= 40) return t('mining.temp.normal');
-  return t('mining.temp.optimal');
 }
 
 function getTempBarColor(temp: number): string {
@@ -308,6 +368,29 @@ function formatUptime(activatedAt: string | null): string {
   } else {
     return `${seconds}s`;
   }
+}
+
+// Calculate block reward based on height (matches DB function)
+function getBlockReward(height: number): number {
+  const baseReward = 100;
+  const halvingInterval = 10000;
+  const halvings = Math.floor(height / halvingInterval);
+  return baseReward / Math.pow(2, halvings);
+}
+
+// Format relative time
+function formatTimeAgo(dateStr: string): string {
+  const date = new Date(dateStr).getTime();
+  const now = Date.now();
+  const diff = Math.max(0, now - date);
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+
+  if (hours > 0) return `${hours}h`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
 }
 
 // Reactive uptime - update every second
@@ -415,10 +498,36 @@ onUnmounted(() => {
         <span class="badge" :class="activeRigsCount > 0 ? 'badge-success' : 'badge-warning'">
           {{ t('mining.activeRigs', { count: activeRigsCount }) }}
         </span>
-        <button @click="showMarket = true" class="btn-primary flex items-center gap-2">
-          <span>🛒</span>
-          <span>{{ t('mining.market') }}</span>
-        </button>
+        <div class="flex items-center gap-1 px-1 py-1 bg-bg-secondary/50 rounded-lg">
+          <button @click="showMarket = true" class="px-3 py-1.5 text-sm font-medium rounded-md bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30 transition-all flex items-center gap-1.5">
+            <span>🛒</span>
+            <span class="hidden sm:inline">{{ t('mining.market') }}</span>
+          </button>
+          <button
+            @click="showExchange = true"
+            class="px-3 py-1.5 text-sm font-medium rounded-md bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-all flex items-center gap-1.5"
+            :title="t('nav.exchange')"
+          >
+            <span>💱</span>
+            <span class="hidden sm:inline">{{ t('nav.exchange') }}</span>
+          </button>
+          <button
+            @click="showRecharge = true"
+            class="px-3 py-1.5 text-sm font-medium rounded-md bg-status-warning/20 text-status-warning hover:bg-status-warning/30 transition-all flex items-center gap-1.5"
+            :title="t('nav.recharge')"
+          >
+            <span>+</span>
+            <span class="hidden sm:inline">{{ t('nav.recharge') }}</span>
+          </button>
+          <button
+            @click="showInventory = true"
+            class="px-3 py-1.5 text-sm font-medium rounded-md bg-bg-tertiary hover:bg-bg-tertiary/80 transition-all flex items-center gap-1.5"
+            :title="t('nav.inventory')"
+          >
+            <span>🎒</span>
+            <span class="hidden sm:inline">{{ t('nav.inventory') }}</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -546,158 +655,121 @@ onUnmounted(() => {
             <div
               v-for="playerRig in rigs"
               :key="playerRig.id"
-              class="rig-card group"
-              :class="{ 'mining': playerRig.is_active }"
+              class="bg-bg-secondary/80 rounded-xl border border-border/30 p-4 relative overflow-hidden"
             >
-              <!-- Tier gradient background -->
+              <!-- Subtle tier indicator -->
               <div
-                class="absolute inset-0 bg-gradient-to-br opacity-50"
-                :class="getTierBg(playerRig.rig.tier)"
+                class="absolute top-0 left-0 w-1 h-full"
+                :class="{
+                  'bg-purple-500/70': playerRig.rig.tier === 'elite',
+                  'bg-yellow-500/70': playerRig.rig.tier === 'advanced',
+                  'bg-gray-400/70': playerRig.rig.tier === 'standard',
+                  'bg-amber-600/70': playerRig.rig.tier === 'basic'
+                }"
               ></div>
 
-              <!-- Mining effect overlay -->
-              <div v-if="playerRig.is_active" class="mining-effect"></div>
+              <!-- Mining indicator dot -->
+              <div v-if="playerRig.is_active" class="absolute top-3 right-3">
+                <span class="relative flex h-2.5 w-2.5">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-success opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-status-success"></span>
+                </span>
+              </div>
 
-              <div class="relative z-10">
-                <!-- Header -->
-                <div class="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 class="font-bold text-lg" :class="getTierColor(playerRig.rig.tier)">
-                      {{ playerRig.rig.name }}
-                    </h3>
-                    <span class="text-xs text-text-muted uppercase">{{ playerRig.rig.tier }}</span>
-                  </div>
-                  <div
-                    class="px-3 py-1 rounded-full text-xs font-bold"
-                    :class="playerRig.is_active
-                      ? 'bg-status-success/20 text-status-success'
-                      : 'bg-bg-tertiary text-text-muted'"
-                  >
-                    {{ playerRig.is_active ? '● ' + t('mining.mining') : '○ ' + t('mining.off') }}
-                  </div>
+              <!-- Header -->
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <h3 class="font-semibold" :class="getTierColor(playerRig.rig.tier)">
+                    {{ getRigName(playerRig.rig.id) }}
+                  </h3>
                 </div>
+                <span class="text-[11px] text-text-muted uppercase px-2 py-0.5 bg-bg-tertiary/50 rounded">
+                  {{ playerRig.rig.tier }}
+                </span>
+              </div>
 
-                <!-- Hashrate Display -->
-                <div class="bg-bg-primary/50 rounded-xl p-4 mb-4">
-                  <div class="text-center">
+              <!-- Hashrate -->
+              <div class="flex items-baseline gap-1.5 mb-3">
+                <span
+                  class="text-xl font-bold font-mono"
+                  :class="playerRig.is_active ? (getRigPenaltyPercent(playerRig) > 0 ? 'text-status-warning' : 'text-white') : 'text-text-muted'"
+                  :key="uptimeKey"
+                >
+                  {{ playerRig.is_active ? Math.round(getRigEffectiveHashrate(playerRig)).toLocaleString() : '0' }}
+                </span>
+                <span class="text-sm text-text-muted">/ {{ playerRig.rig.hashrate.toLocaleString() }} H/s</span>
+              </div>
+
+              <!-- Stats row -->
+              <div class="flex items-center gap-4 text-xs text-text-muted mb-3">
+                <span class="flex items-center gap-1">
+                  <span class="text-status-warning">⚡</span>{{ playerRig.rig.power_consumption }}/t
+                  <span v-if="getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger">(+{{ getPowerPenaltyPercent(playerRig) }}%)</span>
+                </span>
+                <span class="flex items-center gap-1">
+                  <span class="text-accent-tertiary">📡</span>{{ playerRig.rig.internet_consumption }}/t
+                </span>
+                <span v-if="rigCooling[playerRig.id]?.length > 0" class="flex items-center gap-1">
+                  <span class="text-cyan-400">❄️</span>{{ rigCooling[playerRig.id][0].durability.toFixed(0) }}%
+                </span>
+                <span v-if="playerRig.is_active && playerRig.activated_at" class="flex items-center gap-1 ml-auto" :key="uptimeKey">
+                  ⏱️ {{ formatUptime(playerRig.activated_at) }}
+                </span>
+              </div>
+
+              <!-- Bars -->
+              <div class="space-y-2 mb-3">
+                <!-- Temperature -->
+                <div class="flex items-center gap-2">
+                  <span class="text-xs text-text-muted w-6">🌡️</span>
+                  <div class="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
                     <div
-                      class="text-2xl font-bold font-mono flex items-baseline justify-center gap-1"
-                      :class="playerRig.is_active ? 'text-white' : 'text-text-muted'"
-                      :key="uptimeKey"
-                    >
-                      <span :class="getRigPenaltyPercent(playerRig) > 0 ? 'text-status-warning' : ''">
-                        {{ Math.round(getRigEffectiveHashrate(playerRig)).toLocaleString() }}
-                      </span>
-                      <span class="text-text-muted text-lg">/</span>
-                      <span class="text-text-muted text-lg">{{ playerRig.rig.hashrate.toLocaleString() }}</span>
-                    </div>
-                    <div class="text-xs text-text-muted">HASHRATE (H/s)</div>
-                  </div>
-
-                  <!-- Uptime display when active -->
-                  <div v-if="playerRig.is_active && playerRig.activated_at" class="mt-3 text-center" :key="uptimeKey">
-                    <div class="text-xs text-text-muted mb-1">{{ t('mining.uptime') }}</div>
-                    <div class="text-sm font-mono text-accent-primary">
-                      ⏱️ {{ formatUptime(playerRig.activated_at) }}
-                    </div>
-                  </div>
-
-                  <!-- Mini progress when active -->
-                  <div v-if="playerRig.is_active" class="mt-3">
-                    <div class="xp-bar">
-                      <div class="xp-bar-fill" :style="{ width: `${miningProgress}%` }"></div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Stats -->
-                <div class="grid grid-cols-2 gap-2 mb-4 text-sm">
-                  <div class="flex items-center gap-1">
-                    <span class="text-status-warning">⚡</span>
-                    <span class="text-xs text-text-muted">
-                      {{ playerRig.rig.power_consumption }}/t
-                      <span v-if="getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger font-medium">
-                        (+{{ getPowerPenaltyPercent(playerRig) }}%)
-                      </span>
-                    </span>
-                  </div>
-                  <div class="flex items-center gap-1">
-                    <span class="text-accent-tertiary">📡</span>
-                    <span class="text-text-muted text-xs">{{ playerRig.rig.internet_consumption }}/t</span>
-                  </div>
-                </div>
-
-                <!-- Cooling Display -->
-                <div class="flex items-center justify-between mb-3 px-2 py-1.5 rounded-lg"
-                     :class="rigCooling[playerRig.id]?.length > 0 ? 'bg-cyan-500/10' : 'bg-bg-tertiary/50'">
-                  <div class="flex items-center gap-1.5">
-                    <span>❄️</span>
-                    <span class="text-xs" :class="rigCooling[playerRig.id]?.length > 0 ? 'text-cyan-400' : 'text-text-muted'">
-                      {{ rigCooling[playerRig.id]?.length > 0 ? t('mining.cooling') : t('mining.noCooling') }}
-                    </span>
-                  </div>
-                  <div v-if="rigCooling[playerRig.id]?.length > 0" class="flex items-center gap-2">
-                    <div v-for="cooling in rigCooling[playerRig.id]" :key="cooling.id"
-                         class="flex items-center gap-1 text-xs"
-                         :title="cooling.name">
-                      <span class="text-cyan-400 font-medium">{{ cooling.durability.toFixed(0) }}%</span>
-                    </div>
-                  </div>
-                  <span v-else class="text-xs text-status-danger">⚠️</span>
-                </div>
-
-                <!-- Temperature Bar -->
-                <div class="mb-3">
-                  <div class="flex justify-between text-xs mb-1">
-                    <span class="text-text-muted flex items-center gap-1">
-                      🌡️ {{ t('mining.temperature') }}
-                    </span>
-                    <span :class="getTempColor(playerRig.temperature ?? 25)">
-                      {{ (playerRig.temperature ?? 25).toFixed(1) }}°C
-                      <span class="text-text-muted ml-1">({{ getTempStatus(playerRig.temperature ?? 25) }})</span>
-                    </span>
-                  </div>
-                  <div class="progress-bar h-2">
-                    <div
-                      class="progress-bar-fill transition-all"
+                      class="h-full rounded-full transition-all"
                       :class="getTempBarColor(playerRig.temperature ?? 25)"
                       :style="{ width: `${playerRig.temperature ?? 25}%` }"
                     ></div>
                   </div>
+                  <span class="text-xs w-14 text-right" :class="getTempColor(playerRig.temperature ?? 25)">
+                    {{ (playerRig.temperature ?? 25).toFixed(0) }}°C
+                  </span>
                 </div>
-
-                <!-- Condition Bar -->
-                <div class="mb-4">
-                  <div class="flex justify-between text-xs mb-1">
-                    <span class="text-text-muted">{{ t('mining.condition') }}</span>
-                    <span :class="playerRig.condition < 30 ? 'text-status-danger' : 'text-white'">
-                      {{ playerRig.condition }}%
-                    </span>
-                  </div>
-                  <div class="progress-bar h-2">
+                <!-- Condition -->
+                <div class="flex items-center gap-2">
+                  <span class="text-xs text-text-muted w-6">🔧</span>
+                  <div class="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
                     <div
-                      class="progress-bar-fill"
+                      class="h-full rounded-full"
                       :class="playerRig.condition > 50 ? 'bg-status-success' : playerRig.condition > 20 ? 'bg-status-warning' : 'bg-status-danger'"
                       :style="{ width: `${playerRig.condition}%` }"
                     ></div>
                   </div>
+                  <span class="text-xs w-14 text-right" :class="playerRig.condition < 30 ? 'text-status-danger' : 'text-text-muted'">
+                    {{ playerRig.condition }}%
+                  </span>
                 </div>
+              </div>
 
-                <!-- Actions -->
-                <div class="flex gap-2">
-                  <button
-                    @click="handleToggleRig(playerRig.id)"
-                    :disabled="playerRig.condition <= 0"
-                    class="flex-1 py-2.5 rounded-xl font-medium transition-all disabled:opacity-50"
-                    :class="playerRig.condition <= 0
-                      ? 'bg-status-danger/20 text-status-danger cursor-not-allowed'
-                      : playerRig.is_active
-                        ? 'bg-status-danger/20 text-status-danger hover:bg-status-danger/30'
-                        : 'bg-status-success/20 text-status-success hover:bg-status-success/30'"
-                  >
-                    {{ playerRig.condition <= 0 ? '🔧 ' + t('mining.repairInInventory') : (playerRig.is_active ? '⏹ ' + t('mining.stop') : '▶ ' + t('mining.start')) }}
-                  </button>
-                </div>
+              <!-- Action buttons -->
+              <div class="flex gap-2">
+                <button
+                  @click="handleToggleRig(playerRig.id)"
+                  :disabled="playerRig.condition <= 0"
+                  class="flex-1 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+                  :class="playerRig.condition <= 0
+                    ? 'bg-status-danger/10 text-status-danger cursor-not-allowed'
+                    : playerRig.is_active
+                      ? 'bg-status-danger/10 text-status-danger hover:bg-status-danger/20'
+                      : 'bg-status-success/10 text-status-success hover:bg-status-success/20'"
+                >
+                  {{ playerRig.condition <= 0 ? '🔧 ' + t('mining.repairInInventory') : (playerRig.is_active ? '⏹ ' + t('mining.stop') : '▶ ' + t('mining.start')) }}
+                </button>
+                <button
+                  @click="openRigManage(playerRig)"
+                  class="px-3 py-2 rounded-lg text-sm font-medium transition-all bg-bg-tertiary hover:bg-bg-tertiary/80 text-text-muted hover:text-white"
+                  :title="t('mining.manage')"
+                >
+                  ⚙️
+                </button>
               </div>
             </div>
           </div>
@@ -706,38 +778,36 @@ onUnmounted(() => {
         <!-- Sidebar -->
         <div class="space-y-4">
           <!-- Recent Blocks -->
-          <div class="card">
-            <h3 class="font-semibold mb-4 flex items-center gap-2">
+          <div class="card p-3">
+            <h3 class="text-sm font-semibold mb-2 flex items-center gap-1.5 text-text-muted">
               <span>📦</span> {{ t('mining.recentBlocks') }}
             </h3>
 
-            <div v-if="recentBlocks.length === 0" class="text-center py-6 text-text-muted text-sm">
+            <div v-if="recentBlocks.length === 0" class="text-center py-4 text-text-muted text-xs">
               {{ t('mining.noBlocks') }}
             </div>
 
-            <div v-else class="space-y-2">
+            <div v-else class="space-y-1.5">
               <div
                 v-for="(block, index) in recentBlocks"
                 :key="block.id"
-                class="flex items-center justify-between p-3 rounded-lg transition-colors"
-                :class="block.miner?.id === authStore.player?.id ? 'bg-status-success/10 border border-status-success/30' : 'bg-bg-secondary'"
+                class="px-2.5 py-2 rounded-lg"
+                :class="block.miner?.id === authStore.player?.id ? 'bg-status-success/10 border border-status-success/20' : 'bg-bg-secondary/50'"
               >
-                <div class="flex items-center gap-3">
-                  <div
-                    class="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
-                    :class="index === 0 ? 'bg-gradient-primary text-white' : 'bg-bg-tertiary text-text-muted'"
-                  >
-                    {{ index === 0 ? '🆕' : index + 1 }}
+                <!-- Row 1: Height + Time -->
+                <div class="flex items-center justify-between mb-1">
+                  <div class="flex items-center gap-1.5">
+                    <span v-if="index === 0" class="text-xs">🆕</span>
+                    <span class="font-mono text-sm font-medium" :class="block.miner?.id === authStore.player?.id ? 'text-status-success' : 'text-accent-primary'">#{{ block.height }}</span>
                   </div>
-                  <div>
-                    <div class="font-mono font-medium text-accent-primary">#{{ block.height }}</div>
-                    <div class="text-xs text-text-muted">
-                      {{ block.miner?.id === authStore.player?.id ? t('mining.you') : block.miner?.username ?? t('mining.unknown') }}
-                    </div>
-                  </div>
+                  <span class="text-[10px] text-text-muted" :key="uptimeKey">{{ formatTimeAgo(block.created_at) }}</span>
                 </div>
-                <div v-if="block.miner?.id === authStore.player?.id" class="text-status-success text-xl">
-                  ⭐
+                <!-- Row 2: Miner + Reward -->
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-text-muted truncate max-w-[100px]">
+                    {{ block.miner?.id === authStore.player?.id ? '⭐ ' + t('mining.you') : block.miner?.username ?? t('mining.unknown') }}
+                  </span>
+                  <span class="font-mono text-status-warning">+{{ getBlockReward(block.height).toFixed(0) }} ₿</span>
                 </div>
               </div>
             </div>
@@ -777,6 +847,35 @@ onUnmounted(() => {
       @close="showMarket = false"
       @purchased="loadData"
     />
+
+    <!-- Inventory Modal -->
+    <InventoryModal
+      :show="showInventory"
+      @close="showInventory = false"
+      @used="loadData"
+    />
+
+    <!-- Exchange Modal -->
+    <ExchangeModal
+      :show="showExchange"
+      @close="showExchange = false"
+      @exchanged="authStore.fetchPlayer()"
+    />
+
+    <!-- Prepaid Cards Panel -->
+    <PrepaidCardsPanel
+      :show="showRecharge"
+      @close="showRecharge = false"
+      @redeemed="authStore.fetchPlayer()"
+    />
+
+    <!-- Rig Manage Modal -->
+    <RigManageModal
+      :show="showRigManage"
+      :rig="selectedRigForManage"
+      @close="closeRigManage"
+      @updated="loadData"
+    />
   </div>
 </template>
 
@@ -786,21 +885,4 @@ onUnmounted(() => {
   100% { transform: translateX(100%); }
 }
 
-.mining-effect {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(139, 92, 246, 0.08) 50%,
-    transparent 100%
-  );
-  animation: mining-scan 2s ease-in-out infinite;
-}
-
-@keyframes mining-scan {
-  0%, 100% { transform: translateY(-100%); }
-  50% { transform: translateY(100%); }
-}
 </style>

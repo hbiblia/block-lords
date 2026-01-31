@@ -43,6 +43,7 @@ const confirmAction = ref<{
   name: string;
   price: number;
   description: string;
+  currency: 'gamecoin' | 'crypto';
 } | null>(null);
 
 // Processing modal state
@@ -80,6 +81,7 @@ const prepaidCards = ref<Array<{
   amount: number;
   base_price: number;
   tier: string;
+  currency: 'gamecoin' | 'crypto';
 }>>([]);
 
 // Rigs que ya tiene el jugador
@@ -90,6 +92,7 @@ const playerCoolingIds = ref<string[]>([]);
 const inventoryCoolingIds = ref<string[]>([]);
 
 const balance = computed(() => authStore.player?.gamecoin_balance ?? 0);
+const cryptoBalance = computed(() => authStore.player?.crypto_balance ?? 0);
 
 // Filtrar rigs disponibles (que no tiene)
 const rigsForSale = computed(() =>
@@ -117,6 +120,43 @@ function getTierBorder(tier: string) {
     case 'elite': return 'border-yellow-500/30';
     default: return 'border-border/50';
   }
+}
+
+// Translation helpers for market items
+function getRigName(id: string): string {
+  const key = `market.items.rigs.${id}.name`;
+  const translated = t(key);
+  return translated !== key ? translated : id;
+}
+
+function getRigDescription(id: string): string {
+  const key = `market.items.rigs.${id}.description`;
+  const translated = t(key);
+  return translated !== key ? translated : '';
+}
+
+function getCoolingName(id: string): string {
+  const key = `market.items.cooling.${id}.name`;
+  const translated = t(key);
+  return translated !== key ? translated : id;
+}
+
+function getCoolingDescription(id: string): string {
+  const key = `market.items.cooling.${id}.description`;
+  const translated = t(key);
+  return translated !== key ? translated : '';
+}
+
+function getCardName(id: string): string {
+  const key = `market.items.cards.${id}.name`;
+  const translated = t(key);
+  return translated !== key ? translated : id;
+}
+
+function getCardDescription(id: string): string {
+  const key = `market.items.cards.${id}.description`;
+  const translated = t(key);
+  return translated !== key ? translated : '';
 }
 
 async function loadData() {
@@ -177,9 +217,10 @@ function requestBuyRig(rig: typeof availableRigs.value[0]) {
   confirmAction.value = {
     type: 'rig',
     id: rig.id,
-    name: rig.name,
+    name: getRigName(rig.id),
     price: rig.base_price,
     description: `${rig.hashrate.toLocaleString()} H/s - ${rig.tier}`,
+    currency: 'gamecoin',
   };
   showConfirm.value = true;
 }
@@ -221,9 +262,10 @@ function requestBuyCooling(item: typeof coolingItems.value[0]) {
   confirmAction.value = {
     type: 'cooling',
     id: item.id,
-    name: item.name,
+    name: getCoolingName(item.id),
     price: item.base_price,
-    description: `-${item.cooling_power}°C refrigeracion - ${item.tier}`,
+    description: `-${item.cooling_power}°C ${t('market.cooling_suffix')} - ${item.tier}`,
+    currency: 'gamecoin',
   };
   showConfirm.value = true;
 }
@@ -265,9 +307,10 @@ function requestBuyCard(card: typeof prepaidCards.value[0]) {
   confirmAction.value = {
     type: 'card',
     id: card.id,
-    name: card.name,
+    name: getCardName(card.id),
     price: card.base_price,
-    description: `+${card.amount}% ${card.card_type === 'energy' ? 'Energia' : 'Internet'}`,
+    description: `+${card.amount}% ${card.card_type === 'energy' ? t('market.energy') : t('market.internet')}`,
+    currency: card.currency || 'gamecoin',
   };
   showConfirm.value = true;
 }
@@ -366,8 +409,10 @@ watch(() => props.show, (newVal) => {
             <span class="gradient-text">{{ t('market.title') }}</span>
           </h2>
           <div class="flex items-center gap-4">
-            <span class="text-sm text-text-muted">
-              {{ t('market.balance') }} <span class="font-bold text-status-warning">{{ balance.toFixed(0) }} 🪙</span>
+            <span class="text-sm text-text-muted flex items-center gap-3">
+              {{ t('market.balance') }}
+              <span class="font-bold text-status-warning">{{ balance.toFixed(0) }} 🪙</span>
+              <span class="font-bold text-accent-primary">{{ cryptoBalance.toFixed(2) }} 💎</span>
             </span>
             <button
               @click="emit('close')"
@@ -440,7 +485,7 @@ watch(() => props.show, (newVal) => {
                   <div>
                     <h3 class="font-medium flex items-center gap-2">
                       <span class="text-xl">⛏️</span>
-                      {{ rig.name }}
+                      {{ getRigName(rig.id) }}
                     </h3>
                     <span
                       class="text-xs uppercase tracking-wider"
@@ -454,7 +499,7 @@ watch(() => props.show, (newVal) => {
                   </span>
                 </div>
 
-                <p class="text-xs text-text-muted mb-3">{{ rig.description }}</p>
+                <p class="text-xs text-text-muted mb-3">{{ getRigDescription(rig.id) }}</p>
 
                 <div class="grid grid-cols-3 gap-2 text-xs mb-4">
                   <div class="bg-bg-primary rounded-lg p-2 text-center">
@@ -505,7 +550,7 @@ watch(() => props.show, (newVal) => {
                   <div>
                     <h3 class="font-medium flex items-center gap-2">
                       <span class="text-xl">❄️</span>
-                      {{ item.name }}
+                      {{ getCoolingName(item.id) }}
                     </h3>
                     <span
                       class="text-xs uppercase tracking-wider"
@@ -519,7 +564,7 @@ watch(() => props.show, (newVal) => {
                   </span>
                 </div>
 
-                <p class="text-xs text-text-muted mb-4">{{ item.description }}</p>
+                <p class="text-xs text-text-muted mb-4">{{ getCoolingDescription(item.id) }}</p>
 
                 <button
                   v-if="playerCoolingIds.includes(item.id)"
@@ -566,21 +611,25 @@ watch(() => props.show, (newVal) => {
                   v-for="card in energyCards"
                   :key="card.id"
                   class="bg-bg-secondary rounded-xl p-4 border border-border/50 hover:border-status-warning/50 transition-colors"
+                  :class="card.tier === 'elite' ? 'ring-1 ring-accent-primary/50' : ''"
                 >
                   <div class="flex items-center justify-between mb-2">
-                    <span class="font-medium">{{ card.name }}</span>
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium">{{ getCardName(card.id) }}</span>
+                      <span v-if="card.tier === 'elite'" class="text-xs px-1.5 py-0.5 rounded bg-accent-primary/20 text-accent-primary">ELITE</span>
+                    </div>
                     <span class="text-status-warning font-bold">+{{ card.amount }}%</span>
                   </div>
-                  <p class="text-xs text-text-muted mb-3">{{ card.description }}</p>
+                  <p class="text-xs text-text-muted mb-3">{{ getCardDescription(card.id) }}</p>
                   <button
                     @click="requestBuyCard(card)"
                     class="w-full py-2 rounded-lg font-medium transition-all"
-                    :class="balance >= card.base_price
+                    :class="(card.currency === 'crypto' ? cryptoBalance : balance) >= card.base_price
                       ? 'bg-status-warning/20 text-status-warning hover:bg-status-warning/30'
                       : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-                    :disabled="buying || balance < card.base_price"
+                    :disabled="buying || (card.currency === 'crypto' ? cryptoBalance : balance) < card.base_price"
                   >
-                    {{ buying ? '...' : `${card.base_price} 🪙` }}
+                    {{ buying ? '...' : `${card.base_price} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
                   </button>
                 </div>
               </div>
@@ -596,21 +645,25 @@ watch(() => props.show, (newVal) => {
                   v-for="card in internetCards"
                   :key="card.id"
                   class="bg-bg-secondary rounded-xl p-4 border border-border/50 hover:border-accent-tertiary/50 transition-colors"
+                  :class="card.tier === 'elite' ? 'ring-1 ring-accent-primary/50' : ''"
                 >
                   <div class="flex items-center justify-between mb-2">
-                    <span class="font-medium">{{ card.name }}</span>
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium">{{ getCardName(card.id) }}</span>
+                      <span v-if="card.tier === 'elite'" class="text-xs px-1.5 py-0.5 rounded bg-accent-primary/20 text-accent-primary">ELITE</span>
+                    </div>
                     <span class="text-accent-tertiary font-bold">+{{ card.amount }}%</span>
                   </div>
-                  <p class="text-xs text-text-muted mb-3">{{ card.description }}</p>
+                  <p class="text-xs text-text-muted mb-3">{{ getCardDescription(card.id) }}</p>
                   <button
                     @click="requestBuyCard(card)"
                     class="w-full py-2 rounded-lg font-medium transition-all"
-                    :class="balance >= card.base_price
+                    :class="(card.currency === 'crypto' ? cryptoBalance : balance) >= card.base_price
                       ? 'bg-accent-tertiary/20 text-accent-tertiary hover:bg-accent-tertiary/30'
                       : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-                    :disabled="buying || balance < card.base_price"
+                    :disabled="buying || (card.currency === 'crypto' ? cryptoBalance : balance) < card.base_price"
                   >
-                    {{ buying ? '...' : `${card.base_price} 🪙` }}
+                    {{ buying ? '...' : `${card.base_price} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
                   </button>
                 </div>
               </div>
@@ -638,17 +691,26 @@ watch(() => props.show, (newVal) => {
             <div class="text-xs text-text-muted mb-2">{{ confirmAction.description }}</div>
             <div class="flex items-center justify-between">
               <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.price') }}</span>
-              <span class="font-bold text-status-warning">{{ confirmAction.price.toLocaleString() }} 🪙</span>
+              <span class="font-bold" :class="confirmAction.currency === 'crypto' ? 'text-accent-primary' : 'text-status-warning'">
+                {{ confirmAction.price.toLocaleString() }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
+              </span>
             </div>
             <div class="flex items-center justify-between mt-1">
               <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.yourBalance') }}</span>
-              <span class="font-mono" :class="balance >= confirmAction.price ? 'text-status-success' : 'text-status-danger'">
-                {{ balance.toFixed(0) }} 🪙
+              <span
+                class="font-mono"
+                :class="(confirmAction.currency === 'crypto' ? cryptoBalance : balance) >= confirmAction.price ? 'text-status-success' : 'text-status-danger'"
+              >
+                {{ confirmAction.currency === 'crypto' ? cryptoBalance.toFixed(2) : balance.toFixed(0) }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
               </span>
             </div>
             <div class="flex items-center justify-between mt-1 pt-2 border-t border-border/50">
               <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.after') }}</span>
-              <span class="font-mono text-white">{{ (balance - confirmAction.price).toFixed(0) }} 🪙</span>
+              <span class="font-mono text-white">
+                {{ confirmAction.currency === 'crypto'
+                  ? (cryptoBalance - confirmAction.price).toFixed(2)
+                  : (balance - confirmAction.price).toFixed(0) }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
+              </span>
             </div>
           </div>
 

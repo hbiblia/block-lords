@@ -387,3 +387,75 @@ export async function getExchangeRates() {
   return data;
 }
 
+// === ENGAGEMENT (REGENERACIÓN PASIVA) ===
+
+export async function applyPassiveRegeneration(playerId: string) {
+  const { data, error } = await supabase.rpc('apply_passive_regeneration', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// === STREAK (RACHA DIARIA) ===
+
+export async function getStreakStatus(playerId: string) {
+  const { data, error } = await supabase.rpc('get_streak_status', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function claimDailyStreak(playerId: string) {
+  const { data, error } = await supabase.rpc('claim_daily_streak', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// === MISIONES DIARIAS ===
+
+export async function getDailyMissions(playerId: string) {
+  const { data, error } = await supabase.rpc('get_daily_missions', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function claimMissionReward(playerId: string, missionUuid: string) {
+  const { data, error } = await supabase.rpc('claim_mission_reward', {
+    p_player_id: playerId,
+    p_mission_uuid: missionUuid,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function recordOnlineHeartbeat(playerId: string) {
+  const { data, error } = await supabase.rpc('record_online_heartbeat', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateMissionProgress(playerId: string, missionType: string, increment: number) {
+  const { data, error } = await supabase.rpc('update_mission_progress', {
+    p_player_id: playerId,
+    p_mission_type: missionType,
+    p_increment: increment,
+  });
+
+  if (error) throw error;
+  return data;
+}
+

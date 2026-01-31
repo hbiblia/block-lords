@@ -63,34 +63,38 @@ ON CONFLICT (id) DO UPDATE SET
   tier = EXCLUDED.tier;
 
 -- Insertar tarjetas prepago de energía
-INSERT INTO prepaid_cards (id, name, description, card_type, amount, base_price, tier)
+INSERT INTO prepaid_cards (id, name, description, card_type, amount, base_price, tier, currency)
 VALUES
-  ('energy_10', 'Energía +10', 'Recarga básica de energía.', 'energy', 10, 25, 'basic'),
-  ('energy_25', 'Energía +25', 'Recarga estándar de energía.', 'energy', 25, 60, 'basic'),
-  ('energy_50', 'Energía +50', 'Recarga premium de energía.', 'energy', 50, 110, 'standard'),
-  ('energy_full', 'Energía MAX', 'Recarga completa de energía al 100%.', 'energy', 100, 200, 'standard')
+  ('energy_10', 'Energía +10', 'Recarga básica de energía.', 'energy', 10, 75, 'basic', 'gamecoin'),
+  ('energy_25', 'Energía +25', 'Recarga estándar de energía.', 'energy', 25, 175, 'basic', 'gamecoin'),
+  ('energy_50', 'Energía +50', 'Recarga premium de energía.', 'energy', 50, 320, 'standard', 'gamecoin'),
+  ('energy_full', 'Energía MAX', 'Recarga completa de energía al 100%.', 'energy', 100, 580, 'standard', 'gamecoin'),
+  ('energy_ultra', 'Energía ULTRA', 'Recarga de energía premium. Incluye +25 capacidad máxima.', 'energy', 150, 2500, 'elite', 'crypto')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
   card_type = EXCLUDED.card_type,
   amount = EXCLUDED.amount,
   base_price = EXCLUDED.base_price,
-  tier = EXCLUDED.tier;
+  tier = EXCLUDED.tier,
+  currency = EXCLUDED.currency;
 
 -- Insertar tarjetas prepago de internet
-INSERT INTO prepaid_cards (id, name, description, card_type, amount, base_price, tier)
+INSERT INTO prepaid_cards (id, name, description, card_type, amount, base_price, tier, currency)
 VALUES
-  ('internet_10', 'Internet +10', 'Recarga básica de datos.', 'internet', 10, 20, 'basic'),
-  ('internet_25', 'Internet +25', 'Recarga estándar de datos.', 'internet', 25, 50, 'basic'),
-  ('internet_50', 'Internet +50', 'Recarga premium de datos.', 'internet', 50, 90, 'standard'),
-  ('internet_full', 'Internet MAX', 'Recarga completa de internet al 100%.', 'internet', 100, 160, 'standard')
+  ('internet_10', 'Internet +10', 'Recarga básica de datos.', 'internet', 10, 60, 'basic', 'gamecoin'),
+  ('internet_25', 'Internet +25', 'Recarga estándar de datos.', 'internet', 25, 140, 'basic', 'gamecoin'),
+  ('internet_50', 'Internet +50', 'Recarga premium de datos.', 'internet', 50, 260, 'standard', 'gamecoin'),
+  ('internet_full', 'Internet MAX', 'Recarga completa de internet al 100%.', 'internet', 100, 480, 'standard', 'gamecoin'),
+  ('internet_ultra', 'Internet ULTRA', 'Recarga de internet premium. Incluye +25 capacidad máxima.', 'internet', 150, 2500, 'elite', 'crypto')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
   card_type = EXCLUDED.card_type,
   amount = EXCLUDED.amount,
   base_price = EXCLUDED.base_price,
-  tier = EXCLUDED.tier;
+  tier = EXCLUDED.tier,
+  currency = EXCLUDED.currency;
 
 -- Insertar estadísticas iniciales de la red
 INSERT INTO network_stats (id, difficulty, hashrate)

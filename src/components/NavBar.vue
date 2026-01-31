@@ -9,12 +9,6 @@ import { toggleLocale, getLocale } from '@/plugins/i18n';
 
 const { t } = useI18n();
 
-const emit = defineEmits<{
-  recharge: [];
-  inventory: [];
-  exchange: [];
-}>();
-
 const router = useRouter();
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
@@ -81,23 +75,12 @@ async function handleLogout() {
               <span class="font-medium">{{ authStore.player?.gamecoin_balance?.toFixed(2) ?? '0.00' }}</span>
             </div>
             <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg">
-              <span class="text-accent-tertiary">₿</span>
-              <span class="font-medium">{{ authStore.player?.crypto_balance?.toFixed(4) ?? '0.0000' }}</span>
+              <span class="text-accent-primary">💎</span>
+              <span class="font-medium">{{ authStore.player?.crypto_balance?.toFixed(2) ?? '0.00' }}</span>
             </div>
-            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg">
-              <span class="text-purple-400">💎</span>
-              <span class="font-medium">{{ authStore.player?.ron_balance?.toFixed(4) ?? '0.0000' }}</span>
-            </div>
-            <button
-              @click="emit('exchange')"
-              class="px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-all flex items-center gap-1"
-              :title="t('nav.exchange')"
-            >
-              💱 <span class="hidden lg:inline">{{ t('nav.exchange') }}</span>
-            </button>
 
             <!-- Energy Bar -->
-            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg min-w-[140px]">
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg min-w-[120px]">
               <span :class="{ 'animate-pulse': miningStore.isMining }">⚡</span>
               <div class="flex-1">
                 <div
@@ -124,11 +107,11 @@ async function handleLogout() {
                   'text-status-danger animate-pulse': energyStatus === 'critical',
                   'text-status-warning': energyStatus !== 'critical'
                 }"
-              >{{ energy.toFixed(0) }}/{{ maxEnergy.toFixed(0) }}</span>
+              >{{ energy.toFixed(0) }}</span>
             </div>
 
             <!-- Internet Bar -->
-            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg min-w-[140px]">
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg min-w-[120px]">
               <span :class="{ 'animate-pulse': miningStore.isMining }">📡</span>
               <div class="flex-1">
                 <div
@@ -155,29 +138,8 @@ async function handleLogout() {
                   'text-status-danger animate-pulse': internetStatus === 'critical',
                   'text-accent-tertiary': internetStatus !== 'critical'
                 }"
-              >{{ internet.toFixed(0) }}/{{ maxInternet.toFixed(0) }}</span>
+              >{{ internet.toFixed(0) }}</span>
             </div>
-
-            <!-- Recharge Button -->
-            <button
-              @click="emit('recharge')"
-              class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1"
-              :class="energyStatus === 'critical' || internetStatus === 'critical'
-                ? 'bg-status-danger text-white animate-pulse'
-                : 'bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30'"
-              :title="t('nav.recharge')"
-            >
-              + <span class="hidden lg:inline">{{ t('nav.recharge') }}</span>
-            </button>
-
-            <!-- Inventory Button -->
-            <button
-              @click="emit('inventory')"
-              class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-bg-tertiary hover:bg-bg-tertiary/80 flex items-center gap-1"
-              :title="t('nav.inventory')"
-            >
-              🎒 <span class="hidden lg:inline">{{ t('nav.inventory') }}</span>
-            </button>
           </div>
 
           <!-- Profile Dropdown -->
@@ -203,6 +165,13 @@ async function handleLogout() {
                 {{ t('nav.profile') }}
               </RouterLink>
               <button
+                @click="handleToggleLocale"
+                class="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary transition-colors"
+              >
+                <span class="w-4 h-4 flex items-center justify-center text-sm">{{ currentLocale === 'en' ? '🇪🇸' : '🇺🇸' }}</span>
+                {{ currentLocale === 'en' ? 'Español' : 'English' }}
+              </button>
+              <button
                 @click="handleLogout"
                 class="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary transition-colors text-status-danger rounded-b-lg"
               >
@@ -216,19 +185,18 @@ async function handleLogout() {
         </template>
 
         <template v-else>
+          <!-- Language Selector for non-authenticated users -->
+          <button
+            @click="handleToggleLocale"
+            class="px-2 py-1.5 text-xs font-medium rounded-lg bg-bg-tertiary hover:bg-bg-tertiary/80 transition-all"
+            :title="currentLocale === 'en' ? 'Switch to Spanish' : 'Cambiar a Inglés'"
+          >
+            {{ currentLocale === 'en' ? '🇺🇸 EN' : '🇪🇸 ES' }}
+          </button>
           <RouterLink to="/login" class="btn-primary">
             {{ t('nav.login') }}
           </RouterLink>
         </template>
-
-        <!-- Language Selector -->
-        <button
-          @click="handleToggleLocale"
-          class="px-2 py-1.5 text-xs font-medium rounded-lg bg-bg-tertiary hover:bg-bg-tertiary/80 transition-all"
-          :title="currentLocale === 'en' ? 'Switch to Spanish' : 'Cambiar a Inglés'"
-        >
-          {{ currentLocale === 'en' ? '🇺🇸 EN' : '🇪🇸 ES' }}
-        </button>
       </div>
     </div>
   </nav>

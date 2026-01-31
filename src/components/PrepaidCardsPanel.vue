@@ -1,9 +1,24 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getPrepaidCards, getPlayerCards, buyPrepaidCard, redeemPrepaidCard } from '@/utils/api';
 
+const { t } = useI18n();
 const authStore = useAuthStore();
+
+// Translation helpers for card names
+function getCardName(id: string): string {
+  const key = `market.items.cards.${id}.name`;
+  const translated = t(key);
+  return translated !== key ? translated : id;
+}
+
+function getCardDescription(id: string): string {
+  const key = `market.items.cards.${id}.description`;
+  const translated = t(key);
+  return translated !== key ? translated : '';
+}
 
 const props = defineProps<{
   show: boolean;
@@ -40,6 +55,7 @@ const availableCards = ref<Array<{
   amount: number;
   base_price: number;
   tier: string;
+  currency: 'gamecoin' | 'crypto';
 }>>([]);
 
 // Tarjetas del jugador
@@ -260,7 +276,7 @@ watch(() => props.show, (newVal) => {
                   <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-2">
                       <span class="text-xl">{{ card.card_type === 'energy' ? '⚡' : '📡' }}</span>
-                      <span class="font-medium">{{ card.name }}</span>
+                      <span class="font-medium">{{ getCardName(card.card_id) }}</span>
                     </div>
                     <span
                       class="text-lg font-bold"
@@ -312,18 +328,22 @@ watch(() => props.show, (newVal) => {
                   v-for="card in energyCards"
                   :key="card.id"
                   class="bg-bg-secondary rounded-xl p-4 border border-border/50 hover:border-status-warning/50 transition-colors"
+                  :class="card.tier === 'elite' ? 'ring-1 ring-accent-primary/50' : ''"
                 >
                   <div class="flex items-center justify-between mb-2">
-                    <span class="font-medium">{{ card.name }}</span>
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium">{{ getCardName(card.id) }}</span>
+                      <span v-if="card.tier === 'elite'" class="text-xs px-1.5 py-0.5 rounded bg-accent-primary/20 text-accent-primary">ELITE</span>
+                    </div>
                     <span class="text-status-warning font-bold">+{{ card.amount }}</span>
                   </div>
-                  <p class="text-xs text-text-muted mb-3">{{ card.description }}</p>
+                  <p class="text-xs text-text-muted mb-3">{{ getCardDescription(card.id) }}</p>
                   <button
                     @click="handleBuyCard(card.id)"
                     class="w-full py-2 rounded-lg bg-status-warning/20 text-status-warning hover:bg-status-warning/30 transition-colors font-medium"
-                    :disabled="buying || (authStore.player?.gamecoin_balance ?? 0) < card.base_price"
+                    :disabled="buying || (card.currency === 'crypto' ? (authStore.player?.crypto_balance ?? 0) < card.base_price : (authStore.player?.gamecoin_balance ?? 0) < card.base_price)"
                   >
-                    {{ buying ? '...' : `${card.base_price} 🪙` }}
+                    {{ buying ? '...' : `${card.base_price} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
                   </button>
                 </div>
               </div>
@@ -339,18 +359,22 @@ watch(() => props.show, (newVal) => {
                   v-for="card in internetCards"
                   :key="card.id"
                   class="bg-bg-secondary rounded-xl p-4 border border-border/50 hover:border-accent-tertiary/50 transition-colors"
+                  :class="card.tier === 'elite' ? 'ring-1 ring-accent-primary/50' : ''"
                 >
                   <div class="flex items-center justify-between mb-2">
-                    <span class="font-medium">{{ card.name }}</span>
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium">{{ getCardName(card.id) }}</span>
+                      <span v-if="card.tier === 'elite'" class="text-xs px-1.5 py-0.5 rounded bg-accent-primary/20 text-accent-primary">ELITE</span>
+                    </div>
                     <span class="text-accent-tertiary font-bold">+{{ card.amount }}</span>
                   </div>
-                  <p class="text-xs text-text-muted mb-3">{{ card.description }}</p>
+                  <p class="text-xs text-text-muted mb-3">{{ getCardDescription(card.id) }}</p>
                   <button
                     @click="handleBuyCard(card.id)"
                     class="w-full py-2 rounded-lg bg-accent-tertiary/20 text-accent-tertiary hover:bg-accent-tertiary/30 transition-colors font-medium"
-                    :disabled="buying || (authStore.player?.gamecoin_balance ?? 0) < card.base_price"
+                    :disabled="buying || (card.currency === 'crypto' ? (authStore.player?.crypto_balance ?? 0) < card.base_price : (authStore.player?.gamecoin_balance ?? 0) < card.base_price)"
                   >
-                    {{ buying ? '...' : `${card.base_price} 🪙` }}
+                    {{ buying ? '...' : `${card.base_price} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
                   </button>
                 </div>
               </div>
@@ -362,9 +386,14 @@ watch(() => props.show, (newVal) => {
         <div class="p-4 border-t border-border/50 bg-bg-secondary">
           <div class="flex items-center justify-between text-sm">
             <span class="text-text-muted">Tu balance:</span>
-            <span class="font-bold text-status-warning">
-              {{ authStore.player?.gamecoin_balance?.toFixed(0) ?? 0 }} 🪙
-            </span>
+            <div class="flex items-center gap-4">
+              <span class="font-bold text-status-warning">
+                {{ authStore.player?.gamecoin_balance?.toFixed(0) ?? 0 }} 🪙
+              </span>
+              <span class="font-bold text-accent-primary">
+                {{ authStore.player?.crypto_balance?.toFixed(2) ?? 0 }} 💎
+              </span>
+            </div>
           </div>
         </div>
       </div>
