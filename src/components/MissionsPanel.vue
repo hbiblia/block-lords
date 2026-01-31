@@ -2,6 +2,7 @@
 import { watch, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMissionsStore } from '@/stores/missions';
+import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 const missionsStore = useMissionsStore();
@@ -29,7 +30,10 @@ onUnmounted(() => {
 });
 
 async function handleClaim(missionId: string) {
-  await missionsStore.claimReward(missionId);
+  const result = await missionsStore.claimReward(missionId);
+  if (result) {
+    playSound('mission_complete');
+  }
 }
 
 function handleClose() {

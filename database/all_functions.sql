@@ -114,6 +114,9 @@ DROP FUNCTION IF EXISTS assign_daily_missions(UUID) CASCADE;
 DROP FUNCTION IF EXISTS update_mission_progress(UUID, TEXT, NUMERIC) CASCADE;
 DROP FUNCTION IF EXISTS claim_mission_reward(UUID, UUID) CASCADE;
 DROP FUNCTION IF EXISTS record_online_heartbeat(UUID) CASCADE;
+DROP FUNCTION IF EXISTS get_player_slot_info(UUID) CASCADE;
+DROP FUNCTION IF EXISTS buy_rig_slot(UUID) CASCADE;
+DROP FUNCTION IF EXISTS get_rig_slot_upgrades() CASCADE;
 
 -- =====================================================
 -- 1. FUNCIONES DE UTILIDAD
@@ -675,6 +678,7 @@ DECLARE
   v_player players%ROWTYPE;
   v_rig rigs%ROWTYPE;
   v_existing_count INT;
+  v_total_rigs INT;
 BEGIN
   -- Verificar jugador
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
@@ -702,6 +706,20 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Ya tienes este rig');
   END IF;
 
+  -- Verificar slots disponibles
+  SELECT COUNT(*) INTO v_total_rigs
+  FROM player_rigs
+  WHERE player_id = p_player_id;
+
+  IF v_total_rigs >= v_player.rig_slots THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'No tienes slots disponibles. Compra más slots para agregar rigs.',
+      'slots_used', v_total_rigs,
+      'slots_total', v_player.rig_slots
+    );
+  END IF;
+
   -- Verificar balance
   IF v_player.gamecoin_balance < v_rig.base_price THEN
     RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
@@ -723,7 +741,163 @@ BEGIN
 
   RETURN json_build_object(
     'success', true,
-    'rig', row_to_json(v_rig)
+    'rig', row_to_json(v_rig),
+    'slots_used', v_total_rigs + 1,
+    'slots_total', v_player.rig_slots
+  );
+END;
+$$;
+
+-- =====================================================
+-- FUNCIONES DE SLOTS DE RIGS
+-- =====================================================
+
+-- Obtener lista de upgrades de slots disponibles
+CREATE OR REPLACE FUNCTION get_rig_slot_upgrades()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(u) ORDER BY u.slot_number), '[]'::JSON)
+    FROM rig_slot_upgrades u
+  );
+END;
+$$;
+
+-- Obtener información de slots del jugador
+CREATE OR REPLACE FUNCTION get_player_slot_info(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_rigs_count INT;
+  v_next_upgrade rig_slot_upgrades%ROWTYPE;
+BEGIN
+  -- Obtener jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Contar rigs actuales
+  SELECT COUNT(*) INTO v_rigs_count
+  FROM player_rigs
+  WHERE player_id = p_player_id;
+
+  -- Obtener siguiente upgrade disponible
+  SELECT * INTO v_next_upgrade
+  FROM rig_slot_upgrades
+  WHERE slot_number = v_player.rig_slots + 1;
+
+  RETURN json_build_object(
+    'success', true,
+    'current_slots', v_player.rig_slots,
+    'used_slots', v_rigs_count,
+    'available_slots', v_player.rig_slots - v_rigs_count,
+    'max_slots', 20,
+    'next_upgrade', CASE
+      WHEN v_next_upgrade IS NOT NULL THEN json_build_object(
+        'slot_number', v_next_upgrade.slot_number,
+        'price', v_next_upgrade.price,
+        'currency', v_next_upgrade.currency,
+        'name', v_next_upgrade.name,
+        'description', v_next_upgrade.description
+      )
+      ELSE NULL
+    END
+  );
+END;
+$$;
+
+-- Comprar un slot adicional
+CREATE OR REPLACE FUNCTION buy_rig_slot(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_upgrade rig_slot_upgrades%ROWTYPE;
+  v_new_slots INT;
+BEGIN
+  -- Obtener jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Verificar si ya tiene el máximo
+  IF v_player.rig_slots >= 20 THEN
+    RETURN json_build_object('success', false, 'error', 'Ya tienes el máximo de slots (20)');
+  END IF;
+
+  -- Obtener el precio del siguiente slot
+  SELECT * INTO v_upgrade
+  FROM rig_slot_upgrades
+  WHERE slot_number = v_player.rig_slots + 1;
+
+  IF v_upgrade IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Upgrade no disponible');
+  END IF;
+
+  -- Verificar balance según la moneda requerida
+  IF v_upgrade.currency = 'gamecoin' THEN
+    IF v_player.gamecoin_balance < v_upgrade.price THEN
+      RETURN json_build_object(
+        'success', false,
+        'error', 'GameCoin insuficiente',
+        'required', v_upgrade.price,
+        'current', v_player.gamecoin_balance
+      );
+    END IF;
+
+    -- Descontar GameCoin
+    UPDATE players
+    SET gamecoin_balance = gamecoin_balance - v_upgrade.price
+    WHERE id = p_player_id;
+
+    -- Registrar transacción
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'slot_purchase', -v_upgrade.price, 'gamecoin',
+            'Compra de ' || v_upgrade.name);
+
+  ELSIF v_upgrade.currency = 'crypto' THEN
+    IF v_player.crypto_balance < v_upgrade.price THEN
+      RETURN json_build_object(
+        'success', false,
+        'error', 'Crypto insuficiente',
+        'required', v_upgrade.price,
+        'current', v_player.crypto_balance
+      );
+    END IF;
+
+    -- Descontar Crypto
+    UPDATE players
+    SET crypto_balance = crypto_balance - v_upgrade.price
+    WHERE id = p_player_id;
+
+    -- Registrar transacción
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'slot_purchase', -v_upgrade.price, 'crypto',
+            'Compra de ' || v_upgrade.name);
+  END IF;
+
+  -- Aumentar slots
+  v_new_slots := v_player.rig_slots + 1;
+  UPDATE players
+  SET rig_slots = v_new_slots
+  WHERE id = p_player_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'new_slots', v_new_slots,
+    'purchased', v_upgrade.name,
+    'price_paid', v_upgrade.price,
+    'currency', v_upgrade.currency
   );
 END;
 $$;
@@ -969,6 +1143,12 @@ DECLARE
   v_deterioration NUMERIC;
   v_base_deterioration NUMERIC;
   v_ambient_temp NUMERIC := 25;  -- Temperatura ambiente base
+  -- Boost multipliers
+  v_boosts JSON;
+  v_energy_mult NUMERIC;
+  v_internet_mult NUMERIC;
+  v_temp_mult NUMERIC;
+  v_durability_mult NUMERIC;
 BEGIN
   -- Solo procesar jugadores que están ONLINE (en el juego)
   FOR v_player IN
@@ -979,6 +1159,13 @@ BEGIN
   LOOP
     v_total_power := 0;
     v_total_internet := 0;
+
+    -- Obtener multiplicadores de boosts activos
+    v_boosts := get_active_boost_multipliers(v_player.id);
+    v_energy_mult := COALESCE((v_boosts->>'energy')::NUMERIC, 1.0);
+    v_internet_mult := COALESCE((v_boosts->>'internet')::NUMERIC, 1.0);
+    v_temp_mult := COALESCE((v_boosts->>'temperature')::NUMERIC, 1.0);
+    v_durability_mult := COALESCE((v_boosts->>'durability')::NUMERIC, 1.0);
 
     -- Procesar cada rig activo individualmente
     FOR v_rig IN
@@ -1006,29 +1193,34 @@ BEGIN
       v_total_internet := v_total_internet + v_rig.internet_consumption;
 
       -- Calcular aumento de temperatura basado en consumo de energía
-      -- Más consumo = más calor generado
-      -- SIN REFRIGERACIÓN: el rig se calienta MUCHO más rápido (3x)
+      -- Calentamiento GRADUAL para que no sea abrupto
+      -- Sin cooling: 1-2 min para llegar a temperatura peligrosa
+      -- Con cooling apropiado: se mantiene estable
+      -- Aplicar multiplicador de boost de coolant_injection
       IF v_rig_cooling_power <= 0 THEN
-        -- Sin cooling: calentamiento agresivo
-        v_temp_increase := v_rig.power_consumption * 2.5;
+        -- Sin cooling: calentamiento gradual (max 10°C por tick)
+        -- Minero Básico (2.5): +1.25°C/tick → peligro en ~8 min
+        -- ASIC S19 (18): +9°C/tick → peligro en ~1 min
+        -- Quantum (55): +10°C/tick (cap) → peligro en ~1 min
+        v_temp_increase := LEAST(v_rig.power_consumption * 0.5, 10) * v_temp_mult;
       ELSE
-        -- Con cooling: calentamiento normal menos el poder de refrigeración
-        v_temp_increase := v_rig.power_consumption * 0.8;
-        v_temp_increase := GREATEST(0, v_temp_increase - v_rig_cooling_power);
+        -- Con cooling: calentamiento reducido menos poder de refrigeración
+        v_temp_increase := v_rig.power_consumption * 0.3;
+        v_temp_increase := GREATEST(0, v_temp_increase - v_rig_cooling_power) * v_temp_mult;
       END IF;
 
       -- Calcular nueva temperatura
       v_new_temp := v_rig.temperature + v_temp_increase;
 
       -- Enfriamiento pasivo hacia temperatura ambiente
-      -- Sin refrigeración: enfriamiento pasivo muy reducido
       IF v_new_temp > v_ambient_temp THEN
         IF v_rig_cooling_power <= 0 THEN
-          -- Sin cooling: enfriamiento pasivo mínimo (0.2 por tick)
-          v_new_temp := v_new_temp - 0.2;
+          -- Sin cooling: enfriamiento pasivo mínimo (1°C por tick)
+          v_new_temp := v_new_temp - 1.0;
         ELSE
-          -- Con cooling: enfriamiento pasivo normal + bonus por refrigeración
-          v_new_temp := v_new_temp - (0.5 + (v_rig_cooling_power * 0.2));
+          -- Con cooling: enfriamiento basado en poder de refrigeración
+          -- Cooling fuerte = enfriamiento rápido hacia temp ambiente
+          v_new_temp := v_new_temp - (1.0 + (v_rig_cooling_power * 0.1));
         END IF;
         v_new_temp := GREATEST(v_ambient_temp, v_new_temp);
       END IF;
@@ -1036,27 +1228,42 @@ BEGIN
       -- Limitar temperatura máxima a 100
       v_new_temp := LEAST(100, v_new_temp);
 
-      -- Calcular deterioro BASE por uso (siempre hay un poco de desgaste)
-      v_base_deterioration := 0.02;  -- 0.02% por tick base
+      -- Calcular deterioro BASE por uso según consumo de energía
+      -- SIN COOLING: 5-10 min según power_consumption
+      --   power=1: 1.7% por tick = ~10 min
+      --   power=10: 3.5% por tick = ~5 min
+      -- CON COOLING: 20-40 min (reduce desgaste 4x)
+      --   power=1: 0.4% por tick = ~40 min
+      --   power=10: 0.9% por tick = ~20 min
+      v_base_deterioration := 1.5 + (v_rig.power_consumption * 0.2);
+
+      -- Con cooling instalado: reducir desgaste significativamente (4x menos)
+      IF v_rig_cooling_power > 0 THEN
+        v_base_deterioration := v_base_deterioration / 4.0;
+      END IF;
 
       -- Deterioro EXTRA basado en temperatura (ESCALADO AGRESIVO)
       -- Cuanto más caliente, exponencialmente más daño
-      -- < 50°C: solo desgaste base (0.02%)
-      -- 50-70°C: daño moderado que escala (hasta ~0.5%)
-      -- 70-85°C: daño severo (hasta ~2%)
-      -- 85-100°C: daño CRÍTICO exponencial (hasta ~7% a 100°C)
+      -- < 50°C: solo desgaste base
+      -- 50-70°C: daño moderado (+10-50%)
+      -- 70-85°C: daño severo (+50-150%)
+      -- 85-100°C: daño CRÍTICO exponencial
+      -- Aplicar multiplicador de boost de durability_shield al final
       IF v_new_temp >= 85 THEN
-        -- Daño crítico: escala exponencialmente - a 100°C = ~7% por tick
-        v_deterioration := v_base_deterioration + 2.0 + POWER((v_new_temp - 85) / 15.0, 2) * 5.0;
+        -- Daño crítico: escala exponencialmente
+        v_deterioration := v_base_deterioration * (1.5 + POWER((v_new_temp - 85) / 15.0, 2) * 3.0);
       ELSIF v_new_temp >= 70 THEN
         -- Daño severo: escala rápidamente
-        v_deterioration := v_base_deterioration + 0.5 + ((v_new_temp - 70) * 0.1);
+        v_deterioration := v_base_deterioration * (1.0 + 0.5 + ((v_new_temp - 70) * 0.07));
       ELSIF v_new_temp >= 50 THEN
         -- Daño moderado
-        v_deterioration := v_base_deterioration + 0.05 + ((v_new_temp - 50) * 0.02);
+        v_deterioration := v_base_deterioration * (1.0 + ((v_new_temp - 50) * 0.025));
       ELSE
         v_deterioration := v_base_deterioration;  -- Solo desgaste base
       END IF;
+
+      -- Aplicar multiplicador de boost de durability_shield
+      v_deterioration := v_deterioration * v_durability_mult;
 
       -- Aplicar deterioro y actualizar temperatura
       UPDATE player_rigs
@@ -1066,8 +1273,10 @@ BEGIN
 
       -- Consumir durabilidad de la refrigeración instalada en este rig
       -- La refrigeración se desgasta más rápido si la temperatura es alta
+      -- ~30 min de duración a temperatura normal (0.5% base = ~33 min)
+      -- A alta temperatura se degrada más rápido
       UPDATE rig_cooling
-      SET durability = GREATEST(0, durability - (0.1 + (GREATEST(0, v_new_temp - 40) * 0.005)))
+      SET durability = GREATEST(0, durability - (0.5 + (GREATEST(0, v_new_temp - 40) * 0.02)))
       WHERE player_rig_id = v_rig.id AND durability > 0;
 
       -- Eliminar refrigeración agotada
@@ -1086,8 +1295,9 @@ BEGIN
 
     -- Calcular nuevo nivel de energía e internet
     -- Internet consume más rápido que energía (incentiva comprar tarjetas de internet)
-    v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.1));
-    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.15));
+    -- Aplicar multiplicadores de boost de energy_saver y bandwidth_optimizer
+    v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.1 * v_energy_mult));
+    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.15 * v_internet_mult));
 
     -- Actualizar recursos del jugador
     UPDATE players
@@ -1137,6 +1347,13 @@ DECLARE
   v_random_pick NUMERIC;
   v_temp_penalty NUMERIC;
   v_condition_penalty NUMERIC;
+  -- Boost multipliers
+  v_boosts JSON;
+  v_hashrate_mult NUMERIC;
+  v_luck_mult NUMERIC;
+  v_current_player_id UUID := NULL;
+  v_total_luck_mult NUMERIC := 1.0;
+  v_luck_count INTEGER := 0;
 BEGIN
   SELECT COALESCE(ns.difficulty, 1000) INTO v_difficulty FROM network_stats ns WHERE ns.id = 'current';
   IF v_difficulty IS NULL THEN v_difficulty := 1000; END IF;
@@ -1149,6 +1366,19 @@ BEGIN
     JOIN players p ON p.id = pr.player_id
     WHERE pr.is_active = true AND p.is_online = true AND p.energy > 0 AND p.internet > 0
   LOOP
+    -- Obtener multiplicadores de boost (caché por jugador)
+    IF v_current_player_id IS DISTINCT FROM v_rig.player_id THEN
+      v_boosts := get_active_boost_multipliers(v_rig.player_id);
+      v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
+      v_luck_mult := COALESCE((v_boosts->>'luck')::NUMERIC, 1.0);
+      v_current_player_id := v_rig.player_id;
+      -- Acumular luck multiplier para probabilidad de bloque
+      IF v_luck_mult > 1.0 THEN
+        v_total_luck_mult := v_total_luck_mult + (v_luck_mult - 1.0);
+        v_luck_count := v_luck_count + 1;
+      END IF;
+    END IF;
+
     -- Multiplicador de reputación
     IF v_rig.reputation_score >= 80 THEN
       v_rep_multiplier := 1 + (v_rig.reputation_score - 80) * 0.01;
@@ -1170,7 +1400,8 @@ BEGIN
     -- 100% condición = 100% hashrate, 0% condición = 20% hashrate
     v_condition_penalty := 0.2 + (v_rig.condition / 100.0) * 0.8;
 
-    v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty;
+    -- Aplicar multiplicador de boost de hashrate
+    v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty * v_hashrate_mult;
     v_network_hashrate := v_network_hashrate + v_effective_hashrate;
   END LOOP;
 
@@ -1184,8 +1415,12 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Probabilidad de minar
-  v_block_probability := v_network_hashrate / v_difficulty;
+  -- Probabilidad de minar (aplicar multiplicador de luck promedio si hay boosts activos)
+  -- El luck multiplier aumenta la probabilidad global de encontrar un bloque
+  IF v_luck_count > 0 THEN
+    v_total_luck_mult := v_total_luck_mult / v_luck_count;
+  END IF;
+  v_block_probability := (v_network_hashrate / v_difficulty) * v_total_luck_mult;
   v_roll := random();
 
   IF v_roll > v_block_probability THEN
@@ -1193,9 +1428,10 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Seleccionar ganador (con mismas penalizaciones)
+  -- Seleccionar ganador (con mismas penalizaciones y boosts)
   v_random_pick := random() * v_network_hashrate;
   v_hashrate_sum := 0;
+  v_current_player_id := NULL;
 
   FOR v_rig IN
     SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score
@@ -1204,6 +1440,13 @@ BEGIN
     JOIN players p ON p.id = pr.player_id
     WHERE pr.is_active = true AND p.is_online = true AND p.energy > 0 AND p.internet > 0
   LOOP
+    -- Obtener multiplicador de hashrate del boost (caché por jugador)
+    IF v_current_player_id IS DISTINCT FROM v_rig.player_id THEN
+      v_boosts := get_active_boost_multipliers(v_rig.player_id);
+      v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
+      v_current_player_id := v_rig.player_id;
+    END IF;
+
     IF v_rig.reputation_score >= 80 THEN
       v_rep_multiplier := 1 + (v_rig.reputation_score - 80) * 0.01;
     ELSIF v_rig.reputation_score < 50 THEN
@@ -1220,7 +1463,8 @@ BEGIN
 
     v_condition_penalty := 0.2 + (v_rig.condition / 100.0) * 0.8;
 
-    v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty;
+    -- Aplicar multiplicador de boost de hashrate
+    v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty * v_hashrate_mult;
     v_hashrate_sum := v_hashrate_sum + v_effective_hashrate;
 
     IF v_hashrate_sum >= v_random_pick THEN
@@ -2666,6 +2910,7 @@ $$;
 -- =====================================================
 
 -- Asignar misiones diarias a un jugador
+-- Asigna: 1 fácil + 2 medias + 1 difícil + 25% chance de 1 épica
 CREATE OR REPLACE FUNCTION assign_daily_missions(p_player_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -2675,10 +2920,11 @@ DECLARE
   v_today DATE := CURRENT_DATE;
   v_existing_count INTEGER;
   v_easy_mission missions%ROWTYPE;
-  v_medium_missions missions[];
   v_hard_mission missions%ROWTYPE;
+  v_epic_mission missions%ROWTYPE;
   v_mission missions%ROWTYPE;
   v_assigned_count INTEGER := 0;
+  v_epic_chance FLOAT := 0.25; -- 25% de probabilidad de misión épica
 BEGIN
   -- Verificar si ya tiene misiones asignadas hoy
   SELECT COUNT(*) INTO v_existing_count
@@ -2734,6 +2980,22 @@ BEGIN
     VALUES (p_player_id, v_hard_mission.id, v_today)
     ON CONFLICT (player_id, mission_id, assigned_date) DO NOTHING;
     v_assigned_count := v_assigned_count + 1;
+  END IF;
+
+  -- 25% de probabilidad de obtener una misión ÉPICA como bonus
+  IF RANDOM() < v_epic_chance THEN
+    SELECT * INTO v_epic_mission
+    FROM missions
+    WHERE difficulty = 'epic'
+    ORDER BY RANDOM()
+    LIMIT 1;
+
+    IF v_epic_mission.id IS NOT NULL THEN
+      INSERT INTO player_missions (player_id, mission_id, assigned_date)
+      VALUES (p_player_id, v_epic_mission.id, v_today)
+      ON CONFLICT (player_id, mission_id, assigned_date) DO NOTHING;
+      v_assigned_count := v_assigned_count + 1;
+    END IF;
   END IF;
 
   RETURN json_build_object('success', true, 'assigned', v_assigned_count);
@@ -2957,5 +3219,356 @@ BEGIN
   END IF;
 
   RETURN json_build_object('success', true, 'minutesOnline', v_tracking.minutes_online, 'added', 0);
+END;
+$$;
+
+-- =====================================================
+-- BOOST ITEMS SYSTEM
+-- Temporary power-ups for mining performance
+-- =====================================================
+
+-- Catálogo de boost items disponibles
+CREATE TABLE IF NOT EXISTS boost_items (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  boost_type TEXT NOT NULL CHECK (boost_type IN (
+    'hashrate',           -- +X% hashrate
+    'energy_saver',       -- -X% energy consumption
+    'bandwidth_optimizer',-- -X% internet consumption
+    'lucky_charm',        -- +X% block probability
+    'overclock',          -- +X% hashrate, +Y% energy consumption
+    'coolant_injection',  -- -X% temperature gain
+    'durability_shield'   -- -X% condition deterioration
+  )),
+  effect_value NUMERIC NOT NULL,          -- Primary effect percentage
+  secondary_value NUMERIC DEFAULT 0,      -- Secondary effect for overclock
+  duration_minutes INTEGER NOT NULL,       -- Duration in minutes
+  base_price DECIMAL(10, 2) NOT NULL CHECK (base_price >= 0),
+  currency TEXT NOT NULL DEFAULT 'gamecoin' CHECK (currency IN ('gamecoin', 'crypto')),
+  tier TEXT NOT NULL CHECK (tier IN ('basic', 'standard', 'advanced', 'elite')),
+  is_stackable BOOLEAN DEFAULT false,
+  max_stack INTEGER DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Boosts en inventario del jugador
+CREATE TABLE IF NOT EXISTS player_boosts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  boost_id TEXT NOT NULL REFERENCES boost_items(id),
+  quantity INTEGER DEFAULT 1,
+  purchased_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(player_id, boost_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_boosts_player ON player_boosts(player_id);
+
+-- Boosts activos
+CREATE TABLE IF NOT EXISTS active_boosts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  boost_id TEXT NOT NULL REFERENCES boost_items(id),
+  activated_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  stack_count INTEGER DEFAULT 1,
+  UNIQUE(player_id, boost_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_active_boosts_player ON active_boosts(player_id);
+CREATE INDEX IF NOT EXISTS idx_active_boosts_expires ON active_boosts(expires_at);
+
+-- Seed data para boost items (all crypto, max 5 min duration, prices 1000+)
+-- First delete old boost items to allow new IDs
+DELETE FROM boost_items WHERE id LIKE 'hashrate_%' OR id LIKE 'energy_saver_%' OR id LIKE 'bandwidth_%'
+  OR id LIKE 'lucky_%' OR id LIKE 'overclock_%' OR id LIKE 'coolant_%' OR id LIKE 'durability_%';
+
+INSERT INTO boost_items (id, name, description, boost_type, effect_value, secondary_value, duration_minutes, base_price, currency, tier, is_stackable, max_stack) VALUES
+-- Hashrate Boosters
+('hashrate_small', 'Minor Hash Boost', '+10% hashrate for 1 minute', 'hashrate', 10, 0, 1, 1200, 'crypto', 'basic', false, 1),
+('hashrate_medium', 'Hash Boost', '+25% hashrate for 3 minutes', 'hashrate', 25, 0, 3, 3000, 'crypto', 'standard', false, 1),
+('hashrate_large', 'Mega Hash Boost', '+50% hashrate for 5 minutes', 'hashrate', 50, 0, 5, 6500, 'crypto', 'elite', false, 1),
+
+-- Energy Savers
+('energy_saver_small', 'Power Saver', '-15% energy consumption for 1 minute', 'energy_saver', 15, 0, 1, 1000, 'crypto', 'basic', false, 1),
+('energy_saver_medium', 'Eco Mode', '-25% energy consumption for 3 minutes', 'energy_saver', 25, 0, 3, 2500, 'crypto', 'standard', false, 1),
+('energy_saver_large', 'Green Mining', '-40% energy consumption for 5 minutes', 'energy_saver', 40, 0, 5, 5500, 'crypto', 'elite', false, 1),
+
+-- Bandwidth Optimizers
+('bandwidth_small', 'Data Optimizer', '-15% internet consumption for 1 minute', 'bandwidth_optimizer', 15, 0, 1, 1000, 'crypto', 'basic', false, 1),
+('bandwidth_medium', 'Network Boost', '-25% internet consumption for 3 minutes', 'bandwidth_optimizer', 25, 0, 3, 2500, 'crypto', 'standard', false, 1),
+('bandwidth_large', 'Fiber Mode', '-40% internet consumption for 5 minutes', 'bandwidth_optimizer', 40, 0, 5, 5500, 'crypto', 'elite', false, 1),
+
+-- Lucky Charms (more expensive - affects block probability)
+('lucky_small', 'Lucky Coin', '+5% block probability for 1 minute', 'lucky_charm', 5, 0, 1, 2000, 'crypto', 'basic', false, 1),
+('lucky_medium', 'Fortune Token', '+10% block probability for 3 minutes', 'lucky_charm', 10, 0, 3, 5000, 'crypto', 'standard', false, 1),
+('lucky_large', 'Jackpot Charm', '+20% block probability for 5 minutes', 'lucky_charm', 20, 0, 5, 12000, 'crypto', 'elite', false, 1),
+
+-- Overclock Mode (hashrate boost + energy penalty)
+('overclock_small', 'Overclock Lite', '+25% hashrate, +15% energy for 1 minute', 'overclock', 25, 15, 1, 1500, 'crypto', 'basic', false, 1),
+('overclock_medium', 'Overclock Pro', '+40% hashrate, +25% energy for 3 minutes', 'overclock', 40, 25, 3, 3500, 'crypto', 'standard', false, 1),
+('overclock_large', 'Overclock Max', '+60% hashrate, +35% energy for 5 minutes', 'overclock', 60, 35, 5, 7500, 'crypto', 'elite', false, 1),
+
+-- Coolant Injection
+('coolant_small', 'Cooling Gel', '-20% temperature gain for 1 minute', 'coolant_injection', 20, 0, 1, 1200, 'crypto', 'basic', false, 1),
+('coolant_medium', 'Cryo Fluid', '-35% temperature gain for 3 minutes', 'coolant_injection', 35, 0, 3, 3000, 'crypto', 'standard', false, 1),
+('coolant_large', 'Liquid Nitrogen', '-50% temperature gain for 5 minutes', 'coolant_injection', 50, 0, 5, 6500, 'crypto', 'elite', false, 1),
+
+-- Durability Shield
+('durability_small', 'Wear Guard', '-20% condition deterioration for 1 minute', 'durability_shield', 20, 0, 1, 1200, 'crypto', 'basic', false, 1),
+('durability_medium', 'Shield Coat', '-35% condition deterioration for 3 minutes', 'durability_shield', 35, 0, 3, 3000, 'crypto', 'standard', false, 1),
+('durability_large', 'Diamond Shell', '-50% condition deterioration for 5 minutes', 'durability_shield', 50, 0, 5, 6500, 'crypto', 'elite', false, 1)
+ON CONFLICT (id) DO NOTHING;
+
+-- Obtener todos los boost items disponibles
+DROP FUNCTION IF EXISTS get_boost_items() CASCADE;
+CREATE OR REPLACE FUNCTION get_boost_items()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.boost_type, t.base_price), '[]'::JSON)
+    FROM (
+      SELECT id, name, description, boost_type, effect_value, secondary_value,
+             duration_minutes, base_price, currency, tier, is_stackable, max_stack
+      FROM boost_items
+      ORDER BY boost_type, base_price ASC
+    ) t
+  );
+END;
+$$;
+
+-- Obtener boosts del jugador (inventario y activos)
+DROP FUNCTION IF EXISTS get_player_boosts(UUID) CASCADE;
+CREATE OR REPLACE FUNCTION get_player_boosts(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Limpiar boosts expirados
+  DELETE FROM active_boosts WHERE expires_at <= NOW();
+
+  RETURN json_build_object(
+    'inventory', (
+      SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+      FROM (
+        SELECT pb.id, pb.quantity, pb.purchased_at,
+               bi.id as boost_id, bi.name, bi.description, bi.boost_type,
+               bi.effect_value, bi.secondary_value, bi.duration_minutes, bi.tier
+        FROM player_boosts pb
+        JOIN boost_items bi ON bi.id = pb.boost_id
+        WHERE pb.player_id = p_player_id AND pb.quantity > 0
+        ORDER BY bi.boost_type, bi.tier
+      ) t
+    ),
+    'active', (
+      SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+      FROM (
+        SELECT ab.id, ab.activated_at, ab.expires_at, ab.stack_count,
+               bi.id as boost_id, bi.name, bi.description, bi.boost_type,
+               bi.effect_value, bi.secondary_value, bi.duration_minutes, bi.tier,
+               EXTRACT(EPOCH FROM (ab.expires_at - NOW())) as seconds_remaining
+        FROM active_boosts ab
+        JOIN boost_items bi ON bi.id = ab.boost_id
+        WHERE ab.player_id = p_player_id AND ab.expires_at > NOW()
+        ORDER BY ab.expires_at ASC
+      ) t
+    )
+  );
+END;
+$$;
+
+-- Comprar boost (agregar al inventario)
+DROP FUNCTION IF EXISTS buy_boost(UUID, TEXT) CASCADE;
+CREATE OR REPLACE FUNCTION buy_boost(p_player_id UUID, p_boost_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_boost boost_items%ROWTYPE;
+BEGIN
+  -- Verificar jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+
+  -- Verificar boost
+  SELECT * INTO v_boost FROM boost_items WHERE id = p_boost_id;
+  IF v_boost IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Boost not found');
+  END IF;
+
+  -- Verificar balance según moneda
+  IF v_boost.currency = 'crypto' THEN
+    IF v_player.crypto_balance < v_boost.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'Insufficient Crypto');
+    END IF;
+
+    UPDATE players
+    SET crypto_balance = crypto_balance - v_boost.base_price
+    WHERE id = p_player_id;
+  ELSE
+    IF v_player.gamecoin_balance < v_boost.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'Insufficient GameCoin');
+    END IF;
+
+    UPDATE players
+    SET gamecoin_balance = gamecoin_balance - v_boost.base_price
+    WHERE id = p_player_id;
+  END IF;
+
+  -- Registrar transacción
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'boost_purchase', -v_boost.base_price, v_boost.currency,
+          'Boost purchase: ' || v_boost.name);
+
+  -- Agregar al inventario
+  INSERT INTO player_boosts (player_id, boost_id, quantity)
+  VALUES (p_player_id, p_boost_id, 1)
+  ON CONFLICT (player_id, boost_id)
+  DO UPDATE SET quantity = player_boosts.quantity + 1;
+
+  RETURN json_build_object(
+    'success', true,
+    'boost', row_to_json(v_boost),
+    'message', 'Boost added to inventory'
+  );
+END;
+$$;
+
+-- Activar boost (usar del inventario)
+DROP FUNCTION IF EXISTS activate_boost(UUID, TEXT) CASCADE;
+CREATE OR REPLACE FUNCTION activate_boost(p_player_id UUID, p_boost_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_inventory player_boosts%ROWTYPE;
+  v_boost boost_items%ROWTYPE;
+  v_existing active_boosts%ROWTYPE;
+  v_expires_at TIMESTAMPTZ;
+BEGIN
+  -- Verificar inventario
+  SELECT * INTO v_inventory
+  FROM player_boosts
+  WHERE player_id = p_player_id AND boost_id = p_boost_id;
+
+  IF v_inventory IS NULL OR v_inventory.quantity <= 0 THEN
+    RETURN json_build_object('success', false, 'error', 'Boost not in inventory');
+  END IF;
+
+  -- Obtener detalles del boost
+  SELECT * INTO v_boost FROM boost_items WHERE id = p_boost_id;
+
+  -- Verificar si ya está activo
+  SELECT * INTO v_existing
+  FROM active_boosts
+  WHERE player_id = p_player_id AND boost_id = p_boost_id AND expires_at > NOW();
+
+  IF v_existing IS NOT NULL THEN
+    IF NOT v_boost.is_stackable OR v_existing.stack_count >= v_boost.max_stack THEN
+      RETURN json_build_object('success', false, 'error', 'Boost already active');
+    END IF;
+
+    -- Stackear: extender duración
+    UPDATE active_boosts
+    SET expires_at = expires_at + (v_boost.duration_minutes || ' minutes')::INTERVAL,
+        stack_count = stack_count + 1
+    WHERE id = v_existing.id;
+
+    v_expires_at := v_existing.expires_at + (v_boost.duration_minutes || ' minutes')::INTERVAL;
+  ELSE
+    -- Calcular expiración
+    v_expires_at := NOW() + (v_boost.duration_minutes || ' minutes')::INTERVAL;
+
+    -- Crear nuevo boost activo
+    INSERT INTO active_boosts (player_id, boost_id, activated_at, expires_at, stack_count)
+    VALUES (p_player_id, p_boost_id, NOW(), v_expires_at, 1);
+  END IF;
+
+  -- Remover del inventario
+  IF v_inventory.quantity > 1 THEN
+    UPDATE player_boosts
+    SET quantity = quantity - 1
+    WHERE id = v_inventory.id;
+  ELSE
+    DELETE FROM player_boosts WHERE id = v_inventory.id;
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'boost', row_to_json(v_boost),
+    'expires_at', v_expires_at,
+    'message', 'Boost activated!'
+  );
+END;
+$$;
+
+-- Obtener multiplicadores de boosts activos (para game tick)
+DROP FUNCTION IF EXISTS get_active_boost_multipliers(UUID) CASCADE;
+CREATE OR REPLACE FUNCTION get_active_boost_multipliers(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_hashrate_mult NUMERIC := 1.0;
+  v_energy_mult NUMERIC := 1.0;
+  v_internet_mult NUMERIC := 1.0;
+  v_luck_mult NUMERIC := 1.0;
+  v_temp_mult NUMERIC := 1.0;
+  v_durability_mult NUMERIC := 1.0;
+  v_boost RECORD;
+BEGIN
+  -- Limpiar boosts expirados
+  DELETE FROM active_boosts WHERE expires_at <= NOW();
+
+  -- Calcular multiplicadores de todos los boosts activos
+  FOR v_boost IN
+    SELECT bi.boost_type, bi.effect_value, bi.secondary_value, ab.stack_count
+    FROM active_boosts ab
+    JOIN boost_items bi ON bi.id = ab.boost_id
+    WHERE ab.player_id = p_player_id AND ab.expires_at > NOW()
+  LOOP
+    CASE v_boost.boost_type
+      WHEN 'hashrate' THEN
+        v_hashrate_mult := v_hashrate_mult + (v_boost.effect_value / 100.0) * v_boost.stack_count;
+      WHEN 'energy_saver' THEN
+        v_energy_mult := v_energy_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
+      WHEN 'bandwidth_optimizer' THEN
+        v_internet_mult := v_internet_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
+      WHEN 'lucky_charm' THEN
+        v_luck_mult := v_luck_mult + (v_boost.effect_value / 100.0) * v_boost.stack_count;
+      WHEN 'overclock' THEN
+        v_hashrate_mult := v_hashrate_mult + (v_boost.effect_value / 100.0) * v_boost.stack_count;
+        v_energy_mult := v_energy_mult + (v_boost.secondary_value / 100.0) * v_boost.stack_count;
+      WHEN 'coolant_injection' THEN
+        v_temp_mult := v_temp_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
+      WHEN 'durability_shield' THEN
+        v_durability_mult := v_durability_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
+    END CASE;
+  END LOOP;
+
+  -- Asegurar que los multiplicadores no bajen demasiado
+  v_energy_mult := GREATEST(0.1, v_energy_mult);
+  v_internet_mult := GREATEST(0.1, v_internet_mult);
+  v_temp_mult := GREATEST(0.1, v_temp_mult);
+  v_durability_mult := GREATEST(0.1, v_durability_mult);
+
+  RETURN json_build_object(
+    'hashrate', v_hashrate_mult,
+    'energy', v_energy_mult,
+    'internet', v_internet_mult,
+    'luck', v_luck_mult,
+    'temperature', v_temp_mult,
+    'durability', v_durability_mult
+  );
 END;
 $$;

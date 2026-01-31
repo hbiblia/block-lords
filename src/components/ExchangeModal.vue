@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { exchangeCryptoToGamecoin, exchangeCryptoToRon, getExchangeRates } from '@/utils/api';
+import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 
@@ -91,14 +92,17 @@ async function handleExchange() {
     }
 
     if (result?.success) {
+      playSound('purchase');
       await authStore.fetchPlayer();
       amount.value = '';
       emit('exchanged');
     } else {
+      playSound('error');
       alert(result?.error ?? 'Error en el exchange');
     }
   } catch (e) {
     console.error('Error exchanging:', e);
+    playSound('error');
     alert('Error al realizar el exchange');
   } finally {
     exchanging.value = false;

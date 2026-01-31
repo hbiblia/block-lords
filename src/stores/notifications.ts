@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { playSound } from '@/utils/sounds';
 
 export type NotificationType =
   | 'energy_depleted'
@@ -51,6 +52,21 @@ export const useNotificationsStore = defineStore('notifications', () => {
     };
 
     notifications.value.push(newNotification);
+
+    // Play sound based on severity
+    switch (notification.severity) {
+      case 'error':
+        playSound('warning');
+        break;
+      case 'warning':
+        playSound('notification');
+        break;
+      case 'success':
+        playSound('success');
+        break;
+      default:
+        playSound('notification');
+    }
 
     // Show modal immediately if none is currently showing
     if (!showModal.value) {

@@ -2,6 +2,7 @@
 import { computed, watch, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStreakStore } from '@/stores/streak';
+import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 const streakStore = useStreakStore();
@@ -72,7 +73,7 @@ function getItemEmoji(itemType: string | null, itemId: string | null) {
 async function handleClaim() {
   const result = await streakStore.claim();
   if (result) {
-    // El modal mostrará el resultado
+    playSound('reward');
   }
 }
 

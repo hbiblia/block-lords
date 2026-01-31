@@ -9,13 +9,13 @@
 INSERT INTO rigs (id, name, description, hashrate, power_consumption, internet_consumption, repair_cost, tier, base_price)
 VALUES
   ('basic_miner', 'Minero Básico', 'Un rig simple para empezar. Bajo consumo, bajo rendimiento.', 100, 2.5, 3.5, 80, 'basic', 0),
-  ('home_miner', 'Minero Casero', 'Rig mejorado para minería doméstica.', 250, 5.0, 7.0, 300, 'basic', 200),
-  ('gpu_rig', 'Rig GPU', 'Múltiples GPUs para mayor hashrate.', 500, 8.0, 12.0, 600, 'standard', 500),
-  ('asic_s9', 'ASIC S9', 'Hardware especializado de minería.', 1000, 12.0, 18.0, 1200, 'standard', 1500),
-  ('asic_s19', 'ASIC S19', 'ASIC de última generación.', 2500, 18.0, 28.0, 2500, 'advanced', 4000),
-  ('mining_farm_small', 'Mini Granja', 'Pequeña granja de minería.', 5000, 28.0, 42.0, 5000, 'advanced', 10000),
-  ('mining_farm_large', 'Gran Granja', 'Granja de minería industrial.', 10000, 40.0, 60.0, 10000, 'elite', 25000),
-  ('quantum_miner', 'Minero Cuántico', 'Tecnología experimental de minería.', 25000, 55.0, 85.0, 20000, 'elite', 75000)
+  ('home_miner', 'Minero Casero', 'Rig mejorado para minería doméstica.', 250, 5.0, 7.0, 500, 'basic', 600),
+  ('gpu_rig', 'Rig GPU', 'Múltiples GPUs para mayor hashrate.', 500, 8.0, 12.0, 1200, 'standard', 1800),
+  ('asic_s9', 'ASIC S9', 'Hardware especializado de minería.', 1000, 12.0, 18.0, 2500, 'standard', 5000),
+  ('asic_s19', 'ASIC S19', 'ASIC de última generación.', 2500, 18.0, 28.0, 5000, 'advanced', 15000),
+  ('mining_farm_small', 'Mini Granja', 'Pequeña granja de minería.', 5000, 28.0, 42.0, 12000, 'advanced', 45000),
+  ('mining_farm_large', 'Gran Granja', 'Granja de minería industrial.', 10000, 40.0, 60.0, 25000, 'elite', 120000),
+  ('quantum_miner', 'Minero Cuántico', 'Tecnología experimental de minería.', 25000, 55.0, 85.0, 50000, 'elite', 350000)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
@@ -45,16 +45,21 @@ ON CONFLICT (id) DO UPDATE SET
   icon = EXCLUDED.icon;
 
 -- Insertar items de refrigeración
+-- cooling_power debe ser >= power_consumption * 0.8 para mantener rig frío
+-- Basic rigs: 2.5-5.0 power → necesitan 2-4 cooling
+-- Standard rigs: 8.0-12.0 power → necesitan 6.4-9.6 cooling
+-- Advanced rigs: 18.0-28.0 power → necesitan 14.4-22.4 cooling
+-- Elite rigs: 40.0-55.0 power → necesitan 32-44 cooling
 INSERT INTO cooling_items (id, name, description, cooling_power, base_price, tier)
 VALUES
-  ('fan_basic', 'Ventilador Básico', 'Un ventilador simple para reducir la temperatura.', 5, 50, 'basic'),
-  ('fan_dual', 'Ventilador Dual', 'Dos ventiladores para mejor circulación de aire.', 10, 120, 'basic'),
-  ('heatsink', 'Disipador de Calor', 'Disipador de aluminio para transferir calor.', 15, 250, 'standard'),
-  ('liquid_cooler', 'Refrigeración Líquida', 'Sistema de refrigeración líquida cerrado.', 25, 600, 'standard'),
-  ('aio_cooler', 'AIO Premium', 'All-in-one de alta gama con radiador de 240mm.', 35, 1200, 'advanced'),
-  ('custom_loop', 'Loop Personalizado', 'Sistema de refrigeración líquida custom.', 50, 2500, 'advanced'),
-  ('industrial_ac', 'A/C Industrial', 'Sistema de aire acondicionado industrial.', 70, 6000, 'elite'),
-  ('cryo_system', 'Sistema Criogénico', 'Refrigeración criogénica de última generación.', 90, 12000, 'elite')
+  ('fan_basic', 'Ventilador Básico', 'Ideal para Minero Básico. Insuficiente para rigs mayores.', 4, 120, 'basic'),
+  ('fan_dual', 'Ventilador Dual', 'Ideal para Minero Casero. Apenas enfría GPU Rig.', 8, 280, 'basic'),
+  ('heatsink', 'Disipador de Calor', 'Ideal para GPU Rig. Insuficiente para ASICs.', 12, 550, 'standard'),
+  ('liquid_cooler', 'Refrigeración Líquida', 'Ideal para ASIC S9. Mantiene frío hasta ASIC S19.', 18, 1400, 'standard'),
+  ('aio_cooler', 'AIO Premium', 'Ideal para ASIC S19. Necesario para granjas pequeñas.', 28, 2800, 'advanced'),
+  ('custom_loop', 'Loop Personalizado', 'Ideal para Mini Granja. Enfría cualquier rig avanzado.', 40, 5500, 'advanced'),
+  ('industrial_ac', 'A/C Industrial', 'Ideal para Gran Granja. Overkill para rigs menores.', 55, 14000, 'elite'),
+  ('cryo_system', 'Sistema Criogénico', 'Ideal para Minero Cuántico. Refrigeración extrema.', 75, 28000, 'elite')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
@@ -65,11 +70,11 @@ ON CONFLICT (id) DO UPDATE SET
 -- Insertar tarjetas prepago de energía
 INSERT INTO prepaid_cards (id, name, description, card_type, amount, base_price, tier, currency)
 VALUES
-  ('energy_10', 'Energía +10', 'Recarga básica de energía.', 'energy', 10, 75, 'basic', 'gamecoin'),
-  ('energy_25', 'Energía +25', 'Recarga estándar de energía.', 'energy', 25, 175, 'basic', 'gamecoin'),
-  ('energy_50', 'Energía +50', 'Recarga premium de energía.', 'energy', 50, 320, 'standard', 'gamecoin'),
-  ('energy_full', 'Energía MAX', 'Recarga completa de energía al 100%.', 'energy', 100, 580, 'standard', 'gamecoin'),
-  ('energy_ultra', 'Energía ULTRA', 'Recarga de energía premium. Incluye +25 capacidad máxima.', 'energy', 150, 2500, 'elite', 'crypto')
+  ('energy_10', 'Energía +10', 'Recarga básica de energía.', 'energy', 10, 150, 'basic', 'gamecoin'),
+  ('energy_25', 'Energía +25', 'Recarga estándar de energía.', 'energy', 25, 350, 'basic', 'gamecoin'),
+  ('energy_50', 'Energía +50', 'Recarga premium de energía.', 'energy', 50, 650, 'standard', 'gamecoin'),
+  ('energy_full', 'Energía MAX', 'Recarga completa de energía al 100%.', 'energy', 100, 1200, 'standard', 'gamecoin'),
+  ('energy_ultra', 'Energía ULTRA', 'Recarga de energía premium. Incluye +25 capacidad máxima.', 'energy', 150, 5, 'elite', 'crypto')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
@@ -82,11 +87,11 @@ ON CONFLICT (id) DO UPDATE SET
 -- Insertar tarjetas prepago de internet
 INSERT INTO prepaid_cards (id, name, description, card_type, amount, base_price, tier, currency)
 VALUES
-  ('internet_10', 'Internet +10', 'Recarga básica de datos.', 'internet', 10, 60, 'basic', 'gamecoin'),
-  ('internet_25', 'Internet +25', 'Recarga estándar de datos.', 'internet', 25, 140, 'basic', 'gamecoin'),
-  ('internet_50', 'Internet +50', 'Recarga premium de datos.', 'internet', 50, 260, 'standard', 'gamecoin'),
-  ('internet_full', 'Internet MAX', 'Recarga completa de internet al 100%.', 'internet', 100, 480, 'standard', 'gamecoin'),
-  ('internet_ultra', 'Internet ULTRA', 'Recarga de internet premium. Incluye +25 capacidad máxima.', 'internet', 150, 2500, 'elite', 'crypto')
+  ('internet_10', 'Internet +10', 'Recarga básica de datos.', 'internet', 10, 120, 'basic', 'gamecoin'),
+  ('internet_25', 'Internet +25', 'Recarga estándar de datos.', 'internet', 25, 280, 'basic', 'gamecoin'),
+  ('internet_50', 'Internet +50', 'Recarga premium de datos.', 'internet', 50, 520, 'standard', 'gamecoin'),
+  ('internet_full', 'Internet MAX', 'Recarga completa de internet al 100%.', 'internet', 100, 950, 'standard', 'gamecoin'),
+  ('internet_ultra', 'Internet ULTRA', 'Recarga de internet premium. Incluye +25 capacidad máxima.', 'internet', 150, 5, 'elite', 'crypto')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,

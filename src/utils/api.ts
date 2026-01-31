@@ -338,6 +338,36 @@ export async function buyRig(playerId: string, rigId: string) {
   return data;
 }
 
+// === RIG SLOTS ===
+
+// Obtener información de slots del jugador
+export async function getPlayerSlotInfo(playerId: string) {
+  const { data, error } = await supabase.rpc('get_player_slot_info', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Obtener lista de upgrades de slots disponibles
+export async function getRigSlotUpgrades() {
+  const { data, error } = await supabase.rpc('get_rig_slot_upgrades');
+
+  if (error) throw error;
+  return data;
+}
+
+// Comprar un slot adicional
+export async function buyRigSlot(playerId: string) {
+  const { data, error } = await supabase.rpc('buy_rig_slot', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 // === EXCHANGE (CRYPTO) ===
 
 export async function exchangeCryptoToGamecoin(playerId: string, cryptoAmount: number) {
@@ -433,6 +463,44 @@ export async function updateMissionProgress(playerId: string, missionType: strin
     p_player_id: playerId,
     p_mission_type: missionType,
     p_increment: increment,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// === BOOSTS ===
+
+export async function getBoostItems() {
+  const { data, error } = await supabase.rpc('get_boost_items');
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getPlayerBoosts(playerId: string) {
+  const { data, error } = await supabase.rpc('get_player_boosts', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function buyBoost(playerId: string, boostId: string) {
+  const { data, error } = await supabase.rpc('buy_boost', {
+    p_player_id: playerId,
+    p_boost_id: boostId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function activateBoost(playerId: string, boostId: string) {
+  const { data, error } = await supabase.rpc('activate_boost', {
+    p_player_id: playerId,
+    p_boost_id: boostId,
   });
 
   if (error) throw error;

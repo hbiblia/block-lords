@@ -3,6 +3,7 @@ import { ref, watch, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling } from '@/utils/api';
+import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -205,6 +206,7 @@ async function confirmUse() {
 
     if (result?.success) {
       processingStatus.value = 'success';
+      playSound('success');
       await loadData();
       await authStore.fetchPlayer();
       emit('updated');
@@ -219,11 +221,13 @@ async function confirmUse() {
     } else {
       processingStatus.value = 'error';
       processingError.value = result?.error || t('common.error');
+      playSound('error');
     }
   } catch (e) {
     console.error('Error:', e);
     processingStatus.value = 'error';
     processingError.value = t('common.error');
+    playSound('error');
   }
 
   confirmAction.value = null;

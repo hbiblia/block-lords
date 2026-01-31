@@ -4,11 +4,11 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
 import { useNotificationsStore } from '@/stores/notifications';
-import { getPlayerRigs, getNetworkStats, getRecentBlocks, toggleRig, getRigCooling } from '@/utils/api';
+import { getPlayerRigs, getNetworkStats, getRecentBlocks, toggleRig, getRigCooling, getPlayerSlotInfo, buyRigSlot, getPlayerBoosts } from '@/utils/api';
+import { playSound } from '@/utils/sounds';
 import MarketModal from '@/components/MarketModal.vue';
 import InventoryModal from '@/components/InventoryModal.vue';
 import ExchangeModal from '@/components/ExchangeModal.vue';
-import PrepaidCardsPanel from '@/components/PrepaidCardsPanel.vue';
 import RigManageModal from '@/components/RigManageModal.vue';
 
 const { t } = useI18n();
@@ -19,9 +19,65 @@ const notificationsStore = useNotificationsStore();
 const showMarket = ref(false);
 const showInventory = ref(false);
 const showExchange = ref(false);
-const showRecharge = ref(false);
 const showRigManage = ref(false);
 const selectedRigForManage = ref<typeof rigs.value[0] | null>(null);
+
+// Slot info
+const slotInfo = ref<{
+  current_slots: number;
+  used_slots: number;
+  available_slots: number;
+  max_slots: number;
+  next_upgrade: {
+    slot_number: number;
+    price: number;
+    currency: string;
+    name: string;
+    description: string;
+  } | null;
+} | null>(null);
+
+const buyingSlot = ref(false);
+const showConfirmSlotPurchase = ref(false);
+
+function openSlotPurchaseConfirm() {
+  if (!canAffordSlot()) return;
+  showConfirmSlotPurchase.value = true;
+}
+
+async function confirmBuySlot() {
+  if (!authStore.player || !slotInfo.value?.next_upgrade || buyingSlot.value) return;
+
+  buyingSlot.value = true;
+
+  try {
+    const result = await buyRigSlot(authStore.player.id);
+    if (result?.success) {
+      playSound('purchase');
+      showConfirmSlotPurchase.value = false;
+      await authStore.fetchPlayer();
+      await loadData();
+    } else {
+      playSound('error');
+      alert(result?.error ?? 'Error comprando slot');
+    }
+  } catch (e) {
+    console.error('Error buying slot:', e);
+    playSound('error');
+    alert('Error de conexión');
+  } finally {
+    buyingSlot.value = false;
+  }
+}
+
+function canAffordSlot(): boolean {
+  if (!slotInfo.value?.next_upgrade) return false;
+  const upgrade = slotInfo.value.next_upgrade;
+  if (upgrade.currency === 'gamecoin') {
+    return (authStore.player?.gamecoin_balance ?? 0) >= upgrade.price;
+  }
+  return (authStore.player?.crypto_balance ?? 0) >= upgrade.price;
+}
 
 function openRigManage(rig: typeof rigs.value[0]) {
   selectedRigForManage.value = rig;
@@ -70,6 +126,46 @@ const rigCooling = ref<Record<string, Array<{
   cooling_power: number;
 }>>>({});
 
+// Active boosts
+const activeBoosts = ref<Array<{
+  id: string;
+  boost_id: string;
+  boost_type: string;
+  name: string;
+  effect_value: number;
+  expires_at: string;
+  seconds_remaining: number;
+}>>([]);
+
+function getBoostIcon(boostType: string): string {
+  switch (boostType) {
+    case 'hashrate': return '⚡';
+    case 'energy_saver': return '🔋';
+    case 'bandwidth_optimizer': return '📶';
+    case 'lucky_charm': return '🍀';
+    case 'overclock': return '🚀';
+    case 'coolant_injection': return '❄️';
+    case 'durability_shield': return '🛡️';
+    default: return '✨';
+  }
+}
+
+function formatTimeRemaining(seconds: number): string {
+  if (seconds <= 0) return t('inventory.boosts.expired', 'Expired');
+  const mins = Math.floor(seconds / 60);
+  const hrs = Math.floor(mins / 60);
+  if (hrs > 0) {
+    return `${hrs}h ${mins % 60}m`;
+  }
+  return `${mins}m`;
+}
+
+function getBoostName(id: string): string {
+  const key = `market.items.boosts.${id}.name`;
+  const translated = t(key);
+  return translated !== key ? translated : id;
+}
+
 // Mining simulation
 const miningProgress = ref(0);
 const hashesCalculated = ref(0);
@@ -111,25 +207,41 @@ const activeRigsCount = computed(() => rigs.value.filter(r => r.is_active).lengt
 
 async function loadData() {
   try {
-    const [rigsData, networkData, blocksData] = await Promise.all([
+    const [rigsData, networkData, blocksData, slotData] = await Promise.all([
       getPlayerRigs(authStore.player!.id),
       getNetworkStats(),
       getRecentBlocks(5),
+      getPlayerSlotInfo(authStore.player!.id),
     ]);
 
     rigs.value = rigsData ?? [];
     networkStats.value = networkData;
     recentBlocks.value = blocksData ?? [];
+    if (slotData?.success) {
+      slotInfo.value = slotData;
+    }
 
     // Sync active rigs to mining store for resource consumption display
     syncMiningStore();
 
     // Load cooling data in background (don't block initial render)
     loadRigsCooling();
+
+    // Load active boosts
+    loadActiveBoosts();
   } catch (e) {
     console.error('Error loading mining data:', e);
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadActiveBoosts() {
+  try {
+    const boostData = await getPlayerBoosts(authStore.player!.id);
+    activeBoosts.value = boostData.active || [];
+  } catch (e) {
+    console.error('Error loading active boosts:', e);
   }
 }
 
@@ -229,8 +341,10 @@ async function handleToggleRig(rigId: string) {
   }
 
   // Optimistic update for visual feedback
+  const wasActive = rig.is_active;
   rig.is_active = !rig.is_active;
   syncMiningStore();
+  playSound('click');
 
   try {
     const result = await toggleRig(authStore.player!.id, rigId);
@@ -238,6 +352,7 @@ async function handleToggleRig(rigId: string) {
     if (!result.success) {
       // Revert and resync from server to ensure UI matches DB state
       await loadData();
+      playSound('error');
       // Use notification system instead of alert
       notificationsStore.addNotification({
         type: 'rig_broken',
@@ -247,10 +362,14 @@ async function handleToggleRig(rigId: string) {
         severity: 'error',
         data: { error: result.error },
       });
+    } else if (!wasActive) {
+      // Rig turned on successfully
+      playSound('success');
     }
   } catch (e) {
     // Revert and resync from server on error
     await loadData();
+    playSound('error');
     console.error('Error toggling rig:', e);
     notificationsStore.addNotification({
       type: 'rig_broken',
@@ -271,6 +390,7 @@ function handleBlockMined(event: CustomEvent) {
   recentBlocks.value = recentBlocks.value.slice(0, 5);
 
   if (winner?.id === authStore.player?.id) {
+    playSound('block_mined');
     lastBlockFound.value = block;
     showBlockFound.value = true;
     miningProgress.value = 100;
@@ -512,14 +632,6 @@ onUnmounted(() => {
             <span class="hidden sm:inline">{{ t('nav.exchange') }}</span>
           </button>
           <button
-            @click="showRecharge = true"
-            class="px-3 py-1.5 text-sm font-medium rounded-md bg-status-warning/20 text-status-warning hover:bg-status-warning/30 transition-all flex items-center gap-1.5"
-            :title="t('nav.recharge')"
-          >
-            <span>+</span>
-            <span class="hidden sm:inline">{{ t('nav.recharge') }}</span>
-          </button>
-          <button
             @click="showInventory = true"
             class="px-3 py-1.5 text-sm font-medium rounded-md bg-bg-tertiary hover:bg-bg-tertiary/80 transition-all flex items-center gap-1.5"
             :title="t('nav.inventory')"
@@ -527,6 +639,21 @@ onUnmounted(() => {
             <span>🎒</span>
             <span class="hidden sm:inline">{{ t('nav.inventory') }}</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Boosts Bar -->
+    <div v-if="activeBoosts.length > 0" class="mb-4">
+      <div class="flex flex-wrap gap-2">
+        <div
+          v-for="boost in activeBoosts"
+          :key="boost.id"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30"
+        >
+          <span>{{ getBoostIcon(boost.boost_type) }}</span>
+          <span class="text-sm font-medium text-purple-400">{{ getBoostName(boost.boost_id) }}</span>
+          <span class="text-xs text-text-muted">{{ formatTimeRemaining(boost.seconds_remaining) }}</span>
         </div>
       </div>
     </div>
@@ -641,6 +768,13 @@ onUnmounted(() => {
         <div class="lg:col-span-2 space-y-4">
           <h2 class="text-lg font-semibold flex items-center gap-2">
             <span>🖥️</span> {{ t('mining.yourRigs') }}
+            <span
+              v-if="slotInfo"
+              class="text-sm font-normal px-2 py-0.5 rounded-full"
+              :class="slotInfo.available_slots === 0 ? 'bg-status-warning/20 text-status-warning' : 'bg-accent-primary/20 text-accent-primary'"
+            >
+              {{ slotInfo.used_slots }}/{{ slotInfo.current_slots }}
+            </span>
           </h2>
 
           <div v-if="rigs.length === 0" class="card text-center py-12">
@@ -772,6 +906,71 @@ onUnmounted(() => {
                 </button>
               </div>
             </div>
+
+            <!-- Empty Available Slots -->
+            <div
+              v-for="n in (slotInfo?.available_slots ?? 0)"
+              :key="'empty-slot-' + n"
+              class="bg-bg-secondary/50 rounded-xl border border-dashed border-border/50 p-4 flex flex-col items-center justify-center min-h-[200px]"
+            >
+              <div class="w-12 h-12 rounded-lg bg-bg-tertiary/50 flex items-center justify-center text-2xl mb-3 opacity-50">
+                🖥️
+              </div>
+              <div class="text-text-muted font-medium">{{ t('slots.available', 'Disponible') }}</div>
+              <p class="text-xs text-text-muted/70 mt-1">{{ t('slots.buyRigToUse', 'Compra un rig en el mercado') }}</p>
+            </div>
+
+            <!-- Slot Purchase Card -->
+            <div
+              v-if="slotInfo?.next_upgrade"
+              class="bg-bg-secondary/80 rounded-xl border border-dashed border-accent-primary/50 p-4 flex flex-col justify-between min-h-[200px]"
+            >
+              <div>
+                <div class="flex items-center gap-2 mb-3">
+                  <div class="w-10 h-10 rounded-lg bg-accent-primary/20 flex items-center justify-center text-xl">
+                    ➕
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-accent-primary">{{ slotInfo.next_upgrade.name }}</h3>
+                    <p class="text-xs text-text-muted">{{ t('slots.unlockNewSlot', 'Desbloquea un nuevo slot') }}</p>
+                  </div>
+                </div>
+
+                <div class="text-center py-3">
+                  <div class="text-2xl font-bold" :class="canAffordSlot() ? 'text-status-success' : 'text-text-muted'">
+                    <span>{{ slotInfo.next_upgrade.currency === 'crypto' ? '💎' : '🪙' }}</span>
+                    {{ slotInfo.next_upgrade.price.toLocaleString() }}
+                    <span class="text-sm">{{ slotInfo.next_upgrade.currency === 'crypto' ? 'Crypto' : 'GC' }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                @click="openSlotPurchaseConfirm"
+                :disabled="!canAffordSlot()"
+                class="w-full py-2.5 rounded-lg text-sm font-semibold transition-all"
+                :class="canAffordSlot()
+                  ? 'bg-gradient-primary hover:opacity-90'
+                  : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
+              >
+                <span v-if="!canAffordSlot()">
+                  {{ t('slots.insufficientFunds', 'Fondos insuficientes') }}
+                </span>
+                <span v-else>
+                  {{ t('slots.buySlot', 'Comprar Slot') }}
+                </span>
+              </button>
+            </div>
+
+            <!-- Max slots reached card -->
+            <div
+              v-else-if="slotInfo && !slotInfo.next_upgrade"
+              class="bg-status-success/10 rounded-xl border border-status-success/30 p-4 flex flex-col items-center justify-center min-h-[200px]"
+            >
+              <div class="text-4xl mb-2">🏆</div>
+              <div class="text-status-success font-semibold text-center">{{ t('slots.maxReached', '¡Máximo alcanzado!') }}</div>
+              <div class="text-sm text-text-muted">{{ slotInfo.max_slots }} slots</div>
+            </div>
           </div>
         </div>
 
@@ -862,13 +1061,6 @@ onUnmounted(() => {
       @exchanged="authStore.fetchPlayer()"
     />
 
-    <!-- Prepaid Cards Panel -->
-    <PrepaidCardsPanel
-      :show="showRecharge"
-      @close="showRecharge = false"
-      @redeemed="authStore.fetchPlayer()"
-    />
-
     <!-- Rig Manage Modal -->
     <RigManageModal
       :show="showRigManage"
@@ -876,6 +1068,58 @@ onUnmounted(() => {
       @close="closeRigManage"
       @updated="loadData"
     />
+
+    <!-- Slot Purchase Confirmation Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="showConfirmSlotPurchase && slotInfo?.next_upgrade"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          @click.self="showConfirmSlotPurchase = false"
+        >
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+          <div class="relative bg-bg-primary border border-border rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+            <h3 class="text-lg font-bold mb-4 text-center">{{ t('slots.confirmPurchase', 'Confirmar compra') }}</h3>
+
+            <div class="bg-bg-secondary rounded-xl p-4 mb-4">
+              <div class="text-center mb-3">
+                <div class="text-3xl mb-2">🖥️</div>
+                <div class="font-semibold">{{ slotInfo.next_upgrade.name }}</div>
+              </div>
+              <div class="text-center text-2xl font-bold">
+                <span>{{ slotInfo.next_upgrade.currency === 'crypto' ? '💎' : '🪙' }}</span>
+                {{ slotInfo.next_upgrade.price.toLocaleString() }}
+                <span class="text-sm">{{ slotInfo.next_upgrade.currency === 'crypto' ? 'Crypto' : 'GC' }}</span>
+              </div>
+            </div>
+
+            <p class="text-sm text-text-muted text-center mb-4">
+              {{ t('slots.confirmMessage', '¿Estás seguro de que deseas comprar este slot?') }}
+            </p>
+
+            <div class="flex gap-3">
+              <button
+                @click="showConfirmSlotPurchase = false"
+                :disabled="buyingSlot"
+                class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+              >
+                {{ t('common.cancel', 'Cancelar') }}
+              </button>
+              <button
+                @click="confirmBuySlot"
+                :disabled="buyingSlot"
+                class="flex-1 py-2.5 rounded-lg font-semibold bg-gradient-primary hover:opacity-90 transition-opacity"
+              >
+                <span v-if="buyingSlot" class="flex items-center justify-center gap-2">
+                  <span class="animate-spin">⏳</span>
+                </span>
+                <span v-else>{{ t('common.confirm', 'Confirmar') }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -885,4 +1129,18 @@ onUnmounted(() => {
   100% { transform: translateX(100%); }
 }
 
+.modal-enter-active,
+.modal-leave-active {
+  transition: all 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from .relative,
+.modal-leave-to .relative {
+  transform: scale(0.95);
+}
 </style>

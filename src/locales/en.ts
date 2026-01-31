@@ -35,6 +35,8 @@ export default {
     market: 'Market',
     connected: 'Connected',
     disconnected: 'Disconnected',
+    soundOn: 'Sound On',
+    soundOff: 'Sound Off',
   },
 
   home: {
@@ -190,28 +192,38 @@ export default {
     title: 'Market',
     subtitle: 'Buy rigs, cooling and prepaid cards',
     balance: 'Balance:',
+    filters: {
+      all: 'All',
+    },
     tabs: {
       rigs: 'Mining Rigs',
       cooling: 'Cooling',
       cards: 'Prepaid Cards',
+      boosts: 'Power-Ups',
     },
     rigs: {
       description: 'Buy new rigs to increase your mining power...',
       allOwned: 'You already own all available rigs!',
+      owned: 'Owned',
       energyTick: 'Energy/tick',
       internetTick: 'Internet/tick',
       repair: 'Repair',
     },
     cooling: {
       description: 'Cooling reduces temperature and prevents damage to your rigs.',
-      installed: 'Installed',
+      installed: 'installed',
       inInventory: 'In inventory',
-      inventory: 'inventory',
+      inventory: 'in inventory',
     },
     cards: {
       energyCards: 'Energy Cards',
       internetCards: 'Internet Cards',
       description: 'Prepaid cards allow you to recharge your resources instantly.',
+    },
+    boosts: {
+      effect: 'Effect',
+      duration: 'Duration',
+      description: 'Temporary boosts to enhance your mining performance.',
     },
     confirmPurchase: {
       title: 'Confirm Purchase',
@@ -230,6 +242,7 @@ export default {
       errorBuyingRig: 'Error purchasing rig. Please try again.',
       errorBuyingCooling: 'Error purchasing cooling. Please try again.',
       errorBuyingCard: 'Error purchasing card. Please try again.',
+      errorBuyingBoost: 'Error purchasing boost. Please try again.',
     },
     items: {
       rigs: {
@@ -263,6 +276,36 @@ export default {
         internet_50: { name: 'Internet +50', description: 'Premium data recharge.' },
         internet_full: { name: 'Internet MAX', description: 'Full internet recharge to 100%.' },
         internet_ultra: { name: 'Internet ULTRA', description: 'Premium internet recharge. Includes +25 max capacity.' },
+      },
+      boosts: {
+        // Hashrate Boosters
+        hashrate_small: { name: 'Minor Hash Boost', description: '+10% hashrate for 1 minute' },
+        hashrate_medium: { name: 'Hash Boost', description: '+25% hashrate for 3 minutes' },
+        hashrate_large: { name: 'Mega Hash Boost', description: '+50% hashrate for 5 minutes' },
+        // Energy Savers
+        energy_saver_small: { name: 'Power Saver', description: '-15% energy consumption for 1 minute' },
+        energy_saver_medium: { name: 'Eco Mode', description: '-25% energy consumption for 3 minutes' },
+        energy_saver_large: { name: 'Green Mining', description: '-40% energy consumption for 5 minutes' },
+        // Bandwidth Optimizers
+        bandwidth_small: { name: 'Data Optimizer', description: '-15% internet consumption for 1 minute' },
+        bandwidth_medium: { name: 'Network Boost', description: '-25% internet consumption for 3 minutes' },
+        bandwidth_large: { name: 'Fiber Mode', description: '-40% internet consumption for 5 minutes' },
+        // Lucky Charms
+        lucky_small: { name: 'Lucky Coin', description: '+5% block probability for 1 minute' },
+        lucky_medium: { name: 'Fortune Token', description: '+10% block probability for 3 minutes' },
+        lucky_large: { name: 'Jackpot Charm', description: '+20% block probability for 5 minutes' },
+        // Overclock
+        overclock_small: { name: 'Overclock Lite', description: '+25% hashrate, +15% energy for 1 minute' },
+        overclock_medium: { name: 'Overclock Pro', description: '+40% hashrate, +25% energy for 3 minutes' },
+        overclock_large: { name: 'Overclock Max', description: '+60% hashrate, +35% energy for 5 minutes' },
+        // Coolant Injection
+        coolant_small: { name: 'Cooling Gel', description: '-20% temperature gain for 1 minute' },
+        coolant_medium: { name: 'Cryo Fluid', description: '-35% temperature gain for 3 minutes' },
+        coolant_large: { name: 'Liquid Nitrogen', description: '-50% temperature gain for 5 minutes' },
+        // Durability Shield
+        durability_small: { name: 'Wear Guard', description: '-20% condition deterioration for 1 minute' },
+        durability_medium: { name: 'Shield Coat', description: '-35% condition deterioration for 3 minutes' },
+        durability_large: { name: 'Diamond Shell', description: '-50% condition deterioration for 5 minutes' },
       },
     },
     cooling_suffix: 'cooling',
@@ -337,6 +380,8 @@ export default {
 
   inventory: {
     title: 'Inventory',
+    empty: 'Your inventory is empty',
+    emptyHint: 'Buy items in the market',
     tabs: {
       rigs: 'Rigs',
       cooling: 'Cooling',
@@ -373,14 +418,22 @@ export default {
     cooling: {
       description: 'Cooling items are installed on specific rigs. Durability is consumed while the rig is active.',
       noItems: "You don't have any cooling items. Buy them in the market.",
-      power: 'power',
+      power: 'Power',
       energyTick: 'energy/tick',
       goToRigs: 'Go to the Rigs tab to install this cooling.',
+      installHint: 'Install from rig management',
     },
     cards: {
       description: 'Prepaid cards for recharging energy and internet.',
       noCards: "You don't have any cards. Buy them in the market.",
       recharge: 'Recharge',
+    },
+    boosts: {
+      title: 'Power-Ups',
+      activate: 'Activate',
+      active: 'Active Boosts',
+      expired: 'Expired',
+      noBoosts: "You don't have any boosts. Buy them in the market.",
     },
     processing: {
       title: 'Processing Action',
@@ -393,10 +446,12 @@ export default {
       errorToggleRig: 'Error changing rig state. Please try again.',
       errorRepairRig: 'Error repairing rig. Please try again.',
       errorDeleteRig: 'Error deleting rig. Please try again.',
+      errorActivatingBoost: 'Error activating boost. Please try again.',
     },
     confirm: {
       installCooling: 'Install Cooling',
       redeemCard: 'Redeem Card',
+      activateBoost: 'Activate Boost',
       repairRig: 'Repair Rig',
       deleteRig: 'Delete Rig',
       turnOnRig: 'Turn On Rig',
@@ -406,6 +461,7 @@ export default {
       cooling: 'Cooling:',
       power: 'Power:',
       card: 'Card:',
+      boost: 'Boost:',
       rechargeAmount: 'Recharge:',
       action: 'Action:',
       startMining: 'Start mining',
@@ -564,6 +620,7 @@ export default {
       easy: 'Easy',
       medium: 'Medium',
       hard: 'Hard',
+      epic: 'Epic',
     },
     types: {
       mine_blocks: 'Mine blocks',
@@ -572,6 +629,40 @@ export default {
       repair_rig: 'Repair rig',
       use_cooling: 'Use cooling',
       recharge_resource: 'Recharge resources',
+    },
+  },
+
+  slots: {
+    title: 'Rig Slots',
+    currentSlots: 'Current slots',
+    used: 'Used',
+    available: 'Available',
+    nextUpgrade: 'Next upgrade',
+    allUpgrades: 'All upgrades',
+    buySlot: 'Buy Slot',
+    insufficientFunds: 'Insufficient funds',
+    purchaseSuccess: 'Slot purchased successfully!',
+    maxReached: 'Maximum reached!',
+    clickToUpgrade: 'Click to upgrade slots',
+    noSlotsAvailable: 'No slots available. Buy more to add rigs.',
+    unlockNewSlot: 'Unlock a new slot',
+    buyRigToUse: 'Buy a rig in the market',
+    confirmPurchase: 'Confirm purchase',
+    confirmMessage: 'Are you sure you want to buy this slot?',
+    descriptions: {
+      slot2: 'Unlocks a second rig slot',
+      slot3: 'Unlocks a third rig slot',
+      slot4: 'Unlocks a fourth rig slot',
+      slot5: 'Unlocks a fifth rig slot',
+      expansion: 'Expand your mining operation',
+      medium: 'Medium mining operation',
+      large: 'Large mining operation',
+      smallFarm: 'Small farm',
+      mediumFarm: 'Medium farm',
+      largeFarm: 'Large farm',
+      megaFarm: 'Mega farm',
+      industrial: 'Industrial farm',
+      maxPower: 'Maximum power',
     },
   },
 };

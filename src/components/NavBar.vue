@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 import { useMiningStore } from '@/stores/mining';
 import { toggleLocale, getLocale } from '@/plugins/i18n';
+import { useSound } from '@/composables/useSound';
 
 const { t } = useI18n();
 
@@ -13,6 +14,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
 const miningStore = useMiningStore();
+const { soundEnabled, toggle: toggleSound, play } = useSound();
 
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 const username = computed(() => authStore.player?.username ?? 'Player');
@@ -20,6 +22,11 @@ const currentLocale = computed(() => getLocale());
 
 function handleToggleLocale() {
   toggleLocale();
+  play('click');
+}
+
+function handleToggleSound() {
+  toggleSound();
 }
 
 // Resource values
@@ -170,6 +177,13 @@ async function handleLogout() {
               >
                 <span class="w-4 h-4 flex items-center justify-center text-sm">{{ currentLocale === 'en' ? '🇪🇸' : '🇺🇸' }}</span>
                 {{ currentLocale === 'en' ? 'Español' : 'English' }}
+              </button>
+              <button
+                @click="handleToggleSound"
+                class="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary transition-colors"
+              >
+                <span class="w-4 h-4 flex items-center justify-center text-sm">{{ soundEnabled ? '🔊' : '🔇' }}</span>
+                {{ soundEnabled ? t('nav.soundOn', 'Sound On') : t('nav.soundOff', 'Sound Off') }}
               </button>
               <button
                 @click="handleLogout"

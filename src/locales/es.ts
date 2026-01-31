@@ -35,6 +35,8 @@ export default {
     market: 'Mercado',
     connected: 'Conectado',
     disconnected: 'Desconectado',
+    soundOn: 'Sonido Activado',
+    soundOff: 'Sonido Desactivado',
   },
 
   home: {
@@ -190,28 +192,38 @@ export default {
     title: 'Mercado',
     subtitle: 'Compra rigs, refrigeracion y tarjetas prepago',
     balance: 'Balance:',
+    filters: {
+      all: 'Todos',
+    },
     tabs: {
       rigs: 'Rigs de Mineria',
       cooling: 'Refrigeracion',
       cards: 'Tarjetas Prepago',
+      boosts: 'Power-Ups',
     },
     rigs: {
       description: 'Compra nuevos rigs para aumentar tu poder de mineria...',
       allOwned: '¡Ya tienes todos los rigs disponibles!',
+      owned: 'Adquirido',
       energyTick: 'Energia/tick',
       internetTick: 'Internet/tick',
       repair: 'Reparacion',
     },
     cooling: {
       description: 'La refrigeracion reduce la temperatura y previene el daño a tus rigs.',
-      installed: 'Instalado',
+      installed: 'instalado',
       inInventory: 'En inventario',
-      inventory: 'inventario',
+      inventory: 'en inventario',
     },
     cards: {
       energyCards: 'Tarjetas de Energia',
       internetCards: 'Tarjetas de Internet',
       description: 'Las tarjetas prepago te permiten recargar tus recursos instantaneamente.',
+    },
+    boosts: {
+      effect: 'Efecto',
+      duration: 'Duracion',
+      description: 'Mejoras temporales para potenciar tu mineria.',
     },
     confirmPurchase: {
       title: 'Confirmar Compra',
@@ -230,6 +242,7 @@ export default {
       errorBuyingRig: 'Error al comprar el rig. Por favor intenta de nuevo.',
       errorBuyingCooling: 'Error al comprar refrigeracion. Por favor intenta de nuevo.',
       errorBuyingCard: 'Error al comprar la tarjeta. Por favor intenta de nuevo.',
+      errorBuyingBoost: 'Error al comprar el boost. Por favor intenta de nuevo.',
     },
     items: {
       rigs: {
@@ -263,6 +276,36 @@ export default {
         internet_50: { name: 'Internet +50', description: 'Recarga premium de datos.' },
         internet_full: { name: 'Internet MAX', description: 'Recarga completa de internet al 100%.' },
         internet_ultra: { name: 'Internet ULTRA', description: 'Recarga de internet premium. Incluye +25 capacidad maxima.' },
+      },
+      boosts: {
+        // Hashrate Boosters
+        hashrate_small: { name: 'Boost Hash Menor', description: '+10% hashrate por 1 minuto' },
+        hashrate_medium: { name: 'Boost Hash', description: '+25% hashrate por 3 minutos' },
+        hashrate_large: { name: 'Mega Boost Hash', description: '+50% hashrate por 5 minutos' },
+        // Energy Savers
+        energy_saver_small: { name: 'Ahorro Energia', description: '-15% consumo de energia por 1 minuto' },
+        energy_saver_medium: { name: 'Modo Eco', description: '-25% consumo de energia por 3 minutos' },
+        energy_saver_large: { name: 'Mineria Verde', description: '-40% consumo de energia por 5 minutos' },
+        // Bandwidth Optimizers
+        bandwidth_small: { name: 'Optimizador Datos', description: '-15% consumo de internet por 1 minuto' },
+        bandwidth_medium: { name: 'Boost Red', description: '-25% consumo de internet por 3 minutos' },
+        bandwidth_large: { name: 'Modo Fibra', description: '-40% consumo de internet por 5 minutos' },
+        // Lucky Charms
+        lucky_small: { name: 'Moneda Suerte', description: '+5% probabilidad de bloque por 1 minuto' },
+        lucky_medium: { name: 'Token Fortuna', description: '+10% probabilidad de bloque por 3 minutos' },
+        lucky_large: { name: 'Amuleto Jackpot', description: '+20% probabilidad de bloque por 5 minutos' },
+        // Overclock
+        overclock_small: { name: 'Overclock Lite', description: '+25% hashrate, +15% energia por 1 minuto' },
+        overclock_medium: { name: 'Overclock Pro', description: '+40% hashrate, +25% energia por 3 minutos' },
+        overclock_large: { name: 'Overclock Max', description: '+60% hashrate, +35% energia por 5 minutos' },
+        // Coolant Injection
+        coolant_small: { name: 'Gel Refrigerante', description: '-20% ganancia de temperatura por 1 minuto' },
+        coolant_medium: { name: 'Fluido Crio', description: '-35% ganancia de temperatura por 3 minutos' },
+        coolant_large: { name: 'Nitrogeno Liquido', description: '-50% ganancia de temperatura por 5 minutos' },
+        // Durability Shield
+        durability_small: { name: 'Protector Desgaste', description: '-20% deterioro de condicion por 1 minuto' },
+        durability_medium: { name: 'Capa Escudo', description: '-35% deterioro de condicion por 3 minutos' },
+        durability_large: { name: 'Coraza Diamante', description: '-50% deterioro de condicion por 5 minutos' },
       },
     },
     cooling_suffix: 'refrigeracion',
@@ -337,6 +380,8 @@ export default {
 
   inventory: {
     title: 'Inventario',
+    empty: 'Tu inventario esta vacio',
+    emptyHint: 'Compra items en el mercado',
     tabs: {
       rigs: 'Rigs',
       cooling: 'Refrigeracion',
@@ -373,14 +418,22 @@ export default {
     cooling: {
       description: 'Los items de refrigeracion se instalan en rigs especificos. La durabilidad se consume mientras el rig esta activo.',
       noItems: 'No tienes items de refrigeracion. Compralos en el mercado.',
-      power: 'poder',
+      power: 'Potencia',
       energyTick: 'energia/tick',
       goToRigs: 'Ve a la pestana de Rigs para instalar esta refrigeracion.',
+      installHint: 'Instalar desde gestion de rig',
     },
     cards: {
       description: 'Tarjetas prepago para recargar energia e internet.',
       noCards: 'No tienes tarjetas. Compralas en el mercado.',
       recharge: 'Recarga',
+    },
+    boosts: {
+      title: 'Power-Ups',
+      activate: 'Activar',
+      active: 'Boosts Activos',
+      expired: 'Expirado',
+      noBoosts: 'No tienes boosts. Compralos en el mercado.',
     },
     processing: {
       title: 'Procesando Accion',
@@ -393,10 +446,12 @@ export default {
       errorToggleRig: 'Error al cambiar estado del rig. Por favor intenta de nuevo.',
       errorRepairRig: 'Error al reparar rig. Por favor intenta de nuevo.',
       errorDeleteRig: 'Error al eliminar rig. Por favor intenta de nuevo.',
+      errorActivatingBoost: 'Error al activar boost. Por favor intenta de nuevo.',
     },
     confirm: {
       installCooling: 'Instalar Refrigeracion',
       redeemCard: 'Canjear Tarjeta',
+      activateBoost: 'Activar Boost',
       repairRig: 'Reparar Rig',
       deleteRig: 'Eliminar Rig',
       turnOnRig: 'Encender Rig',
@@ -406,6 +461,7 @@ export default {
       cooling: 'Refrigeracion:',
       power: 'Poder:',
       card: 'Tarjeta:',
+      boost: 'Boost:',
       rechargeAmount: 'Recarga:',
       action: 'Accion:',
       startMining: 'Iniciar mineria',
@@ -564,6 +620,7 @@ export default {
       easy: 'Facil',
       medium: 'Media',
       hard: 'Dificil',
+      epic: 'Epica',
     },
     types: {
       mine_blocks: 'Minar bloques',
@@ -572,6 +629,40 @@ export default {
       repair_rig: 'Reparar rig',
       use_cooling: 'Usar refrigeracion',
       recharge_resource: 'Recargar recursos',
+    },
+  },
+
+  slots: {
+    title: 'Slots de Rigs',
+    currentSlots: 'Slots actuales',
+    used: 'Usados',
+    available: 'Disponible',
+    nextUpgrade: 'Siguiente mejora',
+    allUpgrades: 'Todas las mejoras',
+    buySlot: 'Comprar Slot',
+    insufficientFunds: 'Fondos insuficientes',
+    purchaseSuccess: '¡Slot comprado exitosamente!',
+    maxReached: '¡Maximo alcanzado!',
+    clickToUpgrade: 'Click para mejorar slots',
+    noSlotsAvailable: 'No tienes slots disponibles. Compra mas para agregar rigs.',
+    unlockNewSlot: 'Desbloquea un nuevo slot',
+    buyRigToUse: 'Compra un rig en el mercado',
+    confirmPurchase: 'Confirmar compra',
+    confirmMessage: '¿Estas seguro de que deseas comprar este slot?',
+    descriptions: {
+      slot2: 'Desbloquea un segundo espacio para rig',
+      slot3: 'Desbloquea un tercer espacio para rig',
+      slot4: 'Desbloquea un cuarto espacio para rig',
+      slot5: 'Desbloquea un quinto espacio para rig',
+      expansion: 'Expande tu operacion de mineria',
+      medium: 'Operacion de mineria mediana',
+      large: 'Operacion de mineria grande',
+      smallFarm: 'Granja pequena',
+      mediumFarm: 'Granja mediana',
+      largeFarm: 'Granja grande',
+      megaFarm: 'Mega granja',
+      industrial: 'Granja industrial',
+      maxPower: 'Maximo poder',
     },
   },
 };
