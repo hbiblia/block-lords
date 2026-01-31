@@ -36,6 +36,26 @@ const loading = ref(false);
 const buying = ref(false);
 const activeFilter = ref<'all' | 'rigs' | 'cooling' | 'energy' | 'internet' | 'boosts'>('all');
 
+// Mobile category popup
+const showMobileCategories = ref(false);
+
+function selectCategory(category: typeof activeFilter.value) {
+  activeFilter.value = category;
+  showMobileCategories.value = false;
+}
+
+function getCategoryIcon(category: typeof activeFilter.value): string {
+  switch (category) {
+    case 'all': return '🏪';
+    case 'rigs': return '⛏️';
+    case 'cooling': return '❄️';
+    case 'energy': return '⚡';
+    case 'internet': return '📡';
+    case 'boosts': return '🚀';
+    default: return '🏪';
+  }
+}
+
 // Confirmation dialog state
 const showConfirm = ref(false);
 const confirmAction = ref<{
@@ -611,8 +631,8 @@ watch(() => props.show, (newVal) => {
 
         <!-- Main Content with Sidebar -->
         <div class="flex flex-1 overflow-hidden">
-          <!-- Sidebar Filters -->
-          <div class="w-40 border-r border-border/50 p-2 flex flex-col gap-1 shrink-0">
+          <!-- Sidebar Filters (hidden on mobile) -->
+          <div class="hidden md:flex w-40 border-r border-border/50 p-2 flex-col gap-1 shrink-0">
             <button
               @click="activeFilter = 'all'"
               class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left"
@@ -916,6 +936,17 @@ watch(() => props.show, (newVal) => {
             </div>
           </div>
         </div>
+
+      </div>
+
+      <!-- Mobile Category Button (floating circle centered at bottom) -->
+      <div class="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[5]">
+        <button
+          @click="showMobileCategories = true"
+          class="w-14 h-14 flex items-center justify-center bg-accent-primary rounded-full shadow-lg hover:bg-accent-primary/90 transition-all active:scale-95"
+        >
+          <span class="text-2xl">{{ getCategoryIcon(activeFilter) }}</span>
+        </button>
       </div>
 
       <!-- Confirmation Dialog -->
@@ -978,6 +1009,91 @@ watch(() => props.show, (newVal) => {
         </div>
       </div>
 
+      <!-- Mobile Categories Popup -->
+      <Transition name="modal">
+        <div
+          v-if="showMobileCategories"
+          class="absolute inset-0 flex items-end justify-center bg-black/50 z-10 md:hidden"
+          @click.self="showMobileCategories = false"
+        >
+          <div class="w-full bg-bg-secondary rounded-t-2xl p-4 animate-slide-up">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold">{{ t('market.filters.selectCategory', 'Categoría') }}</h3>
+              <button
+                @click="showMobileCategories = false"
+                class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                @click="selectCategory('all')"
+                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                :class="activeFilter === 'all'
+                  ? 'bg-accent-primary/20 text-accent-primary border border-accent-primary/30'
+                  : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
+              >
+                <span class="text-xl">🏪</span>
+                <span class="font-medium">{{ t('market.filters.all', 'Todos') }}</span>
+              </button>
+              <button
+                @click="selectCategory('rigs')"
+                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                :class="activeFilter === 'rigs'
+                  ? 'bg-accent-primary/20 text-accent-primary border border-accent-primary/30'
+                  : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
+              >
+                <span class="text-xl">⛏️</span>
+                <span class="font-medium">{{ t('market.tabs.rigs') }}</span>
+              </button>
+              <button
+                @click="selectCategory('cooling')"
+                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                :class="activeFilter === 'cooling'
+                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                  : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
+              >
+                <span class="text-xl">❄️</span>
+                <span class="font-medium">{{ t('market.tabs.cooling') }}</span>
+              </button>
+              <button
+                @click="selectCategory('energy')"
+                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                :class="activeFilter === 'energy'
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
+              >
+                <span class="text-xl">⚡</span>
+                <span class="font-medium">{{ t('market.energy') }}</span>
+              </button>
+              <button
+                @click="selectCategory('internet')"
+                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                :class="activeFilter === 'internet'
+                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                  : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
+              >
+                <span class="text-xl">📡</span>
+                <span class="font-medium">{{ t('market.internet') }}</span>
+              </button>
+              <button
+                @click="selectCategory('boosts')"
+                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                :class="activeFilter === 'boosts'
+                  ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                  : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
+              >
+                <span class="text-xl">🚀</span>
+                <span class="font-medium">{{ t('market.tabs.boosts') }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
       <!-- Processing Modal -->
       <div
         v-if="showProcessingModal"
@@ -1032,3 +1148,28 @@ watch(() => props.show, (newVal) => {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+</style>

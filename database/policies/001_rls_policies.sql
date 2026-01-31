@@ -409,3 +409,77 @@ DROP POLICY IF EXISTS "Actualizar propio tracking online" ON player_online_track
 CREATE POLICY "Actualizar propio tracking online"
   ON player_online_tracking FOR UPDATE
   USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA BOOST_ITEMS (catálogo público)
+-- =====================================================
+
+ALTER TABLE boost_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Catálogo de boosts público" ON boost_items;
+CREATE POLICY "Catálogo de boosts público"
+  ON boost_items FOR SELECT
+  USING (true);
+
+-- =====================================================
+-- POLÍTICAS PARA PLAYER_BOOSTS (Boosts del jugador)
+-- =====================================================
+
+ALTER TABLE player_boosts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ver propios boosts" ON player_boosts;
+CREATE POLICY "Ver propios boosts"
+  ON player_boosts FOR SELECT
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Insertar propios boosts" ON player_boosts;
+CREATE POLICY "Insertar propios boosts"
+  ON player_boosts FOR INSERT
+  WITH CHECK (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Actualizar propios boosts" ON player_boosts;
+CREATE POLICY "Actualizar propios boosts"
+  ON player_boosts FOR UPDATE
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Eliminar propios boosts" ON player_boosts;
+CREATE POLICY "Eliminar propios boosts"
+  ON player_boosts FOR DELETE
+  USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA ACTIVE_BOOSTS (Boosts activos)
+-- =====================================================
+
+ALTER TABLE active_boosts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ver propios boosts activos" ON active_boosts;
+CREATE POLICY "Ver propios boosts activos"
+  ON active_boosts FOR SELECT
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Insertar propios boosts activos" ON active_boosts;
+CREATE POLICY "Insertar propios boosts activos"
+  ON active_boosts FOR INSERT
+  WITH CHECK (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Actualizar propios boosts activos" ON active_boosts;
+CREATE POLICY "Actualizar propios boosts activos"
+  ON active_boosts FOR UPDATE
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Eliminar propios boosts activos" ON active_boosts;
+CREATE POLICY "Eliminar propios boosts activos"
+  ON active_boosts FOR DELETE
+  USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA RIG_SLOT_UPGRADES (catálogo público)
+-- =====================================================
+
+ALTER TABLE rig_slot_upgrades ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Catálogo de upgrades de slots público" ON rig_slot_upgrades;
+CREATE POLICY "Catálogo de upgrades de slots público"
+  ON rig_slot_upgrades FOR SELECT
+  USING (true);

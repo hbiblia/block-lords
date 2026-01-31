@@ -298,7 +298,9 @@ function startMiningSimulation() {
         miningProgress.value = 0;
       }
     } else {
+      // Reset progress when all rigs are stopped
       miningProgress.value = 0;
+      hashesCalculated.value = 0;
     }
   }, 100);
 }

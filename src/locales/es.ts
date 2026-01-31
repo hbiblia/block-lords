@@ -187,6 +187,8 @@ export default {
     },
     toggleError: 'No se pudo cambiar el estado del rig. Intenta de nuevo.',
     connectionError: 'Error de conexion al cambiar estado del rig.',
+    confirmStop: '¿Detener rig?',
+    confirmStopMessage: '¿Estás seguro de que deseas detener este rig?',
   },
 
   market: {
@@ -195,6 +197,7 @@ export default {
     balance: 'Balance:',
     filters: {
       all: 'Todos',
+      selectCategory: 'Categoría',
     },
     tabs: {
       rigs: 'Rigs de Mineria',

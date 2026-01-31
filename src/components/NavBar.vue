@@ -59,6 +59,17 @@ function toggleMobileResources() {
   showMobileResources.value = !showMobileResources.value;
 }
 
+// Profile dropdown
+const showProfileMenu = ref(false);
+
+function toggleProfileMenu() {
+  showProfileMenu.value = !showProfileMenu.value;
+}
+
+function closeProfileMenu() {
+  showProfileMenu.value = false;
+}
+
 async function handleLogout() {
   realtimeStore.disconnect();
   await authStore.logout();
@@ -179,51 +190,64 @@ async function handleLogout() {
           </div>
 
           <!-- Profile Dropdown -->
-          <div class="relative group">
-            <button class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-bg-tertiary transition-colors">
+          <div class="relative">
+            <button
+              @click="toggleProfileMenu"
+              class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-bg-tertiary transition-colors"
+              :class="{ 'bg-bg-tertiary': showProfileMenu }"
+            >
               <div class="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center text-sm font-bold">
                 {{ username.charAt(0).toUpperCase() }}
               </div>
               <span class="text-white font-medium hidden sm:inline">{{ username }}</span>
-              <svg class="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                class="w-4 h-4 text-text-muted transition-transform"
+                :class="{ 'rotate-180': showProfileMenu }"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
 
-            <div class="absolute right-0 top-full mt-2 w-48 card opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all shadow-card">
-              <RouterLink
-                to="/profile"
-                class="flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary transition-colors rounded-t-lg"
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                {{ t('nav.profile') }}
-              </RouterLink>
-              <button
-                @click="handleToggleLocale"
-                class="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary transition-colors"
-              >
-                <span class="w-4 h-4 flex items-center justify-center text-sm">{{ currentLocale === 'en' ? '🇪🇸' : '🇺🇸' }}</span>
-                {{ currentLocale === 'en' ? 'Español' : 'English' }}
-              </button>
-              <button
-                @click="handleToggleSound"
-                class="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary transition-colors"
-              >
-                <span class="w-4 h-4 flex items-center justify-center text-sm">{{ soundEnabled ? '🔊' : '🔇' }}</span>
-                {{ soundEnabled ? t('nav.soundOn', 'Sound On') : t('nav.soundOff', 'Sound Off') }}
-              </button>
-              <button
-                @click="handleLogout"
-                class="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary transition-colors text-status-danger rounded-b-lg"
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                {{ t('nav.logout') }}
-              </button>
-            </div>
+            <Transition name="dropdown">
+              <div v-if="showProfileMenu" class="absolute right-0 top-full mt-2 w-48 card shadow-card">
+                <RouterLink
+                  to="/profile"
+                  @click="closeProfileMenu"
+                  class="flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary transition-colors rounded-t-lg"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  {{ t('nav.profile') }}
+                </RouterLink>
+                <button
+                  @click="handleToggleLocale(); closeProfileMenu()"
+                  class="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary transition-colors"
+                >
+                  <span class="w-4 h-4 flex items-center justify-center text-sm">{{ currentLocale === 'en' ? '🇪🇸' : '🇺🇸' }}</span>
+                  {{ currentLocale === 'en' ? 'Español' : 'English' }}
+                </button>
+                <button
+                  @click="handleToggleSound(); closeProfileMenu()"
+                  class="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary transition-colors"
+                >
+                  <span class="w-4 h-4 flex items-center justify-center text-sm">{{ soundEnabled ? '🔊' : '🔇' }}</span>
+                  {{ soundEnabled ? t('nav.soundOn', 'Sound On') : t('nav.soundOff', 'Sound Off') }}
+                </button>
+                <button
+                  @click="handleLogout(); closeProfileMenu()"
+                  class="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary transition-colors text-status-danger rounded-b-lg"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  {{ t('nav.logout') }}
+                </button>
+              </div>
+            </Transition>
           </div>
         </template>
 
@@ -243,6 +267,15 @@ async function handleLogout() {
       </div>
     </div>
   </nav>
+
+  <!-- Profile Menu Backdrop -->
+  <Transition name="backdrop">
+    <div
+      v-if="showProfileMenu"
+      class="fixed inset-0 z-40"
+      @click="closeProfileMenu"
+    ></div>
+  </Transition>
 
   <!-- Mobile Resources Backdrop (Teleported to body) -->
   <Teleport to="body">

@@ -187,6 +187,8 @@ export default {
     },
     toggleError: 'Could not change rig state. Please try again.',
     connectionError: 'Connection error while changing rig state.',
+    confirmStop: 'Stop rig?',
+    confirmStopMessage: 'Are you sure you want to stop this rig?',
   },
 
   market: {
@@ -195,6 +197,7 @@ export default {
     balance: 'Balance:',
     filters: {
       all: 'All',
+      selectCategory: 'Category',
     },
     tabs: {
       rigs: 'Mining Rigs',
