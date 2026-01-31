@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
@@ -52,6 +52,13 @@ const internetStatus = computed(() => {
   return 'normal';
 });
 
+// Mobile resources panel
+const showMobileResources = ref(false);
+
+function toggleMobileResources() {
+  showMobileResources.value = !showMobileResources.value;
+}
+
 async function handleLogout() {
   realtimeStore.disconnect();
   await authStore.logout();
@@ -74,7 +81,29 @@ async function handleLogout() {
       <!-- User Menu -->
       <div class="flex items-center gap-4">
         <template v-if="isAuthenticated">
-          <!-- Balances & Resources -->
+          <!-- Mobile Resources Button -->
+          <div class="md:hidden relative">
+            <button
+              @click="toggleMobileResources"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-secondary rounded-lg text-sm"
+              :class="{ 'ring-2 ring-accent-primary': showMobileResources }"
+            >
+              <span class="text-status-warning">🪙</span>
+              <span class="font-medium">{{ authStore.player?.gamecoin_balance?.toFixed(0) ?? '0' }}</span>
+              <svg
+                class="w-3.5 h-3.5 text-text-muted transition-transform"
+                :class="{ 'rotate-180': showMobileResources }"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+          </div>
+
+          <!-- Balances & Resources (Desktop) -->
           <div class="hidden md:flex items-center gap-3 text-sm">
             <!-- Coins -->
             <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg">
@@ -214,4 +243,136 @@ async function handleLogout() {
       </div>
     </div>
   </nav>
+
+  <!-- Mobile Resources Backdrop (Teleported to body) -->
+  <Teleport to="body">
+    <Transition name="backdrop">
+      <div
+        v-if="showMobileResources"
+        class="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm"
+        @click="showMobileResources = false"
+      ></div>
+    </Transition>
+  </Teleport>
+
+  <!-- Mobile Resources Dropdown (Teleported to body) -->
+  <Teleport to="body">
+    <Transition name="dropdown">
+      <div
+        v-if="showMobileResources"
+        class="fixed top-[4.5rem] right-4 w-56 card p-3 shadow-card z-[70]"
+      >
+        <!-- GameCoin -->
+        <div class="flex items-center justify-between py-2 border-b border-border/30">
+          <div class="flex items-center gap-2">
+            <span class="text-status-warning text-lg">🪙</span>
+            <span class="text-text-muted text-sm">GameCoin</span>
+          </div>
+          <span class="font-bold">{{ authStore.player?.gamecoin_balance?.toFixed(2) ?? '0.00' }}</span>
+        </div>
+
+        <!-- Crypto -->
+        <div class="flex items-center justify-between py-2 border-b border-border/30">
+          <div class="flex items-center gap-2">
+            <span class="text-accent-primary text-lg">💎</span>
+            <span class="text-text-muted text-sm">Crypto</span>
+          </div>
+          <span class="font-bold">{{ authStore.player?.crypto_balance?.toFixed(2) ?? '0.00' }}</span>
+        </div>
+
+        <!-- Energy -->
+        <div class="py-2 border-b border-border/30">
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="flex items-center gap-2">
+              <span :class="{ 'animate-pulse': miningStore.isMining }">⚡</span>
+              <span class="text-text-muted text-sm">{{ t('nav.energy', 'Energía') }}</span>
+            </div>
+            <span
+              class="font-bold text-sm"
+              :class="{
+                'text-status-danger': energyStatus === 'critical',
+                'text-status-warning': energyStatus === 'warning',
+                'text-white': energyStatus === 'normal'
+              }"
+            >{{ energy.toFixed(0) }} / {{ maxEnergy.toFixed(0) }}</span>
+          </div>
+          <div
+            class="h-2.5 rounded-full overflow-hidden"
+            :class="{
+              'bg-status-danger/20': energyStatus === 'critical',
+              'bg-status-warning/20': energyStatus === 'warning',
+              'bg-bg-tertiary': energyStatus === 'normal'
+            }"
+          >
+            <div
+              class="h-full rounded-full transition-all duration-200"
+              :class="{
+                'bg-status-danger': energyStatus === 'critical',
+                'bg-gradient-to-r from-status-warning to-yellow-400': energyStatus !== 'critical'
+              }"
+              :style="{ width: `${energyPercent}%` }"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Internet -->
+        <div class="py-2">
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="flex items-center gap-2">
+              <span :class="{ 'animate-pulse': miningStore.isMining }">📡</span>
+              <span class="text-text-muted text-sm">Internet</span>
+            </div>
+            <span
+              class="font-bold text-sm"
+              :class="{
+                'text-status-danger': internetStatus === 'critical',
+                'text-status-warning': internetStatus === 'warning',
+                'text-white': internetStatus === 'normal'
+              }"
+            >{{ internet.toFixed(0) }} / {{ maxInternet.toFixed(0) }}</span>
+          </div>
+          <div
+            class="h-2.5 rounded-full overflow-hidden"
+            :class="{
+              'bg-status-danger/20': internetStatus === 'critical',
+              'bg-status-warning/20': internetStatus === 'warning',
+              'bg-bg-tertiary': internetStatus === 'normal'
+            }"
+          >
+            <div
+              class="h-full rounded-full transition-all duration-200"
+              :class="{
+                'bg-status-danger': internetStatus === 'critical',
+                'bg-gradient-to-r from-accent-tertiary to-cyan-400': internetStatus !== 'critical'
+              }"
+              :style="{ width: `${internetPercent}%` }"
+            ></div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
+
+<style scoped>
+.dropdown-enter-active,
+.dropdown-leave-active {
+  transition: all 0.2s ease;
+}
+
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.backdrop-enter-active,
+.backdrop-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.backdrop-enter-from,
+.backdrop-leave-to {
+  opacity: 0;
+}
+</style>

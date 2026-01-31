@@ -1288,9 +1288,9 @@ BEGIN
       -- Eliminar refrigeración agotada
       DELETE FROM rig_cooling WHERE player_rig_id = v_rig.id AND durability <= 0;
 
-      -- Si condición llega a 0, apagar el rig
+      -- Si condición llega a 0, apagar el rig y resetear temperatura
       IF (v_rig.condition - v_deterioration) <= 0 THEN
-        UPDATE player_rigs SET is_active = false WHERE id = v_rig.id;
+        UPDATE player_rigs SET is_active = false, temperature = 0 WHERE id = v_rig.id;
         INSERT INTO player_events (player_id, type, data)
         VALUES (v_player.id, 'rig_broken', json_build_object(
           'rig_id', v_rig.id,
@@ -1311,9 +1311,9 @@ BEGIN
         internet = v_new_internet
     WHERE id = v_player.id;
 
-    -- Apagar rigs si no hay energía o internet
+    -- Apagar rigs si no hay energía o internet y resetear temperatura
     IF v_new_energy = 0 OR v_new_internet = 0 THEN
-      UPDATE player_rigs SET is_active = false WHERE player_id = v_player.id;
+      UPDATE player_rigs SET is_active = false, temperature = 0 WHERE player_id = v_player.id;
       INSERT INTO player_events (player_id, type, data)
       VALUES (v_player.id, 'rigs_shutdown', json_build_object(
         'reason', CASE WHEN v_new_energy = 0 THEN 'energy' ELSE 'internet' END

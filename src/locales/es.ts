@@ -37,6 +37,7 @@ export default {
     disconnected: 'Desconectado',
     soundOn: 'Sonido Activado',
     soundOff: 'Sonido Desactivado',
+    energy: 'Energía',
   },
 
   home: {

@@ -40,6 +40,12 @@ const slotInfo = ref<{
 const buyingSlot = ref(false);
 const showConfirmSlotPurchase = ref(false);
 
+// Stop rig confirmation modal
+const showConfirmStopRig = ref(false);
+const rigToStop = ref<typeof rigs.value[0] | null>(null);
+const stoppingRig = ref(false);
+const stopRigError = ref<string | null>(null);
+
 function openSlotPurchaseConfirm() {
   if (!canAffordSlot()) return;
   showConfirmSlotPurchase.value = true;
@@ -309,40 +315,45 @@ async function handleToggleRig(rigId: string) {
 
   if (!rig) return;
 
-  // Pre-check: If trying to turn ON, verify resources are sufficient for at least one tick
-  if (!rig.is_active) {
-    const player = authStore.player;
-    if (player) {
-      const requiredEnergy = rig.rig.power_consumption;
-      const requiredInternet = rig.rig.internet_consumption;
+  // Si el rig está activo, mostrar modal de confirmación para parar
+  if (rig.is_active) {
+    rigToStop.value = rig;
+    stopRigError.value = null;
+    showConfirmStopRig.value = true;
+    return;
+  }
 
-      if (player.energy < requiredEnergy) {
-        // Use addNotification directly to bypass deduplication (user-initiated action)
-        notificationsStore.addNotification({
-          type: 'energy_depleted',
-          title: 'notifications.energyDepleted.title',
-          message: 'notifications.energyDepleted.message',
-          icon: '⚡',
-          severity: 'error',
-        });
-        return;
-      }
-      if (player.internet < requiredInternet) {
-        notificationsStore.addNotification({
-          type: 'internet_depleted',
-          title: 'notifications.internetDepleted.title',
-          message: 'notifications.internetDepleted.message',
-          icon: '📡',
-          severity: 'error',
-        });
-        return;
-      }
+  // Pre-check: If trying to turn ON, verify resources are sufficient for at least one tick
+  const player = authStore.player;
+  if (player) {
+    const requiredEnergy = rig.rig.power_consumption;
+    const requiredInternet = rig.rig.internet_consumption;
+
+    if (player.energy < requiredEnergy) {
+      // Use addNotification directly to bypass deduplication (user-initiated action)
+      notificationsStore.addNotification({
+        type: 'energy_depleted',
+        title: 'notifications.energyDepleted.title',
+        message: 'notifications.energyDepleted.message',
+        icon: '⚡',
+        severity: 'error',
+      });
+      return;
+    }
+    if (player.internet < requiredInternet) {
+      notificationsStore.addNotification({
+        type: 'internet_depleted',
+        title: 'notifications.internetDepleted.title',
+        message: 'notifications.internetDepleted.message',
+        icon: '📡',
+        severity: 'error',
+      });
+      return;
     }
   }
 
-  // Optimistic update for visual feedback
-  const wasActive = rig.is_active;
-  rig.is_active = !rig.is_active;
+  // Optimistic update for visual feedback (solo para encender)
+  rig.is_active = true;
   syncMiningStore();
   playSound('click');
 
@@ -353,7 +364,6 @@ async function handleToggleRig(rigId: string) {
       // Revert and resync from server to ensure UI matches DB state
       await loadData();
       playSound('error');
-      // Use notification system instead of alert
       notificationsStore.addNotification({
         type: 'rig_broken',
         title: 'common.error',
@@ -362,7 +372,7 @@ async function handleToggleRig(rigId: string) {
         severity: 'error',
         data: { error: result.error },
       });
-    } else if (!wasActive) {
+    } else {
       // Rig turned on successfully
       playSound('success');
     }
@@ -379,6 +389,39 @@ async function handleToggleRig(rigId: string) {
       severity: 'error',
     });
   }
+}
+
+async function confirmStopRig() {
+  if (!rigToStop.value || stoppingRig.value) return;
+
+  stoppingRig.value = true;
+  stopRigError.value = null;
+
+  try {
+    const result = await toggleRig(authStore.player!.id, rigToStop.value.id);
+
+    if (!result.success) {
+      playSound('error');
+      stopRigError.value = result.error || t('mining.toggleError');
+    } else {
+      playSound('click');
+      showConfirmStopRig.value = false;
+      rigToStop.value = null;
+      await loadData();
+    }
+  } catch (e) {
+    console.error('Error stopping rig:', e);
+    playSound('error');
+    stopRigError.value = t('mining.connectionError');
+  } finally {
+    stoppingRig.value = false;
+  }
+}
+
+function cancelStopRig() {
+  showConfirmStopRig.value = false;
+  rigToStop.value = null;
+  stopRigError.value = null;
 }
 
 function handleBlockMined(event: CustomEvent) {
@@ -754,22 +797,28 @@ onUnmounted(() => {
           </div>
 
           <!-- Stats Grid -->
-          <div class="grid grid-cols-4 gap-4">
-            <div class="bg-bg-secondary rounded-xl p-3 text-center">
-              <div class="text-xl font-bold text-status-warning">{{ miningChance.toFixed(2) }}%</div>
-              <div class="text-xs text-text-muted">{{ t('mining.probability') }}</div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <!-- Private stat (user) -->
+            <div class="bg-accent-primary/10 border border-accent-primary/30 rounded-xl p-3 text-center relative">
+              <div class="absolute top-1 right-1.5 text-[10px] text-accent-primary/70">👤</div>
+              <div class="text-lg font-bold text-status-warning">{{ miningChance.toFixed(2) }}%</div>
+              <div class="text-[10px] text-text-muted">{{ t('mining.probability') }}</div>
             </div>
-            <div class="bg-bg-secondary rounded-xl p-3 text-center">
-              <div class="text-xl font-bold text-accent-tertiary">{{ networkStats.difficulty?.toLocaleString() ?? 0 }}</div>
-              <div class="text-xs text-text-muted">{{ t('mining.difficulty') }}</div>
+            <!-- Global stats (network) -->
+            <div class="bg-bg-secondary rounded-xl p-3 text-center relative">
+              <div class="absolute top-1 right-1.5 text-[10px] text-text-muted/50">🌐</div>
+              <div class="text-lg font-bold text-accent-tertiary">{{ networkStats.difficulty?.toLocaleString() ?? 0 }}</div>
+              <div class="text-[10px] text-text-muted">{{ t('mining.difficulty') }}</div>
             </div>
-            <div class="bg-bg-secondary rounded-xl p-3 text-center">
-              <div class="text-xl font-bold text-accent-primary">{{ networkStats.activeMiners ?? 0 }}</div>
-              <div class="text-xs text-text-muted">{{ t('mining.miners') }}</div>
+            <div class="bg-bg-secondary rounded-xl p-3 text-center relative">
+              <div class="absolute top-1 right-1.5 text-[10px] text-text-muted/50">🌐</div>
+              <div class="text-lg font-bold text-accent-primary">{{ networkStats.activeMiners ?? 0 }}</div>
+              <div class="text-[10px] text-text-muted">{{ t('mining.miners') }}</div>
             </div>
-            <div class="bg-bg-secondary rounded-xl p-3 text-center">
-              <div class="text-xl font-bold text-status-success">#{{ networkStats.latestBlock?.height ?? 0 }}</div>
-              <div class="text-xs text-text-muted">{{ t('mining.lastBlock') }}</div>
+            <div class="bg-bg-secondary rounded-xl p-3 text-center relative">
+              <div class="absolute top-1 right-1.5 text-[10px] text-text-muted/50">🌐</div>
+              <div class="text-lg font-bold text-status-success">#{{ networkStats.latestBlock?.height ?? 0 }}</div>
+              <div class="text-[10px] text-text-muted">{{ t('mining.lastBlock') }}</div>
             </div>
           </div>
         </div>
@@ -813,19 +862,9 @@ onUnmounted(() => {
             <div
               v-for="playerRig in rigs"
               :key="playerRig.id"
-              class="bg-bg-secondary/80 rounded-xl border border-border/30 p-4 relative overflow-hidden"
+              class="bg-bg-secondary/80 rounded-xl border p-4 relative overflow-hidden"
+              :class="playerRig.condition <= 0 ? 'border-status-danger/70' : playerRig.condition < 30 ? 'border-status-warning/50' : 'border-border/30'"
             >
-              <!-- Subtle tier indicator -->
-              <div
-                class="absolute top-0 left-0 w-1 h-full"
-                :class="{
-                  'bg-purple-500/70': playerRig.rig.tier === 'elite',
-                  'bg-yellow-500/70': playerRig.rig.tier === 'advanced',
-                  'bg-gray-400/70': playerRig.rig.tier === 'standard',
-                  'bg-amber-600/70': playerRig.rig.tier === 'basic'
-                }"
-              ></div>
-
               <!-- Mining indicator dot -->
               <div v-if="playerRig.is_active" class="absolute top-3 right-3">
                 <span class="relative flex h-2.5 w-2.5">
@@ -1138,6 +1177,62 @@ onUnmounted(() => {
                   <span class="animate-spin">⏳</span>
                 </span>
                 <span v-else>{{ t('common.confirm', 'Confirmar') }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Stop Rig Confirmation Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="showConfirmStopRig && rigToStop"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          @click.self="cancelStopRig"
+        >
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+          <div class="relative bg-bg-primary border border-border rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+            <h3 class="text-lg font-bold mb-4 text-center">{{ t('mining.confirmStop', '¿Detener rig?') }}</h3>
+
+            <div class="bg-bg-secondary rounded-xl p-4 mb-4">
+              <div class="text-center mb-3">
+                <div class="text-3xl mb-2">⏹️</div>
+                <div class="font-semibold" :class="getTierColor(rigToStop.rig.tier)">{{ getRigName(rigToStop.rig.id) }}</div>
+              </div>
+              <div class="flex justify-center gap-4 text-sm text-text-muted">
+                <span>⚡ {{ rigToStop.rig.hashrate.toLocaleString() }} H/s</span>
+                <span>🌡️ {{ (rigToStop.temperature ?? 0).toFixed(0) }}°C</span>
+              </div>
+            </div>
+
+            <!-- Error message -->
+            <div v-if="stopRigError" class="mb-4 p-3 rounded-lg bg-status-danger/20 border border-status-danger/30">
+              <p class="text-sm text-status-danger text-center">{{ stopRigError }}</p>
+            </div>
+
+            <p class="text-sm text-text-muted text-center mb-4">
+              {{ t('mining.confirmStopMessage', '¿Estás seguro de que deseas detener este rig?') }}
+            </p>
+
+            <div class="flex gap-3">
+              <button
+                @click="cancelStopRig"
+                :disabled="stoppingRig"
+                class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+              >
+                {{ t('common.cancel', 'Cancelar') }}
+              </button>
+              <button
+                @click="confirmStopRig"
+                :disabled="stoppingRig"
+                class="flex-1 py-2.5 rounded-lg font-semibold bg-status-danger/20 text-status-danger hover:bg-status-danger/30 transition-colors"
+              >
+                <span v-if="stoppingRig" class="flex items-center justify-center gap-2">
+                  <span class="animate-spin">⏳</span>
+                </span>
+                <span v-else>{{ t('mining.stop', 'Detener') }}</span>
               </button>
             </div>
           </div>
