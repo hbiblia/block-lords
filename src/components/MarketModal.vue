@@ -45,6 +45,11 @@ const confirmAction = ref<{
   description: string;
 } | null>(null);
 
+// Processing modal state
+const showProcessingModal = ref(false);
+const processingStatus = ref<'processing' | 'success' | 'error'>('processing');
+const processingError = ref<string>('');
+
 // Catálogos
 const availableRigs = ref<Array<{
   id: string;
@@ -182,6 +187,9 @@ function requestBuyRig(rig: typeof availableRigs.value[0]) {
 async function buyRig(rigId: string) {
   if (!authStore.player) return;
   buying.value = true;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
 
   try {
     const { data, error } = await supabase.rpc('buy_rig', {
@@ -194,13 +202,16 @@ async function buyRig(rigId: string) {
     if (data?.success) {
       await loadData();
       await authStore.fetchPlayer();
+      processingStatus.value = 'success';
       emit('purchased');
     } else {
-      alert(data?.error ?? 'Error al comprar rig');
+      processingStatus.value = 'error';
+      processingError.value = data?.error ?? t('market.processing.errorBuyingRig');
     }
   } catch (e) {
     console.error('Error buying rig:', e);
-    alert('Error al comprar rig');
+    processingStatus.value = 'error';
+    processingError.value = t('market.processing.errorBuyingRig');
   } finally {
     buying.value = false;
   }
@@ -220,6 +231,9 @@ function requestBuyCooling(item: typeof coolingItems.value[0]) {
 async function buyCooling(coolingId: string) {
   if (!authStore.player) return;
   buying.value = true;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
 
   try {
     const { data, error } = await supabase.rpc('buy_cooling', {
@@ -232,13 +246,16 @@ async function buyCooling(coolingId: string) {
     if (data?.success) {
       await loadData();
       await authStore.fetchPlayer();
+      processingStatus.value = 'success';
       emit('purchased');
     } else {
-      alert(data?.error ?? 'Error al comprar refrigeración');
+      processingStatus.value = 'error';
+      processingError.value = data?.error ?? t('market.processing.errorBuyingCooling');
     }
   } catch (e) {
     console.error('Error buying cooling:', e);
-    alert('Error al comprar refrigeración');
+    processingStatus.value = 'error';
+    processingError.value = t('market.processing.errorBuyingCooling');
   } finally {
     buying.value = false;
   }
@@ -258,6 +275,9 @@ function requestBuyCard(card: typeof prepaidCards.value[0]) {
 async function buyCard(cardId: string) {
   if (!authStore.player) return;
   buying.value = true;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
 
   try {
     const { data, error } = await supabase.rpc('buy_prepaid_card', {
@@ -270,16 +290,25 @@ async function buyCard(cardId: string) {
     if (data?.success) {
       await loadData();
       await authStore.fetchPlayer();
+      processingStatus.value = 'success';
       emit('purchased');
     } else {
-      alert(data?.error ?? 'Error al comprar tarjeta');
+      processingStatus.value = 'error';
+      processingError.value = data?.error ?? t('market.processing.errorBuyingCard');
     }
   } catch (e) {
     console.error('Error buying card:', e);
-    alert('Error al comprar tarjeta');
+    processingStatus.value = 'error';
+    processingError.value = t('market.processing.errorBuyingCard');
   } finally {
     buying.value = false;
   }
+}
+
+function closeProcessingModal() {
+  showProcessingModal.value = false;
+  processingStatus.value = 'processing';
+  processingError.value = '';
 }
 
 async function confirmPurchase() {
@@ -636,6 +665,58 @@ watch(() => props.show, (newVal) => {
               class="flex-1 py-2.5 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/80 transition-colors disabled:opacity-50"
             >
               {{ buying ? t('market.confirmPurchase.buying') : t('common.confirm') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Processing Modal -->
+      <div
+        v-if="showProcessingModal"
+        class="absolute inset-0 flex items-center justify-center bg-black/70 z-20"
+      >
+        <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
+          <!-- Processing State -->
+          <div v-if="processingStatus === 'processing'" class="text-center">
+            <div class="relative w-16 h-16 mx-auto mb-4">
+              <div class="absolute inset-0 border-4 border-accent-primary/20 rounded-full"></div>
+              <div class="absolute inset-0 border-4 border-accent-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <h3 class="text-lg font-bold mb-2">{{ t('market.processing.title') }}</h3>
+            <p class="text-text-muted text-sm">{{ t('market.processing.wait') }}</p>
+          </div>
+
+          <!-- Success State -->
+          <div v-else-if="processingStatus === 'success'" class="text-center">
+            <div class="w-16 h-16 mx-auto mb-4 bg-status-success/20 rounded-full flex items-center justify-center">
+              <svg class="w-8 h-8 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-bold text-status-success mb-2">{{ t('market.processing.success') }}</h3>
+            <p class="text-text-muted text-sm mb-4">{{ t('market.processing.purchaseComplete') }}</p>
+            <button
+              @click="closeProcessingModal"
+              class="w-full py-2.5 rounded-lg font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors"
+            >
+              {{ t('common.close') }}
+            </button>
+          </div>
+
+          <!-- Error State -->
+          <div v-else-if="processingStatus === 'error'" class="text-center">
+            <div class="w-16 h-16 mx-auto mb-4 bg-status-danger/20 rounded-full flex items-center justify-center">
+              <svg class="w-8 h-8 text-status-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-bold text-status-danger mb-2">{{ t('market.processing.error') }}</h3>
+            <p class="text-text-muted text-sm mb-4">{{ processingError }}</p>
+            <button
+              @click="closeProcessingModal"
+              class="w-full py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+            >
+              {{ t('common.close') }}
             </button>
           </div>
         </div>

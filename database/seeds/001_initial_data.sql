@@ -5,16 +5,17 @@
 -- Usa ON CONFLICT para evitar duplicados
 
 -- Insertar rigs base
+-- Internet consume más que energía para incentivar mejoras
 INSERT INTO rigs (id, name, description, hashrate, power_consumption, internet_consumption, repair_cost, tier, base_price)
 VALUES
-  ('basic_miner', 'Minero Básico', 'Un rig simple para empezar. Bajo consumo, bajo rendimiento.', 100, 0.5, 0.2, 10, 'basic', 0),
-  ('home_miner', 'Minero Casero', 'Rig mejorado para minería doméstica.', 250, 1.0, 0.4, 25, 'basic', 50),
-  ('gpu_rig', 'Rig GPU', 'Múltiples GPUs para mayor hashrate.', 500, 2.0, 0.8, 50, 'standard', 150),
-  ('asic_s9', 'ASIC S9', 'Hardware especializado de minería.', 1000, 3.5, 1.2, 100, 'standard', 400),
-  ('asic_s19', 'ASIC S19', 'ASIC de última generación.', 2500, 5.0, 1.5, 200, 'advanced', 1000),
-  ('mining_farm_small', 'Mini Granja', 'Pequeña granja de minería.', 5000, 8.0, 2.0, 400, 'advanced', 2500),
-  ('mining_farm_large', 'Gran Granja', 'Granja de minería industrial.', 10000, 12.0, 3.0, 750, 'elite', 5000),
-  ('quantum_miner', 'Minero Cuántico', 'Tecnología experimental de minería.', 25000, 15.0, 4.0, 1500, 'elite', 15000)
+  ('basic_miner', 'Minero Básico', 'Un rig simple para empezar. Bajo consumo, bajo rendimiento.', 100, 2.5, 3.5, 80, 'basic', 0),
+  ('home_miner', 'Minero Casero', 'Rig mejorado para minería doméstica.', 250, 5.0, 7.0, 300, 'basic', 200),
+  ('gpu_rig', 'Rig GPU', 'Múltiples GPUs para mayor hashrate.', 500, 8.0, 12.0, 600, 'standard', 500),
+  ('asic_s9', 'ASIC S9', 'Hardware especializado de minería.', 1000, 12.0, 18.0, 1200, 'standard', 1500),
+  ('asic_s19', 'ASIC S19', 'ASIC de última generación.', 2500, 18.0, 28.0, 2500, 'advanced', 4000),
+  ('mining_farm_small', 'Mini Granja', 'Pequeña granja de minería.', 5000, 28.0, 42.0, 5000, 'advanced', 10000),
+  ('mining_farm_large', 'Gran Granja', 'Granja de minería industrial.', 10000, 40.0, 60.0, 10000, 'elite', 25000),
+  ('quantum_miner', 'Minero Cuántico', 'Tecnología experimental de minería.', 25000, 55.0, 85.0, 20000, 'elite', 75000)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
@@ -46,14 +47,14 @@ ON CONFLICT (id) DO UPDATE SET
 -- Insertar items de refrigeración
 INSERT INTO cooling_items (id, name, description, cooling_power, base_price, tier)
 VALUES
-  ('fan_basic', 'Ventilador Básico', 'Un ventilador simple para reducir la temperatura.', 5, 20, 'basic'),
-  ('fan_dual', 'Ventilador Dual', 'Dos ventiladores para mejor circulación de aire.', 10, 50, 'basic'),
-  ('heatsink', 'Disipador de Calor', 'Disipador de aluminio para transferir calor.', 15, 100, 'standard'),
-  ('liquid_cooler', 'Refrigeración Líquida', 'Sistema de refrigeración líquida cerrado.', 25, 250, 'standard'),
-  ('aio_cooler', 'AIO Premium', 'All-in-one de alta gama con radiador de 240mm.', 35, 500, 'advanced'),
-  ('custom_loop', 'Loop Personalizado', 'Sistema de refrigeración líquida custom.', 50, 1000, 'advanced'),
-  ('industrial_ac', 'A/C Industrial', 'Sistema de aire acondicionado industrial.', 70, 2500, 'elite'),
-  ('cryo_system', 'Sistema Criogénico', 'Refrigeración criogénica de última generación.', 90, 5000, 'elite')
+  ('fan_basic', 'Ventilador Básico', 'Un ventilador simple para reducir la temperatura.', 5, 50, 'basic'),
+  ('fan_dual', 'Ventilador Dual', 'Dos ventiladores para mejor circulación de aire.', 10, 120, 'basic'),
+  ('heatsink', 'Disipador de Calor', 'Disipador de aluminio para transferir calor.', 15, 250, 'standard'),
+  ('liquid_cooler', 'Refrigeración Líquida', 'Sistema de refrigeración líquida cerrado.', 25, 600, 'standard'),
+  ('aio_cooler', 'AIO Premium', 'All-in-one de alta gama con radiador de 240mm.', 35, 1200, 'advanced'),
+  ('custom_loop', 'Loop Personalizado', 'Sistema de refrigeración líquida custom.', 50, 2500, 'advanced'),
+  ('industrial_ac', 'A/C Industrial', 'Sistema de aire acondicionado industrial.', 70, 6000, 'elite'),
+  ('cryo_system', 'Sistema Criogénico', 'Refrigeración criogénica de última generación.', 90, 12000, 'elite')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
@@ -64,10 +65,10 @@ ON CONFLICT (id) DO UPDATE SET
 -- Insertar tarjetas prepago de energía
 INSERT INTO prepaid_cards (id, name, description, card_type, amount, base_price, tier)
 VALUES
-  ('energy_10', 'Energía +10', 'Recarga básica de energía.', 'energy', 10, 15, 'basic'),
-  ('energy_25', 'Energía +25', 'Recarga estándar de energía.', 'energy', 25, 35, 'basic'),
-  ('energy_50', 'Energía +50', 'Recarga premium de energía.', 'energy', 50, 65, 'standard'),
-  ('energy_full', 'Energía MAX', 'Recarga completa de energía al 100%.', 'energy', 100, 120, 'standard')
+  ('energy_10', 'Energía +10', 'Recarga básica de energía.', 'energy', 10, 25, 'basic'),
+  ('energy_25', 'Energía +25', 'Recarga estándar de energía.', 'energy', 25, 60, 'basic'),
+  ('energy_50', 'Energía +50', 'Recarga premium de energía.', 'energy', 50, 110, 'standard'),
+  ('energy_full', 'Energía MAX', 'Recarga completa de energía al 100%.', 'energy', 100, 200, 'standard')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
@@ -79,10 +80,10 @@ ON CONFLICT (id) DO UPDATE SET
 -- Insertar tarjetas prepago de internet
 INSERT INTO prepaid_cards (id, name, description, card_type, amount, base_price, tier)
 VALUES
-  ('internet_10', 'Internet +10', 'Recarga básica de datos.', 'internet', 10, 12, 'basic'),
-  ('internet_25', 'Internet +25', 'Recarga estándar de datos.', 'internet', 25, 28, 'basic'),
-  ('internet_50', 'Internet +50', 'Recarga premium de datos.', 'internet', 50, 52, 'standard'),
-  ('internet_full', 'Internet MAX', 'Recarga completa de internet al 100%.', 'internet', 100, 95, 'standard')
+  ('internet_10', 'Internet +10', 'Recarga básica de datos.', 'internet', 10, 20, 'basic'),
+  ('internet_25', 'Internet +25', 'Recarga estándar de datos.', 'internet', 25, 50, 'basic'),
+  ('internet_50', 'Internet +50', 'Recarga premium de datos.', 'internet', 50, 90, 'standard'),
+  ('internet_full', 'Internet MAX', 'Recarga completa de internet al 100%.', 'internet', 100, 160, 'standard')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,

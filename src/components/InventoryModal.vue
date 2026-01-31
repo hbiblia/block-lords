@@ -61,6 +61,17 @@ const confirmAction = ref<{
   };
 } | null>(null);
 
+// Processing modal state
+const showProcessingModal = ref(false);
+const processingStatus = ref<'processing' | 'success' | 'error'>('processing');
+const processingError = ref<string>('');
+
+function closeProcessingModal() {
+  showProcessingModal.value = false;
+  processingStatus.value = 'processing';
+  processingError.value = '';
+}
+
 interface InstalledCoolingItem {
   id: string;
   durability: number;
@@ -155,6 +166,9 @@ function requestInstallCooling(rig: RigItem, cooling: CoolingItem) {
 async function handleInstallCooling(rigId: string, coolingId: string) {
   if (!authStore.player || using.value) return;
   using.value = true;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
 
   try {
     const result = await installCoolingToRig(authStore.player.id, rigId, coolingId);
@@ -162,13 +176,16 @@ async function handleInstallCooling(rigId: string, coolingId: string) {
       await loadInventory();
       await authStore.fetchPlayer();
       selectedRigForCooling.value = null;
+      processingStatus.value = 'success';
       emit('used');
     } else {
-      alert(result.error || 'Error al instalar');
+      processingStatus.value = 'error';
+      processingError.value = result.error || t('inventory.processing.errorInstallCooling');
     }
   } catch (e) {
     console.error('Error installing cooling:', e);
-    alert('Error al instalar refrigeración');
+    processingStatus.value = 'error';
+    processingError.value = t('inventory.processing.errorInstallCooling');
   } finally {
     using.value = false;
   }
@@ -190,19 +207,25 @@ function requestRedeemCard(card: CardItem) {
 async function handleRedeemCard(code: string) {
   if (!authStore.player || using.value) return;
   using.value = true;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
 
   try {
     const result = await redeemPrepaidCard(authStore.player.id, code);
     if (result.success) {
       await loadInventory();
       await authStore.fetchPlayer();
+      processingStatus.value = 'success';
       emit('used');
     } else {
-      alert(result.error || 'Error al canjear');
+      processingStatus.value = 'error';
+      processingError.value = result.error || t('inventory.processing.errorRedeemCard');
     }
   } catch (e) {
     console.error('Error redeeming card:', e);
-    alert('Error al canjear tarjeta');
+    processingStatus.value = 'error';
+    processingError.value = t('inventory.processing.errorRedeemCard');
   } finally {
     using.value = false;
   }
@@ -223,18 +246,24 @@ function requestToggleRig(rig: RigItem) {
 async function handleToggleRig(rigId: string) {
   if (!authStore.player || using.value) return;
   using.value = true;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
 
   try {
     const result = await toggleRig(authStore.player.id, rigId);
     if (result.success) {
       await loadInventory();
+      processingStatus.value = 'success';
       emit('used');
     } else {
-      alert(result.error || 'Error al cambiar estado del rig');
+      processingStatus.value = 'error';
+      processingError.value = result.error || t('inventory.processing.errorToggleRig');
     }
   } catch (e) {
     console.error('Error toggling rig:', e);
-    alert('Error al cambiar estado del rig');
+    processingStatus.value = 'error';
+    processingError.value = t('inventory.processing.errorToggleRig');
   } finally {
     using.value = false;
   }
@@ -257,19 +286,25 @@ function requestRepairRig(rig: RigItem) {
 async function handleRepairRig(rigId: string) {
   if (!authStore.player || using.value) return;
   using.value = true;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
 
   try {
     const result = await repairRig(authStore.player.id, rigId);
     if (result.success) {
       await loadInventory();
       await authStore.fetchPlayer();
+      processingStatus.value = 'success';
       emit('used');
     } else {
-      alert(result.error || 'Error al reparar rig');
+      processingStatus.value = 'error';
+      processingError.value = result.error || t('inventory.processing.errorRepairRig');
     }
   } catch (e) {
     console.error('Error repairing rig:', e);
-    alert('Error al reparar rig');
+    processingStatus.value = 'error';
+    processingError.value = t('inventory.processing.errorRepairRig');
   } finally {
     using.value = false;
   }
@@ -291,18 +326,24 @@ function requestDeleteRig(rig: RigItem) {
 async function handleDeleteRig(rigId: string) {
   if (!authStore.player || using.value) return;
   using.value = true;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
 
   try {
     const result = await deleteRig(authStore.player.id, rigId);
     if (result.success) {
       await loadInventory();
+      processingStatus.value = 'success';
       emit('used');
     } else {
-      alert(result.error || 'Error al eliminar rig');
+      processingStatus.value = 'error';
+      processingError.value = result.error || t('inventory.processing.errorDeleteRig');
     }
   } catch (e) {
     console.error('Error deleting rig:', e);
-    alert('Error al eliminar rig');
+    processingStatus.value = 'error';
+    processingError.value = t('inventory.processing.errorDeleteRig');
   } finally {
     using.value = false;
   }
@@ -900,6 +941,58 @@ onMounted(() => {
                   : 'bg-accent-primary text-white hover:bg-accent-primary/80'"
             >
               {{ using ? t('common.processing') : (confirmAction.type === 'delete' ? t('common.delete') : t('common.confirm')) }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Processing Modal -->
+      <div
+        v-if="showProcessingModal"
+        class="absolute inset-0 flex items-center justify-center bg-black/70 z-20"
+      >
+        <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
+          <!-- Processing State -->
+          <div v-if="processingStatus === 'processing'" class="text-center">
+            <div class="relative w-16 h-16 mx-auto mb-4">
+              <div class="absolute inset-0 border-4 border-accent-primary/20 rounded-full"></div>
+              <div class="absolute inset-0 border-4 border-accent-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <h3 class="text-lg font-bold mb-2">{{ t('inventory.processing.title') }}</h3>
+            <p class="text-text-muted text-sm">{{ t('inventory.processing.wait') }}</p>
+          </div>
+
+          <!-- Success State -->
+          <div v-else-if="processingStatus === 'success'" class="text-center">
+            <div class="w-16 h-16 mx-auto mb-4 bg-status-success/20 rounded-full flex items-center justify-center">
+              <svg class="w-8 h-8 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-bold text-status-success mb-2">{{ t('inventory.processing.success') }}</h3>
+            <p class="text-text-muted text-sm mb-4">{{ t('inventory.processing.actionComplete') }}</p>
+            <button
+              @click="closeProcessingModal"
+              class="w-full py-2.5 rounded-lg font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors"
+            >
+              {{ t('common.close') }}
+            </button>
+          </div>
+
+          <!-- Error State -->
+          <div v-else-if="processingStatus === 'error'" class="text-center">
+            <div class="w-16 h-16 mx-auto mb-4 bg-status-danger/20 rounded-full flex items-center justify-center">
+              <svg class="w-8 h-8 text-status-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-bold text-status-danger mb-2">{{ t('inventory.processing.error') }}</h3>
+            <p class="text-text-muted text-sm mb-4">{{ processingError }}</p>
+            <button
+              @click="closeProcessingModal"
+              class="w-full py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+            >
+              {{ t('common.close') }}
             </button>
           </div>
         </div>

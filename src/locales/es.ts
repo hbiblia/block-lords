@@ -207,6 +207,16 @@ export default {
       after: 'Despues:',
       buying: 'Comprando...',
     },
+    processing: {
+      title: 'Procesando Compra',
+      wait: 'Por favor espera mientras procesamos tu compra...',
+      success: '¡Compra Exitosa!',
+      purchaseComplete: 'Tu item ha sido agregado exitosamente.',
+      error: 'Compra Fallida',
+      errorBuyingRig: 'Error al comprar el rig. Por favor intenta de nuevo.',
+      errorBuyingCooling: 'Error al comprar refrigeracion. Por favor intenta de nuevo.',
+      errorBuyingCard: 'Error al comprar la tarjeta. Por favor intenta de nuevo.',
+    },
   },
 
   profile: {
@@ -320,6 +330,18 @@ export default {
       description: 'Tarjetas prepago para recargar energia e internet.',
       noCards: 'No tienes tarjetas. Compralas en el mercado.',
       recharge: 'Recarga',
+    },
+    processing: {
+      title: 'Procesando Accion',
+      wait: 'Por favor espera mientras procesamos tu accion...',
+      success: '¡Accion Completada!',
+      actionComplete: 'Tu accion ha sido completada exitosamente.',
+      error: 'Accion Fallida',
+      errorInstallCooling: 'Error al instalar refrigeracion. Por favor intenta de nuevo.',
+      errorRedeemCard: 'Error al canjear tarjeta. Por favor intenta de nuevo.',
+      errorToggleRig: 'Error al cambiar estado del rig. Por favor intenta de nuevo.',
+      errorRepairRig: 'Error al reparar rig. Por favor intenta de nuevo.',
+      errorDeleteRig: 'Error al eliminar rig. Por favor intenta de nuevo.',
     },
     confirm: {
       installCooling: 'Instalar Refrigeracion',

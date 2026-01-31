@@ -207,6 +207,16 @@ export default {
       after: 'After:',
       buying: 'Buying...',
     },
+    processing: {
+      title: 'Processing Purchase',
+      wait: 'Please wait while we process your purchase...',
+      success: 'Purchase Complete!',
+      purchaseComplete: 'Your item has been added successfully.',
+      error: 'Purchase Failed',
+      errorBuyingRig: 'Error purchasing rig. Please try again.',
+      errorBuyingCooling: 'Error purchasing cooling. Please try again.',
+      errorBuyingCard: 'Error purchasing card. Please try again.',
+    },
   },
 
   profile: {
@@ -320,6 +330,18 @@ export default {
       description: 'Prepaid cards for recharging energy and internet.',
       noCards: "You don't have any cards. Buy them in the market.",
       recharge: 'Recharge',
+    },
+    processing: {
+      title: 'Processing Action',
+      wait: 'Please wait while we process your action...',
+      success: 'Action Complete!',
+      actionComplete: 'Your action has been completed successfully.',
+      error: 'Action Failed',
+      errorInstallCooling: 'Error installing cooling. Please try again.',
+      errorRedeemCard: 'Error redeeming card. Please try again.',
+      errorToggleRig: 'Error changing rig state. Please try again.',
+      errorRepairRig: 'Error repairing rig. Please try again.',
+      errorDeleteRig: 'Error deleting rig. Please try again.',
     },
     confirm: {
       installCooling: 'Install Cooling',
