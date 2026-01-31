@@ -20,6 +20,11 @@ interface Player {
   max_internet: number;
   reputation_score: number;
   region: string;
+  ron_wallet?: string | null;
+  created_at?: string;
+  blocks_mined?: number;
+  total_crypto_earned?: number;
+  rig_slots?: number;
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -324,6 +329,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   });
 
+  // Refresh player data from server (useful after account reset)
+  async function refreshPlayer() {
+    if (!user.value) return;
+    try {
+      const result = await getPlayerProfile(user.value.id);
+      if (result.success && result.player) {
+        player.value = result.player;
+      }
+    } catch (e) {
+      console.error('Error refreshing player:', e);
+    }
+  }
+
   return {
     user,
     player,
@@ -337,6 +355,7 @@ export const useAuthStore = defineStore('auth', () => {
     checkAuth,
     waitForInit,
     fetchPlayer,
+    refreshPlayer,
     loginWithGoogle,
     completeProfile,
     logout,

@@ -10,16 +10,17 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- =====================================================
 
 -- Jugadores
-CREATE TABLE players (
+CREATE TABLE IF NOT EXISTS players (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT UNIQUE NOT NULL,
   username TEXT UNIQUE NOT NULL CHECK (length(username) >= 3 AND length(username) <= 20),
-  gamecoin_balance DECIMAL(18, 4) DEFAULT 100 NOT NULL CHECK (gamecoin_balance >= 0),
+  gamecoin_balance DECIMAL(18, 4) DEFAULT 1000 NOT NULL CHECK (gamecoin_balance >= 0),
   crypto_balance DECIMAL(18, 8) DEFAULT 0 NOT NULL CHECK (crypto_balance >= 0),
   energy DECIMAL(5, 2) DEFAULT 100 NOT NULL CHECK (energy >= 0 AND energy <= 100),
   internet DECIMAL(5, 2) DEFAULT 100 NOT NULL CHECK (internet >= 0 AND internet <= 100),
   reputation_score DECIMAL(5, 2) DEFAULT 50 NOT NULL CHECK (reputation_score >= 0 AND reputation_score <= 100),
   region TEXT DEFAULT 'global',
+  ron_wallet TEXT DEFAULT NULL,
   is_online BOOLEAN DEFAULT false,
   last_seen TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -27,7 +28,7 @@ CREATE TABLE players (
 );
 
 -- Rigs (catálogo de equipos de minería)
-CREATE TABLE rigs (
+CREATE TABLE IF NOT EXISTS rigs (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
@@ -41,7 +42,7 @@ CREATE TABLE rigs (
 );
 
 -- Rigs de jugadores
-CREATE TABLE player_rigs (
+CREATE TABLE IF NOT EXISTS player_rigs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   rig_id TEXT NOT NULL REFERENCES rigs(id),
@@ -52,7 +53,7 @@ CREATE TABLE player_rigs (
 );
 
 -- Bloques minados
-CREATE TABLE blocks (
+CREATE TABLE IF NOT EXISTS blocks (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   height INTEGER UNIQUE NOT NULL,
   hash TEXT UNIQUE NOT NULL,
@@ -64,7 +65,7 @@ CREATE TABLE blocks (
 );
 
 -- Órdenes del mercado
-CREATE TABLE market_orders (
+CREATE TABLE IF NOT EXISTS market_orders (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   type TEXT NOT NULL CHECK (type IN ('buy', 'sell')),
@@ -79,7 +80,7 @@ CREATE TABLE market_orders (
 );
 
 -- Trades ejecutados
-CREATE TABLE trades (
+CREATE TABLE IF NOT EXISTS trades (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   buyer_id UUID NOT NULL REFERENCES players(id),
   seller_id UUID NOT NULL REFERENCES players(id),
@@ -94,7 +95,7 @@ CREATE TABLE trades (
 );
 
 -- Transacciones (historial)
-CREATE TABLE transactions (
+CREATE TABLE IF NOT EXISTS transactions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   type TEXT NOT NULL,
@@ -105,7 +106,7 @@ CREATE TABLE transactions (
 );
 
 -- Eventos de reputación
-CREATE TABLE reputation_events (
+CREATE TABLE IF NOT EXISTS reputation_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   delta DECIMAL(5, 2) NOT NULL,
@@ -117,7 +118,7 @@ CREATE TABLE reputation_events (
 );
 
 -- Insignias
-CREATE TABLE badges (
+CREATE TABLE IF NOT EXISTS badges (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
@@ -126,7 +127,7 @@ CREATE TABLE badges (
 );
 
 -- Insignias de jugadores
-CREATE TABLE player_badges (
+CREATE TABLE IF NOT EXISTS player_badges (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   badge_id TEXT NOT NULL REFERENCES badges(id),
@@ -135,7 +136,7 @@ CREATE TABLE player_badges (
 );
 
 -- Eventos de jugadores (logs)
-CREATE TABLE player_events (
+CREATE TABLE IF NOT EXISTS player_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   type TEXT NOT NULL,
@@ -144,7 +145,7 @@ CREATE TABLE player_events (
 );
 
 -- Penalizaciones
-CREATE TABLE player_penalties (
+CREATE TABLE IF NOT EXISTS player_penalties (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   type TEXT NOT NULL,
@@ -154,7 +155,7 @@ CREATE TABLE player_penalties (
 );
 
 -- Mensajes de chat
-CREATE TABLE chat_messages (
+CREATE TABLE IF NOT EXISTS chat_messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   channel TEXT NOT NULL,
@@ -163,7 +164,7 @@ CREATE TABLE chat_messages (
 );
 
 -- Estadísticas de la red
-CREATE TABLE network_stats (
+CREATE TABLE IF NOT EXISTS network_stats (
   id TEXT PRIMARY KEY DEFAULT 'current',
   difficulty DECIMAL(15, 2) DEFAULT 1000,
   hashrate DECIMAL(15, 2) DEFAULT 0,
@@ -174,30 +175,30 @@ CREATE TABLE network_stats (
 -- ÍNDICES
 -- =====================================================
 
-CREATE INDEX idx_players_username ON players(username);
-CREATE INDEX idx_players_reputation ON players(reputation_score DESC);
-CREATE INDEX idx_players_online ON players(is_online) WHERE is_online = true;
+CREATE INDEX IF NOT EXISTS idx_players_username ON players(username);
+CREATE INDEX IF NOT EXISTS idx_players_reputation ON players(reputation_score DESC);
+CREATE INDEX IF NOT EXISTS idx_players_online ON players(is_online) WHERE is_online = true;
 
-CREATE INDEX idx_player_rigs_player ON player_rigs(player_id);
-CREATE INDEX idx_player_rigs_active ON player_rigs(player_id) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_player_rigs_player ON player_rigs(player_id);
+CREATE INDEX IF NOT EXISTS idx_player_rigs_active ON player_rigs(player_id) WHERE is_active = true;
 
-CREATE INDEX idx_blocks_height ON blocks(height DESC);
-CREATE INDEX idx_blocks_miner ON blocks(miner_id);
+CREATE INDEX IF NOT EXISTS idx_blocks_height ON blocks(height DESC);
+CREATE INDEX IF NOT EXISTS idx_blocks_miner ON blocks(miner_id);
 
-CREATE INDEX idx_market_orders_type ON market_orders(item_type, type, status);
-CREATE INDEX idx_market_orders_player ON market_orders(player_id);
-CREATE INDEX idx_market_orders_active ON market_orders(item_type) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_market_orders_type ON market_orders(item_type, type, status);
+CREATE INDEX IF NOT EXISTS idx_market_orders_player ON market_orders(player_id);
+CREATE INDEX IF NOT EXISTS idx_market_orders_active ON market_orders(item_type) WHERE status = 'active';
 
-CREATE INDEX idx_trades_buyer ON trades(buyer_id);
-CREATE INDEX idx_trades_seller ON trades(seller_id);
-CREATE INDEX idx_trades_created ON trades(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_trades_buyer ON trades(buyer_id);
+CREATE INDEX IF NOT EXISTS idx_trades_seller ON trades(seller_id);
+CREATE INDEX IF NOT EXISTS idx_trades_created ON trades(created_at DESC);
 
-CREATE INDEX idx_transactions_player ON transactions(player_id);
-CREATE INDEX idx_transactions_created ON transactions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_transactions_player ON transactions(player_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_created ON transactions(created_at DESC);
 
-CREATE INDEX idx_reputation_events_player ON reputation_events(player_id);
+CREATE INDEX IF NOT EXISTS idx_reputation_events_player ON reputation_events(player_id);
 
-CREATE INDEX idx_chat_messages_channel ON chat_messages(channel, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel, created_at DESC);
 
 -- =====================================================
 -- FUNCIONES
@@ -356,11 +357,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_players_updated_at ON players;
 CREATE TRIGGER update_players_updated_at
   BEFORE UPDATE ON players
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_market_orders_updated_at ON market_orders;
 CREATE TRIGGER update_market_orders_updated_at
   BEFORE UPDATE ON market_orders
   FOR EACH ROW

@@ -507,3 +507,24 @@ export async function activateBoost(playerId: string, boostId: string) {
   return data;
 }
 
+// === PROFILE ===
+
+export async function updateRonWallet(playerId: string, walletAddress: string | null) {
+  const { data, error } = await supabase.rpc('update_ron_wallet', {
+    p_player_id: playerId,
+    p_wallet_address: walletAddress ?? '',
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function resetPlayerAccount(playerId: string) {
+  const { data, error } = await supabase.rpc('reset_player_account', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
