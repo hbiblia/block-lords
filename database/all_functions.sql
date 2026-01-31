@@ -503,10 +503,15 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_rig player_rigs%ROWTYPE;
-  v_rig_info rigs%ROWTYPE;
-  v_player players%ROWTYPE;
+  v_power_consumption NUMERIC;
+  v_internet_consumption NUMERIC;
+  v_player_energy NUMERIC;
+  v_player_internet NUMERIC;
 BEGIN
-  SELECT * INTO v_rig FROM player_rigs WHERE id = p_rig_id AND player_id = p_player_id;
+  -- Obtener el rig (sin lock explícito - el UPDATE es atómico)
+  SELECT * INTO v_rig
+  FROM player_rigs
+  WHERE id = p_rig_id AND player_id = p_player_id;
 
   IF v_rig IS NULL THEN
     RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
@@ -519,25 +524,26 @@ BEGIN
       RETURN json_build_object('success', false, 'error', 'El rig está roto. Debes repararlo o eliminarlo.');
     END IF;
 
-    -- Obtener información del rig para saber consumo
-    SELECT * INTO v_rig_info FROM rigs WHERE id = v_rig.rig_id;
-    SELECT * INTO v_player FROM players WHERE id = p_player_id;
+    -- Obtener información del rig y jugador
+    SELECT r.power_consumption, r.internet_consumption, p.energy, p.internet
+    INTO v_power_consumption, v_internet_consumption, v_player_energy, v_player_internet
+    FROM rigs r, players p
+    WHERE r.id = v_rig.rig_id AND p.id = p_player_id;
 
     -- Verificar que hay suficientes recursos para al menos un tick
-    IF v_player.energy < v_rig_info.power_consumption THEN
-      RETURN json_build_object('success', false, 'error', 'Energía insuficiente. Necesitas al menos ' || v_rig_info.power_consumption || ' para este rig.');
+    IF v_player_energy < v_power_consumption THEN
+      RETURN json_build_object('success', false, 'error', 'Energía insuficiente. Necesitas al menos ' || v_power_consumption || ' para este rig.');
     END IF;
 
-    IF v_player.internet < v_rig_info.internet_consumption THEN
-      RETURN json_build_object('success', false, 'error', 'Internet insuficiente. Necesitas al menos ' || v_rig_info.internet_consumption || ' para este rig.');
+    IF v_player_internet < v_internet_consumption THEN
+      RETURN json_build_object('success', false, 'error', 'Internet insuficiente. Necesitas al menos ' || v_internet_consumption || ' para este rig.');
     END IF;
   END IF;
 
   UPDATE player_rigs
   SET is_active = NOT is_active,
       activated_at = CASE WHEN NOT is_active THEN NOW() ELSE NULL END,
-      -- Cuando se apaga: temperatura a 0. Cuando se enciende: empieza en 0 y sube gradualmente
-      temperature = CASE WHEN NOT is_active THEN 0 ELSE 0 END
+      temperature = 0
   WHERE id = p_rig_id
   RETURNING * INTO v_rig;
 
@@ -3644,8 +3650,9 @@ BEGIN
   -- Delete all player rigs
   DELETE FROM player_rigs WHERE player_id = p_player_id;
 
-  -- Delete all player inventory (cooling items)
+  -- Delete all player cooling and inventory
   DELETE FROM player_cooling WHERE player_id = p_player_id;
+  DELETE FROM player_inventory WHERE player_id = p_player_id;
 
   -- Delete player prepaid cards
   DELETE FROM player_cards WHERE player_id = p_player_id;
@@ -3661,8 +3668,8 @@ BEGIN
   DELETE FROM player_streaks WHERE player_id = p_player_id;
   DELETE FROM streak_claims WHERE player_id = p_player_id;
 
-  -- Delete market listings
-  DELETE FROM market_listings WHERE seller_id = p_player_id;
+  -- Delete market orders
+  DELETE FROM market_orders WHERE player_id = p_player_id;
 
   -- Delete transactions history
   DELETE FROM transactions WHERE player_id = p_player_id;
@@ -3676,7 +3683,6 @@ BEGIN
     reputation_score = 50,
     rig_slots = 1,
     blocks_mined = 0,
-    total_crypto_earned = 0,
     updated_at = NOW()
   WHERE id = p_player_id;
 

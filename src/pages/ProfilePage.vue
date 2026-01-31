@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
@@ -164,7 +164,17 @@ function getTransactionIcon(type: string): string {
   }
 }
 
+// Lock body scroll when modal is open
+watch(showResetConfirm, (isOpen) => {
+  document.body.style.overflow = isOpen ? 'hidden' : '';
+});
+
 onMounted(loadData);
+
+onUnmounted(() => {
+  // Ensure scroll is restored when component unmounts
+  document.body.style.overflow = '';
+});
 </script>
 
 <template>
@@ -391,10 +401,15 @@ onMounted(loadData);
         <div
           v-if="showResetConfirm"
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
-          @click.self="closeResetConfirm"
         >
-          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
-          <div class="relative bg-bg-primary border border-status-danger/50 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+          <div
+            class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            @click="closeResetConfirm"
+          ></div>
+          <div
+            class="relative bg-bg-primary border border-status-danger/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
+            @click.stop
+          >
             <h3 class="text-lg font-bold mb-2 text-center text-status-danger">
               ⚠️ {{ t('profile.reset.title', 'Reiniciar Cuenta?') }}
             </h3>

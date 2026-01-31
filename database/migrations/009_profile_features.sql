@@ -80,8 +80,9 @@ BEGIN
   -- Delete all player rigs
   DELETE FROM player_rigs WHERE player_id = p_player_id;
 
-  -- Delete all player inventory (cooling items)
+  -- Delete all player cooling and inventory
   DELETE FROM player_cooling WHERE player_id = p_player_id;
+  DELETE FROM player_inventory WHERE player_id = p_player_id;
 
   -- Delete player prepaid cards
   DELETE FROM player_cards WHERE player_id = p_player_id;
@@ -97,8 +98,8 @@ BEGIN
   DELETE FROM player_streaks WHERE player_id = p_player_id;
   DELETE FROM streak_claims WHERE player_id = p_player_id;
 
-  -- Delete market listings
-  DELETE FROM market_listings WHERE seller_id = p_player_id;
+  -- Delete market orders
+  DELETE FROM market_orders WHERE player_id = p_player_id;
 
   -- Delete transactions history
   DELETE FROM transactions WHERE player_id = p_player_id;
@@ -112,7 +113,6 @@ BEGIN
     reputation_score = 50,
     rig_slots = 1,
     blocks_mined = 0,
-    total_crypto_earned = 0,
     updated_at = NOW()
   WHERE id = p_player_id;
 
