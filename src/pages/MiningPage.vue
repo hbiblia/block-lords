@@ -6,10 +6,14 @@ import { useMiningStore } from '@/stores/mining';
 import { useNotificationsStore } from '@/stores/notifications';
 import { getPlayerRigs, getNetworkStats, getRecentBlocks, toggleRig, getRigCooling, getPlayerSlotInfo, buyRigSlot, getPlayerBoosts } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
+import { useWakeLock } from '@/composables/useWakeLock';
 import MarketModal from '@/components/MarketModal.vue';
 import InventoryModal from '@/components/InventoryModal.vue';
 import ExchangeModal from '@/components/ExchangeModal.vue';
 import RigManageModal from '@/components/RigManageModal.vue';
+
+// Wake Lock to keep screen on while mining
+const { requestWakeLock, releaseWakeLock } = useWakeLock();
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -652,6 +656,10 @@ onMounted(() => {
   startMiningSimulation();
   startUptimeTimer();
   startAutoRefresh(); // Auto-refresh cada 10 segundos
+
+  // Request wake lock to keep screen on while mining
+  requestWakeLock();
+
   window.addEventListener('block-mined', handleBlockMined as EventListener);
   window.addEventListener('inventory-used', handleInventoryUsed as EventListener);
   window.addEventListener('player-rigs-updated', handleRigsUpdated as EventListener);
@@ -662,6 +670,10 @@ onUnmounted(() => {
   stopMiningSimulation();
   stopUptimeTimer();
   stopAutoRefresh(); // Detener auto-refresh
+
+  // Release wake lock when leaving mining page
+  releaseWakeLock();
+
   // Limpiar debounce timer de cooling
   if (coolingDebounceTimer) {
     clearTimeout(coolingDebounceTimer);
