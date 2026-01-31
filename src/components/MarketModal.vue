@@ -2,12 +2,49 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
-import { supabase } from '@/utils/supabase';
-import { playSound } from '@/utils/sounds';
+import { useMarketStore } from '@/stores/market';
+
+// Types for items
+interface RigItem {
+  id: string;
+  hashrate: number;
+  tier: string;
+  base_price: number;
+  power_consumption: number;
+  internet_consumption: number;
+}
+
+interface CoolingItemType {
+  id: string;
+  cooling_power: number;
+  tier: string;
+  base_price: number;
+}
+
+interface CardItem {
+  id: string;
+  card_type: 'energy' | 'internet';
+  amount: number;
+  base_price: number;
+  tier: string;
+  currency: 'gamecoin' | 'crypto';
+}
+
+interface BoostItemType {
+  id: string;
+  boost_type: string;
+  effect_value: number;
+  secondary_value: number;
+  duration_minutes: number;
+  base_price: number;
+  currency: 'gamecoin' | 'crypto';
+  tier: string;
+}
 
 const { t } = useI18n();
 
 const authStore = useAuthStore();
+const marketStore = useMarketStore();
 
 const props = defineProps<{
   show: boolean;
@@ -32,8 +69,6 @@ onUnmounted(() => {
   document.body.style.overflow = '';
 });
 
-const loading = ref(false);
-const buying = ref(false);
 const activeFilter = ref<'all' | 'rigs' | 'cooling' | 'energy' | 'internet' | 'boosts'>('all');
 
 // Mobile category popup
@@ -72,76 +107,21 @@ const showProcessingModal = ref(false);
 const processingStatus = ref<'processing' | 'success' | 'error'>('processing');
 const processingError = ref<string>('');
 
-// Catálogos
-const availableRigs = ref<Array<{
-  id: string;
-  name: string;
-  description: string;
-  hashrate: number;
-  power_consumption: number;
-  internet_consumption: number;
-  repair_cost: number;
-  tier: string;
-  base_price: number;
-}>>([]);
-
-const coolingItems = ref<Array<{
-  id: string;
-  name: string;
-  description: string;
-  cooling_power: number;
-  base_price: number;
-  tier: string;
-}>>([]);
-
-const prepaidCards = ref<Array<{
-  id: string;
-  name: string;
-  description: string;
-  card_type: 'energy' | 'internet';
-  amount: number;
-  base_price: number;
-  tier: string;
-  currency: 'gamecoin' | 'crypto';
-}>>([]);
-
-// Rig quantities owned
-const rigQuantities = ref<Record<string, number>>({});
-// Cooling quantities: { item_id: { installed: number, inventory: number } }
-const coolingQuantities = ref<Record<string, { installed: number; inventory: number }>>({});
-// Card quantities in inventory
-const cardQuantities = ref<Record<string, number>>({});
-// Boost quantities in inventory
-const boostQuantities = ref<Record<string, number>>({});
-
-// Boost items catalog
-const boostItems = ref<Array<{
-  id: string;
-  name: string;
-  description: string;
-  boost_type: string;
-  effect_value: number;
-  secondary_value: number;
-  duration_minutes: number;
-  base_price: number;
-  currency: 'gamecoin' | 'crypto';
-  tier: string;
-}>>([]);
+// Use store data
+const loading = computed(() => marketStore.loading);
+const buying = computed(() => marketStore.buying);
+const rigsForSale = computed(() => marketStore.rigsForSale);
+const coolingItems = computed(() => marketStore.coolingItems);
+const energyCards = computed(() => marketStore.energyCards);
+const internetCards = computed(() => marketStore.internetCards);
+const boostItems = computed(() => marketStore.boostItems);
 
 const balance = computed(() => authStore.player?.gamecoin_balance ?? 0);
 const cryptoBalance = computed(() => authStore.player?.crypto_balance ?? 0);
 
-// Rigs disponibles para mostrar (todos con precio > 0)
-const rigsForSale = computed(() =>
-  availableRigs.value.filter(r => r.base_price > 0)
-);
-
 function getRigOwned(id: string): number {
-  return rigQuantities.value[id] || 0;
+  return marketStore.getRigOwned(id);
 }
-
-const energyCards = computed(() => prepaidCards.value.filter(c => c.card_type === 'energy'));
-const internetCards = computed(() => prepaidCards.value.filter(c => c.card_type === 'internet'));
 
 function getTierColor(tier: string) {
   switch (tier) {
@@ -183,12 +163,11 @@ function getCoolingDescription(id: string): string {
 }
 
 function getCoolingOwned(id: string): { installed: number; inventory: number; total: number } {
-  const q = coolingQuantities.value[id] || { installed: 0, inventory: 0 };
-  return { ...q, total: q.installed + q.inventory };
+  return marketStore.getCoolingOwned(id);
 }
 
 function getCardOwned(id: string): number {
-  return cardQuantities.value[id] || 0;
+  return marketStore.getCardOwned(id);
 }
 
 function getCardName(id: string): string {
@@ -210,7 +189,7 @@ function getBoostName(id: string): string {
 }
 
 function getBoostOwned(id: string): number {
-  return boostQuantities.value[id] || 0;
+  return marketStore.getBoostOwned(id);
 }
 
 function getBoostIcon(boostType: string): string {
@@ -226,7 +205,7 @@ function getBoostIcon(boostType: string): string {
   }
 }
 
-function formatBoostEffect(boost: typeof boostItems.value[0]): string {
+function formatBoostEffect(boost: BoostItemType): string {
   const sign = boost.boost_type === 'energy_saver' || boost.boost_type === 'bandwidth_optimizer' ||
                boost.boost_type === 'coolant_injection' || boost.boost_type === 'durability_shield' ? '-' : '+';
   let effect = `${sign}${boost.effect_value}%`;
@@ -244,7 +223,7 @@ function formatDuration(minutes: number): string {
   return `${minutes}m`;
 }
 
-function canAffordBoost(boost: typeof boostItems.value[0]): boolean {
+function canAffordBoost(boost: BoostItemType): boolean {
   if (boost.currency === 'crypto') {
     return cryptoBalance.value >= boost.base_price;
   }
@@ -252,113 +231,10 @@ function canAffordBoost(boost: typeof boostItems.value[0]): boolean {
 }
 
 async function loadData() {
-  loading.value = true;
-  try {
-    // Cargar rigs disponibles
-    const { data: rigs } = await supabase
-      .from('rigs')
-      .select('*')
-      .order('base_price', { ascending: true });
-    availableRigs.value = rigs ?? [];
-
-    // Cargar cooling items
-    const { data: cooling } = await supabase
-      .from('cooling_items')
-      .select('*')
-      .order('base_price', { ascending: true });
-    coolingItems.value = cooling ?? [];
-
-    // Cargar tarjetas prepago
-    const { data: cards } = await supabase
-      .from('prepaid_cards')
-      .select('*')
-      .order('base_price', { ascending: true });
-    prepaidCards.value = cards ?? [];
-
-    // Cargar rigs del jugador
-    if (authStore.player) {
-      const { data: playerRigs } = await supabase
-        .from('player_rigs')
-        .select('rig_id')
-        .eq('player_id', authStore.player.id);
-
-      // Build rig quantities map
-      const rigQty: Record<string, number> = {};
-      for (const r of playerRigs ?? []) {
-        rigQty[r.rig_id] = (rigQty[r.rig_id] || 0) + 1;
-      }
-      rigQuantities.value = rigQty;
-
-      // Cooling instalado
-      const { data: playerCooling } = await supabase
-        .from('player_cooling')
-        .select('cooling_item_id')
-        .eq('player_id', authStore.player.id);
-
-      // Cooling en inventario
-      const { data: inventoryCooling } = await supabase
-        .from('player_inventory')
-        .select('item_id, quantity')
-        .eq('player_id', authStore.player.id)
-        .eq('item_type', 'cooling');
-
-      // Build cooling quantities map
-      const quantities: Record<string, { installed: number; inventory: number }> = {};
-      for (const c of playerCooling ?? []) {
-        if (!quantities[c.cooling_item_id]) {
-          quantities[c.cooling_item_id] = { installed: 0, inventory: 0 };
-        }
-        quantities[c.cooling_item_id].installed++;
-      }
-      for (const c of inventoryCooling ?? []) {
-        if (!quantities[c.item_id]) {
-          quantities[c.item_id] = { installed: 0, inventory: 0 };
-        }
-        quantities[c.item_id].inventory += c.quantity || 1;
-      }
-      coolingQuantities.value = quantities;
-
-      // Cards in inventory
-      const { data: inventoryCards } = await supabase
-        .from('player_prepaid_cards')
-        .select('card_id')
-        .eq('player_id', authStore.player.id)
-        .eq('is_redeemed', false);
-
-      const cardQty: Record<string, number> = {};
-      for (const c of inventoryCards ?? []) {
-        cardQty[c.card_id] = (cardQty[c.card_id] || 0) + 1;
-      }
-      cardQuantities.value = cardQty;
-
-      // Boosts in inventory
-      const { data: inventoryBoosts } = await supabase
-        .from('player_boosts')
-        .select('boost_id, quantity')
-        .eq('player_id', authStore.player.id);
-
-      const boostQty: Record<string, number> = {};
-      for (const b of inventoryBoosts ?? []) {
-        boostQty[b.boost_id] = (boostQty[b.boost_id] || 0) + (b.quantity || 1);
-      }
-      boostQuantities.value = boostQty;
-    }
-
-    // Load boost items catalog
-    const { data: boosts } = await supabase
-      .from('boost_items')
-      .select('*')
-      .order('boost_type', { ascending: true })
-      .order('base_price', { ascending: true });
-    boostItems.value = boosts ?? [];
-  } catch (e) {
-    console.error('Error loading market data:', e);
-  } finally {
-    loading.value = false;
-  }
+  await marketStore.loadData();
 }
 
-function requestBuyRig(rig: typeof availableRigs.value[0]) {
+function requestBuyRig(rig: RigItem) {
   confirmAction.value = {
     type: 'rig',
     id: rig.id,
@@ -372,41 +248,22 @@ function requestBuyRig(rig: typeof availableRigs.value[0]) {
 
 async function buyRig(rigId: string) {
   if (!authStore.player) return;
-  buying.value = true;
   showProcessingModal.value = true;
   processingStatus.value = 'processing';
   processingError.value = '';
 
-  try {
-    const { data, error } = await supabase.rpc('buy_rig', {
-      p_player_id: authStore.player.id,
-      p_rig_id: rigId,
-    });
+  const result = await marketStore.buyRig(rigId);
 
-    if (error) throw error;
-
-    if (data?.success) {
-      await loadData();
-      await authStore.fetchPlayer();
-      processingStatus.value = 'success';
-      playSound('purchase');
-      emit('purchased');
-    } else {
-      processingStatus.value = 'error';
-      processingError.value = data?.error ?? t('market.processing.errorBuyingRig');
-      playSound('error');
-    }
-  } catch (e) {
-    console.error('Error buying rig:', e);
+  if (result.success) {
+    processingStatus.value = 'success';
+    emit('purchased');
+  } else {
     processingStatus.value = 'error';
-    processingError.value = t('market.processing.errorBuyingRig');
-    playSound('error');
-  } finally {
-    buying.value = false;
+    processingError.value = result.error ?? t('market.processing.errorBuyingRig');
   }
 }
 
-function requestBuyCooling(item: typeof coolingItems.value[0]) {
+function requestBuyCooling(item: CoolingItemType) {
   confirmAction.value = {
     type: 'cooling',
     id: item.id,
@@ -420,41 +277,22 @@ function requestBuyCooling(item: typeof coolingItems.value[0]) {
 
 async function buyCooling(coolingId: string) {
   if (!authStore.player) return;
-  buying.value = true;
   showProcessingModal.value = true;
   processingStatus.value = 'processing';
   processingError.value = '';
 
-  try {
-    const { data, error } = await supabase.rpc('buy_cooling', {
-      p_player_id: authStore.player.id,
-      p_cooling_id: coolingId,
-    });
+  const result = await marketStore.buyCooling(coolingId);
 
-    if (error) throw error;
-
-    if (data?.success) {
-      await loadData();
-      await authStore.fetchPlayer();
-      processingStatus.value = 'success';
-      playSound('purchase');
-      emit('purchased');
-    } else {
-      processingStatus.value = 'error';
-      processingError.value = data?.error ?? t('market.processing.errorBuyingCooling');
-      playSound('error');
-    }
-  } catch (e) {
-    console.error('Error buying cooling:', e);
+  if (result.success) {
+    processingStatus.value = 'success';
+    emit('purchased');
+  } else {
     processingStatus.value = 'error';
-    processingError.value = t('market.processing.errorBuyingCooling');
-    playSound('error');
-  } finally {
-    buying.value = false;
+    processingError.value = result.error ?? t('market.processing.errorBuyingCooling');
   }
 }
 
-function requestBuyCard(card: typeof prepaidCards.value[0]) {
+function requestBuyCard(card: CardItem) {
   confirmAction.value = {
     type: 'card',
     id: card.id,
@@ -468,41 +306,22 @@ function requestBuyCard(card: typeof prepaidCards.value[0]) {
 
 async function buyCard(cardId: string) {
   if (!authStore.player) return;
-  buying.value = true;
   showProcessingModal.value = true;
   processingStatus.value = 'processing';
   processingError.value = '';
 
-  try {
-    const { data, error } = await supabase.rpc('buy_prepaid_card', {
-      p_player_id: authStore.player.id,
-      p_card_id: cardId,
-    });
+  const result = await marketStore.buyCard(cardId);
 
-    if (error) throw error;
-
-    if (data?.success) {
-      await loadData();
-      await authStore.fetchPlayer();
-      processingStatus.value = 'success';
-      playSound('purchase');
-      emit('purchased');
-    } else {
-      processingStatus.value = 'error';
-      processingError.value = data?.error ?? t('market.processing.errorBuyingCard');
-      playSound('error');
-    }
-  } catch (e) {
-    console.error('Error buying card:', e);
+  if (result.success) {
+    processingStatus.value = 'success';
+    emit('purchased');
+  } else {
     processingStatus.value = 'error';
-    processingError.value = t('market.processing.errorBuyingCard');
-    playSound('error');
-  } finally {
-    buying.value = false;
+    processingError.value = result.error ?? t('market.processing.errorBuyingCard');
   }
 }
 
-function requestBuyBoost(boost: typeof boostItems.value[0]) {
+function requestBuyBoost(boost: BoostItemType) {
   confirmAction.value = {
     type: 'boost',
     id: boost.id,
@@ -516,37 +335,18 @@ function requestBuyBoost(boost: typeof boostItems.value[0]) {
 
 async function buyBoost(boostId: string) {
   if (!authStore.player) return;
-  buying.value = true;
   showProcessingModal.value = true;
   processingStatus.value = 'processing';
   processingError.value = '';
 
-  try {
-    const { data, error } = await supabase.rpc('buy_boost', {
-      p_player_id: authStore.player.id,
-      p_boost_id: boostId,
-    });
+  const result = await marketStore.buyBoost(boostId);
 
-    if (error) throw error;
-
-    if (data?.success) {
-      await loadData();
-      await authStore.fetchPlayer();
-      processingStatus.value = 'success';
-      playSound('purchase');
-      emit('purchased');
-    } else {
-      processingStatus.value = 'error';
-      processingError.value = data?.error ?? t('market.processing.errorBuyingBoost');
-      playSound('error');
-    }
-  } catch (e) {
-    console.error('Error buying boost:', e);
+  if (result.success) {
+    processingStatus.value = 'success';
+    emit('purchased');
+  } else {
     processingStatus.value = 'error';
-    processingError.value = t('market.processing.errorBuyingBoost');
-    playSound('error');
-  } finally {
-    buying.value = false;
+    processingError.value = result.error ?? t('market.processing.errorBuyingBoost');
   }
 }
 

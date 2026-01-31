@@ -1183,9 +1183,21 @@ BEGIN
       WHERE pr.player_id = v_player.id AND pr.is_active = true
     LOOP
       -- Obtener refrigeración instalada en este rig específico
+      -- Eficiencia del cooling basada en durabilidad:
+      -- >= 50%: eficiencia lineal (durability/100)
+      -- < 50%: penalización adicional (durability/100 * durability/50)
+      -- Esto hace que cooling degradado sea menos efectivo
       SELECT
-        COALESCE(SUM(ci.cooling_power * (rc.durability / 100.0)), 0),
-        COALESCE(SUM(ci.energy_cost * (rc.durability / 100.0)), 0)
+        COALESCE(SUM(ci.cooling_power * (
+          CASE WHEN rc.durability >= 50 THEN rc.durability / 100.0
+               ELSE (rc.durability / 100.0) * (rc.durability / 50.0)
+          END
+        )), 0),
+        COALESCE(SUM(ci.energy_cost * (
+          CASE WHEN rc.durability >= 50 THEN rc.durability / 100.0
+               ELSE (rc.durability / 100.0) * (rc.durability / 50.0)
+          END
+        )), 0)
       INTO v_rig_cooling_power, v_rig_cooling_energy
       FROM rig_cooling rc
       JOIN cooling_items ci ON ci.id = rc.cooling_item_id
@@ -1600,13 +1612,31 @@ DECLARE
   v_block_height INT;
   v_difficulty_result JSON;
   v_inactive_marked INT := 0;
+  v_rigs_shutdown INT := 0;
 BEGIN
   -- Marcar como offline a usuarios inactivos (sin heartbeat por más de 5 minutos)
-  UPDATE players
-  SET is_online = false
-  WHERE is_online = true
-    AND last_seen < NOW() - INTERVAL '5 minutes';
-  GET DIAGNOSTICS v_inactive_marked = ROW_COUNT;
+  -- Y apagar sus rigs automáticamente
+  WITH inactive_players AS (
+    UPDATE players
+    SET is_online = false
+    WHERE is_online = true
+      AND last_seen < NOW() - INTERVAL '5 minutes'
+    RETURNING id
+  )
+  SELECT COUNT(*) INTO v_inactive_marked FROM inactive_players;
+
+  -- Apagar rigs de jugadores que acaban de ser marcados offline
+  IF v_inactive_marked > 0 THEN
+    UPDATE player_rigs
+    SET is_active = false, temperature = 25, activated_at = NULL
+    WHERE player_id IN (
+      SELECT id FROM players
+      WHERE is_online = false
+        AND last_seen < NOW() - INTERVAL '5 minutes'
+        AND last_seen > NOW() - INTERVAL '6 minutes'
+    ) AND is_active = true;
+    GET DIAGNOSTICS v_rigs_shutdown = ROW_COUNT;
+  END IF;
 
   -- Procesar decay de recursos (solo jugadores online)
   v_resources_processed := process_resource_decay();
@@ -1623,6 +1653,8 @@ BEGIN
     'blockMined', v_block_mined,
     'blockHeight', v_block_height,
     'difficultyAdjusted', (v_difficulty_result->>'adjusted')::BOOLEAN,
+    'playersMarkedOffline', v_inactive_marked,
+    'rigsShutdown', v_rigs_shutdown,
     'timestamp', NOW()
   );
 END;

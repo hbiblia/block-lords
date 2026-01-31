@@ -3,8 +3,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
-import { useNotificationsStore } from '@/stores/notifications';
-import { getPlayerRigs, getNetworkStats, getRecentBlocks, toggleRig, getRigCooling, getPlayerSlotInfo, buyRigSlot, getPlayerBoosts } from '@/utils/api';
+import { buyRigSlot } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { useWakeLock } from '@/composables/useWakeLock';
 import MarketModal from '@/components/MarketModal.vue';
@@ -18,38 +17,49 @@ const { requestWakeLock, releaseWakeLock } = useWakeLock();
 const { t } = useI18n();
 const authStore = useAuthStore();
 const miningStore = useMiningStore();
-const notificationsStore = useNotificationsStore();
 
+// Modals
 const showMarket = ref(false);
 const showInventory = ref(false);
 const showExchange = ref(false);
 const showRigManage = ref(false);
-const selectedRigForManage = ref<typeof rigs.value[0] | null>(null);
+const selectedRigForManage = ref<typeof miningStore.rigs[0] | null>(null);
 
-// Slot info
-const slotInfo = ref<{
-  current_slots: number;
-  used_slots: number;
-  available_slots: number;
-  max_slots: number;
-  next_upgrade: {
-    slot_number: number;
-    price: number;
-    currency: string;
-    name: string;
-    description: string;
-  } | null;
-} | null>(null);
-
+// Slot purchase
 const buyingSlot = ref(false);
 const showConfirmSlotPurchase = ref(false);
 
-// Stop rig confirmation modal
+// Stop rig confirmation
 const showConfirmStopRig = ref(false);
-const rigToStop = ref<typeof rigs.value[0] | null>(null);
+const rigToStop = ref<typeof miningStore.rigs[0] | null>(null);
 const stoppingRig = ref(false);
 const stopRigError = ref<string | null>(null);
 
+// Mining simulation (visual only)
+const miningProgress = ref(0);
+const hashesCalculated = ref(0);
+const miningInterval = ref<number | null>(null);
+const lastBlockFound = ref<any>(null);
+const showBlockFound = ref(false);
+
+// Uptime timer
+const uptimeKey = ref(0);
+let uptimeInterval: number | null = null;
+
+// Computed from store
+const rigs = computed(() => miningStore.rigs);
+const networkStats = computed(() => miningStore.networkStats);
+const recentBlocks = computed(() => miningStore.recentBlocks);
+const rigCooling = computed(() => miningStore.rigCooling);
+const activeBoosts = computed(() => miningStore.activeBoosts);
+const slotInfo = computed(() => miningStore.slotInfo);
+const loading = computed(() => miningStore.loading);
+const totalHashrate = computed(() => miningStore.totalHashrate);
+const effectiveHashrate = computed(() => miningStore.effectiveHashrate);
+const miningChance = computed(() => miningStore.miningChance);
+const activeRigsCount = computed(() => miningStore.activeRigsCount);
+
+// Slot functions
 function openSlotPurchaseConfirm() {
   if (!canAffordSlot()) return;
   showConfirmSlotPurchase.value = true;
@@ -66,7 +76,7 @@ async function confirmBuySlot() {
       playSound('purchase');
       showConfirmSlotPurchase.value = false;
       await authStore.fetchPlayer();
-      await loadData();
+      await miningStore.loadData();
     } else {
       playSound('error');
       alert(result?.error ?? 'Error comprando slot');
@@ -89,7 +99,8 @@ function canAffordSlot(): boolean {
   return (authStore.player?.crypto_balance ?? 0) >= upgrade.price;
 }
 
-function openRigManage(rig: typeof rigs.value[0]) {
+// Rig manage modal
+function openRigManage(rig: typeof miningStore.rigs[0]) {
   selectedRigForManage.value = rig;
   showRigManage.value = true;
 }
@@ -99,54 +110,7 @@ function closeRigManage() {
   selectedRigForManage.value = null;
 }
 
-const loading = ref(true);
-const rigs = ref<Array<{
-  id: string;
-  is_active: boolean;
-  condition: number;
-  temperature: number;
-  activated_at: string | null;
-  max_condition?: number;
-  times_repaired?: number;
-  rig: {
-    id: string;
-    name: string;
-    hashrate: number;
-    power_consumption: number;
-    internet_consumption: number;
-    tier: string;
-    repair_cost: number;
-  };
-}>>([]);
-
-const networkStats = ref({
-  difficulty: 1000,
-  hashrate: 0,
-  latestBlock: null as any,
-  activeMiners: 0,
-});
-
-const recentBlocks = ref<any[]>([]);
-
-// Cooling data per rig
-const rigCooling = ref<Record<string, Array<{
-  id: string;
-  durability: number;
-  name: string;
-  cooling_power: number;
-}>>>({});
-
-// Active boosts
-const activeBoosts = ref<Array<{
-  id: string;
-  boost_id: string;
-  boost_type: string;
-  name: string;
-  effect_value: number;
-  expires_at: string;
-  seconds_remaining: number;
-}>>([]);
-
+// Boost helpers
 function getBoostIcon(boostType: string): string {
   switch (boostType) {
     case 'hashrate': return '⚡';
@@ -176,133 +140,20 @@ function getBoostName(id: string): string {
   return translated !== key ? translated : id;
 }
 
-// Mining simulation
-const miningProgress = ref(0);
-const hashesCalculated = ref(0);
-const miningInterval = ref<number | null>(null);
-const lastBlockFound = ref<any>(null);
-const showBlockFound = ref(false);
-
-// Calcular hashrate base del jugador (sin penalizaciones)
-const totalHashrate = computed(() => {
-  return rigs.value
-    .filter(r => r.is_active)
-    .reduce((sum, r) => sum + r.rig.hashrate, 0);
-});
-
-// Calcular hashrate efectivo (con penalización por temperatura y condición)
-const effectiveHashrate = computed(() => {
-  return rigs.value
-    .filter(r => r.is_active)
-    .reduce((sum, r) => {
-      const temp = r.temperature ?? 25;
-      const condition = r.condition ?? 100;
-      // Penalización por temperatura: >60°C reduce hashrate (hasta -50% a 100°C)
-      let tempPenalty = 1;
-      if (temp > 60) {
-        tempPenalty = Math.max(0.5, 1 - ((temp - 60) * 0.0125));
-      }
-      return sum + (r.rig.hashrate * (condition / 100) * tempPenalty);
-    }, 0);
-});
-
-// Calcular probabilidad de minar (usa hashrate efectivo)
-const miningChance = computed(() => {
-  if (networkStats.value.hashrate === 0) return 0;
-  return (effectiveHashrate.value / networkStats.value.hashrate) * 100;
-});
-
-// Número de rigs activos
-const activeRigsCount = computed(() => rigs.value.filter(r => r.is_active).length);
-
-async function loadData() {
-  try {
-    const [rigsData, networkData, blocksData, slotData] = await Promise.all([
-      getPlayerRigs(authStore.player!.id),
-      getNetworkStats(),
-      getRecentBlocks(5),
-      getPlayerSlotInfo(authStore.player!.id),
-    ]);
-
-    rigs.value = rigsData ?? [];
-    networkStats.value = networkData;
-    recentBlocks.value = blocksData ?? [];
-    if (slotData?.success) {
-      slotInfo.value = slotData;
-    }
-
-    // Sync active rigs to mining store for resource consumption display
-    syncMiningStore();
-
-    // Load cooling data in background (don't block initial render)
-    loadRigsCooling();
-
-    // Load active boosts
-    loadActiveBoosts();
-  } catch (e) {
-    console.error('Error loading mining data:', e);
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function loadActiveBoosts() {
-  try {
-    const boostData = await getPlayerBoosts(authStore.player!.id);
-    activeBoosts.value = boostData.active || [];
-  } catch (e) {
-    console.error('Error loading active boosts:', e);
-  }
-}
-
-async function loadRigsCooling() {
-  const coolingPromises = rigs.value.map(async (rig) => {
-    try {
-      const cooling = await getRigCooling(rig.id);
-      return { rigId: rig.id, cooling: cooling ?? [] };
-    } catch {
-      return { rigId: rig.id, cooling: [] };
-    }
-  });
-
-  const results = await Promise.all(coolingPromises);
-  const coolingMap: Record<string, any[]> = {};
-  results.forEach(({ rigId, cooling }) => {
-    coolingMap[rigId] = cooling;
-  });
-  rigCooling.value = coolingMap;
-}
-
-// Sync active rigs to the mining store
-function syncMiningStore() {
-  const activeRigsList = rigs.value
-    .filter(r => r.is_active)
-    .map(r => ({
-      id: r.id,
-      hashrate: r.rig.hashrate,
-      powerConsumption: r.rig.power_consumption,
-      internetConsumption: r.rig.internet_consumption,
-    }));
-  miningStore.setActiveRigs(activeRigsList);
-}
-
-// Simulación visual de minería
+// Mining simulation (visual)
 function startMiningSimulation() {
   if (miningInterval.value) return;
 
   miningInterval.value = window.setInterval(() => {
     if (totalHashrate.value > 0) {
-      // Incrementar progreso basado en hashrate
       const progressIncrement = (totalHashrate.value / networkStats.value.difficulty) * 2;
       miningProgress.value = Math.min(100, miningProgress.value + progressIncrement);
-      hashesCalculated.value += totalHashrate.value / 60; // Aproximación por segundo
+      hashesCalculated.value += totalHashrate.value / 60;
 
-      // Reset cuando llega a 100 (simula intento de bloque)
       if (miningProgress.value >= 100) {
         miningProgress.value = 0;
       }
     } else {
-      // Reset progress when all rigs are stopped
       miningProgress.value = 0;
       hashesCalculated.value = 0;
     }
@@ -316,12 +167,12 @@ function stopMiningSimulation() {
   }
 }
 
+// Toggle rig
 async function handleToggleRig(rigId: string) {
   const rig = rigs.value.find(r => r.id === rigId);
-
   if (!rig) return;
 
-  // Si el rig está activo, mostrar modal de confirmación para parar
+  // If rig is active, show confirmation modal
   if (rig.is_active) {
     rigToStop.value = rig;
     stopRigError.value = null;
@@ -329,72 +180,8 @@ async function handleToggleRig(rigId: string) {
     return;
   }
 
-  // Pre-check: If trying to turn ON, verify resources are sufficient for at least one tick
-  const player = authStore.player;
-  if (player) {
-    const requiredEnergy = rig.rig.power_consumption;
-    const requiredInternet = rig.rig.internet_consumption;
-
-    if (player.energy < requiredEnergy) {
-      // Use addNotification directly to bypass deduplication (user-initiated action)
-      notificationsStore.addNotification({
-        type: 'energy_depleted',
-        title: 'notifications.energyDepleted.title',
-        message: 'notifications.energyDepleted.message',
-        icon: '⚡',
-        severity: 'error',
-      });
-      return;
-    }
-    if (player.internet < requiredInternet) {
-      notificationsStore.addNotification({
-        type: 'internet_depleted',
-        title: 'notifications.internetDepleted.title',
-        message: 'notifications.internetDepleted.message',
-        icon: '📡',
-        severity: 'error',
-      });
-      return;
-    }
-  }
-
-  // Optimistic update for visual feedback (solo para encender)
-  rig.is_active = true;
-  syncMiningStore();
-  playSound('click');
-
-  try {
-    const result = await toggleRig(authStore.player!.id, rigId);
-
-    if (!result.success) {
-      // Revert and resync from server to ensure UI matches DB state
-      await loadData();
-      playSound('error');
-      notificationsStore.addNotification({
-        type: 'rig_broken',
-        title: 'common.error',
-        message: 'mining.toggleError',
-        icon: '⚠️',
-        severity: 'error',
-        data: { error: result.error },
-      });
-    } else {
-      // Rig turned on successfully
-      playSound('success');
-    }
-  } catch (e) {
-    // Revert and resync from server on error
-    await loadData();
-    playSound('error');
-    console.error('Error toggling rig:', e);
-    notificationsStore.addNotification({
-      type: 'rig_broken',
-      title: 'common.error',
-      message: 'mining.connectionError',
-      icon: '⚠️',
-      severity: 'error',
-    });
-  }
+  // Turn on - handled by store
+  await miningStore.toggleRig(rigId);
 }
 
 async function confirmStopRig() {
@@ -403,25 +190,17 @@ async function confirmStopRig() {
   stoppingRig.value = true;
   stopRigError.value = null;
 
-  try {
-    const result = await toggleRig(authStore.player!.id, rigToStop.value.id);
+  const result = await miningStore.toggleRig(rigToStop.value.id);
 
-    if (!result.success) {
-      playSound('error');
-      stopRigError.value = result.error || t('mining.toggleError');
-    } else {
-      playSound('click');
-      showConfirmStopRig.value = false;
-      rigToStop.value = null;
-      await loadData();
-    }
-  } catch (e) {
-    console.error('Error stopping rig:', e);
-    playSound('error');
-    stopRigError.value = t('mining.connectionError');
-  } finally {
-    stoppingRig.value = false;
+  if (!result.success) {
+    stopRigError.value = result.error || t('mining.toggleError');
+  } else {
+    playSound('click');
+    showConfirmStopRig.value = false;
+    rigToStop.value = null;
   }
+
+  stoppingRig.value = false;
 }
 
 function cancelStopRig() {
@@ -430,16 +209,12 @@ function cancelStopRig() {
   stopRigError.value = null;
 }
 
+// Block mined handler
 function handleBlockMined(event: CustomEvent) {
   const { block, winner } = event.detail;
-  recentBlocks.value.unshift({
-    ...block,
-    miner: winner,
-  });
-  recentBlocks.value = recentBlocks.value.slice(0, 5);
+  miningStore.handleBlockMined(block, winner);
 
   if (winner?.id === authStore.player?.id) {
-    playSound('block_mined');
     lastBlockFound.value = block;
     showBlockFound.value = true;
     miningProgress.value = 100;
@@ -448,11 +223,10 @@ function handleBlockMined(event: CustomEvent) {
       showBlockFound.value = false;
       miningProgress.value = 0;
     }, 3000);
-
-    authStore.fetchPlayer();
   }
 }
 
+// UI Helpers
 function getTierColor(tier: string): string {
   switch (tier) {
     case 'elite': return 'text-rank-diamond';
@@ -462,7 +236,6 @@ function getTierColor(tier: string): string {
   }
 }
 
-// Translation helper for rig names
 function getRigName(id: string): string {
   const key = `market.items.rigs.${id}.name`;
   const translated = t(key);
@@ -481,39 +254,6 @@ function getTempBarColor(temp: number): string {
   if (temp >= 60) return 'bg-status-warning';
   if (temp >= 40) return 'bg-yellow-400';
   return 'bg-status-success';
-}
-
-function getRigEffectiveHashrate(rig: typeof rigs.value[0]): number {
-  const temp = rig.temperature ?? 25;
-  const condition = rig.condition ?? 100;
-  let tempPenalty = 1;
-  if (temp > 60) {
-    tempPenalty = Math.max(0.5, 1 - ((temp - 60) * 0.0125));
-  }
-  return rig.rig.hashrate * (condition / 100) * tempPenalty;
-}
-
-function getRigPenaltyPercent(rig: typeof rigs.value[0]): number {
-  const effective = getRigEffectiveHashrate(rig);
-  const base = rig.rig.hashrate;
-  if (base === 0) return 0;
-  return Math.round(((base - effective) / base) * 100);
-}
-
-// Calcular consumo de energía efectivo (con penalización por temperatura)
-// Fórmula: power_consumption * (1 + max(0, (temp - 40)) * 0.0083)
-// A 100°C = +50% de consumo extra
-function getRigEffectivePower(rig: typeof rigs.value[0]): number {
-  const temp = rig.temperature ?? 25;
-  const tempPenalty = 1 + Math.max(0, (temp - 40)) * 0.0083;
-  return rig.rig.power_consumption * tempPenalty;
-}
-
-function getPowerPenaltyPercent(rig: typeof rigs.value[0]): number {
-  const effective = getRigEffectivePower(rig);
-  const base = rig.rig.power_consumption;
-  if (base === 0) return 0;
-  return Math.round(((effective - base) / base) * 100);
 }
 
 function formatUptime(activatedAt: string | null): string {
@@ -539,7 +279,6 @@ function formatUptime(activatedAt: string | null): string {
   }
 }
 
-// Calculate block reward based on height (matches DB function)
 function getBlockReward(height: number): number {
   const baseReward = 100;
   const halvingInterval = 10000;
@@ -547,7 +286,6 @@ function getBlockReward(height: number): number {
   return baseReward / Math.pow(2, halvings);
 }
 
-// Format relative time
 function formatTimeAgo(dateStr: string): string {
   const date = new Date(dateStr).getTime();
   const now = Date.now();
@@ -562,10 +300,7 @@ function formatTimeAgo(dateStr: string): string {
   return `${seconds}s`;
 }
 
-// Reactive uptime - update every second
-const uptimeKey = ref(0);
-let uptimeInterval: number | null = null;
-
+// Uptime timer
 function startUptimeTimer() {
   if (uptimeInterval) return;
   uptimeInterval = window.setInterval(() => {
@@ -580,111 +315,30 @@ function stopUptimeTimer() {
   }
 }
 
-// Auto-refresh polling (cada 10 segundos)
-let autoRefreshInterval: number | null = null;
-const AUTO_REFRESH_INTERVAL = 10000; // 10 segundos
-
-function startAutoRefresh() {
-  if (autoRefreshInterval) return;
-  autoRefreshInterval = window.setInterval(async () => {
-    try {
-      await loadData();
-    } catch (e) {
-      console.error('Auto-refresh error:', e);
-    }
-  }, AUTO_REFRESH_INTERVAL);
-}
-
-function stopAutoRefresh() {
-  if (autoRefreshInterval) {
-    clearInterval(autoRefreshInterval);
-    autoRefreshInterval = null;
-  }
-}
-
+// Inventory used handler
 function handleInventoryUsed() {
-  // Refresh rig data when something is installed/used from inventory
-  loadData();
-}
-
-// Debounce timer for cooling updates
-let coolingDebounceTimer: number | null = null;
-
-function handleRigsUpdated(event: CustomEvent) {
-  const { eventType, new: newData, old: oldData } = event.detail;
-
-  // Solo recargar todo si es INSERT o DELETE (rig nuevo o eliminado)
-  if (eventType === 'INSERT' || eventType === 'DELETE') {
-    loadData();
-    return;
-  }
-
-  // Para UPDATE: actualizar directamente el rig específico sin llamar a la API
-  if (eventType === 'UPDATE' && newData) {
-    const rigIndex = rigs.value.findIndex(r => r.id === newData.id);
-    if (rigIndex !== -1) {
-      // Actualizar solo los campos que vienen del servidor
-      const currentRig = rigs.value[rigIndex];
-      rigs.value[rigIndex] = {
-        ...currentRig,
-        is_active: newData.is_active ?? currentRig.is_active,
-        condition: newData.condition ?? currentRig.condition,
-        temperature: newData.temperature ?? currentRig.temperature,
-        activated_at: newData.activated_at ?? currentRig.activated_at,
-      };
-      // Sincronizar mining store si cambió el estado activo
-      if (oldData && newData.is_active !== oldData.is_active) {
-        syncMiningStore();
-      }
-    }
-  }
-}
-
-function handleCoolingUpdated() {
-  // Debounce: esperar 500ms de inactividad antes de recargar cooling
-  if (coolingDebounceTimer) {
-    clearTimeout(coolingDebounceTimer);
-  }
-  coolingDebounceTimer = window.setTimeout(() => {
-    loadRigsCooling();
-    coolingDebounceTimer = null;
-  }, 500);
+  miningStore.loadData();
 }
 
 onMounted(() => {
-  loadData();
+  miningStore.loadData();
+  miningStore.subscribeToRealtime();
   startMiningSimulation();
   startUptimeTimer();
-  startAutoRefresh(); // Auto-refresh cada 10 segundos
-
-  // Request wake lock to keep screen on while mining
   requestWakeLock();
 
   window.addEventListener('block-mined', handleBlockMined as EventListener);
   window.addEventListener('inventory-used', handleInventoryUsed as EventListener);
-  window.addEventListener('player-rigs-updated', handleRigsUpdated as EventListener);
-  window.addEventListener('rig-cooling-updated', handleCoolingUpdated as EventListener);
 });
 
 onUnmounted(() => {
   stopMiningSimulation();
   stopUptimeTimer();
-  stopAutoRefresh(); // Detener auto-refresh
-
-  // Release wake lock when leaving mining page
+  miningStore.unsubscribeFromRealtime();
   releaseWakeLock();
 
-  // Limpiar debounce timer de cooling
-  if (coolingDebounceTimer) {
-    clearTimeout(coolingDebounceTimer);
-    coolingDebounceTimer = null;
-  }
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
   window.removeEventListener('inventory-used', handleInventoryUsed as EventListener);
-  window.removeEventListener('player-rigs-updated', handleRigsUpdated as EventListener);
-  window.removeEventListener('rig-cooling-updated', handleCoolingUpdated as EventListener);
-  // Clear mining store when leaving page
-  miningStore.clearRigs();
 });
 </script>
 
@@ -747,9 +401,8 @@ onUnmounted(() => {
     </div>
 
     <div v-else class="space-y-6">
-      <!-- Mining Status Panel - PRINCIPAL -->
+      <!-- Mining Status Panel -->
       <div class="card relative overflow-hidden">
-        <!-- Background effect cuando está minando -->
         <div
           v-if="totalHashrate > 0"
           class="absolute inset-0 bg-gradient-to-r from-accent-primary/5 via-accent-secondary/5 to-accent-primary/5 animate-pulse"
@@ -801,7 +454,6 @@ onUnmounted(() => {
                 :class="showBlockFound ? 'bg-status-success' : 'bg-gradient-to-r from-accent-primary to-accent-secondary'"
                 :style="{ width: `${miningProgress}%` }"
               ></div>
-              <!-- Efecto de brillo -->
               <div
                 v-if="totalHashrate > 0"
                 class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
@@ -812,13 +464,11 @@ onUnmounted(() => {
 
           <!-- Stats Grid -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <!-- Private stat (user) -->
             <div class="bg-accent-primary/10 border border-accent-primary/30 rounded-xl p-3 text-center relative">
               <div class="absolute top-1 right-1.5 text-[10px] text-accent-primary/70">👤</div>
               <div class="text-lg font-bold text-status-warning">{{ miningChance.toFixed(2) }}%</div>
               <div class="text-[10px] text-text-muted">{{ t('mining.probability') }}</div>
             </div>
-            <!-- Global stats (network) -->
             <div class="bg-bg-secondary rounded-xl p-3 text-center relative">
               <div class="absolute top-1 right-1.5 text-[10px] text-text-muted/50">🌐</div>
               <div class="text-lg font-bold text-accent-tertiary">{{ networkStats.difficulty?.toLocaleString() ?? 0 }}</div>
@@ -903,10 +553,10 @@ onUnmounted(() => {
               <div class="flex items-baseline gap-1.5 mb-3">
                 <span
                   class="text-xl font-bold font-mono"
-                  :class="playerRig.is_active ? (getRigPenaltyPercent(playerRig) > 0 ? 'text-status-warning' : 'text-white') : 'text-text-muted'"
+                  :class="playerRig.is_active ? (miningStore.getRigPenaltyPercent(playerRig) > 0 ? 'text-status-warning' : 'text-white') : 'text-text-muted'"
                   :key="uptimeKey"
                 >
-                  {{ playerRig.is_active ? Math.round(getRigEffectiveHashrate(playerRig)).toLocaleString() : '0' }}
+                  {{ playerRig.is_active ? Math.round(miningStore.getRigEffectiveHashrate(playerRig)).toLocaleString() : '0' }}
                 </span>
                 <span class="text-sm text-text-muted">/ {{ playerRig.rig.hashrate.toLocaleString() }} H/s</span>
               </div>
@@ -915,13 +565,19 @@ onUnmounted(() => {
               <div class="flex items-center gap-4 text-xs text-text-muted mb-3">
                 <span class="flex items-center gap-1">
                   <span class="text-status-warning">⚡</span>{{ playerRig.rig.power_consumption }}/t
-                  <span v-if="getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger">(+{{ getPowerPenaltyPercent(playerRig) }}%)</span>
+                  <span v-if="miningStore.getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger">(+{{ miningStore.getPowerPenaltyPercent(playerRig) }}%)</span>
                 </span>
                 <span class="flex items-center gap-1">
                   <span class="text-accent-tertiary">📡</span>{{ playerRig.rig.internet_consumption }}/t
                 </span>
                 <span v-if="rigCooling[playerRig.id]?.length > 0" class="flex items-center gap-1">
-                  <span class="text-cyan-400">❄️</span>{{ rigCooling[playerRig.id][0].durability.toFixed(0) }}%
+                  <span :class="miningStore.isCoolingDegraded(rigCooling[playerRig.id][0].durability) ? 'text-status-warning' : 'text-cyan-400'">❄️</span>
+                  <span :class="miningStore.isCoolingDegraded(rigCooling[playerRig.id][0].durability) ? 'text-status-warning' : ''">
+                    {{ rigCooling[playerRig.id][0].durability.toFixed(0) }}%
+                  </span>
+                  <span v-if="miningStore.isCoolingDegraded(rigCooling[playerRig.id][0].durability)" class="text-status-warning text-[10px]">
+                    ({{ miningStore.getCoolingEfficiencyPercent(rigCooling[playerRig.id][0].durability) }}% eff)
+                  </span>
                 </span>
                 <span v-if="playerRig.is_active && playerRig.activated_at" class="flex items-center gap-1 ml-auto" :key="uptimeKey">
                   ⏱️ {{ formatUptime(playerRig.activated_at) }}
@@ -1121,14 +777,14 @@ onUnmounted(() => {
     <MarketModal
       :show="showMarket"
       @close="showMarket = false"
-      @purchased="loadData"
+      @purchased="miningStore.loadData()"
     />
 
     <!-- Inventory Modal -->
     <InventoryModal
       :show="showInventory"
       @close="showInventory = false"
-      @used="loadData"
+      @used="miningStore.loadData()"
     />
 
     <!-- Exchange Modal -->
@@ -1143,7 +799,7 @@ onUnmounted(() => {
       :show="showRigManage"
       :rig="selectedRigForManage"
       @close="closeRigManage"
-      @updated="loadData"
+      @updated="miningStore.loadData()"
     />
 
     <!-- Slot Purchase Confirmation Modal -->

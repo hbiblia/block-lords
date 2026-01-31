@@ -12,6 +12,7 @@ import ConnectionLostModal from '@/components/ConnectionLostModal.vue';
 import GameNotificationsModal from '@/components/GameNotificationsModal.vue';
 import StreakModal from '@/components/StreakModal.vue';
 import MissionsPanel from '@/components/MissionsPanel.vue';
+import ToastContainer from '@/components/ToastContainer.vue';
 
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
@@ -50,6 +51,9 @@ onUnmounted(() => {
 
     <!-- Game Notifications Modal -->
     <GameNotificationsModal />
+
+    <!-- Toast Notifications -->
+    <ToastContainer />
 
     <!-- Streak Modal -->
     <StreakModal
