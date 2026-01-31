@@ -1,4 +1,4 @@
-import { ref, onUnmounted } from 'vue';
+import { ref } from 'vue';
 
 const wakeLock = ref<WakeLockSentinel | null>(null);
 const isSupported = ref(false);
@@ -44,13 +44,6 @@ export function useWakeLock() {
       } catch (err) {
         console.error('Failed to release Wake Lock:', err);
       }
-    }
-  }
-
-  // Re-acquire wake lock when page becomes visible again
-  function handleVisibilityChange() {
-    if (document.visibilityState === 'visible' && isActive.value === false && wakeLock.value === null) {
-      // Only re-acquire if it was previously active
     }
   }
 
