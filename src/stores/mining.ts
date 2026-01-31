@@ -96,11 +96,13 @@ export const useMiningStore = defineStore('mining', () => {
   const loading = ref(true);
   const togglingRig = ref<string | null>(null);
 
-  // Realtime channel
+  // Realtime channels
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let rigsChannel: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let coolingChannel: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let networkStatsChannel: any = null;
 
   // Computed
   const activeRigsCount = computed(() => rigs.value.filter(r => r.is_active).length);
@@ -290,7 +292,7 @@ export const useMiningStore = defineStore('mining', () => {
     }, 500);
   }
 
-  function handleBlockMined(block: any, winner: any) {
+  async function handleBlockMined(block: any, winner: any) {
     const authStore = useAuthStore();
     const toastStore = useToastStore();
 
@@ -299,6 +301,25 @@ export const useMiningStore = defineStore('mining', () => {
       miner: winner,
     });
     recentBlocks.value = recentBlocks.value.slice(0, 5);
+
+    // Update latestBlock in networkStats
+    networkStats.value = {
+      ...networkStats.value,
+      latestBlock: {
+        height: block.height,
+        hash: block.hash,
+        created_at: block.created_at,
+        miner: winner,
+      },
+    };
+
+    // Refresh full network stats to get updated activeMiners count
+    try {
+      const freshStats = await getNetworkStats();
+      networkStats.value = freshStats;
+    } catch (e) {
+      console.warn('Error refreshing network stats:', e);
+    }
 
     if (winner?.id === authStore.player?.id) {
       playSound('block_mined');
@@ -423,6 +444,29 @@ export const useMiningStore = defineStore('mining', () => {
         }
       )
       .subscribe();
+
+    // Subscribe to network_stats changes (global)
+    // Note: network_stats table only has difficulty and hashrate columns
+    // latestBlock comes from block-mined events, activeMiners from player_rigs
+    networkStatsChannel = supabase
+      .channel('mining_network_stats')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'network_stats',
+        },
+        (payload) => {
+          const newStats = payload.new as any;
+          networkStats.value = {
+            ...networkStats.value,
+            difficulty: newStats.difficulty ?? networkStats.value.difficulty,
+            hashrate: newStats.hashrate ?? networkStats.value.hashrate,
+          };
+        }
+      )
+      .subscribe();
   }
 
   function unsubscribeFromRealtime() {
@@ -433,6 +477,10 @@ export const useMiningStore = defineStore('mining', () => {
     if (coolingChannel) {
       supabase.removeChannel(coolingChannel);
       coolingChannel = null;
+    }
+    if (networkStatsChannel) {
+      supabase.removeChannel(networkStatsChannel);
+      networkStatsChannel = null;
     }
     if (coolingDebounceTimer) {
       clearTimeout(coolingDebounceTimer);
