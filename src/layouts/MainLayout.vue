@@ -27,6 +27,15 @@ const pendingBlocksStore = usePendingBlocksStore();
 const infoBarVisible = ref(false);
 provide('infoBarVisible', infoBarVisible);
 
+// Escuchar evento de bloque minado para actualizar pending blocks
+function handleBlockMined(event: CustomEvent) {
+  const { winner } = event.detail;
+  // Si el jugador actual minó el bloque, actualizar pending blocks
+  if (winner?.id === authStore.player?.id) {
+    pendingBlocksStore.fetchPendingBlocks();
+  }
+}
+
 // Cargar estado de streak, misiones y bloques pendientes al inicio
 onMounted(() => {
   if (authStore.isAuthenticated) {
@@ -41,6 +50,9 @@ onMounted(() => {
       console.error('AdSense error:', e);
     }
   }
+
+  // Escuchar evento de bloque minado
+  window.addEventListener('block-mined', handleBlockMined as EventListener);
 });
 
 // Iniciar/detener heartbeat cuando cambia el estado de autenticación
@@ -62,6 +74,7 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
 
 onUnmounted(() => {
   missionsStore.stopHeartbeat();
+  window.removeEventListener('block-mined', handleBlockMined as EventListener);
 });
 </script>
 
