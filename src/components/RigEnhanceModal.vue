@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
+import { useToastStore } from '@/stores/toast';
 import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling, getPlayerBoosts, installBoostToRig, getRigBoosts } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
 const miningStore = useMiningStore();
+const toastStore = useToastStore();
 
 interface RigData {
   id: string;
@@ -114,12 +116,42 @@ const showProcessingModal = ref(false);
 const processingStatus = ref<'processing' | 'success' | 'error'>('processing');
 const processingError = ref('');
 
-// Sync boosts from store when updated via realtime
+// Timer for smooth countdown interpolation between server updates
+let boostTimer: number | null = null;
+
+function startBoostTimer() {
+  stopBoostTimer();
+  boostTimer = window.setInterval(() => {
+    // Only decrement if rig is active (mining) - interpolate between server updates
+    if (props.rig?.is_active && installedBoosts.value.length > 0) {
+      installedBoosts.value = installedBoosts.value
+        .map(boost => ({
+          ...boost,
+          remaining_seconds: Math.max(0, boost.remaining_seconds - 1),
+        }))
+        .filter(boost => boost.remaining_seconds > 0);
+    }
+  }, 1000);
+}
+
+function stopBoostTimer() {
+  if (boostTimer) {
+    clearInterval(boostTimer);
+    boostTimer = null;
+  }
+}
+
+onUnmounted(() => {
+  stopBoostTimer();
+});
+
+// Sync boosts from store when updated via realtime (server is source of truth)
 watch(
   () => props.rig?.id ? miningStore.rigBoosts[props.rig.id] : null,
   (storeBoosts) => {
     if (storeBoosts && props.show) {
-      installedBoosts.value = storeBoosts;
+      // Server update received - sync with authoritative data
+      installedBoosts.value = storeBoosts.map(b => ({ ...b }));
     }
   },
   { deep: true }
@@ -130,8 +162,10 @@ watch(() => props.show, async (isOpen) => {
   if (isOpen && props.rig) {
     document.body.style.overflow = 'hidden';
     await loadData();
+    startBoostTimer();
   } else {
     document.body.style.overflow = '';
+    stopBoostTimer();
   }
 });
 
@@ -326,7 +360,18 @@ async function confirmUse() {
       playSound('success');
       await loadData();
       await authStore.fetchPlayer();
+      await miningStore.reloadRigs();
       emit('updated');
+
+      // Show toast notification based on action type
+      const rigName = props.rig.rig?.name || 'Rig';
+      if (type === 'install' && data.coolingName) {
+        toastStore.boostInstalled(data.coolingName, rigName);
+      } else if (type === 'boost' && data.boostName) {
+        toastStore.boostInstalled(data.boostName, rigName);
+      } else if (type === 'repair') {
+        toastStore.success(`${rigName} reparado`);
+      }
 
       // Close modal after delete
       if (type === 'delete') {
@@ -436,8 +481,8 @@ function closeProcessingModal() {
           >
             <span>📦</span>
             <span>{{ t('rigManage.installTab', 'Install') }}</span>
-            <span v-if="installedBoosts.length > 0" class="px-1.5 py-0.5 rounded-full text-xs bg-purple-500/30 text-purple-400">
-              {{ installedBoosts.length }}
+            <span v-if="installedCooling.length + installedBoosts.length > 0" class="px-1.5 py-0.5 rounded-full text-xs bg-purple-500/30 text-purple-400">
+              {{ installedCooling.length + installedBoosts.length }}
             </span>
           </button>
           <button

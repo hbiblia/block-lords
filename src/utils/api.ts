@@ -497,16 +497,6 @@ export async function buyBoost(playerId: string, boostId: string) {
   return data;
 }
 
-export async function activateBoost(playerId: string, boostId: string) {
-  const { data, error } = await supabase.rpc('activate_boost', {
-    p_player_id: playerId,
-    p_boost_id: boostId,
-  });
-
-  if (error) throw error;
-  return data;
-}
-
 // === RIG-SPECIFIC BOOSTS ===
 
 // Instalar boost en un rig específico

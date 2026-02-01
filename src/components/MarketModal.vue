@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMarketStore } from '@/stores/market';
+import { formatGamecoin, formatCrypto, formatNumber } from '@/utils/format';
 
 // Types for items
 interface RigItem {
@@ -285,7 +286,7 @@ function requestBuyRig(rig: RigItem) {
     id: rig.id,
     name: getRigName(rig.id),
     price: rig.base_price,
-    description: `${rig.hashrate.toLocaleString()} H/s - ${rig.tier}`,
+    description: `${formatNumber(rig.hashrate)} H/s - ${rig.tier}`,
     currency: 'gamecoin',
   };
   showConfirm.value = true;
@@ -494,8 +495,8 @@ watch(() => props.show, (newVal) => {
           <div class="flex items-center gap-4">
             <span class="text-sm text-text-muted flex items-center gap-3">
               {{ t('market.balance') }}
-              <span class="font-bold text-status-warning">{{ balance.toFixed(0) }} 🪙</span>
-              <span class="font-bold text-accent-primary">{{ cryptoBalance.toFixed(2) }} 💎</span>
+              <span class="font-bold text-status-warning">{{ formatGamecoin(balance) }} 🪙</span>
+              <span class="font-bold text-accent-primary">{{ formatCrypto(cryptoBalance) }} 💎</span>
             </span>
             <button
               @click="emit('close')"
@@ -611,7 +612,7 @@ watch(() => props.show, (newVal) => {
 
                   <div class="flex items-center justify-between mb-2">
                     <span class="text-xs text-text-muted">Hashrate</span>
-                    <span class="font-mono font-bold text-accent-primary">{{ rig.hashrate.toLocaleString() }} H/s</span>
+                    <span class="font-mono font-bold text-accent-primary">{{ formatNumber(rig.hashrate) }} H/s</span>
                   </div>
 
                   <div class="flex items-center gap-2 text-xs text-text-muted mb-2">
@@ -636,7 +637,7 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="buying || balance < rig.base_price"
                     >
-                      {{ buying ? '...' : `${rig.base_price.toLocaleString()} 🪙` }}
+                      {{ buying ? '...' : `${formatNumber(rig.base_price)} 🪙` }}
                     </button>
                   </div>
                 </div>
@@ -684,7 +685,7 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="buying || balance < item.base_price"
                     >
-                      {{ buying ? '...' : `${item.base_price.toLocaleString()} 🪙` }}
+                      {{ buying ? '...' : `${formatNumber(item.base_price)} 🪙` }}
                     </button>
                   </div>
                 </div>
@@ -727,7 +728,7 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="buying || (card.currency === 'crypto' ? cryptoBalance : balance) < card.base_price"
                     >
-                      {{ buying ? '...' : `${card.base_price} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
+                      {{ buying ? '...' : `${formatNumber(card.base_price)} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
                     </button>
                   </div>
                 </div>
@@ -770,7 +771,7 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="buying || (card.currency === 'crypto' ? cryptoBalance : balance) < card.base_price"
                     >
-                      {{ buying ? '...' : `${card.base_price} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
+                      {{ buying ? '...' : `${formatNumber(card.base_price)} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
                     </button>
                   </div>
                 </div>
@@ -820,7 +821,7 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="buying || !canAffordBoost(boost)"
                     >
-                      {{ buying ? '...' : `${boost.base_price} ${boost.currency === 'crypto' ? '💎' : '🪙'}` }}
+                      {{ buying ? '...' : `${formatNumber(boost.base_price)} ${boost.currency === 'crypto' ? '💎' : '🪙'}` }}
                     </button>
                   </div>
                 </div>
@@ -877,7 +878,7 @@ watch(() => props.show, (newVal) => {
                       class="w-full py-2.5 rounded-lg text-sm font-bold transition-all disabled:opacity-50 bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-400 hover:to-purple-400 shadow-lg"
                       :disabled="buying"
                     >
-                      {{ buying ? '...' : `${pkg.ron_price} RON` }}
+                      {{ buying ? '...' : `${formatNumber(pkg.ron_price)} RON` }}
                     </button>
                   </div>
                 </div>
@@ -918,7 +919,7 @@ watch(() => props.show, (newVal) => {
             <div class="flex items-center justify-between">
               <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.price') }}</span>
               <span class="font-bold" :class="confirmAction.currency === 'crypto' ? 'text-accent-primary' : confirmAction.currency === 'ron' ? 'text-blue-400' : 'text-status-warning'">
-                {{ confirmAction.price.toLocaleString() }} {{ confirmAction.currency === 'crypto' ? '💎' : confirmAction.currency === 'ron' ? 'RON' : '🪙' }}
+                {{ formatNumber(confirmAction.price) }} {{ confirmAction.currency === 'crypto' ? '💎' : confirmAction.currency === 'ron' ? 'RON' : '🪙' }}
               </span>
             </div>
             <template v-if="confirmAction.currency !== 'ron'">
@@ -928,15 +929,15 @@ watch(() => props.show, (newVal) => {
                   class="font-mono"
                   :class="(confirmAction.currency === 'crypto' ? cryptoBalance : balance) >= confirmAction.price ? 'text-status-success' : 'text-status-danger'"
                 >
-                  {{ confirmAction.currency === 'crypto' ? cryptoBalance.toFixed(2) : balance.toFixed(0) }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
+                  {{ confirmAction.currency === 'crypto' ? formatCrypto(cryptoBalance) : formatGamecoin(balance) }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
                 </span>
               </div>
               <div class="flex items-center justify-between mt-1 pt-2 border-t border-border/50">
                 <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.after') }}</span>
                 <span class="font-mono text-white">
                   {{ confirmAction.currency === 'crypto'
-                    ? (cryptoBalance - confirmAction.price).toFixed(2)
-                    : (balance - confirmAction.price).toFixed(0) }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
+                    ? formatCrypto(cryptoBalance - confirmAction.price)
+                    : formatGamecoin(balance - confirmAction.price) }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
                 </span>
               </div>
             </template>

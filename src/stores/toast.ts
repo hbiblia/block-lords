@@ -124,6 +124,20 @@ export const useToastStore = defineStore('toast', () => {
     return show(`${resource === 'energy' ? 'Energía' : 'Internet'} al ${percent}%`, 'warning', { icon });
   }
 
+  function boostInstalled(boostName: string, rigName: string) {
+    return show(`${boostName} activado en ${rigName}`, 'success', {
+      icon: '🚀',
+      duration: 4000
+    });
+  }
+
+  function boostExpired(boostName: string, rigName: string) {
+    return show(`${boostName} expiró en ${rigName}`, 'warning', {
+      icon: '⏱️',
+      duration: 5000
+    });
+  }
+
   return {
     toasts,
     show,
@@ -137,5 +151,7 @@ export const useToastStore = defineStore('toast', () => {
     rigToggled,
     purchaseSuccess,
     resourceLow,
+    boostInstalled,
+    boostExpired,
   };
 });

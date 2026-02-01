@@ -239,6 +239,7 @@ export default {
         overclock: 'Mas hashrate a cambio de mas energia',
         coolant_injection: 'El rig se calienta menos',
         durability_shield: 'El rig se desgasta menos',
+        autonomous_mining: 'Mineria autonoma sin conexion',
       },
     },
     confirmPurchase: {
@@ -328,6 +329,10 @@ export default {
         durability_small: { name: 'Protector Desgaste', description: '-20% deterioro de condicion por 1 minuto' },
         durability_medium: { name: 'Capa Escudo', description: '-35% deterioro de condicion por 3 minutos' },
         durability_large: { name: 'Coraza Diamante', description: '-50% deterioro de condicion por 5 minutos' },
+        // Autonomous Mining
+        autonomous_1h: { name: 'Modulo Auto-Piloto', description: 'Mantiene el rig minando 1 hora sin conexion' },
+        autonomous_4h: { name: 'Protocolo Nocturno', description: 'Mantiene el rig minando 4 horas sin conexion' },
+        autonomous_12h: { name: 'Sistema Automatizacion Total', description: 'Mantiene el rig minando 12 horas sin conexion' },
       },
       crypto_packages: {
         crypto_starter: { name: 'Pack Inicial', description: 'Perfecto para empezar tu aventura.' },

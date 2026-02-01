@@ -239,6 +239,7 @@ export default {
         overclock: 'More hashrate at the cost of more energy',
         coolant_injection: 'Rig heats up slower',
         durability_shield: 'Rig wears out slower',
+        autonomous_mining: 'Autonomous mining while offline',
       },
     },
     confirmPurchase: {
@@ -328,6 +329,10 @@ export default {
         durability_small: { name: 'Wear Guard', description: '-20% condition deterioration for 1 minute' },
         durability_medium: { name: 'Shield Coat', description: '-35% condition deterioration for 3 minutes' },
         durability_large: { name: 'Diamond Shell', description: '-50% condition deterioration for 5 minutes' },
+        // Autonomous Mining
+        autonomous_1h: { name: 'Auto-Pilot Module', description: 'Keeps rig mining for 1 hour while offline' },
+        autonomous_4h: { name: 'Night Shift Protocol', description: 'Keeps rig mining for 4 hours while offline' },
+        autonomous_12h: { name: 'Full Automation System', description: 'Keeps rig mining for 12 hours while offline' },
       },
       crypto_packages: {
         crypto_starter: { name: 'Starter Pack', description: 'Perfect to start your adventure.' },

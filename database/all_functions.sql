@@ -1161,12 +1161,19 @@ DECLARE
   v_temp_mult NUMERIC;
   v_durability_mult NUMERIC;
 BEGIN
-  -- Solo procesar jugadores que están ONLINE (en el juego)
+  -- Procesar jugadores que están ONLINE o tienen rigs con autonomous mining boost
   FOR v_player IN
     SELECT p.id, p.energy, p.internet
     FROM players p
-    WHERE p.is_online = true
-      AND EXISTS (SELECT 1 FROM player_rigs pr WHERE pr.player_id = p.id AND pr.is_active = true)
+    WHERE EXISTS (SELECT 1 FROM player_rigs pr WHERE pr.player_id = p.id AND pr.is_active = true)
+      AND (
+        p.is_online = true
+        OR EXISTS (
+          SELECT 1 FROM player_rigs pr2
+          WHERE pr2.player_id = p.id AND pr2.is_active = true
+            AND rig_has_autonomous_boost(pr2.id)
+        )
+      )
   LOOP
     v_total_power := 0;
     v_total_internet := 0;
@@ -1312,8 +1319,9 @@ BEGIN
 
       -- Decrementar tiempo restante de boosts activos de este rig
       -- El boost solo cuenta tiempo cuando el rig está minando (is_active = true)
+      -- Se decrementa 60 segundos porque cron corre cada minuto
       UPDATE rig_boosts
-      SET remaining_seconds = remaining_seconds - 1
+      SET remaining_seconds = GREATEST(0, remaining_seconds - 60)
       WHERE player_rig_id = v_rig.id AND remaining_seconds > 0;
 
       -- Eliminar boosts expirados
@@ -1396,12 +1404,14 @@ BEGIN
   IF v_difficulty IS NULL THEN v_difficulty := 1000; END IF;
 
   -- Calcular hashrate total con penalizaciones por temperatura y condición
+  -- Incluye jugadores online O rigs con autonomous mining boost
   FOR v_rig IN
     SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
-    WHERE pr.is_active = true AND p.is_online = true AND p.energy > 0 AND p.internet > 0
+    WHERE pr.is_active = true AND p.energy > 0 AND p.internet > 0
+      AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
   LOOP
     -- Obtener multiplicadores de boost (caché por jugador)
     IF v_current_player_id IS DISTINCT FROM v_rig.player_id THEN
@@ -1466,6 +1476,7 @@ BEGIN
   END IF;
 
   -- Seleccionar ganador (con mismas penalizaciones y boosts)
+  -- Incluye jugadores online O rigs con autonomous mining boost
   v_random_pick := random() * v_network_hashrate;
   v_hashrate_sum := 0;
   v_current_player_id := NULL;
@@ -1475,7 +1486,8 @@ BEGIN
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
-    WHERE pr.is_active = true AND p.is_online = true AND p.energy > 0 AND p.internet > 0
+    WHERE pr.is_active = true AND p.energy > 0 AND p.internet > 0
+      AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
   LOOP
     -- Obtener multiplicador de hashrate del boost (caché por jugador)
     IF v_current_player_id IS DISTINCT FROM v_rig.player_id THEN
@@ -1639,6 +1651,7 @@ BEGIN
   SELECT COUNT(*) INTO v_inactive_marked FROM inactive_players;
 
   -- Apagar rigs de jugadores que acaban de ser marcados offline
+  -- EXCEPTO los que tienen boost de autonomous_mining activo
   IF v_inactive_marked > 0 THEN
     UPDATE player_rigs
     SET is_active = false, temperature = 25, activated_at = NULL
@@ -1647,7 +1660,8 @@ BEGIN
       WHERE is_online = false
         AND last_seen < NOW() - INTERVAL '5 minutes'
         AND last_seen > NOW() - INTERVAL '6 minutes'
-    ) AND is_active = true;
+    ) AND is_active = true
+    AND NOT rig_has_autonomous_boost(id);
     GET DIAGNOSTICS v_rigs_shutdown = ROW_COUNT;
   END IF;
 
@@ -2705,23 +2719,13 @@ ON CONFLICT (id) DO NOTHING;
 -- 3. Para verificar: SELECT * FROM cron.job;
 -- 4. Para eliminar: SELECT cron.unschedule('game_tick_job');
 
--- Función que ejecuta el decay 6 veces por minuto (cada ~10 segundos)
+-- Función que ejecuta el decay una vez por minuto (llamada por pg_cron)
 CREATE OR REPLACE FUNCTION run_decay_cycle()
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  PERFORM process_resource_decay();
-  PERFORM pg_sleep(10);
-  PERFORM process_resource_decay();
-  PERFORM pg_sleep(10);
-  PERFORM process_resource_decay();
-  PERFORM pg_sleep(10);
-  PERFORM process_resource_decay();
-  PERFORM pg_sleep(10);
-  PERFORM process_resource_decay();
-  PERFORM pg_sleep(10);
   PERFORM process_resource_decay();
 END;
 $$;
@@ -3284,6 +3288,21 @@ $$;
 -- Temporary power-ups for mining performance
 -- =====================================================
 
+-- Update CHECK constraint to include new boost types (for existing tables)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE table_name = 'boost_items' AND constraint_type = 'CHECK'
+  ) THEN
+    ALTER TABLE boost_items DROP CONSTRAINT IF EXISTS boost_items_boost_type_check;
+    ALTER TABLE boost_items ADD CONSTRAINT boost_items_boost_type_check CHECK (boost_type IN (
+      'hashrate', 'energy_saver', 'bandwidth_optimizer', 'lucky_charm',
+      'overclock', 'coolant_injection', 'durability_shield', 'autonomous_mining'
+    ));
+  END IF;
+END $$;
+
 -- Catálogo de boost items disponibles
 CREATE TABLE IF NOT EXISTS boost_items (
   id TEXT PRIMARY KEY,
@@ -3296,7 +3315,8 @@ CREATE TABLE IF NOT EXISTS boost_items (
     'lucky_charm',        -- +X% block probability
     'overclock',          -- +X% hashrate, +Y% energy consumption
     'coolant_injection',  -- -X% temperature gain
-    'durability_shield'   -- -X% condition deterioration
+    'durability_shield',  -- -X% condition deterioration
+    'autonomous_mining'   -- Keeps rig mining when player offline
   )),
   effect_value NUMERIC NOT NULL,          -- Primary effect percentage
   secondary_value NUMERIC DEFAULT 0,      -- Secondary effect for overclock
@@ -3373,7 +3393,12 @@ INSERT INTO boost_items (id, name, description, boost_type, effect_value, second
 -- Durability Shield
 ('durability_small', 'Wear Guard', '-20% condition deterioration for 5 minutes', 'durability_shield', 20, 0, 5, 1200, 'crypto', 'basic', false, 1),
 ('durability_medium', 'Shield Coat', '-35% condition deterioration for 10 minutes', 'durability_shield', 35, 0, 10, 3000, 'crypto', 'standard', false, 1),
-('durability_large', 'Diamond Shell', '-50% condition deterioration for 20 minutes', 'durability_shield', 50, 0, 20, 6500, 'crypto', 'elite', false, 1)
+('durability_large', 'Diamond Shell', '-50% condition deterioration for 20 minutes', 'durability_shield', 50, 0, 20, 6500, 'crypto', 'elite', false, 1),
+
+-- Autonomous Mining (keeps rig mining when offline - long durations, high prices)
+('autonomous_1h', 'Auto-Pilot Module', 'Keeps rig mining for 1 hour while offline', 'autonomous_mining', 100, 0, 60, 15000, 'crypto', 'standard', false, 1),
+('autonomous_4h', 'Night Shift Protocol', 'Keeps rig mining for 4 hours while offline', 'autonomous_mining', 100, 0, 240, 50000, 'crypto', 'advanced', false, 1),
+('autonomous_12h', 'Full Automation System', 'Keeps rig mining for 12 hours while offline', 'autonomous_mining', 100, 0, 720, 120000, 'crypto', 'elite', false, 1)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
@@ -3768,6 +3793,7 @@ DECLARE
   v_luck_mult NUMERIC := 1.0;
   v_temp_mult NUMERIC := 1.0;
   v_durability_mult NUMERIC := 1.0;
+  v_autonomous BOOLEAN := false;
   v_boost RECORD;
 BEGIN
   -- Calcular multiplicadores de todos los boosts activos en este rig
@@ -3793,6 +3819,8 @@ BEGIN
         v_temp_mult := v_temp_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
       WHEN 'durability_shield' THEN
         v_durability_mult := v_durability_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
+      WHEN 'autonomous_mining' THEN
+        v_autonomous := true;
     END CASE;
   END LOOP;
 
@@ -3808,7 +3836,27 @@ BEGIN
     'internet', v_internet_mult,
     'luck', v_luck_mult,
     'temperature', v_temp_mult,
-    'durability', v_durability_mult
+    'durability', v_durability_mult,
+    'autonomous', v_autonomous
+  );
+END;
+$$;
+
+-- Helper function to check if rig has autonomous mining boost
+DROP FUNCTION IF EXISTS rig_has_autonomous_boost(UUID) CASCADE;
+CREATE OR REPLACE FUNCTION rig_has_autonomous_boost(p_rig_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1
+    FROM rig_boosts rb
+    JOIN boost_items bi ON bi.id = rb.boost_item_id
+    WHERE rb.player_rig_id = p_rig_id
+      AND rb.remaining_seconds > 0
+      AND bi.boost_type = 'autonomous_mining'
   );
 END;
 $$;

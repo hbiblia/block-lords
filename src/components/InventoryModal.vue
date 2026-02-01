@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
-import { getPlayerInventory, redeemPrepaidCard, getPlayerBoosts, activateBoost } from '@/utils/api';
+import { getPlayerInventory, redeemPrepaidCard, getPlayerBoosts } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
@@ -38,16 +38,12 @@ const using = ref(false);
 // Confirmation dialog state
 const showConfirm = ref(false);
 const confirmAction = ref<{
-  type: 'redeem' | 'activate';
+  type: 'redeem';
   data: {
     cardCode?: string;
     cardName?: string;
     cardType?: 'energy' | 'internet';
     cardAmount?: number;
-    boostId?: string;
-    boostName?: string;
-    boostEffect?: string;
-    boostDuration?: number;
   };
 } | null>(null);
 
@@ -177,47 +173,6 @@ async function handleRedeemCard(code: string) {
   }
 }
 
-function requestActivateBoost(boost: BoostItem) {
-  confirmAction.value = {
-    type: 'activate',
-    data: {
-      boostId: boost.boost_id,
-      boostName: getBoostName(boost.boost_id),
-      boostEffect: formatBoostEffect(boost),
-      boostDuration: boost.duration_minutes,
-    },
-  };
-  showConfirm.value = true;
-}
-
-async function handleActivateBoost(boostId: string) {
-  if (!authStore.player || using.value) return;
-  using.value = true;
-  showProcessingModal.value = true;
-  processingStatus.value = 'processing';
-  processingError.value = '';
-
-  try {
-    const result = await activateBoost(authStore.player.id, boostId);
-    if (result.success) {
-      await loadInventory();
-      processingStatus.value = 'success';
-      playSound('success');
-      emit('used');
-    } else {
-      processingStatus.value = 'error';
-      processingError.value = result.error || t('inventory.processing.errorActivatingBoost');
-      playSound('error');
-    }
-  } catch (e) {
-    console.error('Error activating boost:', e);
-    processingStatus.value = 'error';
-    processingError.value = t('inventory.processing.errorActivatingBoost');
-    playSound('error');
-  } finally {
-    using.value = false;
-  }
-}
 
 async function confirmUse() {
   if (!confirmAction.value) return;
@@ -227,8 +182,6 @@ async function confirmUse() {
 
   if (type === 'redeem' && data.cardCode) {
     await handleRedeemCard(data.cardCode);
-  } else if (type === 'activate' && data.boostId) {
-    await handleActivateBoost(data.boostId);
   }
 
   confirmAction.value = null;
@@ -499,13 +452,9 @@ onMounted(() => {
               </div>
 
               <div class="mt-auto">
-                <button
-                  @click="requestActivateBoost(boost)"
-                  :disabled="using"
-                  class="w-full py-2 rounded text-sm font-medium transition-colors disabled:opacity-50 bg-purple-500 text-white hover:bg-purple-400"
-                >
-                  {{ using ? t('common.processing') : t('inventory.boosts.activate') }}
-                </button>
+                <p class="text-xs text-text-muted/70 italic text-center py-2">
+                  {{ t('inventory.boosts.installHint', 'Instalar desde gestion de rig') }}
+                </p>
               </div>
             </div>
           </div>
@@ -555,31 +504,7 @@ onMounted(() => {
             </div>
           </template>
 
-          <!-- Boost Activate Confirmation -->
-          <template v-else-if="confirmAction.type === 'activate'">
-            <div class="text-center mb-4">
-              <div class="text-4xl mb-3">🚀</div>
-              <h3 class="text-lg font-bold mb-1">{{ t('inventory.confirm.activateBoost') }}</h3>
-              <p class="text-text-muted text-sm">{{ t('inventory.confirm.areYouSure') }}</p>
-            </div>
-
-            <div class="bg-bg-primary rounded-lg p-4 mb-4">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">{{ t('inventory.confirm.boost') }}</span>
-                <span class="font-medium text-white">{{ confirmAction.data.boostName }}</span>
-              </div>
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">{{ t('market.boosts.effect') }}</span>
-                <span class="font-bold text-purple-400">{{ confirmAction.data.boostEffect }}</span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-text-muted text-sm">{{ t('market.boosts.duration') }}</span>
-                <span class="font-medium text-white">{{ confirmAction.data.boostDuration }}m</span>
-              </div>
-            </div>
-          </template>
-
-          <div class="flex gap-3">
+<div class="flex gap-3">
             <button
               @click="cancelUse"
               class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
@@ -589,8 +514,7 @@ onMounted(() => {
             <button
               @click="confirmUse"
               :disabled="using"
-              class="flex-1 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50"
-              :class="confirmAction.type === 'activate' ? 'bg-purple-500 text-white hover:bg-purple-400' : 'bg-accent-primary text-white hover:bg-accent-primary/80'"
+              class="flex-1 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 bg-accent-primary text-white hover:bg-accent-primary/80"
             >
               {{ using ? t('common.processing') : t('common.confirm') }}
             </button>

@@ -299,6 +299,19 @@ export const useMiningStore = defineStore('mining', () => {
     rigBoosts.value = boostsMap;
   }
 
+  // Reload just the rigs data (used when boosts expire to update stats)
+  async function reloadRigs() {
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) return;
+
+    try {
+      const rigsData = await getPlayerRigs(authStore.player.id);
+      rigs.value = rigsData ?? [];
+    } catch (e) {
+      console.error('Error reloading rigs:', e);
+    }
+  }
+
   async function loadActiveBoosts() {
     const authStore = useAuthStore();
     if (!authStore.player?.id) return;
@@ -342,8 +355,28 @@ export const useMiningStore = defineStore('mining', () => {
     if (coolingDebounceTimer) {
       clearTimeout(coolingDebounceTimer);
     }
-    coolingDebounceTimer = window.setTimeout(() => {
-      loadRigsCooling();
+    coolingDebounceTimer = window.setTimeout(async () => {
+      const toastStore = useToastStore();
+      // Save old cooling to detect expired ones
+      const oldCooling = { ...rigCooling.value };
+
+      await loadRigsCooling();
+
+      // Detect expired cooling (was present before, not present now or durability = 0)
+      for (const rigId of Object.keys(oldCooling)) {
+        const oldItems = oldCooling[rigId] || [];
+        const newItems = rigCooling.value[rigId] || [];
+        const rig = rigs.value.find(r => r.id === rigId);
+        const rigName = rig?.rig?.name || 'Rig';
+
+        for (const oldItem of oldItems) {
+          const stillExists = newItems.find(n => n.id === oldItem.id);
+          if (!stillExists && oldItem.durability <= 1) {
+            toastStore.boostExpired(oldItem.name, rigName);
+          }
+        }
+      }
+
       coolingDebounceTimer = null;
     }, 500);
   }
@@ -355,8 +388,30 @@ export const useMiningStore = defineStore('mining', () => {
     if (boostsDebounceTimer) {
       clearTimeout(boostsDebounceTimer);
     }
-    boostsDebounceTimer = window.setTimeout(() => {
-      loadRigsBoosts();
+    boostsDebounceTimer = window.setTimeout(async () => {
+      const toastStore = useToastStore();
+      // Save old boosts to detect expired ones
+      const oldBoosts = { ...rigBoosts.value };
+
+      await loadRigsBoosts();
+      // Also reload rigs to update stats when boosts change/expire
+      await reloadRigs();
+
+      // Detect expired boosts (was present before, not present now)
+      for (const rigId of Object.keys(oldBoosts)) {
+        const oldItems = oldBoosts[rigId] || [];
+        const newItems = rigBoosts.value[rigId] || [];
+        const rig = rigs.value.find(r => r.id === rigId);
+        const rigName = rig?.rig?.name || 'Rig';
+
+        for (const oldItem of oldItems) {
+          const stillExists = newItems.find(n => n.id === oldItem.id);
+          if (!stillExists && oldItem.remaining_seconds <= 60) {
+            toastStore.boostExpired(oldItem.name, rigName);
+          }
+        }
+      }
+
       boostsDebounceTimer = null;
     }, 500);
   }
@@ -635,6 +690,7 @@ export const useMiningStore = defineStore('mining', () => {
     loadRigsCooling,
     loadRigsBoosts,
     loadActiveBoosts,
+    reloadRigs,
     toggleRig,
     handleBlockMined,
 

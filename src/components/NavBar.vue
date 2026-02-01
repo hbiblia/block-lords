@@ -7,6 +7,7 @@ import { useRealtimeStore } from '@/stores/realtime';
 import { useMiningStore } from '@/stores/mining';
 import { toggleLocale, getLocale } from '@/plugins/i18n';
 import { useSound } from '@/composables/useSound';
+import { formatGamecoin, formatCrypto, formatNumber } from '@/utils/format';
 
 // Inject InfoBar visibility to adjust positioning
 const infoBarVisible = inject<Ref<boolean>>('infoBarVisible', ref(false));
@@ -106,7 +107,7 @@ async function handleLogout() {
               :class="{ 'ring-2 ring-accent-primary': showMobileResources }"
             >
               <span class="text-status-warning">🪙</span>
-              <span class="font-medium">{{ authStore.player?.gamecoin_balance?.toFixed(0) ?? '0' }}</span>
+              <span class="font-medium">{{ formatGamecoin(authStore.player?.gamecoin_balance) }}</span>
               <svg
                 class="w-3.5 h-3.5 text-text-muted transition-transform"
                 :class="{ 'rotate-180': showMobileResources }"
@@ -125,11 +126,11 @@ async function handleLogout() {
             <!-- Coins -->
             <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg">
               <span class="text-status-warning">🪙</span>
-              <span class="font-medium">{{ authStore.player?.gamecoin_balance?.toFixed(2) ?? '0.00' }}</span>
+              <span class="font-medium">{{ formatGamecoin(authStore.player?.gamecoin_balance) }}</span>
             </div>
             <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg">
               <span class="text-accent-primary">💎</span>
-              <span class="font-medium">{{ authStore.player?.crypto_balance?.toFixed(2) ?? '0.00' }}</span>
+              <span class="font-medium">{{ formatCrypto(authStore.player?.crypto_balance) }}</span>
             </div>
 
             <!-- Energy Bar -->
@@ -160,7 +161,7 @@ async function handleLogout() {
                   'text-status-danger animate-pulse': energyStatus === 'critical',
                   'text-status-warning': energyStatus !== 'critical'
                 }"
-              >{{ energy.toFixed(0) }}</span>
+              >{{ formatNumber(energy) }}</span>
             </div>
 
             <!-- Internet Bar -->
@@ -191,7 +192,7 @@ async function handleLogout() {
                   'text-status-danger animate-pulse': internetStatus === 'critical',
                   'text-accent-tertiary': internetStatus !== 'critical'
                 }"
-              >{{ internet.toFixed(0) }}</span>
+              >{{ formatNumber(internet) }}</span>
             </div>
           </div>
 
@@ -333,7 +334,7 @@ async function handleLogout() {
                 'text-status-warning': energyStatus === 'warning',
                 'text-white': energyStatus === 'normal'
               }"
-            >{{ energy.toFixed(0) }} / {{ maxEnergy.toFixed(0) }}</span>
+            >{{ formatNumber(energy) }} / {{ formatNumber(maxEnergy) }}</span>
           </div>
           <div
             class="h-2.5 rounded-full overflow-hidden"
@@ -368,7 +369,7 @@ async function handleLogout() {
                 'text-status-warning': internetStatus === 'warning',
                 'text-white': internetStatus === 'normal'
               }"
-            >{{ internet.toFixed(0) }} / {{ maxInternet.toFixed(0) }}</span>
+            >{{ formatNumber(internet) }} / {{ formatNumber(maxInternet) }}</span>
           </div>
           <div
             class="h-2.5 rounded-full overflow-hidden"
