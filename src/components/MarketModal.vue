@@ -345,7 +345,7 @@ function requestBuyCard(card: CardItem) {
     id: card.id,
     name: getCardName(card.id),
     price: card.base_price,
-    description: `+${card.amount}% ${card.card_type === 'energy' ? t('market.energy') : t('market.internet')}`,
+    description: `+${card.amount} ${card.card_type === 'energy' ? t('market.energy') : t('market.internet')}`,
     currency: card.currency || 'gamecoin',
   };
   showConfirm.value = true;
@@ -487,7 +487,7 @@ watch(() => props.show, (newVal) => {
       ></div>
 
       <!-- Modal -->
-      <div class="relative w-full max-w-5xl h-[90vh] overflow-hidden card animate-fade-in flex flex-col">
+      <div class="relative w-full max-w-5xl h-[90vh] overflow-hidden card animate-fade-in flex flex-col bg-bg-primary">
         <!-- Header -->
         <div class="flex items-center justify-between p-4 border-b border-border/50">
           <h2 class="text-xl font-display font-bold">
@@ -710,7 +710,7 @@ watch(() => props.show, (newVal) => {
 
                   <div class="flex items-center justify-between mb-2">
                     <span class="text-xs text-text-muted">{{ t('market.energy') }}</span>
-                    <span class="font-mono font-bold text-lg text-amber-400">+{{ card.amount }}%</span>
+                    <span class="font-mono font-bold text-lg text-amber-400">+{{ card.amount }}</span>
                   </div>
 
                   <!-- Show owned quantity if any -->
@@ -753,7 +753,7 @@ watch(() => props.show, (newVal) => {
 
                   <div class="flex items-center justify-between mb-2">
                     <span class="text-xs text-text-muted">{{ t('market.internet') }}</span>
-                    <span class="font-mono font-bold text-lg text-cyan-400">+{{ card.amount }}%</span>
+                    <span class="font-mono font-bold text-lg text-cyan-400">+{{ card.amount }}</span>
                   </div>
 
                   <!-- Show owned quantity if any -->

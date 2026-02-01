@@ -554,14 +554,22 @@ BEGIN
     END IF;
 
     -- Calcular nueva temperatura al encender
-    -- Si fue apagado hace menos de 60 segundos, aplicar penalización
+    -- Si fue apagado hace menos de 60 segundos Y no hubo modificaciones, aplicar penalización
     IF v_rig.deactivated_at IS NOT NULL THEN
       v_seconds_since_off := EXTRACT(EPOCH FROM (NOW() - v_rig.deactivated_at));
 
       IF v_seconds_since_off < v_quick_toggle_threshold THEN
-        -- Penalización: temperatura x10 (pero mínimo 50°C para que duela)
-        v_new_temperature := LEAST(100, GREATEST(50, v_rig.temperature * v_temperature_multiplier));
-        v_quick_toggle_penalty := true;
+        -- Solo penalizar si NO hubo modificaciones después de apagar
+        -- (last_modified_at es NULL o anterior a deactivated_at)
+        IF v_rig.last_modified_at IS NULL OR v_rig.last_modified_at < v_rig.deactivated_at THEN
+          -- Penalización: temperatura x10 (pero mínimo 50°C para que duela)
+          v_new_temperature := LEAST(100, GREATEST(50, v_rig.temperature * v_temperature_multiplier));
+          v_quick_toggle_penalty := true;
+        ELSE
+          -- Hubo modificaciones (cooling, boost, reparación, upgrade), no penalizar
+          -- Enfriamiento gradual normal
+          v_new_temperature := GREATEST(25, v_rig.temperature - (v_seconds_since_off / 60) * 10);
+        END IF;
       ELSE
         -- Enfriamiento gradual basado en tiempo apagado
         -- Cada 60 segundos reduce 10 grados, mínimo temperatura ambiente (25)
@@ -668,7 +676,8 @@ BEGIN
   UPDATE player_rigs
   SET condition = v_current_max,  -- Repara hasta el máximo actual
       max_condition = v_new_max,  -- Reduce el máximo para futuras reparaciones
-      times_repaired = COALESCE(times_repaired, 0) + 1
+      times_repaired = COALESCE(times_repaired, 0) + 1,
+      last_modified_at = NOW()    -- Marca modificación (evita penalización por quick toggle)
   WHERE id = p_rig_id;
 
   INSERT INTO transactions (player_id, type, amount, currency, description)
@@ -2319,6 +2328,9 @@ BEGIN
   INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability)
   VALUES (p_rig_id, p_cooling_id, 100);
 
+  -- Marcar el rig como modificado (evita penalización por quick toggle)
+  UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
   RETURN json_build_object(
     'success', true,
     'message', 'Refrigeración instalada en el rig',
@@ -3329,7 +3341,25 @@ DECLARE
   v_tracking player_online_tracking%ROWTYPE;
   v_minutes_since_last INTEGER;
   v_new_minutes INTEGER;
+  v_player players%ROWTYPE;
+  v_free_max INTEGER := 100;
+  v_premium_expired BOOLEAN := false;
 BEGIN
+  -- Verificar si el premium acaba de expirar
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player.premium_until IS NOT NULL AND v_player.premium_until <= NOW() THEN
+    -- Premium expiró: llenar energía e internet al máximo free (100) y limpiar premium_until
+    UPDATE players SET
+      energy = v_free_max,
+      internet = v_free_max,
+      premium_until = NULL  -- Marcar como procesado
+    WHERE id = p_player_id AND premium_until IS NOT NULL AND premium_until <= NOW();
+
+    IF FOUND THEN
+      v_premium_expired := true;
+    END IF;
+  END IF;
+
   -- Obtener o crear registro de tracking
   SELECT * INTO v_tracking
   FROM player_online_tracking
@@ -3344,7 +3374,7 @@ BEGIN
     -- Actualizar progreso de misiones de tiempo online
     PERFORM update_mission_progress(p_player_id, 'online_time', 1);
 
-    RETURN json_build_object('success', true, 'minutesOnline', 1);
+    RETURN json_build_object('success', true, 'minutesOnline', 1, 'premiumExpired', v_premium_expired);
   END IF;
 
   -- Calcular minutos desde el último heartbeat (máximo 5 para evitar trampas)
@@ -3368,10 +3398,10 @@ BEGIN
     -- Actualizar progreso de misiones de tiempo online
     PERFORM update_mission_progress(p_player_id, 'online_time', v_minutes_since_last);
 
-    RETURN json_build_object('success', true, 'minutesOnline', v_new_minutes, 'added', v_minutes_since_last);
+    RETURN json_build_object('success', true, 'minutesOnline', v_new_minutes, 'added', v_minutes_since_last, 'premiumExpired', v_premium_expired);
   END IF;
 
-  RETURN json_build_object('success', true, 'minutesOnline', v_tracking.minutes_online, 'added', 0);
+  RETURN json_build_object('success', true, 'minutesOnline', v_tracking.minutes_online, 'added', 0, 'premiumExpired', v_premium_expired);
 END;
 $$;
 
@@ -3837,6 +3867,9 @@ BEGIN
   ELSE
     DELETE FROM player_boosts WHERE id = v_inventory.id;
   END IF;
+
+  -- Marcar el rig como modificado (evita penalización por quick toggle)
+  UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
 
   RETURN json_build_object(
     'success', true,
@@ -4369,7 +4402,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION get_premium_resource_bonus()
 RETURNS INTEGER LANGUAGE plpgsql AS $$
-BEGIN RETURN 500; END;
+BEGIN RETURN 400; END;  -- 100 base + 400 bonus = 500 max para premium
 $$;
 
 CREATE OR REPLACE FUNCTION get_effective_max_energy(p_player_id UUID)
@@ -4475,6 +4508,7 @@ $$;
 CREATE OR REPLACE FUNCTION purchase_premium(p_player_id UUID)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_player players%ROWTYPE; v_price DECIMAL := 5; v_new_expires TIMESTAMPTZ; v_subscription_id UUID;
+  v_premium_max INTEGER := 500;  -- Max recursos para premium
 BEGIN
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF v_player.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
@@ -4485,11 +4519,17 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Balance insuficiente', 'required', v_price, 'current', COALESCE(v_player.ron_balance, 0));
   END IF;
   v_new_expires := NOW() + INTERVAL '30 days';
-  UPDATE players SET ron_balance = ron_balance - v_price, premium_until = v_new_expires WHERE id = p_player_id;
+  -- Al activar premium: llenar energía e internet al máximo premium (500)
+  UPDATE players SET
+    ron_balance = ron_balance - v_price,
+    premium_until = v_new_expires,
+    energy = v_premium_max,
+    internet = v_premium_max
+  WHERE id = p_player_id;
   INSERT INTO premium_subscriptions (player_id, expires_at, amount_paid) VALUES (p_player_id, v_new_expires, v_price) RETURNING id INTO v_subscription_id;
   INSERT INTO transactions (player_id, type, amount, currency, description)
   VALUES (p_player_id, 'premium_purchase', -v_price, 'ron', 'Suscripcion Premium (30 dias)');
-  RETURN json_build_object('success', true, 'subscription_id', v_subscription_id, 'expires_at', v_new_expires, 'price', v_price);
+  RETURN json_build_object('success', true, 'subscription_id', v_subscription_id, 'expires_at', v_new_expires, 'price', v_price, 'energy', v_premium_max, 'internet', v_premium_max);
 END;
 $$;
 
@@ -4650,9 +4690,21 @@ RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_player players%ROWTYPE; v_hours_offline NUMERIC; v_regen_rate NUMERIC := 5;
   v_energy_regen NUMERIC := 0; v_internet_regen NUMERIC := 0; v_new_energy NUMERIC; v_new_internet NUMERIC;
   v_max_energy_cap NUMERIC; v_max_internet_cap NUMERIC; v_effective_max_energy NUMERIC; v_effective_max_internet NUMERIC;
+  v_premium_expired BOOLEAN := false; v_free_max INTEGER := 100;
 BEGIN
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF v_player IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
+
+  -- Verificar si el premium expiró mientras estaba offline
+  IF v_player.premium_until IS NOT NULL AND v_player.premium_until <= NOW() THEN
+    -- Premium expiró: llenar energía e internet al máximo free (100) y limpiar premium_until
+    UPDATE players SET energy = v_free_max, internet = v_free_max, premium_until = NULL, last_seen = NOW()
+    WHERE id = p_player_id;
+    v_premium_expired := true;
+    RETURN json_build_object('success', true, 'energyGained', 0, 'internetGained', 0,
+      'premiumExpired', true, 'energy', v_free_max, 'internet', v_free_max);
+  END IF;
+
   IF v_player.last_seen IS NULL THEN RETURN json_build_object('success', true, 'energyGained', 0, 'internetGained', 0); END IF;
   v_hours_offline := LEAST(24, EXTRACT(EPOCH FROM (NOW() - v_player.last_seen)) / 3600);
   IF v_hours_offline < 0.0833 THEN RETURN json_build_object('success', true, 'energyGained', 0, 'internetGained', 0); END IF;
@@ -4740,9 +4792,9 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Nivel no valido'); END IF;
   IF v_player.crypto_balance < v_upgrade_cost.crypto_cost THEN RETURN jsonb_build_object('success', false, 'error', 'Crypto insuficiente', 'required', v_upgrade_cost.crypto_cost); END IF;
   UPDATE players SET crypto_balance = crypto_balance - v_upgrade_cost.crypto_cost WHERE id = p_player_id;
-  CASE p_upgrade_type WHEN 'hashrate' THEN UPDATE player_rigs SET hashrate_level = v_next_level WHERE id = p_player_rig_id;
-    WHEN 'efficiency' THEN UPDATE player_rigs SET efficiency_level = v_next_level WHERE id = p_player_rig_id;
-    WHEN 'thermal' THEN UPDATE player_rigs SET thermal_level = v_next_level WHERE id = p_player_rig_id; END CASE;
+  CASE p_upgrade_type WHEN 'hashrate' THEN UPDATE player_rigs SET hashrate_level = v_next_level, last_modified_at = NOW() WHERE id = p_player_rig_id;
+    WHEN 'efficiency' THEN UPDATE player_rigs SET efficiency_level = v_next_level, last_modified_at = NOW() WHERE id = p_player_rig_id;
+    WHEN 'thermal' THEN UPDATE player_rigs SET thermal_level = v_next_level, last_modified_at = NOW() WHERE id = p_player_rig_id; END CASE;
   RETURN jsonb_build_object('success', true, 'upgrade_type', p_upgrade_type, 'new_level', v_next_level, 'crypto_spent', v_upgrade_cost.crypto_cost);
 END;
 $$;

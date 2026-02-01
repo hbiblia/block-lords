@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS player_rigs (
 -- Add columns if they don't exist (for existing databases)
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ;
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ;
+ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS last_modified_at TIMESTAMPTZ;
 
 ALTER TABLE player_rigs DROP CONSTRAINT IF EXISTS hashrate_level_valid;
 ALTER TABLE player_rigs DROP CONSTRAINT IF EXISTS efficiency_level_valid;
