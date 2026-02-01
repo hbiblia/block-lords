@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, watch, onUnmounted, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { usePendingBlocksStore } from '@/stores/pendingBlocks';
 import { playSound } from '@/utils/sounds';
@@ -82,7 +82,7 @@ function renderCaptcha() {
   }
 }
 
-function onCaptchaSuccess(token: string) {
+function onCaptchaSuccess(_token: string) {
   console.log('Captcha verified');
   captchaVerified.value = true;
 }
