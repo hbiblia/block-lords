@@ -41,6 +41,18 @@ interface BoostItemType {
   tier: string;
 }
 
+interface CryptoPackageType {
+  id: string;
+  name: string;
+  description: string;
+  crypto_amount: number;
+  ron_price: number;
+  bonus_percent: number;
+  tier: string;
+  is_featured: boolean;
+  total_crypto: number;
+}
+
 const { t } = useI18n();
 
 const authStore = useAuthStore();
@@ -69,7 +81,7 @@ onUnmounted(() => {
   document.body.style.overflow = '';
 });
 
-const activeFilter = ref<'all' | 'rigs' | 'cooling' | 'energy' | 'internet' | 'boosts'>('all');
+const activeFilter = ref<'all' | 'rigs' | 'cooling' | 'energy' | 'internet' | 'boosts' | 'crypto'>('all');
 
 // Mobile category popup
 const showMobileCategories = ref(false);
@@ -87,6 +99,7 @@ function getCategoryIcon(category: typeof activeFilter.value): string {
     case 'energy': return '⚡';
     case 'internet': return '📡';
     case 'boosts': return '🚀';
+    case 'crypto': return '💎';
     default: return '🏪';
   }
 }
@@ -94,12 +107,12 @@ function getCategoryIcon(category: typeof activeFilter.value): string {
 // Confirmation dialog state
 const showConfirm = ref(false);
 const confirmAction = ref<{
-  type: 'rig' | 'cooling' | 'card' | 'boost';
+  type: 'rig' | 'cooling' | 'card' | 'boost' | 'crypto_package';
   id: string;
   name: string;
   price: number;
   description: string;
-  currency: 'gamecoin' | 'crypto';
+  currency: 'gamecoin' | 'crypto' | 'ron';
 } | null>(null);
 
 // Processing modal state
@@ -115,6 +128,7 @@ const coolingItems = computed(() => marketStore.coolingItems);
 const energyCards = computed(() => marketStore.energyCards);
 const internetCards = computed(() => marketStore.internetCards);
 const boostItems = computed(() => marketStore.boostItems);
+const cryptoPackages = computed(() => marketStore.cryptoPackages);
 
 const balance = computed(() => authStore.player?.gamecoin_balance ?? 0);
 const cryptoBalance = computed(() => authStore.player?.crypto_balance ?? 0);
@@ -214,6 +228,12 @@ function getBoostIcon(boostType: string): string {
   }
 }
 
+function getBoostTypeDescription(boostType: string): string {
+  const key = `market.boosts.types.${boostType}`;
+  const translated = t(key);
+  return translated !== key ? translated : '';
+}
+
 function formatBoostEffect(boost: BoostItemType): string {
   const sign = boost.boost_type === 'energy_saver' || boost.boost_type === 'bandwidth_optimizer' ||
                boost.boost_type === 'coolant_injection' || boost.boost_type === 'durability_shield' ? '-' : '+';
@@ -237,6 +257,22 @@ function canAffordBoost(boost: BoostItemType): boolean {
     return cryptoBalance.value >= boost.base_price;
   }
   return balance.value >= boost.base_price;
+}
+
+function getCryptoPackageName(id: string): string {
+  const key = `market.items.crypto_packages.${id}.name`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  const pkg = cryptoPackages.value.find(p => p.id === id);
+  return pkg?.name ?? id;
+}
+
+function getCryptoPackageDescription(id: string): string {
+  const key = `market.items.crypto_packages.${id}.description`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  const pkg = cryptoPackages.value.find(p => p.id === id);
+  return pkg?.description ?? '';
 }
 
 async function loadData() {
@@ -359,6 +395,38 @@ async function buyBoost(boostId: string) {
   }
 }
 
+function requestBuyCryptoPackage(pkg: CryptoPackageType) {
+  const bonusText = pkg.bonus_percent > 0 ? ` (+${pkg.bonus_percent}% bonus)` : '';
+  confirmAction.value = {
+    type: 'crypto_package',
+    id: pkg.id,
+    name: getCryptoPackageName(pkg.id),
+    price: pkg.ron_price,
+    description: `${pkg.total_crypto} 💎 Crypto${bonusText}`,
+    currency: 'ron',
+  };
+  showConfirm.value = true;
+}
+
+async function buyCryptoPackage(packageId: string) {
+  if (!authStore.player) return;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
+
+  // TODO: Integrate with Ronin wallet for actual RON payment
+  // For now, we simulate the purchase
+  const result = await marketStore.buyCryptoPackage(packageId);
+
+  if (result.success) {
+    processingStatus.value = 'success';
+    emit('purchased');
+  } else {
+    processingStatus.value = 'error';
+    processingError.value = result.error ?? t('market.processing.errorBuyingCrypto');
+  }
+}
+
 function closeProcessingModal() {
   showProcessingModal.value = false;
   processingStatus.value = 'processing';
@@ -379,6 +447,8 @@ async function confirmPurchase() {
     await buyCard(id);
   } else if (type === 'boost') {
     await buyBoost(id);
+  } else if (type === 'crypto_package') {
+    await buyCryptoPackage(id);
   }
 
   confirmAction.value = null;
@@ -501,6 +571,16 @@ watch(() => props.show, (newVal) => {
             >
               <span>🚀</span>
               <span>{{ t('market.tabs.boosts') }}</span>
+            </button>
+            <button
+              @click="activeFilter = 'crypto'"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left"
+              :class="activeFilter === 'crypto'
+                ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400'
+                : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
+            >
+              <span>💎</span>
+              <span>{{ t('market.tabs.crypto', 'Crypto') }}</span>
             </button>
           </div>
 
@@ -711,7 +791,10 @@ watch(() => props.show, (newVal) => {
                     <span class="text-2xl">{{ getBoostIcon(boost.boost_type) }}</span>
                   </div>
 
-                  <div class="flex items-center justify-between mb-2">
+                  <!-- Boost type description -->
+                  <p class="text-xs text-text-muted mb-2">{{ getBoostTypeDescription(boost.boost_type) }}</p>
+
+                  <div class="flex items-center justify-between mb-1">
                     <span class="text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
                     <span class="font-mono font-bold text-purple-400">{{ formatBoostEffect(boost) }}</span>
                   </div>
@@ -742,6 +825,63 @@ watch(() => props.show, (newVal) => {
                   </div>
                 </div>
               </template>
+
+              <!-- Crypto Packages (RON) -->
+              <template v-if="activeFilter === 'all' || activeFilter === 'crypto'">
+                <div
+                  v-for="pkg in cryptoPackages"
+                  :key="pkg.id"
+                  class="rounded-lg border p-4 flex flex-col min-h-[200px] transition-all hover:scale-[1.01] relative overflow-hidden"
+                  :class="[
+                    pkg.is_featured
+                      ? 'bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 border-blue-500/50'
+                      : 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30'
+                  ]"
+                >
+                  <!-- Featured badge -->
+                  <div
+                    v-if="pkg.is_featured"
+                    class="absolute top-0 right-0 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg"
+                  >
+                    {{ t('market.crypto.featured', 'Popular') }}
+                  </div>
+
+                  <div class="flex items-start justify-between mb-3">
+                    <div>
+                      <h4 class="font-medium text-blue-400">{{ getCryptoPackageName(pkg.id) }}</h4>
+                      <p class="text-xs text-text-muted uppercase">{{ pkg.tier }}</p>
+                    </div>
+                    <span class="text-3xl">💎</span>
+                  </div>
+
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs text-text-muted">{{ t('market.crypto.amount', 'Cantidad') }}</span>
+                    <div class="text-right">
+                      <span class="font-mono font-bold text-xl text-blue-400">{{ pkg.total_crypto }}</span>
+                      <span class="text-blue-400 ml-1">💎</span>
+                    </div>
+                  </div>
+
+                  <!-- Bonus badge -->
+                  <div v-if="pkg.bonus_percent > 0" class="flex items-center justify-center mb-2">
+                    <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-bold">
+                      +{{ pkg.bonus_percent }}% BONUS
+                    </span>
+                  </div>
+
+                  <p class="text-xs text-text-muted mb-3 line-clamp-2">{{ getCryptoPackageDescription(pkg.id) }}</p>
+
+                  <div class="mt-auto">
+                    <button
+                      @click="requestBuyCryptoPackage(pkg)"
+                      class="w-full py-2.5 rounded-lg text-sm font-bold transition-all disabled:opacity-50 bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-400 hover:to-purple-400 shadow-lg"
+                      :disabled="buying"
+                    >
+                      {{ buying ? '...' : `${pkg.ron_price} RON` }}
+                    </button>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -766,7 +906,7 @@ watch(() => props.show, (newVal) => {
         <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
           <div class="text-center mb-4">
             <div class="text-4xl mb-3">
-              {{ confirmAction.type === 'rig' ? '⛏️' : confirmAction.type === 'cooling' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : '💳' }}
+              {{ confirmAction.type === 'rig' ? '⛏️' : confirmAction.type === 'cooling' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'crypto_package' ? '💎' : '💳' }}
             </div>
             <h3 class="text-lg font-bold mb-1">{{ t('market.confirmPurchase.title') }}</h3>
             <p class="text-text-muted text-sm">{{ t('market.confirmPurchase.question') }}</p>
@@ -777,27 +917,36 @@ watch(() => props.show, (newVal) => {
             <div class="text-xs text-text-muted mb-2">{{ confirmAction.description }}</div>
             <div class="flex items-center justify-between">
               <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.price') }}</span>
-              <span class="font-bold" :class="confirmAction.currency === 'crypto' ? 'text-accent-primary' : 'text-status-warning'">
-                {{ confirmAction.price.toLocaleString() }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
+              <span class="font-bold" :class="confirmAction.currency === 'crypto' ? 'text-accent-primary' : confirmAction.currency === 'ron' ? 'text-blue-400' : 'text-status-warning'">
+                {{ confirmAction.price.toLocaleString() }} {{ confirmAction.currency === 'crypto' ? '💎' : confirmAction.currency === 'ron' ? 'RON' : '🪙' }}
               </span>
             </div>
-            <div class="flex items-center justify-between mt-1">
-              <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.yourBalance') }}</span>
-              <span
-                class="font-mono"
-                :class="(confirmAction.currency === 'crypto' ? cryptoBalance : balance) >= confirmAction.price ? 'text-status-success' : 'text-status-danger'"
-              >
-                {{ confirmAction.currency === 'crypto' ? cryptoBalance.toFixed(2) : balance.toFixed(0) }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
-              </span>
-            </div>
-            <div class="flex items-center justify-between mt-1 pt-2 border-t border-border/50">
-              <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.after') }}</span>
-              <span class="font-mono text-white">
-                {{ confirmAction.currency === 'crypto'
-                  ? (cryptoBalance - confirmAction.price).toFixed(2)
-                  : (balance - confirmAction.price).toFixed(0) }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
-              </span>
-            </div>
+            <template v-if="confirmAction.currency !== 'ron'">
+              <div class="flex items-center justify-between mt-1">
+                <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.yourBalance') }}</span>
+                <span
+                  class="font-mono"
+                  :class="(confirmAction.currency === 'crypto' ? cryptoBalance : balance) >= confirmAction.price ? 'text-status-success' : 'text-status-danger'"
+                >
+                  {{ confirmAction.currency === 'crypto' ? cryptoBalance.toFixed(2) : balance.toFixed(0) }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between mt-1 pt-2 border-t border-border/50">
+                <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.after') }}</span>
+                <span class="font-mono text-white">
+                  {{ confirmAction.currency === 'crypto'
+                    ? (cryptoBalance - confirmAction.price).toFixed(2)
+                    : (balance - confirmAction.price).toFixed(0) }} {{ confirmAction.currency === 'crypto' ? '💎' : '🪙' }}
+                </span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="mt-2 p-2 rounded bg-blue-500/10 border border-blue-500/30">
+                <p class="text-xs text-blue-400 text-center">
+                  {{ t('market.crypto.ronNote', 'Pago con RON en la red Ronin') }}
+                </p>
+              </div>
+            </template>
           </div>
 
           <div class="flex gap-3">
@@ -897,6 +1046,16 @@ watch(() => props.show, (newVal) => {
               >
                 <span class="text-xl">🚀</span>
                 <span class="font-medium">{{ t('market.tabs.boosts') }}</span>
+              </button>
+              <button
+                @click="selectCategory('crypto')"
+                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors col-span-2"
+                :class="activeFilter === 'crypto'
+                  ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 border border-blue-500/30'
+                  : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
+              >
+                <span class="text-xl">💎</span>
+                <span class="font-medium">{{ t('market.tabs.crypto', 'Comprar Crypto') }}</span>
               </button>
             </div>
           </div>

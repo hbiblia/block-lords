@@ -117,6 +117,9 @@ DROP FUNCTION IF EXISTS record_online_heartbeat(UUID) CASCADE;
 DROP FUNCTION IF EXISTS get_player_slot_info(UUID) CASCADE;
 DROP FUNCTION IF EXISTS buy_rig_slot(UUID) CASCADE;
 DROP FUNCTION IF EXISTS get_rig_slot_upgrades() CASCADE;
+DROP FUNCTION IF EXISTS get_crypto_packages() CASCADE;
+DROP FUNCTION IF EXISTS buy_crypto_package(UUID, TEXT, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS get_player_crypto_purchases(UUID, INTEGER) CASCADE;
 
 -- =====================================================
 -- 1. FUNCIONES DE UTILIDAD
@@ -1168,13 +1171,6 @@ BEGIN
     v_total_power := 0;
     v_total_internet := 0;
 
-    -- Obtener multiplicadores de boosts activos
-    v_boosts := get_active_boost_multipliers(v_player.id);
-    v_energy_mult := COALESCE((v_boosts->>'energy')::NUMERIC, 1.0);
-    v_internet_mult := COALESCE((v_boosts->>'internet')::NUMERIC, 1.0);
-    v_temp_mult := COALESCE((v_boosts->>'temperature')::NUMERIC, 1.0);
-    v_durability_mult := COALESCE((v_boosts->>'durability')::NUMERIC, 1.0);
-
     -- Procesar cada rig activo individualmente
     FOR v_rig IN
       SELECT pr.id, pr.temperature, pr.condition, r.power_consumption, r.internet_consumption, r.hashrate
@@ -1182,6 +1178,12 @@ BEGIN
       JOIN rigs r ON r.id = pr.rig_id
       WHERE pr.player_id = v_player.id AND pr.is_active = true
     LOOP
+      -- Obtener multiplicadores de boosts específicos de ESTE rig
+      v_boosts := get_rig_boost_multipliers(v_rig.id);
+      v_energy_mult := COALESCE((v_boosts->>'energy')::NUMERIC, 1.0);
+      v_internet_mult := COALESCE((v_boosts->>'internet')::NUMERIC, 1.0);
+      v_temp_mult := COALESCE((v_boosts->>'temperature')::NUMERIC, 1.0);
+      v_durability_mult := COALESCE((v_boosts->>'durability')::NUMERIC, 1.0);
       -- Obtener refrigeración instalada en este rig específico
       -- Eficiencia del cooling basada en durabilidad:
       -- >= 50%: eficiencia lineal (durability/100)
@@ -1206,11 +1208,13 @@ BEGIN
       -- Calcular consumo de energía del rig:
       -- Base + penalización por temperatura + consumo de refrigeración
       -- Temperatura > 40°C aumenta consumo hasta 50% extra a 100°C
+      -- Aplicar multiplicador de boost de energy_saver (por rig)
       v_total_power := v_total_power +
-        (v_rig.power_consumption * (1 + GREATEST(0, (v_rig.temperature - 40)) * 0.0083)) +
-        v_rig_cooling_energy;
+        ((v_rig.power_consumption * (1 + GREATEST(0, (v_rig.temperature - 40)) * 0.0083)) +
+        v_rig_cooling_energy) * v_energy_mult;
 
-      v_total_internet := v_total_internet + v_rig.internet_consumption;
+      -- Aplicar multiplicador de boost de bandwidth_optimizer (por rig)
+      v_total_internet := v_total_internet + (v_rig.internet_consumption * v_internet_mult);
 
       -- Calcular aumento de temperatura basado en consumo de energía
       -- Calentamiento GRADUAL para que no sea abrupto
@@ -1306,6 +1310,15 @@ BEGIN
       -- Eliminar refrigeración agotada
       DELETE FROM rig_cooling WHERE player_rig_id = v_rig.id AND durability <= 0;
 
+      -- Decrementar tiempo restante de boosts activos de este rig
+      -- El boost solo cuenta tiempo cuando el rig está minando (is_active = true)
+      UPDATE rig_boosts
+      SET remaining_seconds = remaining_seconds - 1
+      WHERE player_rig_id = v_rig.id AND remaining_seconds > 0;
+
+      -- Eliminar boosts expirados
+      DELETE FROM rig_boosts WHERE player_rig_id = v_rig.id AND remaining_seconds <= 0;
+
       -- Si condición llega a 0, apagar el rig y resetear temperatura
       IF (v_rig.condition - v_deterioration) <= 0 THEN
         UPDATE player_rigs SET is_active = false, temperature = 0 WHERE id = v_rig.id;
@@ -1319,9 +1332,9 @@ BEGIN
 
     -- Calcular nuevo nivel de energía e internet
     -- Internet consume más rápido que energía (incentiva comprar tarjetas de internet)
-    -- Aplicar multiplicadores de boost de energy_saver y bandwidth_optimizer
-    v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.1 * v_energy_mult));
-    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.15 * v_internet_mult));
+    -- Los multiplicadores de boost ya fueron aplicados por rig en el loop anterior
+    v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.1));
+    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.15));
 
     -- Actualizar recursos del jugador
     UPDATE players
@@ -3618,6 +3631,181 @@ END;
 $$;
 
 -- =====================================================
+-- RIG-SPECIFIC BOOST FUNCTIONS
+-- =====================================================
+
+-- Instalar boost en un rig específico (similar a install_cooling_to_rig)
+DROP FUNCTION IF EXISTS install_boost_to_rig(UUID, UUID, TEXT) CASCADE;
+CREATE OR REPLACE FUNCTION install_boost_to_rig(p_player_id UUID, p_rig_id UUID, p_boost_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_inventory player_boosts%ROWTYPE;
+  v_boost boost_items%ROWTYPE;
+  v_rig player_rigs%ROWTYPE;
+  v_existing rig_boosts%ROWTYPE;
+  v_remaining_seconds INTEGER;
+BEGIN
+  -- Verificar que el rig pertenece al jugador
+  SELECT * INTO v_rig
+  FROM player_rigs
+  WHERE id = p_rig_id AND player_id = p_player_id;
+
+  IF v_rig IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
+  END IF;
+
+  -- Verificar que el rig NO está activo (debe estar apagado para aplicar boost)
+  IF v_rig.is_active THEN
+    RETURN json_build_object('success', false, 'error', 'Detén el rig antes de aplicar el boost');
+  END IF;
+
+  -- Verificar inventario
+  SELECT * INTO v_inventory
+  FROM player_boosts
+  WHERE player_id = p_player_id AND boost_id = p_boost_id;
+
+  IF v_inventory IS NULL OR v_inventory.quantity <= 0 THEN
+    RETURN json_build_object('success', false, 'error', 'No tienes este boost en tu inventario');
+  END IF;
+
+  -- Obtener detalles del boost
+  SELECT * INTO v_boost FROM boost_items WHERE id = p_boost_id;
+
+  IF v_boost IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Boost no encontrado');
+  END IF;
+
+  -- Verificar si ya está instalado en este rig
+  SELECT * INTO v_existing
+  FROM rig_boosts
+  WHERE player_rig_id = p_rig_id AND boost_item_id = p_boost_id AND remaining_seconds > 0;
+
+  IF v_existing IS NOT NULL THEN
+    IF NOT v_boost.is_stackable OR v_existing.stack_count >= v_boost.max_stack THEN
+      RETURN json_build_object('success', false, 'error', 'Este boost ya está activo en este rig');
+    END IF;
+
+    -- Stackear: agregar tiempo
+    UPDATE rig_boosts
+    SET remaining_seconds = remaining_seconds + (v_boost.duration_minutes * 60),
+        stack_count = stack_count + 1
+    WHERE id = v_existing.id;
+
+    v_remaining_seconds := v_existing.remaining_seconds + (v_boost.duration_minutes * 60);
+  ELSE
+    -- Calcular segundos totales
+    v_remaining_seconds := v_boost.duration_minutes * 60;
+
+    -- Crear nuevo boost en el rig
+    INSERT INTO rig_boosts (player_rig_id, boost_item_id, remaining_seconds, stack_count)
+    VALUES (p_rig_id, p_boost_id, v_remaining_seconds, 1);
+  END IF;
+
+  -- Remover del inventario
+  IF v_inventory.quantity > 1 THEN
+    UPDATE player_boosts
+    SET quantity = quantity - 1
+    WHERE id = v_inventory.id;
+  ELSE
+    DELETE FROM player_boosts WHERE id = v_inventory.id;
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'boost', row_to_json(v_boost),
+    'remaining_seconds', v_remaining_seconds,
+    'message', 'Boost aplicado al rig'
+  );
+END;
+$$;
+
+-- Obtener boosts instalados en un rig específico
+DROP FUNCTION IF EXISTS get_rig_boosts(UUID) CASCADE;
+CREATE OR REPLACE FUNCTION get_rig_boosts(p_rig_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Limpiar boosts expirados (remaining_seconds <= 0)
+  DELETE FROM rig_boosts WHERE player_rig_id = p_rig_id AND remaining_seconds <= 0;
+
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.activated_at), '[]'::JSON)
+    FROM (
+      SELECT rb.id, rb.boost_item_id, rb.remaining_seconds, rb.stack_count, rb.activated_at,
+             bi.name, bi.description, bi.boost_type, bi.effect_value, bi.secondary_value, bi.tier
+      FROM rig_boosts rb
+      JOIN boost_items bi ON bi.id = rb.boost_item_id
+      WHERE rb.player_rig_id = p_rig_id AND rb.remaining_seconds > 0
+    ) t
+  );
+END;
+$$;
+
+-- Obtener multiplicadores de boosts de un rig específico (para game tick)
+DROP FUNCTION IF EXISTS get_rig_boost_multipliers(UUID) CASCADE;
+CREATE OR REPLACE FUNCTION get_rig_boost_multipliers(p_rig_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_hashrate_mult NUMERIC := 1.0;
+  v_energy_mult NUMERIC := 1.0;
+  v_internet_mult NUMERIC := 1.0;
+  v_luck_mult NUMERIC := 1.0;
+  v_temp_mult NUMERIC := 1.0;
+  v_durability_mult NUMERIC := 1.0;
+  v_boost RECORD;
+BEGIN
+  -- Calcular multiplicadores de todos los boosts activos en este rig
+  FOR v_boost IN
+    SELECT bi.boost_type, bi.effect_value, bi.secondary_value, rb.stack_count
+    FROM rig_boosts rb
+    JOIN boost_items bi ON bi.id = rb.boost_item_id
+    WHERE rb.player_rig_id = p_rig_id AND rb.remaining_seconds > 0
+  LOOP
+    CASE v_boost.boost_type
+      WHEN 'hashrate' THEN
+        v_hashrate_mult := v_hashrate_mult + (v_boost.effect_value / 100.0) * v_boost.stack_count;
+      WHEN 'energy_saver' THEN
+        v_energy_mult := v_energy_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
+      WHEN 'bandwidth_optimizer' THEN
+        v_internet_mult := v_internet_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
+      WHEN 'lucky_charm' THEN
+        v_luck_mult := v_luck_mult + (v_boost.effect_value / 100.0) * v_boost.stack_count;
+      WHEN 'overclock' THEN
+        v_hashrate_mult := v_hashrate_mult + (v_boost.effect_value / 100.0) * v_boost.stack_count;
+        v_energy_mult := v_energy_mult + (v_boost.secondary_value / 100.0) * v_boost.stack_count;
+      WHEN 'coolant_injection' THEN
+        v_temp_mult := v_temp_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
+      WHEN 'durability_shield' THEN
+        v_durability_mult := v_durability_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
+    END CASE;
+  END LOOP;
+
+  -- Asegurar que los multiplicadores no bajen demasiado
+  v_energy_mult := GREATEST(0.1, v_energy_mult);
+  v_internet_mult := GREATEST(0.1, v_internet_mult);
+  v_temp_mult := GREATEST(0.1, v_temp_mult);
+  v_durability_mult := GREATEST(0.1, v_durability_mult);
+
+  RETURN json_build_object(
+    'hashrate', v_hashrate_mult,
+    'energy', v_energy_mult,
+    'internet', v_internet_mult,
+    'luck', v_luck_mult,
+    'temperature', v_temp_mult,
+    'durability', v_durability_mult
+  );
+END;
+$$;
+
+-- =====================================================
 -- PROFILE FUNCTIONS
 -- =====================================================
 
@@ -3729,6 +3917,148 @@ BEGIN
   RETURN json_build_object(
     'success', true,
     'message', 'Cuenta reiniciada exitosamente'
+  );
+END;
+$$;
+
+-- =====================================================
+-- FUNCIONES DE PAQUETES DE CRYPTO (RON)
+-- =====================================================
+
+-- Obtener paquetes de crypto disponibles
+CREATE OR REPLACE FUNCTION get_crypto_packages()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.ron_price ASC), '[]'::JSON)
+    FROM (
+      SELECT
+        id,
+        name,
+        description,
+        crypto_amount,
+        ron_price,
+        bonus_percent,
+        tier,
+        is_featured,
+        -- Calcular total con bonus
+        ROUND(crypto_amount * (1 + bonus_percent::NUMERIC / 100), 2) as total_crypto
+      FROM crypto_packages
+      WHERE is_active = true
+      ORDER BY ron_price ASC
+    ) t
+  );
+END;
+$$;
+
+-- Comprar paquete de crypto con RON
+-- tx_hash es el hash de la transacción en Ronin para verificación
+CREATE OR REPLACE FUNCTION buy_crypto_package(
+  p_player_id UUID,
+  p_package_id TEXT,
+  p_tx_hash TEXT DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_package crypto_packages%ROWTYPE;
+  v_total_crypto NUMERIC;
+  v_purchase_id UUID;
+BEGIN
+  -- Obtener el paquete
+  SELECT * INTO v_package
+  FROM crypto_packages
+  WHERE id = p_package_id AND is_active = true;
+
+  IF v_package IS NULL THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'Paquete no encontrado o no disponible'
+    );
+  END IF;
+
+  -- Calcular crypto total (con bonus)
+  v_total_crypto := v_package.crypto_amount * (1 + v_package.bonus_percent::NUMERIC / 100);
+
+  -- Registrar la compra
+  INSERT INTO crypto_purchases (
+    player_id,
+    package_id,
+    crypto_amount,
+    ron_paid,
+    tx_hash,
+    status,
+    completed_at
+  ) VALUES (
+    p_player_id,
+    p_package_id,
+    v_total_crypto,
+    v_package.ron_price,
+    p_tx_hash,
+    'completed',
+    NOW()
+  )
+  RETURNING id INTO v_purchase_id;
+
+  -- Dar el crypto al jugador
+  UPDATE players
+  SET crypto_balance = crypto_balance + v_total_crypto,
+      updated_at = NOW()
+  WHERE id = p_player_id;
+
+  -- Registrar transacción
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (
+    p_player_id,
+    'crypto_purchase',
+    v_total_crypto,
+    'crypto',
+    'Compra de ' || v_package.name || ' por ' || v_package.ron_price || ' RON'
+  );
+
+  RETURN json_build_object(
+    'success', true,
+    'purchase_id', v_purchase_id,
+    'crypto_received', v_total_crypto,
+    'ron_paid', v_package.ron_price,
+    'bonus_percent', v_package.bonus_percent
+  );
+END;
+$$;
+
+-- Obtener historial de compras de crypto del jugador
+CREATE OR REPLACE FUNCTION get_player_crypto_purchases(
+  p_player_id UUID,
+  p_limit INTEGER DEFAULT 20
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT
+        cp.id,
+        cp.package_id,
+        pkg.name as package_name,
+        cp.crypto_amount,
+        cp.ron_paid,
+        cp.status,
+        cp.purchased_at,
+        cp.completed_at
+      FROM crypto_purchases cp
+      JOIN crypto_packages pkg ON pkg.id = cp.package_id
+      WHERE cp.player_id = p_player_id
+      ORDER BY cp.purchased_at DESC
+      LIMIT p_limit
+    ) t
   );
 END;
 $$;

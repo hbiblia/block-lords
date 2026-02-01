@@ -119,3 +119,26 @@ SELECT
   0
 WHERE EXISTS (SELECT 1 FROM players LIMIT 1)
   AND NOT EXISTS (SELECT 1 FROM blocks WHERE height = 0);
+
+-- Insertar paquetes de compra de Crypto con RON
+-- Precios en RON (Ronin blockchain)
+-- NOTA: Mínimo 1 RON para comprar. Tasa base: 1 RON = 5000 crypto
+-- Paquetes más grandes tienen GRANDES bonus para motivar compras mayores
+-- Vender: 100,000 crypto = 1 RON (spread 20x para mantener economía)
+INSERT INTO crypto_packages (id, name, description, crypto_amount, ron_price, bonus_percent, tier, is_featured)
+VALUES
+  ('crypto_starter', 'Pack Inicial', 'Perfecto para empezar. ¡Gran valor!', 5000, 1.0, 0, 'basic', false),
+  ('crypto_basic', 'Pack Básico', 'Impulso instantáneo para tu minería.', 12500, 2.5, 20, 'basic', false),
+  ('crypto_standard', 'Pack Estándar', '¡El favorito de los mineros! Mejor valor.', 25000, 5.0, 25, 'standard', true),
+  ('crypto_plus', 'Pack Plus', 'Poder real. Bonus increíble.', 50000, 10.0, 35, 'standard', false),
+  ('crypto_premium', 'Pack Premium', 'Para mineros serios. ¡50% extra!', 125000, 25.0, 50, 'premium', true),
+  ('crypto_elite', 'Pack Élite', 'Domina el juego. Bonus masivo.', 250000, 50.0, 75, 'premium', false),
+  ('crypto_whale', 'Pack Ballena', '¡MÁXIMO VALOR! +100% bonus.', 500000, 100.0, 100, 'elite', true)
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  crypto_amount = EXCLUDED.crypto_amount,
+  ron_price = EXCLUDED.ron_price,
+  bonus_percent = EXCLUDED.bonus_percent,
+  tier = EXCLUDED.tier,
+  is_featured = EXCLUDED.is_featured;

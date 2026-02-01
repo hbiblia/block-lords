@@ -507,6 +507,30 @@ export async function activateBoost(playerId: string, boostId: string) {
   return data;
 }
 
+// === RIG-SPECIFIC BOOSTS ===
+
+// Instalar boost en un rig específico
+export async function installBoostToRig(playerId: string, rigId: string, boostId: string) {
+  const { data, error } = await supabase.rpc('install_boost_to_rig', {
+    p_player_id: playerId,
+    p_rig_id: rigId,
+    p_boost_id: boostId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Obtener boosts instalados en un rig
+export async function getRigBoosts(rigId: string) {
+  const { data, error } = await supabase.rpc('get_rig_boosts', {
+    p_rig_id: rigId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 // === PROFILE ===
 
 export async function updateRonWallet(playerId: string, walletAddress: string | null) {

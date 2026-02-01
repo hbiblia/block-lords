@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { supabase } from '@/utils/supabase';
-import { getPlayerRigs, getNetworkStats, getRecentBlocks, getRigCooling, getPlayerSlotInfo, getPlayerBoosts, toggleRig as apiToggleRig } from '@/utils/api';
+import { getPlayerRigs, getNetworkStats, getRecentBlocks, getRigCooling, getRigBoosts, getPlayerSlotInfo, getPlayerBoosts, toggleRig as apiToggleRig } from '@/utils/api';
 import { useAuthStore } from './auth';
 import { useNotificationsStore } from './notifications';
 import { useToastStore } from './toast';
@@ -47,6 +47,14 @@ interface Block {
   };
 }
 
+// Calculate block reward based on height (mirrors database calculate_block_reward function)
+function calculateBlockReward(blockHeight: number): number {
+  const BASE_REWARD = 100;
+  const HALVING_INTERVAL = 10000;
+  const halvings = Math.floor(blockHeight / HALVING_INTERVAL);
+  return BASE_REWARD / Math.pow(2, halvings);
+}
+
 interface CoolingItem {
   id: string;
   durability: number;
@@ -62,6 +70,17 @@ interface ActiveBoost {
   effect_value: number;
   expires_at: string;
   seconds_remaining: number;
+}
+
+interface RigBoost {
+  id: string;
+  boost_item_id: string;
+  remaining_seconds: number;
+  stack_count: number;
+  name: string;
+  boost_type: string;
+  effect_value: number;
+  tier: string;
 }
 
 interface SlotInfo {
@@ -89,6 +108,7 @@ export const useMiningStore = defineStore('mining', () => {
   });
   const recentBlocks = ref<Block[]>([]);
   const rigCooling = ref<Record<string, CoolingItem[]>>({});
+  const rigBoosts = ref<Record<string, RigBoost[]>>({});
   const activeBoosts = ref<ActiveBoost[]>([]);
   const slotInfo = ref<SlotInfo | null>(null);
 
@@ -118,15 +138,7 @@ export const useMiningStore = defineStore('mining', () => {
   const effectiveHashrate = computed(() =>
     rigs.value
       .filter(r => r.is_active)
-      .reduce((sum, r) => {
-        const temp = r.temperature ?? 25;
-        const condition = r.condition ?? 100;
-        let tempPenalty = 1;
-        if (temp > 60) {
-          tempPenalty = Math.max(0.5, 1 - ((temp - 60) * 0.0125));
-        }
-        return sum + (r.rig.hashrate * (condition / 100) * tempPenalty);
-      }, 0)
+      .reduce((sum, r) => sum + getRigEffectiveHashrate(r), 0)
   );
 
   const totalEnergyConsumption = computed(() =>
@@ -147,6 +159,21 @@ export const useMiningStore = defineStore('mining', () => {
   });
 
   // Rig helpers
+  function getRigBoostMultiplier(rigId: string, boostType: string): number {
+    const boosts = rigBoosts.value[rigId] ?? [];
+    let multiplier = 1;
+    for (const boost of boosts) {
+      if (boost.boost_type === boostType) {
+        multiplier += boost.effect_value / 100;
+      }
+      // Overclock also adds hashrate
+      if (boostType === 'hashrate' && boost.boost_type === 'overclock') {
+        multiplier += boost.effect_value / 100;
+      }
+    }
+    return multiplier;
+  }
+
   function getRigEffectiveHashrate(rig: PlayerRig): number {
     const temp = rig.temperature ?? 25;
     const condition = rig.condition ?? 100;
@@ -154,7 +181,14 @@ export const useMiningStore = defineStore('mining', () => {
     if (temp > 60) {
       tempPenalty = Math.max(0.5, 1 - ((temp - 60) * 0.0125));
     }
-    return rig.rig.hashrate * (condition / 100) * tempPenalty;
+    // Apply boost multiplier
+    const boostMultiplier = getRigBoostMultiplier(rig.id, 'hashrate');
+    return rig.rig.hashrate * (condition / 100) * tempPenalty * boostMultiplier;
+  }
+
+  function getRigHashrateBoostPercent(rig: PlayerRig): number {
+    const boostMultiplier = getRigBoostMultiplier(rig.id, 'hashrate');
+    return Math.round((boostMultiplier - 1) * 100);
   }
 
   function getRigPenaltyPercent(rig: PlayerRig): number {
@@ -217,6 +251,7 @@ export const useMiningStore = defineStore('mining', () => {
 
       // Load cooling and boosts in background
       loadRigsCooling();
+      loadRigsBoosts();
       loadActiveBoosts();
     } catch (e) {
       console.error('Error loading mining data:', e);
@@ -241,6 +276,24 @@ export const useMiningStore = defineStore('mining', () => {
       coolingMap[rigId] = cooling;
     });
     rigCooling.value = coolingMap;
+  }
+
+  async function loadRigsBoosts() {
+    const boostPromises = rigs.value.map(async (rig) => {
+      try {
+        const boosts = await getRigBoosts(rig.id);
+        return { rigId: rig.id, boosts: boosts ?? [] };
+      } catch {
+        return { rigId: rig.id, boosts: [] };
+      }
+    });
+
+    const results = await Promise.all(boostPromises);
+    const boostsMap: Record<string, RigBoost[]> = {};
+    results.forEach(({ rigId, boosts }) => {
+      boostsMap[rigId] = boosts;
+    });
+    rigBoosts.value = boostsMap;
   }
 
   async function loadActiveBoosts() {
@@ -324,8 +377,8 @@ export const useMiningStore = defineStore('mining', () => {
     if (winner?.id === authStore.player?.id) {
       playSound('block_mined');
       authStore.fetchPlayer();
-      // Show toast with reward
-      const reward = block.reward ?? 0.0001;
+      // Show toast with reward calculated from block height
+      const reward = calculateBlockReward(block.height);
       toastStore.blockMined(reward, true);
     }
   }
@@ -498,6 +551,7 @@ export const useMiningStore = defineStore('mining', () => {
     };
     recentBlocks.value = [];
     rigCooling.value = {};
+    rigBoosts.value = {};
     activeBoosts.value = [];
     slotInfo.value = null;
     loading.value = true;
@@ -509,6 +563,7 @@ export const useMiningStore = defineStore('mining', () => {
     networkStats,
     recentBlocks,
     rigCooling,
+    rigBoosts,
     activeBoosts,
     slotInfo,
     loading,
@@ -528,6 +583,7 @@ export const useMiningStore = defineStore('mining', () => {
     getRigPenaltyPercent,
     getRigEffectivePower,
     getPowerPenaltyPercent,
+    getRigHashrateBoostPercent,
 
     // Cooling helpers
     getCoolingEfficiency,
@@ -537,6 +593,7 @@ export const useMiningStore = defineStore('mining', () => {
     // Actions
     loadData,
     loadRigsCooling,
+    loadRigsBoosts,
     loadActiveBoosts,
     toggleRig,
     handleBlockMined,

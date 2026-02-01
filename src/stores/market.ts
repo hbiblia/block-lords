@@ -55,12 +55,25 @@ interface CoolingQuantity {
   inventory: number;
 }
 
+interface CryptoPackage {
+  id: string;
+  name: string;
+  description: string;
+  crypto_amount: number;
+  ron_price: number;
+  bonus_percent: number;
+  tier: string;
+  is_featured: boolean;
+  total_crypto: number;
+}
+
 export const useMarketStore = defineStore('market', () => {
   // Catalogs (rarely change, loaded once)
   const rigs = ref<Rig[]>([]);
   const coolingItems = ref<CoolingItem[]>([]);
   const prepaidCards = ref<PrepaidCard[]>([]);
   const boostItems = ref<BoostItem[]>([]);
+  const cryptoPackages = ref<CryptoPackage[]>([]);
 
   // Player quantities
   const rigQuantities = ref<Record<string, number>>({});
@@ -113,17 +126,19 @@ export const useMarketStore = defineStore('market', () => {
 
     loadingCatalogs.value = true;
     try {
-      const [rigsRes, coolingRes, cardsRes, boostsRes] = await Promise.all([
+      const [rigsRes, coolingRes, cardsRes, boostsRes, cryptoRes] = await Promise.all([
         supabase.from('rigs').select('*').order('base_price', { ascending: true }),
         supabase.from('cooling_items').select('*').order('base_price', { ascending: true }),
         supabase.from('prepaid_cards').select('*').order('base_price', { ascending: true }),
         supabase.from('boost_items').select('*').order('boost_type').order('base_price', { ascending: true }),
+        supabase.rpc('get_crypto_packages'),
       ]);
 
       rigs.value = rigsRes.data ?? [];
       coolingItems.value = coolingRes.data ?? [];
       prepaidCards.value = cardsRes.data ?? [];
       boostItems.value = boostsRes.data ?? [];
+      cryptoPackages.value = cryptoRes.data ?? [];
       catalogsLoaded.value = true;
     } catch (e) {
       console.error('Error loading market catalogs:', e);
@@ -325,6 +340,43 @@ export const useMarketStore = defineStore('market', () => {
     }
   }
 
+  async function buyCryptoPackage(
+    packageId: string,
+    txHash?: string
+  ): Promise<{ success: boolean; error?: string; cryptoReceived?: number }> {
+    const authStore = useAuthStore();
+    if (!authStore.player) return { success: false, error: 'No player' };
+
+    buying.value = true;
+    try {
+      const { data, error } = await supabase.rpc('buy_crypto_package', {
+        p_player_id: authStore.player.id,
+        p_package_id: packageId,
+        p_tx_hash: txHash ?? null,
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        await authStore.fetchPlayer();
+        playSound('purchase');
+        return {
+          success: true,
+          cryptoReceived: data.crypto_received,
+        };
+      }
+
+      playSound('error');
+      return { success: false, error: data?.error ?? 'Error buying crypto package' };
+    } catch (e) {
+      console.error('Error buying crypto package:', e);
+      playSound('error');
+      return { success: false, error: 'Connection error' };
+    } finally {
+      buying.value = false;
+    }
+  }
+
   function clearState() {
     rigQuantities.value = {};
     coolingQuantities.value = {};
@@ -339,6 +391,7 @@ export const useMarketStore = defineStore('market', () => {
     coolingItems,
     prepaidCards,
     boostItems,
+    cryptoPackages,
 
     // Computed
     rigsForSale,
@@ -362,6 +415,7 @@ export const useMarketStore = defineStore('market', () => {
     buyCooling,
     buyCard,
     buyBoost,
+    buyCryptoPackage,
     clearState,
   };
 });

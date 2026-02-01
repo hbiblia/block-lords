@@ -313,6 +313,12 @@ function getBoostIcon(boostType: string): string {
   }
 }
 
+function getBoostTypeDescription(boostType: string): string {
+  const key = `market.boosts.types.${boostType}`;
+  const translated = t(key);
+  return translated !== key ? translated : '';
+}
+
 function formatBoostEffect(boost: BoostItem): string {
   const sign = boost.boost_type === 'energy_saver' || boost.boost_type === 'bandwidth_optimizer' ||
                boost.boost_type === 'coolant_injection' || boost.boost_type === 'durability_shield' ? '-' : '+';
@@ -471,7 +477,7 @@ onMounted(() => {
               :key="boost.id"
               class="rounded-lg border p-4 flex flex-col h-full min-h-[160px] bg-purple-500/10 border-purple-500/30"
             >
-              <div class="flex items-start justify-between mb-3">
+              <div class="flex items-start justify-between mb-2">
                 <div>
                   <h4 class="font-medium text-purple-400">{{ getBoostName(boost.boost_id) }}</h4>
                   <p class="text-xs text-text-muted uppercase">{{ boost.tier }}</p>
@@ -479,7 +485,10 @@ onMounted(() => {
                 <span class="text-2xl">{{ getBoostIcon(boost.boost_type) }}</span>
               </div>
 
-              <div class="flex items-center justify-between mb-2">
+              <!-- Boost type description -->
+              <p class="text-xs text-text-muted mb-2">{{ getBoostTypeDescription(boost.boost_type) }}</p>
+
+              <div class="flex items-center justify-between mb-1">
                 <span class="text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
                 <span class="font-mono font-bold text-purple-400">{{ formatBoostEffect(boost) }}</span>
               </div>

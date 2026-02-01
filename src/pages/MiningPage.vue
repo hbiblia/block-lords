@@ -9,7 +9,7 @@ import { useWakeLock } from '@/composables/useWakeLock';
 import MarketModal from '@/components/MarketModal.vue';
 import InventoryModal from '@/components/InventoryModal.vue';
 import ExchangeModal from '@/components/ExchangeModal.vue';
-import RigManageModal from '@/components/RigManageModal.vue';
+import RigEnhanceModal from '@/components/RigEnhanceModal.vue';
 
 // Wake Lock to keep screen on while mining
 const { requestWakeLock, releaseWakeLock } = useWakeLock();
@@ -51,6 +51,7 @@ const rigs = computed(() => miningStore.rigs);
 const networkStats = computed(() => miningStore.networkStats);
 const recentBlocks = computed(() => miningStore.recentBlocks);
 const rigCooling = computed(() => miningStore.rigCooling);
+const rigBoosts = computed(() => miningStore.rigBoosts);
 const activeBoosts = computed(() => miningStore.activeBoosts);
 const slotInfo = computed(() => miningStore.slotInfo);
 const loading = computed(() => miningStore.loading);
@@ -556,12 +557,24 @@ onUnmounted(() => {
               <div class="flex items-baseline gap-1.5 mb-3">
                 <span
                   class="text-xl font-bold font-mono"
-                  :class="playerRig.is_active ? (miningStore.getRigPenaltyPercent(playerRig) > 0 ? 'text-status-warning' : 'text-white') : 'text-text-muted'"
+                  :class="playerRig.is_active
+                    ? (miningStore.getRigHashrateBoostPercent(playerRig) > 0
+                      ? 'text-status-success'
+                      : miningStore.getRigPenaltyPercent(playerRig) > 0
+                        ? 'text-status-warning'
+                        : 'text-white')
+                    : 'text-text-muted'"
                   :key="uptimeKey"
                 >
                   {{ playerRig.is_active ? Math.round(miningStore.getRigEffectiveHashrate(playerRig)).toLocaleString() : '0' }}
                 </span>
                 <span class="text-sm text-text-muted">/ {{ playerRig.rig.hashrate.toLocaleString() }} H/s</span>
+                <span
+                  v-if="playerRig.is_active && miningStore.getRigHashrateBoostPercent(playerRig) > 0"
+                  class="text-xs text-status-success font-medium"
+                >
+                  (+{{ miningStore.getRigHashrateBoostPercent(playerRig) }}% ⚡)
+                </span>
               </div>
 
               <!-- Stats row -->
@@ -581,6 +594,10 @@ onUnmounted(() => {
                   <span v-if="miningStore.isCoolingDegraded(rigCooling[playerRig.id][0].durability)" class="text-status-warning text-[10px]">
                     ({{ miningStore.getCoolingEfficiencyPercent(rigCooling[playerRig.id][0].durability) }}% eff)
                   </span>
+                </span>
+                <span v-if="rigBoosts[playerRig.id]?.length > 0" class="flex items-center gap-1" :title="rigBoosts[playerRig.id].map((b: any) => b.name).join(', ')">
+                  <span class="text-purple-400">🚀</span>
+                  <span class="text-purple-400">{{ rigBoosts[playerRig.id].length }}</span>
                 </span>
                 <span v-if="playerRig.is_active && playerRig.activated_at" class="flex items-center gap-1 ml-auto" :key="uptimeKey">
                   ⏱️ {{ formatUptime(playerRig.activated_at) }}
@@ -797,8 +814,8 @@ onUnmounted(() => {
       @exchanged="authStore.fetchPlayer()"
     />
 
-    <!-- Rig Manage Modal -->
-    <RigManageModal
+    <!-- Rig Enhance Modal -->
+    <RigEnhanceModal
       :show="showRigManage"
       :rig="selectedRigForManage"
       @close="closeRigManage"
