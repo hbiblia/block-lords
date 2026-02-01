@@ -273,6 +273,18 @@ function getThermalBonus(playerRig: typeof miningStore.rigs[0]): number {
   return UPGRADE_BONUSES.thermal[level as keyof typeof UPGRADE_BONUSES.thermal] ?? 0;
 }
 
+// Get hashrate bonus percentage for display
+function getHashrateBonus(playerRig: typeof miningStore.rigs[0]): number {
+  const level = playerRig.hashrate_level ?? 1;
+  return UPGRADE_BONUSES.hashrate[level as keyof typeof UPGRADE_BONUSES.hashrate] ?? 0;
+}
+
+// Get efficiency bonus percentage for display
+function getEfficiencyBonus(playerRig: typeof miningStore.rigs[0]): number {
+  const level = playerRig.efficiency_level ?? 1;
+  return UPGRADE_BONUSES.efficiency[level as keyof typeof UPGRADE_BONUSES.efficiency] ?? 0;
+}
+
 function getTempColor(temp: number): string {
   if (temp >= 80) return 'text-status-danger';
   if (temp >= 60) return 'text-status-warning';
@@ -628,7 +640,7 @@ onUnmounted(() => {
                 </span>
                 <span class="text-sm text-text-muted">
                   / {{ getUpgradedHashrate(playerRig).toLocaleString() }} H/s
-                  <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400 text-xs">(+{{ UPGRADE_BONUSES.hashrate[playerRig.hashrate_level as keyof typeof UPGRADE_BONUSES.hashrate] }}%)</span>
+                  <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400 text-xs">(+{{ getHashrateBonus(playerRig) }}%)</span>
                 </span>
                 <span
                   v-if="playerRig.is_active && miningStore.getRigHashrateBoostPercent(playerRig) > 0"
@@ -642,7 +654,7 @@ onUnmounted(() => {
               <div class="flex items-center gap-4 text-xs text-text-muted mb-3">
                 <span class="flex items-center gap-1">
                   <span class="text-status-warning">⚡</span>{{ (getUpgradedPower(playerRig) + getRigCoolingEnergy(playerRig.id)).toFixed(0) }}/t
-                  <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">(-{{ UPGRADE_BONUSES.efficiency[playerRig.efficiency_level as keyof typeof UPGRADE_BONUSES.efficiency] }}%)</span>
+                  <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">(-{{ getEfficiencyBonus(playerRig) }}%)</span>
                   <span v-if="miningStore.getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger">(+{{ miningStore.getPowerPenaltyPercent(playerRig) }}%)</span>
                 </span>
                 <span class="flex items-center gap-1">
