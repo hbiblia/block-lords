@@ -2686,8 +2686,8 @@ $$;
 -- Agregar columna ron_balance si no existe
 ALTER TABLE players ADD COLUMN IF NOT EXISTS ron_balance NUMERIC DEFAULT 0;
 
--- Tasa de cambio: 1 crypto = 10 GameCoin (ajustable)
--- Tasa de conversión RON: 100 crypto = 1 RON (ajustable)
+-- Tasa de cambio: 1 crypto = 50 GameCoin
+-- Tasa de conversión RON: 100,000 crypto = 1 RON
 
 -- Exchange: Crypto → GameCoin
 CREATE OR REPLACE FUNCTION exchange_crypto_to_gamecoin(p_player_id UUID, p_crypto_amount NUMERIC)
@@ -2697,7 +2697,7 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_player players%ROWTYPE;
-  v_exchange_rate NUMERIC := 0.5;  -- 1 crypto = 10 GameCoin
+  v_exchange_rate NUMERIC := 50;  -- 1 crypto = 50 GameCoin
   v_gamecoin_received NUMERIC;
 BEGIN
   -- Validar cantidad
@@ -2798,9 +2798,9 @@ SECURITY DEFINER
 AS $$
 BEGIN
   RETURN json_build_object(
-    'crypto_to_gamecoin', 0.5,  -- 1 crypto = 10 GameCoin
-    'crypto_to_ron', 0.00001,  -- 1000 crypto = 0.01 RON
-    'min_crypto_for_ron', 100000  -- Mínimo para convertir a RON (= 1 RON)
+    'crypto_to_gamecoin', 50,  -- 1 crypto = 50 GameCoin
+    'crypto_to_ron', 0.00001,  -- 100,000 crypto = 1 RON
+    'min_crypto_for_ron', 100000  -- Mínimo para convertir a RON
   );
 END;
 $$;

@@ -236,7 +236,7 @@ export const useMarketStore = defineStore('market', () => {
         supabase.from('player_rigs').select('rig_id').eq('player_id', playerId),
         supabase.from('player_cooling').select('cooling_item_id').eq('player_id', playerId),
         supabase.from('player_inventory').select('item_id, quantity').eq('player_id', playerId).eq('item_type', 'cooling'),
-        supabase.from('player_prepaid_cards').select('card_id').eq('player_id', playerId).eq('is_redeemed', false),
+        supabase.from('player_cards').select('card_id').eq('player_id', playerId).eq('is_redeemed', false),
         supabase.from('player_boosts').select('boost_id, quantity').eq('player_id', playerId),
       ]);
 

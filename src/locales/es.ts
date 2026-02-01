@@ -318,16 +318,24 @@ export default {
         cryo_system: { name: 'Sistema Criogenico', description: 'Refrigeracion criogenica de ultima generacion.' },
       },
       cards: {
-        energy_10: { name: 'Energia +10', description: 'Recarga basica de energia.' },
-        energy_25: { name: 'Energia +25', description: 'Recarga estandar de energia.' },
-        energy_50: { name: 'Energia +50', description: 'Recarga premium de energia.' },
-        energy_full: { name: 'Energia MAX', description: 'Recarga completa de energia al 100%.' },
-        energy_ultra: { name: 'Energia ULTRA', description: 'Recarga de energia premium. Incluye +25 capacidad maxima.' },
-        internet_10: { name: 'Internet +10', description: 'Recarga basica de datos.' },
-        internet_25: { name: 'Internet +25', description: 'Recarga estandar de datos.' },
-        internet_50: { name: 'Internet +50', description: 'Recarga premium de datos.' },
-        internet_full: { name: 'Internet MAX', description: 'Recarga completa de internet al 100%.' },
-        internet_ultra: { name: 'Internet ULTRA', description: 'Recarga de internet premium. Incluye +25 capacidad maxima.' },
+        // Energy - GameCoin
+        energy_small: { name: 'Energia Basica', description: 'Recarga +25 energia.' },
+        energy_medium: { name: 'Energia Media', description: 'Recarga +50 energia.' },
+        energy_large: { name: 'Energia Grande', description: 'Recarga +100 energia.' },
+        // Energy - Crypto (mejor valor)
+        energy_premium: { name: 'Energia Premium', description: 'Recarga +50 energia. Pago con Crypto.' },
+        energy_ultra: { name: 'Energia Ultra', description: 'Recarga +100 energia. Pago con Crypto.' },
+        energy_mega: { name: 'Energia Mega', description: 'Recarga +200 energia. Gran valor.' },
+        energy_max: { name: 'Energia MAX', description: 'Recarga +500 energia. Mejor valor.' },
+        // Internet - GameCoin
+        internet_small: { name: 'Internet Basico', description: 'Recarga +25 internet.' },
+        internet_medium: { name: 'Internet Medio', description: 'Recarga +50 internet.' },
+        internet_large: { name: 'Internet Grande', description: 'Recarga +100 internet.' },
+        // Internet - Crypto (mejor valor)
+        internet_premium: { name: 'Internet Premium', description: 'Recarga +50 internet. Pago con Crypto.' },
+        internet_ultra: { name: 'Internet Ultra', description: 'Recarga +100 internet. Pago con Crypto.' },
+        internet_mega: { name: 'Internet Mega', description: 'Recarga +200 internet. Gran valor.' },
+        internet_max: { name: 'Internet MAX', description: 'Recarga +500 internet. Mejor valor.' },
       },
       boosts: {
         // Hashrate Boosters
@@ -1040,16 +1048,24 @@ export default {
       cryo_system: { name: 'Sistema Criogenico', desc: 'Ideal para Minero Cuantico. Refrigeracion extrema.' },
     },
     cards: {
-      energy_10: { name: 'Energia +10', desc: 'Recarga basica de energia.' },
-      energy_25: { name: 'Energia +25', desc: 'Recarga estandar de energia.' },
-      energy_50: { name: 'Energia +50', desc: 'Recarga premium de energia.' },
-      energy_full: { name: 'Energia MAX', desc: 'Recarga completa de energia al 100%.' },
-      energy_ultra: { name: 'Energia ULTRA', desc: 'Recarga de energia premium. Incluye +25 capacidad maxima.' },
-      internet_10: { name: 'Internet +10', desc: 'Recarga basica de datos.' },
-      internet_25: { name: 'Internet +25', desc: 'Recarga estandar de datos.' },
-      internet_50: { name: 'Internet +50', desc: 'Recarga premium de datos.' },
-      internet_full: { name: 'Internet MAX', desc: 'Recarga completa de internet al 100%.' },
-      internet_ultra: { name: 'Internet ULTRA', desc: 'Recarga de internet premium. Incluye +25 capacidad maxima.' },
+      // Energy - GameCoin
+      energy_small: { name: 'Energia Basica', desc: 'Recarga +25 energia.' },
+      energy_medium: { name: 'Energia Media', desc: 'Recarga +50 energia.' },
+      energy_large: { name: 'Energia Grande', desc: 'Recarga +100 energia.' },
+      // Energy - Crypto (mejor valor)
+      energy_premium: { name: 'Energia Premium', desc: 'Recarga +50 energia. Pago con Crypto.' },
+      energy_ultra: { name: 'Energia Ultra', desc: 'Recarga +100 energia. Pago con Crypto.' },
+      energy_mega: { name: 'Energia Mega', desc: 'Recarga +200 energia. Gran valor.' },
+      energy_max: { name: 'Energia MAX', desc: 'Recarga +500 energia. Mejor valor.' },
+      // Internet - GameCoin
+      internet_small: { name: 'Internet Basico', desc: 'Recarga +25 internet.' },
+      internet_medium: { name: 'Internet Medio', desc: 'Recarga +50 internet.' },
+      internet_large: { name: 'Internet Grande', desc: 'Recarga +100 internet.' },
+      // Internet - Crypto (mejor valor)
+      internet_premium: { name: 'Internet Premium', desc: 'Recarga +50 internet. Pago con Crypto.' },
+      internet_ultra: { name: 'Internet Ultra', desc: 'Recarga +100 internet. Pago con Crypto.' },
+      internet_mega: { name: 'Internet Mega', desc: 'Recarga +200 internet. Gran valor.' },
+      internet_max: { name: 'Internet MAX', desc: 'Recarga +500 internet. Mejor valor.' },
     },
     packages: {
       crypto_starter: { name: 'Pack Inicial', desc: 'Perfecto para empezar. ¡Gran valor!' },

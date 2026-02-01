@@ -57,14 +57,20 @@ ON CONFLICT (id) DO UPDATE SET
   base_price = EXCLUDED.base_price,
   tier = EXCLUDED.tier;
 
--- Prepaid cards - Energy
+-- Prepaid cards - Energy (1 Crypto = 50 GC, ~8 GC/unit base, crypto gives better value)
+-- Free max 100, Premium max 500
+-- Value progression: larger cards = better value per unit
 INSERT INTO prepaid_cards (id, name, description, card_type, amount, base_price, tier, currency)
 VALUES
-  ('energy_10', 'energy_10', 'energy_10', 'energy', 10, 150, 'basic', 'gamecoin'),
-  ('energy_25', 'energy_25', 'energy_25', 'energy', 25, 350, 'basic', 'gamecoin'),
-  ('energy_50', 'energy_50', 'energy_50', 'energy', 50, 650, 'standard', 'gamecoin'),
-  ('energy_full', 'energy_full', 'energy_full', 'energy', 100, 1200, 'standard', 'gamecoin'),
-  ('energy_ultra', 'energy_ultra', 'energy_ultra', 'energy', 150, 5, 'elite', 'crypto')
+  -- GameCoin cards (basic tier)
+  ('energy_small', 'energy_small', 'energy_small', 'energy', 25, 200, 'basic', 'gamecoin'),
+  ('energy_medium', 'energy_medium', 'energy_medium', 'energy', 50, 380, 'basic', 'gamecoin'),
+  ('energy_large', 'energy_large', 'energy_large', 'energy', 100, 700, 'standard', 'gamecoin'),
+  -- Crypto cards (premium tier, better value)
+  ('energy_premium', 'energy_premium', 'energy_premium', 'energy', 50, 4, 'advanced', 'crypto'),
+  ('energy_ultra', 'energy_ultra', 'energy_ultra', 'energy', 100, 7, 'advanced', 'crypto'),
+  ('energy_mega', 'energy_mega', 'energy_mega', 'energy', 200, 12, 'elite', 'crypto'),
+  ('energy_max', 'energy_max', 'energy_max', 'energy', 500, 25, 'elite', 'crypto')
 ON CONFLICT (id) DO UPDATE SET
   card_type = EXCLUDED.card_type,
   amount = EXCLUDED.amount,
@@ -72,20 +78,30 @@ ON CONFLICT (id) DO UPDATE SET
   tier = EXCLUDED.tier,
   currency = EXCLUDED.currency;
 
--- Prepaid cards - Internet
+-- Prepaid cards - Internet (1 Crypto = 50 GC, ~7 GC/unit base, crypto gives better value)
+-- Free max 100, Premium max 500
 INSERT INTO prepaid_cards (id, name, description, card_type, amount, base_price, tier, currency)
 VALUES
-  ('internet_10', 'internet_10', 'internet_10', 'internet', 10, 120, 'basic', 'gamecoin'),
-  ('internet_25', 'internet_25', 'internet_25', 'internet', 25, 280, 'basic', 'gamecoin'),
-  ('internet_50', 'internet_50', 'internet_50', 'internet', 50, 520, 'standard', 'gamecoin'),
-  ('internet_full', 'internet_full', 'internet_full', 'internet', 100, 950, 'standard', 'gamecoin'),
-  ('internet_ultra', 'internet_ultra', 'internet_ultra', 'internet', 150, 5, 'elite', 'crypto')
+  -- GameCoin cards (basic tier)
+  ('internet_small', 'internet_small', 'internet_small', 'internet', 25, 175, 'basic', 'gamecoin'),
+  ('internet_medium', 'internet_medium', 'internet_medium', 'internet', 50, 330, 'basic', 'gamecoin'),
+  ('internet_large', 'internet_large', 'internet_large', 'internet', 100, 600, 'standard', 'gamecoin'),
+  -- Crypto cards (premium tier, better value)
+  ('internet_premium', 'internet_premium', 'internet_premium', 'internet', 50, 4, 'advanced', 'crypto'),
+  ('internet_ultra', 'internet_ultra', 'internet_ultra', 'internet', 100, 7, 'advanced', 'crypto'),
+  ('internet_mega', 'internet_mega', 'internet_mega', 'internet', 200, 12, 'elite', 'crypto'),
+  ('internet_max', 'internet_max', 'internet_max', 'internet', 500, 25, 'elite', 'crypto')
 ON CONFLICT (id) DO UPDATE SET
   card_type = EXCLUDED.card_type,
   amount = EXCLUDED.amount,
   base_price = EXCLUDED.base_price,
   tier = EXCLUDED.tier,
   currency = EXCLUDED.currency;
+
+-- Delete old prepaid cards that no longer exist
+-- First delete references in player_cards, then delete the prepaid cards
+DELETE FROM player_cards WHERE card_id IN ('energy_10', 'energy_25', 'energy_50', 'energy_full', 'energy_medium', 'internet_10', 'internet_25', 'internet_50', 'internet_full', 'internet_medium');
+DELETE FROM prepaid_cards WHERE id IN ('energy_10', 'energy_25', 'energy_50', 'energy_full', 'energy_medium', 'internet_10', 'internet_25', 'internet_50', 'internet_full', 'internet_medium');
 
 -- Network stats
 INSERT INTO network_stats (id, difficulty, hashrate)
