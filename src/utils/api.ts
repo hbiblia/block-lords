@@ -630,6 +630,29 @@ export async function getWithdrawalHistory(playerId: string, limit: number = 10)
   return data;
 }
 
+// === RON DEPOSITS ===
+
+export async function depositRon(playerId: string, amount: number, txHash: string) {
+  const { data, error } = await supabase.rpc('deposit_ron', {
+    p_player_id: playerId,
+    p_amount: amount,
+    p_tx_hash: txHash,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getRonDepositHistory(playerId: string, limit: number = 10) {
+  const { data, error } = await supabase.rpc('get_ron_deposit_history', {
+    p_player_id: playerId,
+    p_limit: limit,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 // === ADMIN: RON WITHDRAWALS ===
 
 export async function adminGetPendingWithdrawals() {

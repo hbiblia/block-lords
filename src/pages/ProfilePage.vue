@@ -3,10 +3,13 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { updateRonWallet, resetPlayerAccount, getPlayerTransactions, requestRonWithdrawal, getWithdrawalHistory, getPremiumStatus, type PremiumStatus } from '@/utils/api';
+import { updateRonWallet, resetPlayerAccount, getPlayerTransactions, requestRonWithdrawal, getWithdrawalHistory, getPremiumStatus, depositRon, type PremiumStatus } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { formatGamecoin, formatCrypto, formatNumber, formatRon } from '@/utils/format';
+import { useRoninWallet } from '@/composables/useRoninWallet';
 import PremiumCard from '@/components/PremiumCard.vue';
+
+const roninWallet = useRoninWallet();
 
 const { t } = useI18n();
 const router = useRouter();
@@ -35,6 +38,16 @@ const withdrawalHistory = ref<any[]>([]);
 const pendingWithdrawal = computed(() =>
   withdrawalHistory.value.find(w => w.status === 'pending' || w.status === 'processing')
 );
+
+// RON Reload/Deposit
+const showReloadModal = ref(false);
+const reloadAmount = ref<string>('');
+const reloading = ref(false);
+const reloadError = ref<string | null>(null);
+const reloadStep = ref<'input' | 'connecting' | 'sending' | 'confirming' | 'crediting' | 'success' | 'error'>('input');
+
+// Predefined reload amounts
+const reloadAmounts = [1, 5, 10, 25];
 
 // Premium status
 const premiumStatus = ref<PremiumStatus | null>(null);
@@ -185,6 +198,98 @@ function closeWithdrawModal() {
   withdrawError.value = null;
 }
 
+function openReloadModal() {
+  reloadAmount.value = '';
+  reloadError.value = null;
+  reloadStep.value = 'input';
+  showReloadModal.value = true;
+}
+
+function closeReloadModal() {
+  if (reloading.value) return;
+  showReloadModal.value = false;
+  reloadAmount.value = '';
+  reloadError.value = null;
+  reloadStep.value = 'input';
+}
+
+function selectReloadAmount(amount: number) {
+  reloadAmount.value = amount.toString();
+}
+
+async function confirmReload() {
+  const amount = parseFloat(reloadAmount.value);
+  if (isNaN(amount) || amount <= 0 || !player.value) return;
+
+  reloading.value = true;
+  reloadError.value = null;
+
+  try {
+    // Step 1: Connect wallet if not connected
+    if (!roninWallet.isConnected.value) {
+      reloadStep.value = 'connecting';
+
+      if (!roninWallet.isInstalled.value) {
+        reloadStep.value = 'error';
+        reloadError.value = t('profile.reload.walletNotInstalled');
+        reloading.value = false;
+        return;
+      }
+
+      const connected = await roninWallet.connect();
+      if (!connected) {
+        reloadStep.value = 'error';
+        reloadError.value = roninWallet.error.value ?? t('profile.reload.connectionFailed');
+        reloading.value = false;
+        return;
+      }
+    }
+
+    // Step 2: Send RON transaction
+    reloadStep.value = 'sending';
+    const sendResult = await roninWallet.sendRON(amount);
+
+    if (!sendResult.success || !sendResult.txHash) {
+      reloadStep.value = 'error';
+      reloadError.value = sendResult.error ?? t('profile.reload.transactionFailed');
+      reloading.value = false;
+      return;
+    }
+
+    // Step 3: Wait for transaction confirmation
+    reloadStep.value = 'confirming';
+    const confirmResult = await roninWallet.waitForTransaction(sendResult.txHash);
+
+    if (!confirmResult.confirmed) {
+      reloadStep.value = 'error';
+      reloadError.value = confirmResult.error ?? t('profile.reload.confirmationFailed');
+      reloading.value = false;
+      return;
+    }
+
+    // Step 4: Credit RON to player account
+    reloadStep.value = 'crediting';
+    const result = await depositRon(player.value.id, amount, sendResult.txHash);
+
+    if (result?.success) {
+      reloadStep.value = 'success';
+      playSound('success');
+      // Refresh player data
+      await authStore.fetchPlayer();
+    } else {
+      reloadStep.value = 'error';
+      reloadError.value = result?.error ?? t('profile.reload.creditFailed');
+    }
+  } catch (e: any) {
+    console.error('Error reloading RON:', e);
+    reloadStep.value = 'error';
+    reloadError.value = e.message ?? t('profile.reload.error');
+    playSound('error');
+  } finally {
+    reloading.value = false;
+  }
+}
+
 async function confirmWithdraw() {
   if (withdrawing.value || !player.value || !canWithdraw.value) return;
 
@@ -234,8 +339,8 @@ function getTransactionIcon(type: string): string {
 }
 
 // Lock body scroll when modal is open
-watch([showResetConfirm, showWithdrawModal], ([reset, withdraw]) => {
-  document.body.style.overflow = (reset || withdraw) ? 'hidden' : '';
+watch([showResetConfirm, showWithdrawModal, showReloadModal], ([reset, withdraw, reload]) => {
+  document.body.style.overflow = (reset || withdraw || reload) ? 'hidden' : '';
 });
 
 onMounted(loadData);
@@ -348,15 +453,26 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Withdraw button -->
-          <button
-            v-else-if="ronBalance > 0"
-            @click="openWithdrawModal"
-            :disabled="!canWithdraw"
-            class="w-full mt-3 py-2 rounded-lg text-sm font-medium bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {{ player?.ron_wallet ? t('profile.withdraw.button', 'Retirar') : t('profile.withdraw.needWallet', 'Configura wallet') }}
-          </button>
+          <!-- Action buttons -->
+          <div v-else class="flex gap-2 mt-3">
+            <!-- Reload button - always visible -->
+            <button
+              @click="openReloadModal"
+              class="flex-1 py-2 rounded-lg text-sm font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors"
+            >
+              {{ t('profile.reload.button', 'Recargar') }}
+            </button>
+
+            <!-- Withdraw button - only if has balance -->
+            <button
+              v-if="ronBalance > 0"
+              @click="openWithdrawModal"
+              :disabled="!canWithdraw"
+              class="flex-1 py-2 rounded-lg text-sm font-medium bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ player?.ron_wallet ? t('profile.withdraw.button', 'Retirar') : t('profile.withdraw.needWallet', 'Configura wallet') }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -645,6 +761,180 @@ onUnmounted(() => {
                 <span v-else>{{ t('profile.withdraw.confirm', 'Confirmar Retiro') }}</span>
               </button>
             </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- RON Reload/Deposit Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="showReloadModal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
+          <div
+            class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            @click="closeReloadModal"
+          ></div>
+          <div
+            class="relative bg-bg-primary border border-status-success/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
+            @click.stop
+          >
+            <!-- Input State -->
+            <template v-if="reloadStep === 'input'">
+              <h3 class="text-lg font-bold mb-4 text-center text-status-success">
+                💰 {{ t('profile.reload.title', 'Recargar RON') }}
+              </h3>
+
+              <p class="text-sm text-text-muted text-center mb-4">
+                {{ t('profile.reload.description', 'Conecta tu Ronin Wallet para depositar RON en tu cuenta.') }}
+              </p>
+
+              <!-- Amount input -->
+              <div class="mb-4">
+                <label class="text-sm text-text-muted block mb-2">{{ t('profile.reload.amount', 'Cantidad a depositar') }}</label>
+                <input
+                  v-model="reloadAmount"
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  placeholder="0.00"
+                  class="w-full bg-bg-tertiary border border-border rounded-lg px-4 py-3 text-xl font-bold text-center focus:outline-none focus:border-status-success transition-colors"
+                />
+              </div>
+
+              <!-- Quick amount buttons -->
+              <div class="grid grid-cols-4 gap-2 mb-4">
+                <button
+                  v-for="amount in reloadAmounts"
+                  :key="amount"
+                  @click="selectReloadAmount(amount)"
+                  :class="[
+                    'py-2 rounded-lg text-sm font-medium transition-colors',
+                    reloadAmount === amount.toString()
+                      ? 'bg-status-success text-white'
+                      : 'bg-bg-tertiary text-text-muted hover:bg-bg-tertiary/80'
+                  ]"
+                >
+                  {{ amount }} RON
+                </button>
+              </div>
+
+              <!-- Current balance -->
+              <div class="bg-bg-tertiary rounded-xl p-3 mb-4 flex justify-between items-center">
+                <span class="text-sm text-text-muted">{{ t('profile.reload.currentBalance', 'Balance actual') }}</span>
+                <span class="font-medium text-purple-400">{{ formatRon(ronBalance) }} RON</span>
+              </div>
+
+              <div v-if="reloadError" class="mb-4 p-3 rounded-lg bg-status-danger/20 border border-status-danger/30">
+                <p class="text-sm text-status-danger text-center">{{ reloadError }}</p>
+              </div>
+
+              <div class="flex gap-3">
+                <button
+                  @click="closeReloadModal"
+                  class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+                >
+                  {{ t('common.cancel') }}
+                </button>
+                <button
+                  @click="confirmReload"
+                  :disabled="!reloadAmount || parseFloat(reloadAmount) <= 0"
+                  class="flex-1 py-2.5 rounded-lg font-semibold bg-status-success text-white hover:bg-status-success/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {{ t('profile.reload.continue', 'Continuar') }}
+                </button>
+              </div>
+            </template>
+
+            <!-- Processing States -->
+            <template v-else-if="['connecting', 'sending', 'confirming', 'crediting'].includes(reloadStep)">
+              <div class="text-center py-4">
+                <div class="relative w-16 h-16 mx-auto mb-4">
+                  <div class="absolute inset-0 border-4 border-status-success/20 rounded-full"></div>
+                  <div class="absolute inset-0 border-4 border-status-success border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <h3 class="text-lg font-bold mb-2">
+                  {{ reloadStep === 'connecting' ? t('profile.reload.connecting', 'Conectando wallet...') :
+                     reloadStep === 'sending' ? t('profile.reload.sending', 'Enviando transaccion...') :
+                     reloadStep === 'confirming' ? t('profile.reload.confirming', 'Confirmando...') :
+                     t('profile.reload.crediting', 'Acreditando RON...') }}
+                </h3>
+                <p class="text-text-muted text-sm">
+                  {{ reloadStep === 'connecting' ? t('profile.reload.connectingDesc', 'Aprueba la conexion en tu Ronin Wallet') :
+                     reloadStep === 'sending' ? t('profile.reload.sendingDesc', 'Confirma la transaccion en tu wallet') :
+                     reloadStep === 'confirming' ? t('profile.reload.confirmingDesc', 'Esperando confirmacion en la blockchain...') :
+                     t('profile.reload.creditingDesc', 'Actualizando tu balance...') }}
+                </p>
+                <!-- Progress indicator -->
+                <div class="mt-4 flex justify-center gap-2">
+                  <div class="w-2 h-2 rounded-full" :class="reloadStep ? 'bg-status-success' : 'bg-bg-tertiary'"></div>
+                  <div class="w-2 h-2 rounded-full" :class="['sending', 'confirming', 'crediting'].includes(reloadStep) ? 'bg-status-success' : 'bg-bg-tertiary'"></div>
+                  <div class="w-2 h-2 rounded-full" :class="['confirming', 'crediting'].includes(reloadStep) ? 'bg-status-success' : 'bg-bg-tertiary'"></div>
+                  <div class="w-2 h-2 rounded-full" :class="reloadStep === 'crediting' ? 'bg-status-success' : 'bg-bg-tertiary'"></div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Success State -->
+            <template v-else-if="reloadStep === 'success'">
+              <div class="text-center py-4">
+                <div class="w-16 h-16 mx-auto mb-4 bg-status-success/20 rounded-full flex items-center justify-center">
+                  <svg class="w-8 h-8 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 class="text-lg font-bold text-status-success mb-2">{{ t('profile.reload.success', 'Deposito exitoso!') }}</h3>
+                <p class="text-text-muted text-sm mb-4">
+                  {{ t('profile.reload.successDesc', 'Tu RON ha sido acreditado a tu cuenta.') }}
+                </p>
+                <div class="bg-bg-tertiary rounded-xl p-4 mb-4">
+                  <div class="text-sm text-text-muted mb-1">{{ t('profile.reload.deposited', 'Depositado') }}</div>
+                  <div class="text-2xl font-bold text-status-success">+{{ reloadAmount }} RON</div>
+                </div>
+                <button
+                  @click="closeReloadModal"
+                  class="w-full py-2.5 rounded-lg font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors"
+                >
+                  {{ t('common.close', 'Cerrar') }}
+                </button>
+              </div>
+            </template>
+
+            <!-- Error State -->
+            <template v-else-if="reloadStep === 'error'">
+              <div class="text-center py-4">
+                <div class="w-16 h-16 mx-auto mb-4 bg-status-danger/20 rounded-full flex items-center justify-center">
+                  <svg class="w-8 h-8 text-status-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <h3 class="text-lg font-bold text-status-danger mb-2">{{ t('profile.reload.errorTitle', 'Error') }}</h3>
+                <p class="text-text-muted text-sm mb-4">{{ reloadError }}</p>
+                <div class="flex flex-col gap-2">
+                  <button
+                    v-if="reloadError === t('profile.reload.walletNotInstalled')"
+                    @click="roninWallet.openInstallPage()"
+                    class="w-full py-2.5 rounded-lg font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                  >
+                    {{ t('profile.reload.installWallet', 'Instalar Ronin Wallet') }}
+                  </button>
+                  <button
+                    @click="reloadStep = 'input'; reloadError = null"
+                    class="w-full py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+                  >
+                    {{ t('common.tryAgain', 'Intentar de nuevo') }}
+                  </button>
+                  <button
+                    @click="closeReloadModal"
+                    class="w-full py-2.5 rounded-lg font-medium text-text-muted hover:text-white transition-colors"
+                  >
+                    {{ t('common.cancel') }}
+                  </button>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
       </Transition>

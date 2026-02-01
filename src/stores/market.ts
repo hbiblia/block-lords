@@ -341,8 +341,7 @@ export const useMarketStore = defineStore('market', () => {
   }
 
   async function buyCryptoPackage(
-    packageId: string,
-    txHash?: string
+    packageId: string
   ): Promise<{ success: boolean; error?: string; cryptoReceived?: number }> {
     const authStore = useAuthStore();
     if (!authStore.player) return { success: false, error: 'No player' };
@@ -352,7 +351,6 @@ export const useMarketStore = defineStore('market', () => {
       const { data, error } = await supabase.rpc('buy_crypto_package', {
         p_player_id: authStore.player.id,
         p_package_id: packageId,
-        p_tx_hash: txHash ?? null,
       });
 
       if (error) throw error;
