@@ -3,6 +3,10 @@
 -- Los bloques minados quedan pendientes hasta que el usuario los reclama
 -- =====================================================
 
+-- Agregar columnas necesarias a players si no existen
+ALTER TABLE players ADD COLUMN IF NOT EXISTS blocks_mined INTEGER DEFAULT 0;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS total_crypto_earned DECIMAL(18, 8) DEFAULT 0;
+
 -- Tabla para bloques pendientes de claim
 CREATE TABLE IF NOT EXISTS pending_blocks (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -176,11 +180,14 @@ $$;
 -- RLS Policies
 ALTER TABLE pending_blocks ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own pending blocks" ON pending_blocks;
 CREATE POLICY "Users can view own pending blocks" ON pending_blocks
   FOR SELECT USING (auth.uid() = player_id);
 
+DROP POLICY IF EXISTS "System can insert pending blocks" ON pending_blocks;
 CREATE POLICY "System can insert pending blocks" ON pending_blocks
   FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Users can update own pending blocks" ON pending_blocks;
 CREATE POLICY "Users can update own pending blocks" ON pending_blocks
   FOR UPDATE USING (auth.uid() = player_id);

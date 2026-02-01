@@ -789,5 +789,9 @@ export default {
     claimTip: 'Reclama tus bloques para recibir las recompensas de minería',
     newBlock: '¡Nuevo bloque minado!',
     claimNow: 'Reclamar ahora',
+    verifyMiner: 'Verificacion de Minero',
+    verifyCaptcha: 'Completa el captcha para verificar que eres humano',
+    claimVerified: 'Reclamar Bloque Verificado',
+    captchaRequired: 'Cada bloque requiere verificacion humana para reclamar',
   },
 };

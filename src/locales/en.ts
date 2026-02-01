@@ -789,5 +789,9 @@ export default {
     claimTip: 'Claim your blocks to receive your mining rewards',
     newBlock: 'New block mined!',
     claimNow: 'Claim now',
+    verifyMiner: 'Miner Verification',
+    verifyCaptcha: 'Complete the captcha to verify you are human',
+    claimVerified: 'Claim Verified Block',
+    captchaRequired: 'Each block requires human verification to claim',
   },
 };
