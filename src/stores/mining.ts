@@ -325,8 +325,11 @@ export const useMiningStore = defineStore('mining', () => {
   }
 
   // Realtime handlers
+  // Debounce for network stats refresh (when rigs toggle)
+  let networkStatsDebounceTimer: number | null = null;
+
   function handleRigUpdate(payload: { eventType: string; new: any; old: any }) {
-    const { eventType, new: newData } = payload;
+    const { eventType, new: newData, old: oldData } = payload;
 
     if (eventType === 'INSERT' || eventType === 'DELETE') {
       loadData();
@@ -337,15 +340,39 @@ export const useMiningStore = defineStore('mining', () => {
       const rigIndex = rigs.value.findIndex(r => r.id === newData.id);
       if (rigIndex !== -1) {
         const currentRig = rigs.value[rigIndex];
-        rigs.value[rigIndex] = {
+        // Use splice to ensure Vue reactivity triggers
+        rigs.value.splice(rigIndex, 1, {
           ...currentRig,
           is_active: newData.is_active ?? currentRig.is_active,
           condition: newData.condition ?? currentRig.condition,
           temperature: newData.temperature ?? currentRig.temperature,
           activated_at: newData.activated_at ?? currentRig.activated_at,
-        };
+          max_condition: newData.max_condition ?? currentRig.max_condition,
+          times_repaired: newData.times_repaired ?? currentRig.times_repaired,
+        });
+
+        // If is_active changed, refresh network stats (activeMiners count)
+        if (oldData && newData.is_active !== oldData.is_active) {
+          refreshNetworkStats();
+        }
       }
     }
+  }
+
+  // Debounced refresh of network stats
+  function refreshNetworkStats() {
+    if (networkStatsDebounceTimer) {
+      clearTimeout(networkStatsDebounceTimer);
+    }
+    networkStatsDebounceTimer = window.setTimeout(async () => {
+      try {
+        const freshStats = await getNetworkStats();
+        networkStats.value = freshStats;
+      } catch (e) {
+        console.warn('Error refreshing network stats:', e);
+      }
+      networkStatsDebounceTimer = null;
+    }, 1000);
   }
 
   // Debounce for cooling updates
@@ -603,6 +630,7 @@ export const useMiningStore = defineStore('mining', () => {
             ...networkStats.value,
             difficulty: newStats.difficulty ?? networkStats.value.difficulty,
             hashrate: newStats.hashrate ?? networkStats.value.hashrate,
+            activeMiners: newStats.active_miners ?? networkStats.value.activeMiners,
           };
         }
       )
@@ -633,6 +661,10 @@ export const useMiningStore = defineStore('mining', () => {
     if (boostsDebounceTimer) {
       clearTimeout(boostsDebounceTimer);
       boostsDebounceTimer = null;
+    }
+    if (networkStatsDebounceTimer) {
+      clearTimeout(networkStatsDebounceTimer);
+      networkStatsDebounceTimer = null;
     }
   }
 

@@ -1452,10 +1452,15 @@ BEGIN
     v_network_hashrate := v_network_hashrate + v_effective_hashrate;
   END LOOP;
 
-  -- Actualizar hashrate de red
-  INSERT INTO network_stats (id, difficulty, hashrate, updated_at)
-  VALUES ('current', v_difficulty, v_network_hashrate, NOW())
-  ON CONFLICT (id) DO UPDATE SET hashrate = v_network_hashrate, updated_at = NOW();
+  -- Actualizar hashrate de red y mineros activos
+  INSERT INTO network_stats (id, difficulty, hashrate, active_miners, updated_at)
+  VALUES ('current', v_difficulty, v_network_hashrate,
+          (SELECT COUNT(DISTINCT player_id) FROM player_rigs WHERE is_active = true),
+          NOW())
+  ON CONFLICT (id) DO UPDATE SET
+    hashrate = v_network_hashrate,
+    active_miners = (SELECT COUNT(DISTINCT player_id) FROM player_rigs WHERE is_active = true),
+    updated_at = NOW();
 
   IF v_network_hashrate = 0 THEN
     RETURN QUERY SELECT false, NULL::INT;

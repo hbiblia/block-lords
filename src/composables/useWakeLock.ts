@@ -16,6 +16,12 @@ export function useWakeLock() {
       return false;
     }
 
+    // Can only request Wake Lock when page is visible
+    if (document.visibilityState !== 'visible') {
+      console.log('Wake Lock deferred - page not visible');
+      return false;
+    }
+
     try {
       wakeLock.value = await navigator.wakeLock.request('screen');
       isActive.value = true;
