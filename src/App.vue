@@ -56,68 +56,80 @@ watch(
 
     <!-- Skeleton Main Content -->
     <main class="container mx-auto px-4 py-6 mt-16">
-      <!-- Header -->
+      <!-- Header (igual al real) -->
       <div class="flex items-center justify-between mb-6">
-        <div class="h-8 w-48 bg-bg-tertiary rounded animate-pulse"></div>
+        <h1 class="text-2xl font-display font-bold">
+          <span class="gradient-text">Mining</span>
+        </h1>
         <div class="flex items-center gap-3">
-          <div class="h-7 w-24 bg-bg-tertiary rounded-full animate-pulse"></div>
+          <span class="badge badge-warning">0 rigs activos</span>
           <div class="flex items-center gap-1 px-1 py-1 bg-bg-secondary/50 rounded-lg">
-            <div class="h-9 w-20 bg-accent-primary/20 rounded-md animate-pulse"></div>
-            <div class="h-9 w-20 bg-purple-500/20 rounded-md animate-pulse"></div>
-            <div class="h-9 w-16 bg-bg-tertiary rounded-md animate-pulse"></div>
+            <button class="px-3 py-1.5 text-sm font-medium rounded-md bg-accent-primary/20 text-accent-primary flex items-center gap-1.5">
+              <span>🛒</span>
+              <span class="hidden sm:inline">Market</span>
+            </button>
+            <button class="px-3 py-1.5 text-sm font-medium rounded-md bg-purple-500/20 text-purple-400 flex items-center gap-1.5">
+              <span>💱</span>
+              <span class="hidden sm:inline">Exchange</span>
+            </button>
+            <button class="px-3 py-1.5 text-sm font-medium rounded-md bg-bg-tertiary flex items-center gap-1.5">
+              <span>🎒</span>
+              <span class="hidden sm:inline">Inventory</span>
+            </button>
           </div>
         </div>
       </div>
 
       <!-- Mining Status Panel -->
       <div class="card relative overflow-hidden mb-6">
-        <div class="absolute inset-0 bg-gradient-to-r from-accent-primary/5 via-accent-secondary/5 to-accent-primary/5 animate-pulse"></div>
         <div class="relative z-10">
           <!-- Header -->
           <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-3">
-              <div class="w-14 h-14 rounded-xl bg-gradient-primary flex items-center justify-center text-3xl animate-pulse">
+              <div class="w-14 h-14 rounded-xl bg-bg-tertiary flex items-center justify-center text-3xl">
                 ⛏️
               </div>
               <div>
-                <div class="h-5 w-36 bg-bg-tertiary rounded animate-pulse mb-2"></div>
-                <div class="h-4 w-28 bg-bg-tertiary rounded animate-pulse"></div>
+                <h2 class="text-lg font-semibold">Centro de Minería</h2>
+                <p class="text-sm text-text-muted">Rigs inactivos</p>
               </div>
             </div>
             <div class="text-right">
-              <div class="h-9 w-32 bg-bg-tertiary rounded animate-pulse mb-1"></div>
-              <div class="h-3 w-24 bg-bg-tertiary rounded animate-pulse ml-auto"></div>
+              <div class="text-3xl font-bold font-mono text-text-muted">0</div>
+              <div class="text-xs text-text-muted">Hashrate efectivo</div>
             </div>
           </div>
 
           <!-- Progress Bar -->
           <div class="mb-4">
             <div class="flex justify-between text-sm mb-2">
-              <div class="h-4 w-24 bg-bg-tertiary rounded animate-pulse"></div>
-              <div class="h-4 w-20 bg-bg-tertiary rounded animate-pulse"></div>
+              <span class="text-text-muted">Progreso de hash</span>
+              <span class="font-mono text-accent-primary">0 hashes</span>
             </div>
-            <div class="h-4 bg-bg-tertiary rounded-full overflow-hidden">
-              <div class="h-full w-1/3 bg-gradient-to-r from-accent-primary to-accent-secondary rounded-full animate-pulse"></div>
-            </div>
+            <div class="h-4 bg-bg-tertiary rounded-full overflow-hidden"></div>
           </div>
 
           <!-- Stats Grid -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div class="bg-accent-primary/10 border border-accent-primary/30 rounded-xl p-3 text-center">
-              <div class="h-6 w-16 bg-bg-tertiary rounded animate-pulse mx-auto mb-1"></div>
-              <div class="h-3 w-20 bg-bg-tertiary rounded animate-pulse mx-auto"></div>
+            <div class="bg-accent-primary/10 border border-accent-primary/30 rounded-xl p-3 text-center relative">
+              <div class="absolute top-1 right-1.5 text-[10px] text-accent-primary/70">👤</div>
+              <div class="text-lg font-bold text-status-warning">0.00%</div>
+              <div class="text-[10px] text-text-muted">Probabilidad</div>
             </div>
-            <div class="bg-bg-secondary rounded-xl p-3 text-center">
-              <div class="h-6 w-16 bg-bg-tertiary rounded animate-pulse mx-auto mb-1"></div>
-              <div class="h-3 w-16 bg-bg-tertiary rounded animate-pulse mx-auto"></div>
+            <div class="bg-bg-secondary rounded-xl p-3 text-center relative">
+              <div class="absolute top-1 right-1.5 text-[10px] text-text-muted/50">🌐</div>
+              <div class="text-lg font-bold text-accent-tertiary">1,000</div>
+              <div class="text-[10px] text-text-muted">Dificultad</div>
             </div>
-            <div class="bg-bg-secondary rounded-xl p-3 text-center">
-              <div class="h-6 w-12 bg-bg-tertiary rounded animate-pulse mx-auto mb-1"></div>
-              <div class="h-3 w-14 bg-bg-tertiary rounded animate-pulse mx-auto"></div>
+            <div class="bg-bg-secondary rounded-xl p-3 text-center relative">
+              <div class="absolute top-1 right-1.5 text-[10px] text-text-muted/50">🌐</div>
+              <div class="text-lg font-bold text-accent-primary">25</div>
+              <div class="text-[10px] text-text-muted">Mineros</div>
             </div>
-            <div class="bg-bg-secondary rounded-xl p-3 text-center">
-              <div class="h-6 w-16 bg-bg-tertiary rounded animate-pulse mx-auto mb-1"></div>
-              <div class="h-3 w-18 bg-bg-tertiary rounded animate-pulse mx-auto"></div>
+            <div class="bg-bg-secondary rounded-xl p-3 text-center relative">
+              <div class="absolute top-1 right-1.5 text-[10px] text-text-muted/50">🌐</div>
+              <div class="text-lg font-bold text-status-success">#0</div>
+              <div class="text-[10px] text-text-muted">Último bloque</div>
             </div>
           </div>
         </div>
@@ -127,39 +139,22 @@ watch(
       <div class="grid lg:grid-cols-3 gap-6">
         <!-- Rigs Column -->
         <div class="lg:col-span-2 space-y-4">
-          <div class="flex items-center gap-2 mb-2">
-            <div class="h-6 w-32 bg-bg-tertiary rounded animate-pulse"></div>
-            <div class="h-5 w-12 bg-accent-primary/20 rounded-full animate-pulse"></div>
-          </div>
-
-          <!-- Rig Cards -->
-          <div class="card p-4">
-            <div class="flex items-start justify-between mb-4">
-              <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-bg-tertiary rounded-lg animate-pulse"></div>
-                <div>
-                  <div class="h-5 w-28 bg-bg-tertiary rounded animate-pulse mb-2"></div>
-                  <div class="h-4 w-20 bg-bg-tertiary rounded animate-pulse"></div>
-                </div>
-              </div>
-              <div class="h-10 w-24 bg-accent-primary/20 rounded-lg animate-pulse"></div>
-            </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <div class="h-16 bg-bg-tertiary rounded-lg animate-pulse"></div>
-              <div class="h-16 bg-bg-tertiary rounded-lg animate-pulse"></div>
-              <div class="h-16 bg-bg-tertiary rounded-lg animate-pulse"></div>
-              <div class="h-16 bg-bg-tertiary rounded-lg animate-pulse"></div>
-            </div>
-            <div class="h-2 bg-bg-tertiary rounded-full animate-pulse"></div>
-          </div>
+          <h2 class="text-lg font-semibold flex items-center gap-2">
+            <span>🖥️</span> Tus Rigs
+            <span class="text-sm font-normal px-2 py-0.5 rounded-full bg-accent-primary/20 text-accent-primary">0/1</span>
+          </h2>
 
           <!-- Empty slot card -->
           <div class="card p-4 border-dashed border-2 border-border/50">
-            <div class="flex items-center justify-center py-6">
+            <div class="flex items-center justify-center py-8">
               <div class="text-center">
-                <div class="h-12 w-12 bg-bg-tertiary rounded-lg animate-pulse mx-auto mb-3"></div>
-                <div class="h-4 w-32 bg-bg-tertiary rounded animate-pulse mx-auto mb-2"></div>
-                <div class="h-8 w-28 bg-accent-primary/20 rounded-lg animate-pulse mx-auto"></div>
+                <div class="w-16 h-16 mx-auto mb-4 rounded-xl bg-bg-tertiary flex items-center justify-center text-3xl">
+                  ➕
+                </div>
+                <p class="text-text-muted mb-3">Slot disponible</p>
+                <button class="btn-primary text-sm px-4 py-2">
+                  🛒 Comprar Rig
+                </button>
               </div>
             </div>
           </div>
@@ -167,13 +162,11 @@ watch(
 
         <!-- Sidebar -->
         <div class="space-y-4">
-          <div class="h-6 w-32 bg-bg-tertiary rounded animate-pulse mb-2"></div>
+          <h2 class="text-lg font-semibold flex items-center gap-2">
+            <span>📦</span> Bloques Recientes
+          </h2>
           <div class="card p-4">
-            <div class="space-y-3">
-              <div class="h-12 bg-bg-tertiary rounded-lg animate-pulse"></div>
-              <div class="h-12 bg-bg-tertiary rounded-lg animate-pulse"></div>
-              <div class="h-12 bg-bg-tertiary rounded-lg animate-pulse"></div>
-            </div>
+            <p class="text-center text-text-muted py-4">Sin bloques recientes</p>
           </div>
         </div>
       </div>
