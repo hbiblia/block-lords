@@ -376,7 +376,7 @@ export default {
     january2024: 'January 2024',
     balances: 'Balances',
     blocksMined: 'Blocks',
-    cryptoEarned: 'Crypto',
+    cryptoEarned: 'Mined',
     transactions: 'Recent Transactions',
     noTransactions: 'No transactions yet',
     tradeHistory: 'Trade History',

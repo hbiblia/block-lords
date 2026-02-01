@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { exchangeCryptoToGamecoin, exchangeCryptoToRon, getExchangeRates } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
+import { formatCrypto, formatGamecoin, formatRon, formatNumber } from '@/utils/format';
 
 const { t } = useI18n();
 
@@ -59,7 +60,7 @@ const errorMessage = computed(() => {
   if (numericAmount.value <= 0) return '';
   if (numericAmount.value > cryptoBalance.value) return t('exchange.insufficientCrypto');
   if (activeTab.value === 'ron' && numericAmount.value < rates.value.min_crypto_for_ron) {
-    return t('exchange.minCryptoForRon', { amount: rates.value.min_crypto_for_ron.toLocaleString() });
+    return t('exchange.minCryptoForRon', { amount: formatNumber(rates.value.min_crypto_for_ron) });
   }
   return '';
 });
@@ -159,13 +160,13 @@ onMounted(() => {
             <div class="text-center">
               <div class="text-xs text-text-muted mb-1">{{ t('exchange.yourCrypto') }}</div>
               <div class="text-xl font-bold text-accent-tertiary font-mono">
-                {{ cryptoBalance.toFixed(4) }} ₿
+                {{ formatCrypto(cryptoBalance) }} ₿
               </div>
             </div>
             <div class="text-center">
               <div class="text-xs text-text-muted mb-1">{{ t('exchange.yourRon') }}</div>
               <div class="text-xl font-bold text-purple-400 font-mono">
-                {{ ronBalance.toFixed(4) }} RON
+                {{ formatRon(ronBalance) }} RON
               </div>
             </div>
           </div>
@@ -206,10 +207,10 @@ onMounted(() => {
           <div class="bg-bg-tertiary rounded-lg p-3 text-center text-sm">
             <span class="text-text-muted">{{ t('exchange.rate') }} </span>
             <span v-if="activeTab === 'gamecoin'" class="text-status-warning font-medium">
-              1 ₿ = {{ rates.crypto_to_gamecoin }} 🪙
+              1 ₿ = {{ formatGamecoin(rates.crypto_to_gamecoin) }} 🪙
             </span>
             <span v-else class="text-purple-400 font-medium">
-              1000 ₿ = {{ (1000 * rates.crypto_to_ron).toFixed(2) }} RON
+              1,000 ₿ = {{ formatRon(1000 * rates.crypto_to_ron) }} RON
             </span>
           </div>
 
@@ -267,14 +268,14 @@ onMounted(() => {
           <div class="bg-bg-primary rounded-xl p-4">
             <div class="text-xs text-text-muted mb-2 text-center">{{ t('exchange.youWillReceive') }}</div>
             <div class="text-3xl font-bold text-center font-mono" :class="activeTab === 'gamecoin' ? 'text-status-warning' : 'text-purple-400'">
-              {{ estimatedReceive.toFixed(activeTab === 'gamecoin' ? 2 : 4) }}
+              {{ activeTab === 'gamecoin' ? formatGamecoin(estimatedReceive) : formatRon(estimatedReceive) }}
               <span class="text-lg">{{ activeTab === 'gamecoin' ? '🪙' : 'RON' }}</span>
             </div>
           </div>
 
           <!-- Min Amount Warning for RON -->
           <div v-if="activeTab === 'ron'" class="text-xs text-text-muted text-center">
-            {{ t('exchange.minAmountWarning', { amount: rates.min_crypto_for_ron.toLocaleString() }) }}
+            {{ t('exchange.minAmountWarning', { amount: formatNumber(rates.min_crypto_for_ron) }) }}
           </div>
 
           <!-- Exchange Button -->

@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { updateRonWallet, resetPlayerAccount, getPlayerTransactions } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
+import { formatGamecoin, formatCrypto, formatNumber } from '@/utils/format';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -214,12 +215,12 @@ onUnmounted(() => {
           <!-- Stats -->
           <div class="hidden sm:flex items-center gap-4 text-center">
             <div>
-              <div class="text-xl font-bold text-status-warning">{{ player?.blocks_mined ?? 0 }}</div>
+              <div class="text-xl font-bold text-status-warning">{{ formatNumber(player?.blocks_mined ?? 0) }}</div>
               <div class="text-xs text-text-muted">{{ t('profile.blocksMined', 'Bloques') }}</div>
             </div>
             <div>
-              <div class="text-xl font-bold text-accent-primary">{{ (player?.total_crypto_earned ?? 0).toFixed(4) }}</div>
-              <div class="text-xs text-text-muted">{{ t('profile.cryptoEarned', 'Crypto') }}</div>
+              <div class="text-xl font-bold text-accent-primary">{{ formatCrypto(player?.total_crypto_earned) }}</div>
+              <div class="text-xs text-text-muted">{{ t('profile.cryptoEarned', 'Minado') }}</div>
             </div>
           </div>
         </div>
@@ -232,7 +233,7 @@ onUnmounted(() => {
             <div>
               <div class="text-sm text-text-muted">GameCoin</div>
               <div class="text-2xl font-bold text-status-warning">
-                🪙 {{ player?.gamecoin_balance?.toFixed(2) }}
+                🪙 {{ formatGamecoin(player?.gamecoin_balance) }}
               </div>
             </div>
             <div class="w-12 h-12 rounded-xl bg-status-warning/20 flex items-center justify-center text-2xl">
@@ -246,7 +247,7 @@ onUnmounted(() => {
             <div>
               <div class="text-sm text-text-muted">Crypto</div>
               <div class="text-2xl font-bold text-accent-primary">
-                💎 {{ player?.crypto_balance?.toFixed(6) }}
+                💎 {{ formatCrypto(player?.crypto_balance) }}
               </div>
             </div>
             <div class="w-12 h-12 rounded-xl bg-accent-primary/20 flex items-center justify-center text-2xl">
@@ -366,7 +367,7 @@ onUnmounted(() => {
                 class="font-medium text-sm"
                 :class="tx.amount >= 0 ? 'text-status-success' : 'text-status-danger'"
               >
-                {{ tx.amount >= 0 ? '+' : '' }}{{ tx.amount.toFixed(2) }}
+                {{ tx.amount >= 0 ? '+' : '' }}{{ tx.currency === 'crypto' ? formatCrypto(tx.amount) : formatGamecoin(tx.amount) }}
               </div>
               <div class="text-xs text-text-muted">
                 {{ tx.currency === 'crypto' ? '💎' : '🪙' }}

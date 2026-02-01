@@ -1544,7 +1544,9 @@ BEGIN
   v_reward := calculate_block_reward(v_block.height);
 
   UPDATE players
-  SET crypto_balance = crypto_balance + v_reward, blocks_mined = COALESCE(blocks_mined, 0) + 1
+  SET crypto_balance = crypto_balance + v_reward,
+      blocks_mined = COALESCE(blocks_mined, 0) + 1,
+      total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_reward
   WHERE id = v_winner_player_id;
 
   INSERT INTO transactions (player_id, type, amount, currency, description)
@@ -2911,7 +2913,8 @@ BEGIN
   -- Dar recompensas
   UPDATE players
   SET gamecoin_balance = gamecoin_balance + v_gamecoin_reward,
-      crypto_balance = crypto_balance + v_crypto_reward
+      crypto_balance = crypto_balance + v_crypto_reward,
+      total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_crypto_reward
   WHERE id = p_player_id;
 
   -- Dar item si corresponde
@@ -3200,7 +3203,8 @@ BEGIN
     WHERE id = p_player_id;
   ELSIF v_mission.reward_type = 'crypto' THEN
     UPDATE players
-    SET crypto_balance = crypto_balance + v_mission.reward_amount
+    SET crypto_balance = crypto_balance + v_mission.reward_amount,
+        total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_mission.reward_amount
     WHERE id = p_player_id;
   ELSIF v_mission.reward_type = 'energy' THEN
     UPDATE players

@@ -3,12 +3,27 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useNotificationsStore } from '@/stores/notifications';
+import { formatCrypto } from '@/utils/format';
 
 const { t } = useI18n();
 const router = useRouter();
 const notificationsStore = useNotificationsStore();
 
 const notification = computed(() => notificationsStore.currentNotification);
+
+// Format notification data for display (e.g., format crypto rewards)
+const formattedData = computed(() => {
+  if (!notification.value?.data) return {};
+
+  const data = { ...notification.value.data };
+
+  // Format reward for block_mined notifications
+  if (notification.value.type === 'block_mined' && typeof data.reward === 'number') {
+    data.reward = formatCrypto(data.reward as number);
+  }
+
+  return data;
+});
 
 const severityColors = {
   info: {
@@ -89,7 +104,7 @@ function goToInventory() {
 
         <!-- Message -->
         <p class="text-text-muted mb-6">
-          {{ t(notification.message, notification.data || {}) }}
+          {{ t(notification.message, formattedData) }}
         </p>
 
         <!-- Action buttons based on notification type -->
