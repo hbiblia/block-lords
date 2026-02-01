@@ -778,13 +778,13 @@ function closeProcessingModal() {
               </div>
 
               <!-- No upgrades available -->
-              <div v-else-if="!rigUpgrades" class="text-center py-8">
+              <div v-if="!rigUpgrades" class="text-center py-8">
                 <div class="text-4xl mb-3 opacity-50">⬆️</div>
                 <p class="text-text-muted text-sm">{{ t('rigManage.upgradesNotAvailable', 'Mejoras no disponibles') }}</p>
               </div>
 
-              <!-- Upgrades available -->
-              <template v-else>
+              <!-- Upgrades available (shown even when rig is active, but buttons disabled) -->
+              <template v-if="rigUpgrades">
                 <div class="text-center mb-4">
                   <p class="text-text-muted text-sm">{{ t('rigManage.upgradeDescription', 'Mejora tu rig con crypto para aumentar su rendimiento') }}</p>
                   <p class="text-xs text-amber-400 mt-1">Max nivel: {{ rigUpgrades.max_level }}</p>
