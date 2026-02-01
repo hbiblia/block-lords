@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { exchangeCryptoToGamecoin, exchangeCryptoToRon, getExchangeRates } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
-import { formatCrypto, formatGamecoin, formatRon, formatNumber } from '@/utils/format';
+import { formatCrypto, formatRon, formatNumber } from '@/utils/format';
 
 const { t } = useI18n();
 
