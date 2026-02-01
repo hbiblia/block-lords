@@ -774,4 +774,20 @@ export default {
       maxPower: 'Maximo poder',
     },
   },
+
+  blocks: {
+    claimTitle: 'Reclamar Bloques',
+    pendingBlocks: 'bloques pendientes',
+    noPending: 'No hay bloques pendientes',
+    noPendingDesc: 'Cuando mines un bloque, aparecerá aquí para reclamarlo',
+    totalReward: 'Recompensa Total',
+    claimAll: 'Reclamar Todo',
+    claim: 'Reclamar',
+    claiming: 'Reclamando...',
+    pendingList: 'Bloques Pendientes',
+    sponsoredBy: 'Patrocinado por',
+    claimTip: 'Reclama tus bloques para recibir las recompensas de minería',
+    newBlock: '¡Nuevo bloque minado!',
+    claimNow: 'Reclamar ahora',
+  },
 };

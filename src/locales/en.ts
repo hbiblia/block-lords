@@ -774,4 +774,20 @@ export default {
       maxPower: 'Maximum power',
     },
   },
+
+  blocks: {
+    claimTitle: 'Claim Blocks',
+    pendingBlocks: 'pending blocks',
+    noPending: 'No pending blocks',
+    noPendingDesc: 'When you mine a block, it will appear here to claim',
+    totalReward: 'Total Reward',
+    claimAll: 'Claim All',
+    claim: 'Claim',
+    claiming: 'Claiming...',
+    pendingList: 'Pending Blocks',
+    sponsoredBy: 'Sponsored by',
+    claimTip: 'Claim your blocks to receive your mining rewards',
+    newBlock: 'New block mined!',
+    claimNow: 'Claim now',
+  },
 };

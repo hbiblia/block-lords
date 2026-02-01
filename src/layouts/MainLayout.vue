@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 import { useStreakStore } from '@/stores/streak';
 import { useMissionsStore } from '@/stores/missions';
+import { usePendingBlocksStore } from '@/stores/pendingBlocks';
 
 const { t } = useI18n();
 import NavBar from '@/components/NavBar.vue';
@@ -14,22 +15,25 @@ import GameNotificationsModal from '@/components/GameNotificationsModal.vue';
 import StreakModal from '@/components/StreakModal.vue';
 import MissionsPanel from '@/components/MissionsPanel.vue';
 import ToastContainer from '@/components/ToastContainer.vue';
+import BlockClaimModal from '@/components/BlockClaimModal.vue';
 
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
 const streakStore = useStreakStore();
 const missionsStore = useMissionsStore();
+const pendingBlocksStore = usePendingBlocksStore();
 
 // InfoBar visibility state - shared via provide/inject
 const infoBarVisible = ref(false);
 provide('infoBarVisible', infoBarVisible);
 
-// Cargar estado de streak y misiones al inicio
+// Cargar estado de streak, misiones y bloques pendientes al inicio
 onMounted(() => {
   if (authStore.isAuthenticated) {
     streakStore.fetchStatus();
     missionsStore.fetchMissions();
     missionsStore.startHeartbeat();
+    pendingBlocksStore.fetchPendingBlocks();
     // Inicializar AdSense
     try {
       ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
@@ -89,6 +93,12 @@ onUnmounted(() => {
       @close="missionsStore.closePanel"
     />
 
+    <!-- Block Claim Modal -->
+    <BlockClaimModal
+      :show="pendingBlocksStore.showModal"
+      @close="pendingBlocksStore.closeModal"
+    />
+
     <!-- Main Content -->
     <main
       class="flex-1 container mx-auto px-4 py-6 transition-[margin] duration-300"
@@ -100,7 +110,7 @@ onUnmounted(() => {
     <!-- Connection Status -->
     <div
       v-if="authStore.isAuthenticated"
-      class="fixed bottom-4 left-4 flex items-center gap-2 px-3 py-2 card text-xs"
+      class="fixed bottom-20 left-4 flex items-center gap-2 px-3 py-2 card text-xs"
     >
       <span
         class="w-2 h-2 rounded-full"
@@ -114,8 +124,26 @@ onUnmounted(() => {
     <!-- Engagement Buttons -->
     <div
       v-if="authStore.isAuthenticated"
-      class="fixed bottom-4 right-4 flex flex-col gap-2"
+      class="fixed bottom-14 right-4 flex flex-col gap-2"
     >
+      <!-- Pending Blocks Button -->
+      <button
+        v-if="pendingBlocksStore.hasPending"
+        @click="pendingBlocksStore.openModal"
+        class="flex items-center gap-2 px-4 py-3 card hover:bg-bg-tertiary transition-colors ring-2 ring-accent-primary animate-pulse"
+      >
+        <span class="text-2xl">⛏️</span>
+        <div class="text-left">
+          <div class="text-xs text-text-muted">{{ t('blocks.claimTitle') }}</div>
+          <div class="text-sm font-bold">{{ pendingBlocksStore.totalReward.toFixed(2) }} ₿</div>
+        </div>
+        <div
+          class="ml-2 px-2 py-0.5 bg-accent-primary/20 text-accent-primary text-xs font-bold rounded-full"
+        >
+          {{ pendingBlocksStore.count }}
+        </div>
+      </button>
+
       <!-- Missions Button -->
       <button
         @click="missionsStore.openPanel"

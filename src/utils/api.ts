@@ -573,3 +573,39 @@ export async function getActiveAnnouncements() {
   return data;
 }
 
+// === PENDING BLOCKS (CLAIM SYSTEM) ===
+
+export async function getPendingBlocks(playerId: string) {
+  const { data, error } = await supabase.rpc('get_pending_blocks', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getPendingBlocksCount(playerId: string) {
+  const { data, error } = await supabase.rpc('get_pending_blocks_count', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function claimBlock(pendingId: string) {
+  const { data, error } = await supabase.rpc('claim_block', {
+    p_pending_id: pendingId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function claimAllBlocks() {
+  const { data, error } = await supabase.rpc('claim_all_blocks');
+
+  if (error) throw error;
+  return data;
+}
+
