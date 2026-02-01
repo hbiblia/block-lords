@@ -521,6 +521,28 @@ export async function getRigBoosts(rigId: string) {
   return data;
 }
 
+// === RIG UPGRADES ===
+
+export async function upgradeRig(playerId: string, playerRigId: string, upgradeType: 'hashrate' | 'efficiency' | 'thermal') {
+  const { data, error } = await supabase.rpc('upgrade_rig', {
+    p_player_id: playerId,
+    p_player_rig_id: playerRigId,
+    p_upgrade_type: upgradeType,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getRigUpgrades(playerRigId: string) {
+  const { data, error } = await supabase.rpc('get_rig_upgrades', {
+    p_player_rig_id: playerRigId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 // === PROFILE ===
 
 export async function updateRonWallet(playerId: string, walletAddress: string | null) {

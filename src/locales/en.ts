@@ -621,6 +621,21 @@ export default {
     confirmRepair: 'Repair Rig',
     confirmDelete: 'Delete Rig',
     deleteConfirmText: 'This rig will be permanently deleted and cannot be recovered.',
+    // Upgrade tab
+    upgradeTab: 'Upgrade',
+    upgradeDescription: 'Permanently improve your rig with crypto upgrades.',
+    upgradeHashrate: 'Hashrate Boost',
+    upgradeHashrateDesc: 'Permanently increases mining speed',
+    upgradeEfficiency: 'Energy Efficiency',
+    upgradeEfficiencyDesc: 'Permanently reduces energy consumption',
+    upgradeThermal: 'Thermal Management',
+    upgradeThermalDesc: 'Permanently improves cooling efficiency',
+    yourCrypto: 'Your Crypto',
+    confirmUpgrade: 'Confirm Upgrade',
+    upgradeType: 'Upgrade Type',
+    newLevel: 'New Level',
+    maxLevelReached: 'Max Level',
+    stopToUpgrade: 'Turn off the rig to apply upgrades.',
   },
 
   connection: {

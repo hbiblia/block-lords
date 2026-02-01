@@ -50,20 +50,21 @@ ON CONFLICT (id) DO UPDATE SET
 -- Standard rigs: 8.0-12.0 power → necesitan 6.4-9.6 cooling
 -- Advanced rigs: 18.0-28.0 power → necesitan 14.4-22.4 cooling
 -- Elite rigs: 40.0-55.0 power → necesitan 32-44 cooling
-INSERT INTO cooling_items (id, name, description, cooling_power, base_price, tier)
+INSERT INTO cooling_items (id, name, description, cooling_power, energy_cost, base_price, tier)
 VALUES
-  ('fan_basic', 'Ventilador Básico', 'Ideal para Minero Básico. Insuficiente para rigs mayores.', 4, 120, 'basic'),
-  ('fan_dual', 'Ventilador Dual', 'Ideal para Minero Casero. Apenas enfría GPU Rig.', 8, 280, 'basic'),
-  ('heatsink', 'Disipador de Calor', 'Ideal para GPU Rig. Insuficiente para ASICs.', 12, 550, 'standard'),
-  ('liquid_cooler', 'Refrigeración Líquida', 'Ideal para ASIC S9. Mantiene frío hasta ASIC S19.', 18, 1400, 'standard'),
-  ('aio_cooler', 'AIO Premium', 'Ideal para ASIC S19. Necesario para granjas pequeñas.', 28, 2800, 'advanced'),
-  ('custom_loop', 'Loop Personalizado', 'Ideal para Mini Granja. Enfría cualquier rig avanzado.', 40, 5500, 'advanced'),
-  ('industrial_ac', 'A/C Industrial', 'Ideal para Gran Granja. Overkill para rigs menores.', 55, 14000, 'elite'),
-  ('cryo_system', 'Sistema Criogénico', 'Ideal para Minero Cuántico. Refrigeración extrema.', 75, 28000, 'elite')
+  ('fan_basic', 'Ventilador Básico', 'Ideal para Minero Básico. Insuficiente para rigs mayores.', 4, 1, 120, 'basic'),
+  ('fan_dual', 'Ventilador Dual', 'Ideal para Minero Casero. Apenas enfría GPU Rig.', 8, 2, 280, 'basic'),
+  ('heatsink', 'Disipador de Calor', 'Ideal para GPU Rig. Insuficiente para ASICs.', 12, 3, 550, 'standard'),
+  ('liquid_cooler', 'Refrigeración Líquida', 'Ideal para ASIC S9. Mantiene frío hasta ASIC S19.', 18, 5, 1400, 'standard'),
+  ('aio_cooler', 'AIO Premium', 'Ideal para ASIC S19. Necesario para granjas pequeñas.', 28, 8, 2800, 'advanced'),
+  ('custom_loop', 'Loop Personalizado', 'Ideal para Mini Granja. Enfría cualquier rig avanzado.', 40, 12, 5500, 'advanced'),
+  ('industrial_ac', 'A/C Industrial', 'Ideal para Gran Granja. Overkill para rigs menores.', 55, 18, 14000, 'elite'),
+  ('cryo_system', 'Sistema Criogénico', 'Ideal para Minero Cuántico. Refrigeración extrema.', 75, 25, 28000, 'elite')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
   cooling_power = EXCLUDED.cooling_power,
+  energy_cost = EXCLUDED.energy_cost,
   base_price = EXCLUDED.base_price,
   tier = EXCLUDED.tier;
 

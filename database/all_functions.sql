@@ -483,11 +483,15 @@ BEGIN
       SELECT pr.id, pr.is_active, pr.condition, pr.temperature, pr.acquired_at, pr.activated_at,
              COALESCE(pr.max_condition, 100) as max_condition,
              COALESCE(pr.times_repaired, 0) as times_repaired,
+             COALESCE(pr.hashrate_level, 1) as hashrate_level,
+             COALESCE(pr.efficiency_level, 1) as efficiency_level,
+             COALESCE(pr.thermal_level, 1) as thermal_level,
              json_build_object(
                'id', r.id, 'name', r.name, 'description', r.description,
                'hashrate', r.hashrate, 'power_consumption', r.power_consumption,
                'internet_consumption', r.internet_consumption,
-               'tier', r.tier, 'repair_cost', r.repair_cost
+               'tier', r.tier, 'repair_cost', r.repair_cost,
+               'max_upgrade_level', COALESCE(r.max_upgrade_level, 3)
              ) as rig
       FROM player_rigs pr
       JOIN rigs r ON r.id = pr.rig_id

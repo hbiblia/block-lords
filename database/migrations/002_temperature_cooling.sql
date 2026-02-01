@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS cooling_items (
   name TEXT NOT NULL,
   description TEXT,
   cooling_power DECIMAL(5, 2) NOT NULL CHECK (cooling_power > 0),  -- Cuánto reduce la temperatura
+  energy_cost DECIMAL(5, 2) NOT NULL DEFAULT 0 CHECK (energy_cost >= 0),  -- Consumo adicional de energía por tick
   base_price DECIMAL(10, 2) NOT NULL CHECK (base_price >= 0),
   tier TEXT NOT NULL CHECK (tier IN ('basic', 'standard', 'advanced', 'elite')),
   created_at TIMESTAMPTZ DEFAULT NOW()

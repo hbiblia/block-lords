@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
 import { useToastStore } from '@/stores/toast';
-import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling, getPlayerBoosts, installBoostToRig, getRigBoosts } from '@/utils/api';
+import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling, getPlayerBoosts, installBoostToRig, getRigBoosts, getRigUpgrades, upgradeRig } from '@/utils/api';
+import { formatCrypto } from '@/utils/format';
 import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
@@ -46,6 +47,7 @@ interface InstalledCooling {
   durability: number;
   name: string;
   cooling_power: number;
+  energy_cost: number;
 }
 
 interface BoostItem {
@@ -72,6 +74,22 @@ interface InstalledBoost {
   tier: string;
 }
 
+interface UpgradeInfo {
+  current_level: number;
+  can_upgrade: boolean;
+  next_cost: number;
+  next_bonus: number;
+  current_bonus: number;
+}
+
+interface RigUpgrades {
+  success: boolean;
+  max_level: number;
+  hashrate: UpgradeInfo;
+  efficiency: UpgradeInfo;
+  thermal: UpgradeInfo;
+}
+
 const props = defineProps<{
   show: boolean;
   rig: RigData | null;
@@ -84,7 +102,7 @@ const emit = defineEmits<{
 
 const loading = ref(false);
 const processing = ref(false);
-const activeTab = ref<'install' | 'repair'>('install');
+const activeTab = ref<'install' | 'repair' | 'upgrade'>('install');
 
 // Inventory cooling items
 const coolingItems = ref<CoolingItem[]>([]);
@@ -96,10 +114,13 @@ const boostItems = ref<BoostItem[]>([]);
 // Installed boosts on this rig
 const installedBoosts = ref<InstalledBoost[]>([]);
 
+// Rig upgrades
+const rigUpgrades = ref<RigUpgrades | null>(null);
+
 // Confirmation dialog
 const showConfirm = ref(false);
 const confirmAction = ref<{
-  type: 'install' | 'repair' | 'delete' | 'boost';
+  type: 'install' | 'repair' | 'delete' | 'boost' | 'upgrade';
   data: {
     coolingId?: string;
     coolingName?: string;
@@ -108,6 +129,10 @@ const confirmAction = ref<{
     boostName?: string;
     boostEffect?: string;
     boostDuration?: number;
+    upgradeType?: 'hashrate' | 'efficiency' | 'thermal';
+    upgradeCost?: number;
+    upgradeBonus?: number;
+    upgradeNewLevel?: number;
   };
 } | null>(null);
 
@@ -174,17 +199,19 @@ async function loadData() {
   loading.value = true;
 
   try {
-    const [inventory, cooling, playerBoosts, rigBoosts] = await Promise.all([
+    const [inventory, cooling, playerBoosts, rigBoosts, upgrades] = await Promise.all([
       getPlayerInventory(authStore.player.id),
       getRigCooling(props.rig.id),
       getPlayerBoosts(authStore.player.id),
       getRigBoosts(props.rig.id),
+      getRigUpgrades(props.rig.id),
     ]);
 
     coolingItems.value = inventory.cooling || [];
     installedCooling.value = cooling || [];
     boostItems.value = playerBoosts?.inventory || [];
     installedBoosts.value = rigBoosts || [];
+    rigUpgrades.value = upgrades?.success ? upgrades : null;
   } catch (e) {
     console.error('Error loading rig data:', e);
   } finally {
@@ -205,6 +232,11 @@ const canAffordRepair = computed(() => (authStore.player?.gamecoin_balance ?? 0)
 // Total cooling power installed
 const totalCoolingPower = computed(() => {
   return installedCooling.value.reduce((sum, c) => sum + (c.cooling_power * c.durability / 100), 0);
+});
+
+// Total energy consumed by cooling systems
+const totalCoolingEnergy = computed(() => {
+  return installedCooling.value.reduce((sum, c) => sum + ((c.energy_cost || 0) * c.durability / 100), 0);
 });
 
 function getTierColor(tier: string) {
@@ -333,6 +365,24 @@ function requestDelete() {
   showConfirm.value = true;
 }
 
+function requestUpgrade(upgradeType: 'hashrate' | 'efficiency' | 'thermal') {
+  if (!rigUpgrades.value) return;
+
+  const info = rigUpgrades.value[upgradeType];
+  if (!info.can_upgrade) return;
+
+  confirmAction.value = {
+    type: 'upgrade',
+    data: {
+      upgradeType,
+      upgradeCost: info.next_cost,
+      upgradeBonus: info.next_bonus,
+      upgradeNewLevel: info.current_level + 1,
+    },
+  };
+  showConfirm.value = true;
+}
+
 async function confirmUse() {
   if (!confirmAction.value || !authStore.player || !props.rig) return;
 
@@ -353,6 +403,8 @@ async function confirmUse() {
       result = await repairRig(authStore.player.id, props.rig.id);
     } else if (type === 'delete') {
       result = await deleteRig(authStore.player.id, props.rig.id);
+    } else if (type === 'upgrade' && data.upgradeType) {
+      result = await upgradeRig(authStore.player.id, props.rig.id, data.upgradeType);
     }
 
     if (result?.success) {
@@ -371,6 +423,10 @@ async function confirmUse() {
         toastStore.boostInstalled(data.boostName, rigName);
       } else if (type === 'repair') {
         toastStore.success(`${rigName} reparado`);
+      } else if (type === 'upgrade' && data.upgradeType) {
+        const upgradeName = data.upgradeType === 'hashrate' ? 'Hashrate' :
+          data.upgradeType === 'efficiency' ? 'Eficiencia' : 'Térmica';
+        toastStore.success(`${rigName}: ${upgradeName} mejorado a Lv${data.upgradeNewLevel}`);
       }
 
       // Close modal after delete
@@ -458,7 +514,10 @@ function closeProcessingModal() {
             <div>
               <div class="text-text-muted text-xs mb-1">{{ t('rigManage.cooling') }}</div>
               <div class="font-mono font-bold text-cyan-400">
-                -{{ totalCoolingPower.toFixed(0) }}°
+                ❄️ -{{ totalCoolingPower.toFixed(0) }}°
+              </div>
+              <div v-if="totalCoolingEnergy > 0" class="font-mono text-xs text-status-warning">
+                ⚡ +{{ totalCoolingEnergy.toFixed(1) }}/t
               </div>
             </div>
             <div>
@@ -495,6 +554,16 @@ function closeProcessingModal() {
             <span>🔧</span>
             <span>{{ t('rigManage.repairTab') }}</span>
           </button>
+          <button
+            @click="activeTab = 'upgrade'"
+            class="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
+            :class="activeTab === 'upgrade'
+              ? 'bg-amber-500/20 text-amber-400'
+              : 'text-text-muted hover:text-white hover:bg-bg-tertiary'"
+          >
+            <span>⬆️</span>
+            <span>{{ t('rigManage.upgradeTab', 'Mejorar') }}</span>
+          </button>
         </div>
 
         <!-- Content -->
@@ -528,7 +597,7 @@ function closeProcessingModal() {
                       <span class="text-lg">❄️</span>
                       <div>
                         <div class="font-medium text-cyan-400 text-sm">{{ getCoolingName(cooling.cooling_item_id, cooling.name) }}</div>
-                        <div class="text-xs text-text-muted">-{{ cooling.cooling_power }}° por tick</div>
+                        <div class="text-xs text-text-muted">❄️ -{{ cooling.cooling_power }}° • ⚡ +{{ (cooling.energy_cost || 0).toFixed(1) }}/t</div>
                       </div>
                     </div>
                     <div class="text-right">
@@ -588,7 +657,7 @@ function closeProcessingModal() {
                       <div>
                         <div class="font-medium" :class="getTierColor(item.tier)">{{ getCoolingName(item.id) }}</div>
                         <div class="text-xs text-text-muted">
-                          -{{ item.cooling_power }}° • +{{ item.energy_cost }}/t • x{{ item.quantity }}
+                          ❄️ -{{ item.cooling_power }}° • ⚡ +{{ item.energy_cost }}/t • x{{ item.quantity }}
                         </div>
                       </div>
                     </div>
@@ -700,6 +769,123 @@ function closeProcessingModal() {
                 </button>
               </div>
             </div>
+
+            <!-- Upgrade Tab -->
+            <div v-show="activeTab === 'upgrade'" class="space-y-4">
+              <!-- Warning if rig is active -->
+              <div v-if="rig.is_active" class="p-3 rounded-lg bg-status-warning/10 border border-status-warning/30 text-status-warning text-sm">
+                {{ t('rigManage.stopToUpgrade', 'Detén el rig para mejorarlo') }}
+              </div>
+
+              <!-- No upgrades available -->
+              <div v-else-if="!rigUpgrades" class="text-center py-8">
+                <div class="text-4xl mb-3 opacity-50">⬆️</div>
+                <p class="text-text-muted text-sm">{{ t('rigManage.upgradesNotAvailable', 'Mejoras no disponibles') }}</p>
+              </div>
+
+              <!-- Upgrades available -->
+              <template v-else>
+                <div class="text-center mb-4">
+                  <p class="text-text-muted text-sm">{{ t('rigManage.upgradeDescription', 'Mejora tu rig con crypto para aumentar su rendimiento') }}</p>
+                  <p class="text-xs text-amber-400 mt-1">Max nivel: {{ rigUpgrades.max_level }}</p>
+                </div>
+
+                <!-- Hashrate Upgrade -->
+                <div class="p-4 rounded-lg border border-amber-500/30 bg-amber-500/5">
+                  <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                      <span class="text-2xl">⚡</span>
+                      <div>
+                        <h4 class="font-medium text-amber-400">{{ t('rigManage.upgradeHashrate', 'Hashrate') }}</h4>
+                        <p class="text-xs text-text-muted">{{ t('rigManage.upgradeHashrateDesc', 'Aumenta la velocidad de minado') }}</p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <div class="font-mono text-amber-400">Lv {{ rigUpgrades.hashrate.current_level }}</div>
+                      <div v-if="rigUpgrades.hashrate.current_bonus > 0" class="text-xs text-status-success">+{{ rigUpgrades.hashrate.current_bonus }}%</div>
+                    </div>
+                  </div>
+                  <div v-if="rigUpgrades.hashrate.can_upgrade" class="flex items-center justify-between">
+                    <div class="text-sm text-text-muted">
+                      → Lv {{ rigUpgrades.hashrate.current_level + 1 }}: <span class="text-status-success">+{{ rigUpgrades.hashrate.next_bonus }}%</span>
+                    </div>
+                    <button
+                      @click="requestUpgrade('hashrate')"
+                      :disabled="rig.is_active || processing || (authStore.player?.crypto_balance ?? 0) < rigUpgrades.hashrate.next_cost"
+                      class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-amber-500 text-black hover:bg-amber-400 flex items-center gap-1"
+                    >
+                      <span>💎</span> {{ formatCrypto(rigUpgrades.hashrate.next_cost) }}
+                    </button>
+                  </div>
+                  <div v-else class="text-center text-xs text-text-muted">{{ t('rigManage.maxLevelReached', 'Nivel máximo alcanzado') }}</div>
+                </div>
+
+                <!-- Efficiency Upgrade -->
+                <div class="p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
+                  <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                      <span class="text-2xl">🔋</span>
+                      <div>
+                        <h4 class="font-medium text-emerald-400">{{ t('rigManage.upgradeEfficiency', 'Eficiencia') }}</h4>
+                        <p class="text-xs text-text-muted">{{ t('rigManage.upgradeEfficiencyDesc', 'Reduce el consumo de energía') }}</p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <div class="font-mono text-emerald-400">Lv {{ rigUpgrades.efficiency.current_level }}</div>
+                      <div v-if="rigUpgrades.efficiency.current_bonus > 0" class="text-xs text-status-success">-{{ rigUpgrades.efficiency.current_bonus }}%</div>
+                    </div>
+                  </div>
+                  <div v-if="rigUpgrades.efficiency.can_upgrade" class="flex items-center justify-between">
+                    <div class="text-sm text-text-muted">
+                      → Lv {{ rigUpgrades.efficiency.current_level + 1 }}: <span class="text-status-success">-{{ rigUpgrades.efficiency.next_bonus }}%</span>
+                    </div>
+                    <button
+                      @click="requestUpgrade('efficiency')"
+                      :disabled="rig.is_active || processing || (authStore.player?.crypto_balance ?? 0) < rigUpgrades.efficiency.next_cost"
+                      class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-emerald-500 text-black hover:bg-emerald-400 flex items-center gap-1"
+                    >
+                      <span>💎</span> {{ formatCrypto(rigUpgrades.efficiency.next_cost) }}
+                    </button>
+                  </div>
+                  <div v-else class="text-center text-xs text-text-muted">{{ t('rigManage.maxLevelReached', 'Nivel máximo alcanzado') }}</div>
+                </div>
+
+                <!-- Thermal Upgrade -->
+                <div class="p-4 rounded-lg border border-cyan-500/30 bg-cyan-500/5">
+                  <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                      <span class="text-2xl">❄️</span>
+                      <div>
+                        <h4 class="font-medium text-cyan-400">{{ t('rigManage.upgradeThermal', 'Térmica') }}</h4>
+                        <p class="text-xs text-text-muted">{{ t('rigManage.upgradeThermalDesc', 'Reduce la temperatura base') }}</p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <div class="font-mono text-cyan-400">Lv {{ rigUpgrades.thermal.current_level }}</div>
+                      <div v-if="rigUpgrades.thermal.current_bonus > 0" class="text-xs text-status-success">-{{ rigUpgrades.thermal.current_bonus }}°C</div>
+                    </div>
+                  </div>
+                  <div v-if="rigUpgrades.thermal.can_upgrade" class="flex items-center justify-between">
+                    <div class="text-sm text-text-muted">
+                      → Lv {{ rigUpgrades.thermal.current_level + 1 }}: <span class="text-status-success">-{{ rigUpgrades.thermal.next_bonus }}°C</span>
+                    </div>
+                    <button
+                      @click="requestUpgrade('thermal')"
+                      :disabled="rig.is_active || processing || (authStore.player?.crypto_balance ?? 0) < rigUpgrades.thermal.next_cost"
+                      class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-cyan-500 text-black hover:bg-cyan-400 flex items-center gap-1"
+                    >
+                      <span>💎</span> {{ formatCrypto(rigUpgrades.thermal.next_cost) }}
+                    </button>
+                  </div>
+                  <div v-else class="text-center text-xs text-text-muted">{{ t('rigManage.maxLevelReached', 'Nivel máximo alcanzado') }}</div>
+                </div>
+
+                <!-- Current crypto balance -->
+                <div class="text-center text-sm text-text-muted mt-4">
+                  {{ t('rigManage.yourCrypto', 'Tu crypto') }}: <span class="text-amber-400 font-mono">💎 {{ formatCrypto(authStore.player?.crypto_balance ?? 0) }}</span>
+                </div>
+              </template>
+            </div>
           </template>
         </div>
       </div>
@@ -712,10 +898,10 @@ function closeProcessingModal() {
         <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
           <div class="text-center mb-4">
             <div class="text-4xl mb-3">
-              {{ confirmAction.type === 'install' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'repair' ? '🔧' : '🗑️' }}
+              {{ confirmAction.type === 'install' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'repair' ? '🔧' : confirmAction.type === 'upgrade' ? '⬆️' : '🗑️' }}
             </div>
             <h3 class="text-lg font-bold mb-1">
-              {{ confirmAction.type === 'install' ? t('rigManage.confirmInstall') : confirmAction.type === 'boost' ? t('rigManage.confirmApplyBoost', 'Aplicar Boost') : confirmAction.type === 'repair' ? t('rigManage.confirmRepair') : t('rigManage.confirmDelete') }}
+              {{ confirmAction.type === 'install' ? t('rigManage.confirmInstall') : confirmAction.type === 'boost' ? t('rigManage.confirmApplyBoost', 'Aplicar Boost') : confirmAction.type === 'repair' ? t('rigManage.confirmRepair') : confirmAction.type === 'upgrade' ? t('rigManage.confirmUpgrade', 'Confirmar Mejora') : t('rigManage.confirmDelete') }}
             </h3>
             <p class="text-text-muted text-sm">{{ t('inventory.confirm.areYouSure') }}</p>
           </div>
@@ -755,6 +941,22 @@ function closeProcessingModal() {
                 <span class="font-bold text-status-success">{{ Math.max(0, maxCondition - 5) }}%</span>
               </div>
             </template>
+            <template v-else-if="confirmAction.type === 'upgrade'">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">{{ t('rigManage.upgradeType', 'Mejora') }}</span>
+                <span class="font-medium text-amber-400">
+                  {{ confirmAction.data.upgradeType === 'hashrate' ? 'Hashrate' : confirmAction.data.upgradeType === 'efficiency' ? 'Eficiencia' : 'Térmica' }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">{{ t('rigManage.newLevel', 'Nuevo nivel') }}</span>
+                <span class="font-bold text-amber-400">Lv {{ confirmAction.data.upgradeNewLevel }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-text-muted text-sm">{{ t('rigManage.cost') }}</span>
+                <span class="font-bold text-amber-400">💎 {{ formatCrypto(confirmAction.data.upgradeCost ?? 0) }}</span>
+              </div>
+            </template>
             <template v-else-if="confirmAction.type === 'delete'">
               <p class="text-sm text-status-danger">{{ t('rigManage.deleteConfirmText') }}</p>
             </template>
@@ -777,7 +979,9 @@ function closeProcessingModal() {
                   ? 'bg-status-warning text-white hover:bg-status-warning/80'
                   : confirmAction.type === 'boost'
                     ? 'bg-purple-500 text-white hover:bg-purple-400'
-                    : 'bg-cyan-500 text-white hover:bg-cyan-400'"
+                    : confirmAction.type === 'upgrade'
+                      ? 'bg-amber-500 text-black hover:bg-amber-400'
+                      : 'bg-cyan-500 text-white hover:bg-cyan-400'"
             >
               {{ t('common.confirm') }}
             </button>

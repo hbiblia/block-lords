@@ -246,11 +246,59 @@ function getRigName(id: string): string {
   return playerRig?.rig.name ?? id;
 }
 
+// Upgrade bonus lookup tables (matching database upgrade_costs)
+const UPGRADE_BONUSES = {
+  hashrate: { 1: 0, 2: 10, 3: 20, 4: 35, 5: 50 },    // % increase
+  efficiency: { 1: 0, 2: 5, 3: 10, 4: 15, 5: 20 },   // % decrease
+  thermal: { 1: 0, 2: 2, 3: 4, 4: 6, 5: 8 },         // °C decrease
+} as const;
+
+// Get upgraded hashrate (base * (1 + bonus%))
+function getUpgradedHashrate(playerRig: typeof miningStore.rigs[0]): number {
+  const level = playerRig.hashrate_level ?? 1;
+  const bonus = UPGRADE_BONUSES.hashrate[level as keyof typeof UPGRADE_BONUSES.hashrate] ?? 0;
+  return Math.round(playerRig.rig.hashrate * (1 + bonus / 100));
+}
+
+// Get upgraded power consumption (base * (1 - bonus%))
+function getUpgradedPower(playerRig: typeof miningStore.rigs[0]): number {
+  const level = playerRig.efficiency_level ?? 1;
+  const bonus = UPGRADE_BONUSES.efficiency[level as keyof typeof UPGRADE_BONUSES.efficiency] ?? 0;
+  return playerRig.rig.power_consumption * (1 - bonus / 100);
+}
+
+// Get thermal bonus (°C reduction)
+function getThermalBonus(playerRig: typeof miningStore.rigs[0]): number {
+  const level = playerRig.thermal_level ?? 1;
+  return UPGRADE_BONUSES.thermal[level as keyof typeof UPGRADE_BONUSES.thermal] ?? 0;
+}
+
 function getTempColor(temp: number): string {
   if (temp >= 80) return 'text-status-danger';
   if (temp >= 60) return 'text-status-warning';
   if (temp >= 40) return 'text-yellow-400';
   return 'text-status-success';
+}
+
+// Get total cooling energy cost for a rig (weighted by durability)
+function getRigCoolingEnergy(rigId: string): number {
+  const cooling = rigCooling.value[rigId];
+  if (!cooling || cooling.length === 0) return 0;
+  return cooling.reduce((sum: number, c: any) => sum + (c.energy_cost * c.durability / 100), 0);
+}
+
+// Get total cooling power for a rig (sum of all cooling items, weighted by durability)
+function getRigTotalCoolingPower(rigId: string): number {
+  const cooling = rigCooling.value[rigId];
+  if (!cooling || cooling.length === 0) return 0;
+  return cooling.reduce((sum: number, c: any) => sum + (c.cooling_power * c.durability / 100), 0);
+}
+
+// Check if any cooling is degraded
+function isAnyCoolingDegraded(rigId: string): boolean {
+  const cooling = rigCooling.value[rigId];
+  if (!cooling || cooling.length === 0) return false;
+  return cooling.some((c: any) => miningStore.isCoolingDegraded(c.durability));
 }
 
 function getTempBarColor(temp: number): string {
@@ -548,9 +596,19 @@ onUnmounted(() => {
                     {{ getRigName(playerRig.rig.id) }}
                   </h3>
                 </div>
-                <span class="text-[11px] text-text-muted uppercase px-2 py-0.5 bg-bg-tertiary/50 rounded">
-                  {{ playerRig.rig.tier }}
-                </span>
+                <div class="flex items-center gap-2">
+                  <!-- Upgrade levels indicator -->
+                  <div v-if="(playerRig.hashrate_level ?? 1) > 1 || (playerRig.efficiency_level ?? 1) > 1 || (playerRig.thermal_level ?? 1) > 1"
+                       class="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-purple-500/20 rounded"
+                       :title="`⚡${playerRig.hashrate_level ?? 1} 💡${playerRig.efficiency_level ?? 1} ❄️${playerRig.thermal_level ?? 1}`">
+                    <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400">⚡{{ playerRig.hashrate_level }}</span>
+                    <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">💡{{ playerRig.efficiency_level }}</span>
+                    <span v-if="(playerRig.thermal_level ?? 1) > 1" class="text-cyan-400">❄️{{ playerRig.thermal_level }}</span>
+                  </div>
+                  <span class="text-[11px] text-text-muted uppercase px-2 py-0.5 bg-bg-tertiary/50 rounded">
+                    {{ playerRig.rig.tier }}
+                  </span>
+                </div>
               </div>
 
               <!-- Hashrate -->
@@ -568,7 +626,10 @@ onUnmounted(() => {
                 >
                   {{ playerRig.is_active ? Math.round(miningStore.getRigEffectiveHashrate(playerRig)).toLocaleString() : '0' }}
                 </span>
-                <span class="text-sm text-text-muted">/ {{ playerRig.rig.hashrate.toLocaleString() }} H/s</span>
+                <span class="text-sm text-text-muted">
+                  / {{ getUpgradedHashrate(playerRig).toLocaleString() }} H/s
+                  <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400 text-xs">(+{{ UPGRADE_BONUSES.hashrate[playerRig.hashrate_level as keyof typeof UPGRADE_BONUSES.hashrate] }}%)</span>
+                </span>
                 <span
                   v-if="playerRig.is_active && miningStore.getRigHashrateBoostPercent(playerRig) > 0"
                   class="text-xs text-status-success font-medium"
@@ -580,19 +641,21 @@ onUnmounted(() => {
               <!-- Stats row -->
               <div class="flex items-center gap-4 text-xs text-text-muted mb-3">
                 <span class="flex items-center gap-1">
-                  <span class="text-status-warning">⚡</span>{{ playerRig.rig.power_consumption }}/t
+                  <span class="text-status-warning">⚡</span>{{ (getUpgradedPower(playerRig) + getRigCoolingEnergy(playerRig.id)).toFixed(0) }}/t
+                  <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">(-{{ UPGRADE_BONUSES.efficiency[playerRig.efficiency_level as keyof typeof UPGRADE_BONUSES.efficiency] }}%)</span>
                   <span v-if="miningStore.getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger">(+{{ miningStore.getPowerPenaltyPercent(playerRig) }}%)</span>
                 </span>
                 <span class="flex items-center gap-1">
                   <span class="text-accent-tertiary">📡</span>{{ playerRig.rig.internet_consumption }}/t
                 </span>
-                <span v-if="rigCooling[playerRig.id]?.length > 0" class="flex items-center gap-1">
-                  <span :class="miningStore.isCoolingDegraded(rigCooling[playerRig.id][0].durability) ? 'text-status-warning' : 'text-cyan-400'">❄️</span>
-                  <span :class="miningStore.isCoolingDegraded(rigCooling[playerRig.id][0].durability) ? 'text-status-warning' : ''">
-                    {{ rigCooling[playerRig.id][0].durability.toFixed(0) }}%
+                <span v-if="rigCooling[playerRig.id]?.length > 0 || getThermalBonus(playerRig) > 0" class="flex items-center gap-1">
+                  <span :class="isAnyCoolingDegraded(playerRig.id) ? 'text-status-warning' : 'text-cyan-400'">❄️</span>
+                  <span :class="isAnyCoolingDegraded(playerRig.id) ? 'text-status-warning' : 'text-cyan-400'">
+                    -{{ (getRigTotalCoolingPower(playerRig.id) + getThermalBonus(playerRig)).toFixed(0) }}°
                   </span>
-                  <span v-if="miningStore.isCoolingDegraded(rigCooling[playerRig.id][0].durability)" class="text-status-warning text-[10px]">
-                    ({{ miningStore.getCoolingEfficiencyPercent(rigCooling[playerRig.id][0].durability) }}% eff)
+                  <span v-if="getThermalBonus(playerRig) > 0" class="text-cyan-300 text-[10px]">(⬆{{ getThermalBonus(playerRig) }}°)</span>
+                  <span v-if="isAnyCoolingDegraded(playerRig.id)" class="text-status-warning text-[10px]">
+                    ⚠️
                   </span>
                 </span>
                 <span v-if="rigBoosts[playerRig.id]?.length > 0" class="flex items-center gap-1" :title="rigBoosts[playerRig.id].map((b: any) => b.name).join(', ')">

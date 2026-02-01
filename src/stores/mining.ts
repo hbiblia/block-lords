@@ -16,6 +16,7 @@ interface Rig {
   internet_consumption: number;
   tier: string;
   repair_cost: number;
+  max_upgrade_level?: number;
 }
 
 interface PlayerRig {
@@ -26,6 +27,9 @@ interface PlayerRig {
   activated_at: string | null;
   max_condition?: number;
   times_repaired?: number;
+  hashrate_level?: number;
+  efficiency_level?: number;
+  thermal_level?: number;
   rig: Rig;
 }
 
@@ -60,6 +64,7 @@ interface CoolingItem {
   durability: number;
   name: string;
   cooling_power: number;
+  energy_cost: number;
 }
 
 interface ActiveBoost {
