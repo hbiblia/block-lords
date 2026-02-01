@@ -4030,7 +4030,23 @@ DECLARE
   v_package crypto_packages%ROWTYPE;
   v_total_crypto NUMERIC;
   v_purchase_id UUID;
+  v_existing_tx UUID;
 BEGIN
+  -- Verificar que tx_hash no haya sido usado antes (previene doble gasto)
+  IF p_tx_hash IS NOT NULL THEN
+    SELECT id INTO v_existing_tx
+    FROM crypto_purchases
+    WHERE tx_hash = p_tx_hash
+    LIMIT 1;
+
+    IF v_existing_tx IS NOT NULL THEN
+      RETURN json_build_object(
+        'success', false,
+        'error', 'Transacción ya utilizada'
+      );
+    END IF;
+  END IF;
+
   -- Obtener el paquete
   SELECT * INTO v_package
   FROM crypto_packages

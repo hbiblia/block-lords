@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMarketStore } from '@/stores/market';
+import { useRoninWallet } from '@/composables/useRoninWallet';
 import { formatGamecoin, formatCrypto, formatNumber } from '@/utils/format';
 
 // Types for items
@@ -58,6 +59,7 @@ const { t } = useI18n();
 
 const authStore = useAuthStore();
 const marketStore = useMarketStore();
+const roninWallet = useRoninWallet();
 
 const props = defineProps<{
   show: boolean;
@@ -120,6 +122,7 @@ const confirmAction = ref<{
 const showProcessingModal = ref(false);
 const processingStatus = ref<'processing' | 'success' | 'error'>('processing');
 const processingError = ref<string>('');
+const processingStep = ref<'connecting' | 'sending' | 'confirming' | 'crediting' | ''>('');
 
 // Use store data
 const loading = computed(() => marketStore.loading);
@@ -411,13 +414,67 @@ function requestBuyCryptoPackage(pkg: CryptoPackageType) {
 
 async function buyCryptoPackage(packageId: string) {
   if (!authStore.player) return;
+
+  // Get package details for the price
+  const pkg = cryptoPackages.value.find(p => p.id === packageId);
+  if (!pkg) {
+    processingStatus.value = 'error';
+    processingError.value = t('market.processing.packageNotFound');
+    showProcessingModal.value = true;
+    return;
+  }
+
   showProcessingModal.value = true;
   processingStatus.value = 'processing';
   processingError.value = '';
 
-  // TODO: Integrate with Ronin wallet for actual RON payment
-  // For now, we simulate the purchase
-  const result = await marketStore.buyCryptoPackage(packageId);
+  // Step 1: Connect wallet if not connected
+  if (!roninWallet.isConnected.value) {
+    processingStep.value = 'connecting';
+
+    if (!roninWallet.isInstalled.value) {
+      processingStatus.value = 'error';
+      processingError.value = t('market.wallet.notInstalled');
+      processingStep.value = '';
+      return;
+    }
+
+    const connected = await roninWallet.connect();
+    if (!connected) {
+      processingStatus.value = 'error';
+      processingError.value = roninWallet.error.value ?? t('market.wallet.connectionFailed');
+      processingStep.value = '';
+      return;
+    }
+  }
+
+  // Step 2: Send RON transaction
+  processingStep.value = 'sending';
+  const sendResult = await roninWallet.sendRON(pkg.ron_price);
+
+  if (!sendResult.success || !sendResult.txHash) {
+    processingStatus.value = 'error';
+    processingError.value = sendResult.error ?? t('market.wallet.transactionFailed');
+    processingStep.value = '';
+    return;
+  }
+
+  // Step 3: Wait for transaction confirmation
+  processingStep.value = 'confirming';
+  const confirmResult = await roninWallet.waitForTransaction(sendResult.txHash);
+
+  if (!confirmResult.confirmed) {
+    processingStatus.value = 'error';
+    processingError.value = confirmResult.error ?? t('market.wallet.confirmationFailed');
+    processingStep.value = '';
+    return;
+  }
+
+  // Step 4: Credit crypto to player account
+  processingStep.value = 'crediting';
+  const result = await marketStore.buyCryptoPackage(packageId, sendResult.txHash);
+
+  processingStep.value = '';
 
   if (result.success) {
     processingStatus.value = 'success';
@@ -432,6 +489,7 @@ function closeProcessingModal() {
   showProcessingModal.value = false;
   processingStatus.value = 'processing';
   processingError.value = '';
+  processingStep.value = '';
 }
 
 async function confirmPurchase() {
@@ -1075,8 +1133,27 @@ watch(() => props.show, (newVal) => {
               <div class="absolute inset-0 border-4 border-accent-primary/20 rounded-full"></div>
               <div class="absolute inset-0 border-4 border-accent-primary border-t-transparent rounded-full animate-spin"></div>
             </div>
-            <h3 class="text-lg font-bold mb-2">{{ t('market.processing.title') }}</h3>
-            <p class="text-text-muted text-sm">{{ t('market.processing.wait') }}</p>
+            <h3 class="text-lg font-bold mb-2">
+              {{ processingStep === 'connecting' ? t('market.wallet.connecting') :
+                 processingStep === 'sending' ? t('market.wallet.sending') :
+                 processingStep === 'confirming' ? t('market.wallet.confirming') :
+                 processingStep === 'crediting' ? t('market.wallet.crediting') :
+                 t('market.processing.title') }}
+            </h3>
+            <p class="text-text-muted text-sm">
+              {{ processingStep === 'connecting' ? t('market.wallet.connectingDesc') :
+                 processingStep === 'sending' ? t('market.wallet.sendingDesc') :
+                 processingStep === 'confirming' ? t('market.wallet.confirmingDesc') :
+                 processingStep === 'crediting' ? t('market.wallet.creditingDesc') :
+                 t('market.processing.wait') }}
+            </p>
+            <!-- Wallet steps indicator -->
+            <div v-if="processingStep" class="mt-4 flex justify-center gap-2">
+              <div class="w-2 h-2 rounded-full" :class="processingStep ? 'bg-accent-primary' : 'bg-bg-tertiary'"></div>
+              <div class="w-2 h-2 rounded-full" :class="['sending', 'confirming', 'crediting'].includes(processingStep) ? 'bg-accent-primary' : 'bg-bg-tertiary'"></div>
+              <div class="w-2 h-2 rounded-full" :class="['confirming', 'crediting'].includes(processingStep) ? 'bg-accent-primary' : 'bg-bg-tertiary'"></div>
+              <div class="w-2 h-2 rounded-full" :class="processingStep === 'crediting' ? 'bg-accent-primary' : 'bg-bg-tertiary'"></div>
+            </div>
           </div>
 
           <!-- Success State -->
@@ -1105,12 +1182,21 @@ watch(() => props.show, (newVal) => {
             </div>
             <h3 class="text-lg font-bold text-status-danger mb-2">{{ t('market.processing.error') }}</h3>
             <p class="text-text-muted text-sm mb-4">{{ processingError }}</p>
-            <button
-              @click="closeProcessingModal"
-              class="w-full py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
-            >
-              {{ t('common.close') }}
-            </button>
+            <div class="flex flex-col gap-2">
+              <button
+                v-if="processingError === t('market.wallet.notInstalled')"
+                @click="roninWallet.openInstallPage()"
+                class="w-full py-2.5 rounded-lg font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+              >
+                {{ t('market.wallet.install') }}
+              </button>
+              <button
+                @click="closeProcessingModal"
+                class="w-full py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+              >
+                {{ t('common.close') }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
