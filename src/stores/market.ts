@@ -184,9 +184,12 @@ export const useMarketStore = defineStore('market', () => {
     return boostQuantities.value[id] || 0;
   }
 
-  // Load catalogs (only once per session)
+  // Track if we've already fetched from server this session
+  const catalogsFetched = ref(false);
+
+  // Load catalogs (only fetches from server once per session unless forced)
   async function loadCatalogs(force = false) {
-    if (catalogsLoaded.value && !force) return;
+    if (catalogsFetched.value && !force) return;
 
     loadingCatalogs.value = true;
     try {
@@ -203,7 +206,7 @@ export const useMarketStore = defineStore('market', () => {
       prepaidCards.value = cardsRes.data ?? [];
       boostItems.value = boostsRes.data ?? [];
       cryptoPackages.value = cryptoRes.data ?? [];
-      catalogsLoaded.value = true;
+      catalogsFetched.value = true;
 
       // Save to localStorage cache
       saveToCache({
