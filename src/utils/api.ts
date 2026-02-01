@@ -593,8 +593,9 @@ export async function getPendingBlocksCount(playerId: string) {
   return data;
 }
 
-export async function claimBlock(pendingId: string) {
+export async function claimBlock(playerId: string, pendingId: string) {
   const { data, error } = await supabase.rpc('claim_block', {
+    p_player_id: playerId,
     p_pending_id: pendingId,
   });
 
@@ -602,8 +603,10 @@ export async function claimBlock(pendingId: string) {
   return data;
 }
 
-export async function claimAllBlocks() {
-  const { data, error } = await supabase.rpc('claim_all_blocks');
+export async function claimAllBlocks(playerId: string) {
+  const { data, error } = await supabase.rpc('claim_all_blocks', {
+    p_player_id: playerId,
+  });
 
   if (error) throw error;
   return data;

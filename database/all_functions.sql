@@ -1631,14 +1631,14 @@ BEGIN
       RETURN;
     END IF;
 
-    UPDATE players
-    SET crypto_balance = crypto_balance + v_reward,
-        blocks_mined = COALESCE(blocks_mined, 0) + 1,
-        total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_reward
-    WHERE id = v_winner_player_id;
+    -- Crear pending_block para que el jugador lo reclame
+    INSERT INTO pending_blocks (block_id, player_id, reward, is_premium)
+    VALUES (v_block.id, v_winner_player_id, v_reward, v_is_premium);
 
-    INSERT INTO transactions (player_id, type, amount, currency, description)
-    VALUES (v_winner_player_id, 'mining_reward', v_reward, 'crypto', 'Recompensa por minar bloque #' || v_block.height);
+    -- Actualizar contador de bloques minados (para leaderboard)
+    UPDATE players
+    SET blocks_mined = COALESCE(blocks_mined, 0) + 1
+    WHERE id = v_winner_player_id;
 
     PERFORM update_reputation(v_winner_player_id, 0.1, 'block_mined');
 
@@ -4429,50 +4429,60 @@ $$;
 -- FUNCIONES DE BLOQUES
 -- =====================================================
 
+-- Drop old function signatures (necesario si cambia el tipo de retorno)
+DROP FUNCTION IF EXISTS get_pending_blocks(UUID) CASCADE;
+DROP FUNCTION IF EXISTS claim_block(UUID) CASCADE;
+DROP FUNCTION IF EXISTS claim_block(UUID, UUID) CASCADE;
+DROP FUNCTION IF EXISTS claim_all_blocks() CASCADE;
+DROP FUNCTION IF EXISTS claim_all_blocks(UUID) CASCADE;
+
 CREATE OR REPLACE FUNCTION get_pending_blocks(p_player_id UUID)
-RETURNS TABLE(id UUID, block_id UUID, block_height INTEGER, reward DECIMAL, created_at TIMESTAMPTZ)
+RETURNS JSON
 LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  RETURN QUERY SELECT pb.id, pb.block_id, b.height, pb.reward, pb.created_at
-  FROM pending_blocks pb JOIN blocks b ON b.id = pb.block_id
-  WHERE pb.player_id = p_player_id AND pb.claimed = false ORDER BY pb.created_at DESC;
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT pb.id, pb.block_id, b.height as block_height, pb.reward, pb.is_premium, pb.created_at
+      FROM pending_blocks pb
+      JOIN blocks b ON b.id = pb.block_id
+      WHERE pb.player_id = p_player_id AND pb.claimed = false
+      ORDER BY pb.created_at DESC
+    ) t
+  );
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION claim_block(p_pending_id UUID)
+CREATE OR REPLACE FUNCTION claim_block(p_player_id UUID, p_pending_id UUID)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_pending pending_blocks%ROWTYPE; v_player_id UUID;
+DECLARE v_pending pending_blocks%ROWTYPE;
 BEGIN
-  v_player_id := auth.uid();
-  IF v_player_id IS NULL THEN RETURN json_build_object('success', false, 'error', 'No autenticado'); END IF;
-  SELECT * INTO v_pending FROM pending_blocks WHERE id = p_pending_id AND player_id = v_player_id AND claimed = false;
+  IF p_player_id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Player ID requerido'); END IF;
+  SELECT * INTO v_pending FROM pending_blocks WHERE id = p_pending_id AND player_id = p_player_id AND claimed = false;
   IF v_pending.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Bloque no encontrado'); END IF;
   UPDATE pending_blocks SET claimed = true, claimed_at = NOW() WHERE id = p_pending_id;
   UPDATE players SET crypto_balance = crypto_balance + v_pending.reward,
-    blocks_mined = COALESCE(blocks_mined, 0) + 1,
-    total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_pending.reward WHERE id = v_player_id;
+    total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_pending.reward WHERE id = p_player_id;
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (v_player_id, 'block_claim', v_pending.reward, 'crypto', 'Bloque reclamado');
+  VALUES (p_player_id, 'block_claim', v_pending.reward, 'crypto', 'Bloque reclamado #' || (SELECT height FROM blocks WHERE id = v_pending.block_id));
   RETURN json_build_object('success', true, 'reward', v_pending.reward, 'block_id', v_pending.block_id);
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION claim_all_blocks()
+CREATE OR REPLACE FUNCTION claim_all_blocks(p_player_id UUID)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_player_id UUID; v_total_reward DECIMAL := 0; v_count INTEGER := 0; v_pending RECORD;
+DECLARE v_total_reward DECIMAL := 0; v_count INTEGER := 0; v_pending RECORD;
 BEGIN
-  v_player_id := auth.uid();
-  IF v_player_id IS NULL THEN RETURN json_build_object('success', false, 'error', 'No autenticado'); END IF;
-  FOR v_pending IN SELECT id, reward FROM pending_blocks WHERE player_id = v_player_id AND claimed = false LOOP
+  IF p_player_id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Player ID requerido'); END IF;
+  FOR v_pending IN SELECT id, reward FROM pending_blocks WHERE player_id = p_player_id AND claimed = false LOOP
     v_total_reward := v_total_reward + v_pending.reward; v_count := v_count + 1;
     UPDATE pending_blocks SET claimed = true, claimed_at = NOW() WHERE id = v_pending.id;
   END LOOP;
   IF v_count = 0 THEN RETURN json_build_object('success', false, 'error', 'No hay bloques pendientes'); END IF;
   UPDATE players SET crypto_balance = crypto_balance + v_total_reward,
-    blocks_mined = COALESCE(blocks_mined, 0) + v_count,
-    total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_total_reward WHERE id = v_player_id;
+    total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_total_reward WHERE id = p_player_id;
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (v_player_id, 'block_claim_all', v_total_reward, 'crypto', 'Reclamados ' || v_count || ' bloques');
+  VALUES (p_player_id, 'block_claim_all', v_total_reward, 'crypto', 'Reclamados ' || v_count || ' bloques');
   RETURN json_build_object('success', true, 'total_reward', v_total_reward, 'blocks_claimed', v_count);
 END;
 $$;
@@ -4844,5 +4854,6 @@ $$;
 
 GRANT EXECUTE ON FUNCTION upgrade_rig TO authenticated;
 GRANT EXECUTE ON FUNCTION get_pending_blocks TO authenticated;
+GRANT EXECUTE ON FUNCTION get_pending_blocks_count TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_block TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_all_blocks TO authenticated;

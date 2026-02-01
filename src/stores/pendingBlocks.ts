@@ -59,18 +59,23 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
   }
 
   async function claim(pendingId: string) {
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) {
+      error.value = 'No autenticado';
+      return null;
+    }
+
     claiming.value = true;
     error.value = null;
 
     try {
-      const result = await claimBlock(pendingId);
+      const result = await claimBlock(authStore.player.id, pendingId);
 
       if (result.success) {
         // Remover de la lista local
         pendingBlocks.value = pendingBlocks.value.filter(b => b.id !== pendingId);
 
         // Actualizar balance del jugador
-        const authStore = useAuthStore();
         await authStore.fetchPlayer();
 
         // Toast de éxito
@@ -92,18 +97,23 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
   }
 
   async function claimAll() {
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) {
+      error.value = 'No autenticado';
+      return null;
+    }
+
     claiming.value = true;
     error.value = null;
 
     try {
-      const result = await claimAllBlocks();
+      const result = await claimAllBlocks(authStore.player.id);
 
       if (result.success) {
         // Limpiar lista local
         pendingBlocks.value = [];
 
         // Actualizar balance del jugador
-        const authStore = useAuthStore();
         await authStore.fetchPlayer();
 
         // Toast de éxito
