@@ -56,7 +56,6 @@ const activeBoosts = computed(() => miningStore.activeBoosts);
 const slotInfo = computed(() => miningStore.slotInfo);
 const loading = computed(() => miningStore.loading);
 const dataLoaded = computed(() => miningStore.dataLoaded);
-const refreshing = computed(() => miningStore.refreshing);
 const totalHashrate = computed(() => miningStore.totalHashrate);
 const effectiveHashrate = computed(() => miningStore.effectiveHashrate);
 const miningChance = computed(() => miningStore.miningChance);

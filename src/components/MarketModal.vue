@@ -124,7 +124,6 @@ const processingError = ref<string>('');
 // Use store data
 const loading = computed(() => marketStore.loading);
 const buying = computed(() => marketStore.buying);
-const refreshing = computed(() => marketStore.refreshing);
 const catalogsLoaded = computed(() => marketStore.catalogsLoaded);
 
 // Disable purchases only while buying (refreshing is silent)

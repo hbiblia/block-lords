@@ -197,7 +197,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Footer -->
-    <footer class="border-t border-border/30 py-6 text-center pb-20">
+    <footer class="border-t border-border/30 py-6 text-center">
       <p class="text-text-muted text-sm">Block Lords &copy; 2025</p>
     </footer>
 
