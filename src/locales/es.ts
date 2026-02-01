@@ -830,6 +830,7 @@ export default {
       title: 'Beneficios',
       blockBonus: '+50% Crypto por bloque',
       withdrawalFee: 'Solo 10% comision de retiro',
+      resourceBonus: '+500 Max energia e internet',
     },
     subscribe: 'Suscribirse',
     extend: 'Extender',

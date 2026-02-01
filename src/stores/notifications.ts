@@ -11,7 +11,9 @@ export type NotificationType =
   | 'cooling_expired'
   | 'low_energy'
   | 'low_internet'
-  | 'welcome_back';
+  | 'welcome_back'
+  | 'rig_turned_on'
+  | 'rig_turned_off';
 
 export interface GameNotification {
   id: string;

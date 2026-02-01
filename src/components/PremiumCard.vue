@@ -138,6 +138,18 @@ onMounted(() => {
             <p class="text-xs text-text-muted">10% vs 25%</p>
           </div>
         </div>
+
+        <div class="flex items-center gap-3 bg-bg-tertiary rounded-lg p-3">
+          <div class="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div>
+            <p class="font-medium">{{ t('premium.benefits.resourceBonus') }}</p>
+            <p class="text-xs text-text-muted">+500 max energy & internet</p>
+          </div>
+        </div>
       </div>
 
       <!-- Error -->

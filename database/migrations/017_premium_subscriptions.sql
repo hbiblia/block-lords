@@ -1,12 +1,13 @@
 -- =====================================================
 -- SISTEMA DE SUSCRIPCIÓN PREMIUM
--- Premium da +50% crypto por bloque y 10% fee de retiro
+-- Premium da +50% crypto por bloque, 10% fee de retiro, +500 max energy/internet
 -- =====================================================
 
 -- Configuración del premium
--- PREMIUM_PRICE: 2.5 RON/mes
+-- PREMIUM_PRICE: 5 RON/mes
 -- PREMIUM_BLOCK_BONUS: 1.5 (50% más crypto)
 -- PREMIUM_WITHDRAWAL_FEE: 0.10 (10% vs 25% normal)
+-- PREMIUM_RESOURCE_BONUS: +500 max energy/internet
 
 -- Tabla de suscripciones premium
 CREATE TABLE IF NOT EXISTS premium_subscriptions (
@@ -80,6 +81,53 @@ BEGIN
 END;
 $$;
 
+-- Función para obtener el bonus de recursos premium
+-- Premium: +500 energy/internet, Normal: 0
+CREATE OR REPLACE FUNCTION get_premium_resource_bonus()
+RETURNS INTEGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN 500; -- +500 max energy/internet para premium
+END;
+$$;
+
+-- Función para obtener max_energy efectivo (con bonus premium)
+CREATE OR REPLACE FUNCTION get_effective_max_energy(p_player_id UUID)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_base_max INTEGER;
+  v_bonus INTEGER := 0;
+BEGIN
+  SELECT max_energy INTO v_base_max FROM players WHERE id = p_player_id;
+  IF is_player_premium(p_player_id) THEN
+    v_bonus := get_premium_resource_bonus();
+  END IF;
+  RETURN COALESCE(v_base_max, 100) + v_bonus;
+END;
+$$;
+
+-- Función para obtener max_internet efectivo (con bonus premium)
+CREATE OR REPLACE FUNCTION get_effective_max_internet(p_player_id UUID)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_base_max INTEGER;
+  v_bonus INTEGER := 0;
+BEGIN
+  SELECT max_internet INTO v_base_max FROM players WHERE id = p_player_id;
+  IF is_player_premium(p_player_id) THEN
+    v_bonus := get_premium_resource_bonus();
+  END IF;
+  RETURN COALESCE(v_base_max, 100) + v_bonus;
+END;
+$$;
+
 -- Función para comprar suscripción premium
 CREATE OR REPLACE FUNCTION purchase_premium(p_player_id UUID)
 RETURNS JSON
@@ -88,7 +136,7 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_player players%ROWTYPE;
-  v_price DECIMAL := 2.5; -- 2.5 RON/mes
+  v_price DECIMAL := 5; -- 5 RON/mes
   v_duration INTERVAL := '30 days';
   v_new_expires TIMESTAMPTZ;
   v_subscription_id UUID;
@@ -158,7 +206,7 @@ DECLARE
   v_player players%ROWTYPE;
   v_is_premium BOOLEAN;
   v_days_remaining INTEGER;
-  v_price DECIMAL := 2.5;
+  v_price DECIMAL := 5;
 BEGIN
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
 
@@ -182,7 +230,8 @@ BEGIN
     'price', v_price,
     'benefits', json_build_object(
       'block_bonus', '+50%',
-      'withdrawal_fee', '10%'
+      'withdrawal_fee', '10%',
+      'resource_bonus', '+500'
     )
   );
 END;
