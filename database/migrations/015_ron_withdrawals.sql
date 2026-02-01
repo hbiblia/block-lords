@@ -3,6 +3,20 @@
 -- Los usuarios pueden solicitar retiros de RON a su wallet
 -- =====================================================
 
+-- Actualizar constraint de monedas en transactions para incluir 'ron'
+DO $$
+BEGIN
+  -- Eliminar constraint existente
+  ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_currency_check;
+
+  -- Crear nuevo constraint que incluye 'ron'
+  ALTER TABLE transactions ADD CONSTRAINT transactions_currency_check
+    CHECK (currency IN ('gamecoin', 'crypto', 'ron'));
+EXCEPTION WHEN OTHERS THEN
+  -- Ignorar si ya existe o hay error
+  NULL;
+END $$;
+
 -- Tabla para solicitudes de retiro
 CREATE TABLE IF NOT EXISTS ron_withdrawals (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -386,13 +400,4 @@ BEGIN
 END;
 $$;
 
--- RLS Policies
-ALTER TABLE ron_withdrawals ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Users can view own withdrawals" ON ron_withdrawals;
-CREATE POLICY "Users can view own withdrawals" ON ron_withdrawals
-  FOR SELECT USING (auth.uid() = player_id);
-
-DROP POLICY IF EXISTS "System can manage withdrawals" ON ron_withdrawals;
-CREATE POLICY "System can manage withdrawals" ON ron_withdrawals
-  FOR ALL USING (true);
+-- RLS: Ver database/policies/001_rls_policies.sql

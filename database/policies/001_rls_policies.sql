@@ -576,3 +576,38 @@ DROP POLICY IF EXISTS "Anuncios públicos visibles" ON announcements;
 CREATE POLICY "Anuncios públicos visibles"
   ON announcements FOR SELECT
   USING (is_active = true AND starts_at <= NOW() AND (ends_at IS NULL OR ends_at > NOW()));
+
+-- =====================================================
+-- POLÍTICAS PARA UPGRADE_COSTS (catálogo público)
+-- =====================================================
+
+ALTER TABLE upgrade_costs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Costos de upgrade públicos" ON upgrade_costs;
+CREATE POLICY "Costos de upgrade públicos"
+  ON upgrade_costs FOR SELECT
+  USING (true);
+
+-- =====================================================
+-- POLÍTICAS PARA RON_WITHDRAWALS (Retiros del jugador)
+-- =====================================================
+
+ALTER TABLE ron_withdrawals ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ver propios retiros" ON ron_withdrawals;
+CREATE POLICY "Ver propios retiros"
+  ON ron_withdrawals FOR SELECT
+  USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA WITHDRAWAL_PROCESSING_LOGS (Solo sistema)
+-- =====================================================
+
+ALTER TABLE withdrawal_processing_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Sistema puede gestionar logs de retiros" ON withdrawal_processing_logs;
+CREATE POLICY "Sistema puede gestionar logs de retiros"
+  ON withdrawal_processing_logs FOR ALL
+  USING (false)
+  WITH CHECK (false);
+-- Nota: Solo accesible via funciones SECURITY DEFINER

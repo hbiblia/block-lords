@@ -8,18 +8,24 @@
 -- =====================================================
 -- EJECUTAR MANUALMENTE DESPUÉS DE CONFIGURAR:
 -- =====================================================
--- 1. Reemplaza TU_PROYECTO con tu ID de proyecto Supabase
--- 2. Reemplaza TU_SERVICE_ROLE_KEY con tu service role key
---    (Project Settings > API > service_role secret)
--- 3. Ejecuta el siguiente SQL en el SQL Editor:
+-- 1. Deploy la función: supabase functions deploy process-withdrawals --no-verify-jwt
+-- 2. Configura HOT_WALLET_PRIVATE_KEY en Edge Functions > Secrets
+-- 3. Reemplaza TU_PROYECTO con tu ID de proyecto Supabase
+-- 4. Ejecuta el siguiente SQL en el SQL Editor:
+--
+-- NOTA: La función procesa hasta 5 retiros por llamada (BATCH_SIZE).
+-- Con cron cada minuto = ~7,200 retiros/dia.
+--
+-- Reemplaza TU_SERVICE_ROLE_KEY con tu service role key (Project Settings > API)
 --
 -- SELECT cron.schedule(
 --   'process-withdrawals',
---   '*/5 * * * *',
+--   '* * * * *',
 --   $$
 --   SELECT net.http_post(
 --     url := 'https://TU_PROYECTO.supabase.co/functions/v1/process-withdrawals',
---     headers := '{"Authorization": "Bearer TU_SERVICE_ROLE_KEY"}'::jsonb
+--     headers := '{"Authorization": "Bearer TU_SERVICE_ROLE_KEY"}'::jsonb,
+--     timeout_milliseconds := 30000
 --   );
 --   $$
 -- );

@@ -6,11 +6,13 @@ Función Edge de Supabase que procesa automáticamente los retiros de RON.
 
 ### 1. Variables de Entorno (Supabase Dashboard)
 
-Ve a **Project Settings > Edge Functions** y agrega:
+Ve a **Project Settings > Edge Functions > Secrets** y agrega:
 
 ```
 HOT_WALLET_PRIVATE_KEY=0x...  # Clave privada de la wallet que envía RON
 ```
+
+**Nota:** `SUPABASE_SERVICE_ROLE_KEY` ya está disponible automáticamente en las Edge Functions.
 
 ### 2. Hot Wallet
 
@@ -21,27 +23,35 @@ HOT_WALLET_PRIVATE_KEY=0x...  # Clave privada de la wallet que envía RON
 ### 3. Deploy de la función
 
 ```bash
-supabase functions deploy process-withdrawals
+supabase functions deploy process-withdrawals --no-verify-jwt
 ```
+
+**IMPORTANTE:** El flag `--no-verify-jwt` es necesario porque la función es llamada por pg_cron (interno de Supabase) que no envía un JWT válido.
 
 ### 4. Configurar Cron Job (pg_cron)
 
 ```sql
 -- En el SQL Editor de Supabase
--- Reemplaza TU_PROYECTO y TU_SERVICE_ROLE_KEY con tus valores
--- (Project Settings > API > service_role secret)
+-- Reemplaza TU_PROYECTO con tu ID de proyecto
+-- Reemplaza TU_SERVICE_ROLE_KEY con tu service role key (Project Settings > API)
+
+-- NOTA: La función procesa hasta 5 retiros por llamada (BATCH_SIZE).
+-- Con cron cada minuto = ~7,200 retiros/dia.
 
 SELECT cron.schedule(
   'process-withdrawals',
-  '*/5 * * * *',
+  '* * * * *',
   $$
   SELECT net.http_post(
     url := 'https://TU_PROYECTO.supabase.co/functions/v1/process-withdrawals',
-    headers := '{"Authorization": "Bearer TU_SERVICE_ROLE_KEY"}'::jsonb
+    headers := '{"Authorization": "Bearer TU_SERVICE_ROLE_KEY"}'::jsonb,
+    timeout_milliseconds := 30000
   );
   $$
 );
 ```
+
+**IMPORTANTE:** Usa el `service_role` key (NO el anon key). Lo encuentras en Project Settings > API.
 
 ### 5. Llamar manualmente (desde admin)
 
@@ -55,14 +65,15 @@ console.log(result);
 
 ## Flujo de Procesamiento
 
-1. Obtiene todos los retiros con status `pending` o `processing`
-2. Para cada retiro:
+1. Obtiene los retiros con status `pending` o `processing`
+2. Procesa un batch de hasta 5 retiros (configurable via `BATCH_SIZE`):
    - Verifica que el hot wallet tenga suficiente balance
    - Marca como `processing`
    - Envía la transacción RON
    - Espera confirmación
    - Marca como `completed` con tx_hash
    - Si falla: marca como `failed` y devuelve fondos al usuario
+3. El cron se ejecuta cada minuto (~7,200 retiros/dia con batch de 5)
 
 ## Seguridad
 
@@ -70,6 +81,8 @@ console.log(result);
 - Solo la Edge Function tiene acceso
 - El hot wallet solo debe tener el RON necesario para pagos
 - Los usuarios reciben notificación cuando el pago se completa
+- **Protección DDoS:** La función verifica el `service_role` key en el header Authorization
+- Sin el key correcto, la función retorna 401 Unauthorized
 
 ## Monitoreo
 
