@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch, ref, provide } from 'vue';
+import { onMounted, onUnmounted, watch, ref, provide, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
@@ -30,6 +30,12 @@ onMounted(() => {
     streakStore.fetchStatus();
     missionsStore.fetchMissions();
     missionsStore.startHeartbeat();
+    // Inicializar AdSense
+    try {
+      ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+    } catch (e) {
+      console.error('AdSense error:', e);
+    }
   }
 });
 
@@ -37,6 +43,14 @@ onMounted(() => {
 watch(() => authStore.isAuthenticated, (isAuth) => {
   if (isAuth) {
     missionsStore.startHeartbeat();
+    // Inicializar AdSense cuando el usuario se autentica
+    nextTick(() => {
+      try {
+        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+      } catch (e) {
+        console.error('AdSense error:', e);
+      }
+    });
   } else {
     missionsStore.stopHeartbeat();
   }
@@ -142,8 +156,30 @@ onUnmounted(() => {
     </div>
 
     <!-- Footer -->
-    <footer class="border-t border-border/30 py-6 text-center">
+    <footer class="border-t border-border/30 py-6 text-center pb-20">
       <p class="text-text-muted text-sm">Block Lords &copy; 2025</p>
     </footer>
+
+    <!-- AdSense Banner (bottom fixed) -->
+    <div
+      v-if="authStore.isAuthenticated"
+      class="fixed bottom-0 left-0 right-0 z-50 flex justify-center bg-bg-secondary/95 backdrop-blur-sm border-t border-border/30"
+    >
+      <ins class="adsbygoogle"
+        style="display:block"
+        data-ad-format="autorelaxed"
+        data-ad-client="ca-pub-7500429866047477"
+        data-ad-slot="7767935377"></ins>
+    </div>
   </div>
 </template>
+
+<style scoped>
+/* Ensure ad container doesn't break layout on mobile */
+@media (max-width: 728px) {
+  .adsbygoogle {
+    width: 100% !important;
+    height: 50px !important;
+  }
+}
+</style>
