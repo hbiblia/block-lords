@@ -483,3 +483,96 @@ DROP POLICY IF EXISTS "Catálogo de upgrades de slots público" ON rig_slot_upgr
 CREATE POLICY "Catálogo de upgrades de slots público"
   ON rig_slot_upgrades FOR SELECT
   USING (true);
+
+-- =====================================================
+-- POLÍTICAS PARA RIG_BOOSTS (Boosts instalados en rigs)
+-- =====================================================
+
+ALTER TABLE rig_boosts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ver boosts de propios rigs" ON rig_boosts;
+CREATE POLICY "Ver boosts de propios rigs"
+  ON rig_boosts FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM player_rigs pr
+      WHERE pr.id = rig_boosts.player_rig_id
+      AND pr.player_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Insertar boosts en propios rigs" ON rig_boosts;
+CREATE POLICY "Insertar boosts en propios rigs"
+  ON rig_boosts FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM player_rigs pr
+      WHERE pr.id = rig_boosts.player_rig_id
+      AND pr.player_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Actualizar boosts de propios rigs" ON rig_boosts;
+CREATE POLICY "Actualizar boosts de propios rigs"
+  ON rig_boosts FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM player_rigs pr
+      WHERE pr.id = rig_boosts.player_rig_id
+      AND pr.player_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Eliminar boosts de propios rigs" ON rig_boosts;
+CREATE POLICY "Eliminar boosts de propios rigs"
+  ON rig_boosts FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM player_rigs pr
+      WHERE pr.id = rig_boosts.player_rig_id
+      AND pr.player_id = auth.uid()
+    )
+  );
+
+-- =====================================================
+-- POLÍTICAS PARA CRYPTO_PACKAGES (catálogo público)
+-- =====================================================
+
+ALTER TABLE crypto_packages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Catálogo de paquetes crypto público" ON crypto_packages;
+CREATE POLICY "Catálogo de paquetes crypto público"
+  ON crypto_packages FOR SELECT
+  USING (true);
+
+-- =====================================================
+-- POLÍTICAS PARA CRYPTO_PURCHASES (Compras del jugador)
+-- =====================================================
+
+ALTER TABLE crypto_purchases ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ver propias compras de crypto" ON crypto_purchases;
+CREATE POLICY "Ver propias compras de crypto"
+  ON crypto_purchases FOR SELECT
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Insertar propias compras de crypto" ON crypto_purchases;
+CREATE POLICY "Insertar propias compras de crypto"
+  ON crypto_purchases FOR INSERT
+  WITH CHECK (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "Actualizar propias compras de crypto" ON crypto_purchases;
+CREATE POLICY "Actualizar propias compras de crypto"
+  ON crypto_purchases FOR UPDATE
+  USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA ANNOUNCEMENTS (Anuncios públicos)
+-- =====================================================
+
+ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anuncios públicos visibles" ON announcements;
+CREATE POLICY "Anuncios públicos visibles"
+  ON announcements FOR SELECT
+  USING (is_active = true AND starts_at <= NOW() AND (ends_at IS NULL OR ends_at > NOW()));

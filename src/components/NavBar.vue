@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, inject, type Ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
@@ -7,6 +7,9 @@ import { useRealtimeStore } from '@/stores/realtime';
 import { useMiningStore } from '@/stores/mining';
 import { toggleLocale, getLocale } from '@/plugins/i18n';
 import { useSound } from '@/composables/useSound';
+
+// Inject InfoBar visibility to adjust positioning
+const infoBarVisible = inject<Ref<boolean>>('infoBarVisible', ref(false));
 
 const { t } = useI18n();
 
@@ -78,7 +81,10 @@ async function handleLogout() {
 </script>
 
 <template>
-  <nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-border/50">
+  <nav
+    class="fixed left-0 right-0 z-50 glass border-b border-border/50 transition-[top] duration-300"
+    :class="infoBarVisible ? 'top-10' : 'top-0'"
+  >
     <div class="container mx-auto px-4 h-16 flex items-center justify-between">
       <!-- Logo -->
       <RouterLink :to="isAuthenticated ? '/mining' : '/'" class="flex items-center gap-3 group">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue';
+import { onMounted, onUnmounted, watch, ref, provide } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
@@ -8,6 +8,7 @@ import { useMissionsStore } from '@/stores/missions';
 
 const { t } = useI18n();
 import NavBar from '@/components/NavBar.vue';
+import InfoBar from '@/components/InfoBar.vue';
 import ConnectionLostModal from '@/components/ConnectionLostModal.vue';
 import GameNotificationsModal from '@/components/GameNotificationsModal.vue';
 import StreakModal from '@/components/StreakModal.vue';
@@ -18,6 +19,10 @@ const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
 const streakStore = useStreakStore();
 const missionsStore = useMissionsStore();
+
+// InfoBar visibility state - shared via provide/inject
+const infoBarVisible = ref(false);
+provide('infoBarVisible', infoBarVisible);
 
 // Cargar estado de streak y misiones al inicio
 onMounted(() => {
@@ -44,6 +49,9 @@ onUnmounted(() => {
 
 <template>
   <div class="min-h-screen flex flex-col bg-bg-primary">
+    <!-- InfoBar (announcements) -->
+    <InfoBar />
+
     <NavBar />
 
     <!-- Connection Lost Modal -->
@@ -68,7 +76,10 @@ onUnmounted(() => {
     />
 
     <!-- Main Content -->
-    <main class="flex-1 container mx-auto px-4 py-6 mt-16">
+    <main
+      class="flex-1 container mx-auto px-4 py-6 transition-[margin] duration-300"
+      :class="infoBarVisible ? 'mt-[6.5rem]' : 'mt-16'"
+    >
       <slot />
     </main>
 

@@ -3335,47 +3335,55 @@ CREATE TABLE IF NOT EXISTS active_boosts (
 CREATE INDEX IF NOT EXISTS idx_active_boosts_player ON active_boosts(player_id);
 CREATE INDEX IF NOT EXISTS idx_active_boosts_expires ON active_boosts(expires_at);
 
--- Seed data para boost items (all crypto, max 5 min duration, prices 1000+)
--- First delete old boost items to allow new IDs
-DELETE FROM boost_items WHERE id LIKE 'hashrate_%' OR id LIKE 'energy_saver_%' OR id LIKE 'bandwidth_%'
-  OR id LIKE 'lucky_%' OR id LIKE 'overclock_%' OR id LIKE 'coolant_%' OR id LIKE 'durability_%';
+-- Seed data para boost items (all crypto, prices 1000+)
+-- Durations: basic=5min, standard=10min, elite=20min (per-rig boosts)
+-- Uses ON CONFLICT DO UPDATE to safely update existing items without foreign key issues
 
 INSERT INTO boost_items (id, name, description, boost_type, effect_value, secondary_value, duration_minutes, base_price, currency, tier, is_stackable, max_stack) VALUES
 -- Hashrate Boosters
-('hashrate_small', 'Minor Hash Boost', '+10% hashrate for 1 minute', 'hashrate', 10, 0, 1, 1200, 'crypto', 'basic', false, 1),
-('hashrate_medium', 'Hash Boost', '+25% hashrate for 3 minutes', 'hashrate', 25, 0, 3, 3000, 'crypto', 'standard', false, 1),
-('hashrate_large', 'Mega Hash Boost', '+50% hashrate for 5 minutes', 'hashrate', 50, 0, 5, 6500, 'crypto', 'elite', false, 1),
+('hashrate_small', 'Minor Hash Boost', '+10% hashrate for 5 minutes', 'hashrate', 10, 0, 5, 1200, 'crypto', 'basic', false, 1),
+('hashrate_medium', 'Hash Boost', '+25% hashrate for 10 minutes', 'hashrate', 25, 0, 10, 3000, 'crypto', 'standard', false, 1),
+('hashrate_large', 'Mega Hash Boost', '+50% hashrate for 20 minutes', 'hashrate', 50, 0, 20, 6500, 'crypto', 'elite', false, 1),
 
 -- Energy Savers
-('energy_saver_small', 'Power Saver', '-15% energy consumption for 1 minute', 'energy_saver', 15, 0, 1, 1000, 'crypto', 'basic', false, 1),
-('energy_saver_medium', 'Eco Mode', '-25% energy consumption for 3 minutes', 'energy_saver', 25, 0, 3, 2500, 'crypto', 'standard', false, 1),
-('energy_saver_large', 'Green Mining', '-40% energy consumption for 5 minutes', 'energy_saver', 40, 0, 5, 5500, 'crypto', 'elite', false, 1),
+('energy_saver_small', 'Power Saver', '-15% energy consumption for 5 minutes', 'energy_saver', 15, 0, 5, 1000, 'crypto', 'basic', false, 1),
+('energy_saver_medium', 'Eco Mode', '-25% energy consumption for 10 minutes', 'energy_saver', 25, 0, 10, 2500, 'crypto', 'standard', false, 1),
+('energy_saver_large', 'Green Mining', '-40% energy consumption for 20 minutes', 'energy_saver', 40, 0, 20, 5500, 'crypto', 'elite', false, 1),
 
 -- Bandwidth Optimizers
-('bandwidth_small', 'Data Optimizer', '-15% internet consumption for 1 minute', 'bandwidth_optimizer', 15, 0, 1, 1000, 'crypto', 'basic', false, 1),
-('bandwidth_medium', 'Network Boost', '-25% internet consumption for 3 minutes', 'bandwidth_optimizer', 25, 0, 3, 2500, 'crypto', 'standard', false, 1),
-('bandwidth_large', 'Fiber Mode', '-40% internet consumption for 5 minutes', 'bandwidth_optimizer', 40, 0, 5, 5500, 'crypto', 'elite', false, 1),
+('bandwidth_small', 'Data Optimizer', '-15% internet consumption for 5 minutes', 'bandwidth_optimizer', 15, 0, 5, 1000, 'crypto', 'basic', false, 1),
+('bandwidth_medium', 'Network Boost', '-25% internet consumption for 10 minutes', 'bandwidth_optimizer', 25, 0, 10, 2500, 'crypto', 'standard', false, 1),
+('bandwidth_large', 'Fiber Mode', '-40% internet consumption for 20 minutes', 'bandwidth_optimizer', 40, 0, 20, 5500, 'crypto', 'elite', false, 1),
 
 -- Lucky Charms (more expensive - affects block probability)
-('lucky_small', 'Lucky Coin', '+5% block probability for 1 minute', 'lucky_charm', 5, 0, 1, 2000, 'crypto', 'basic', false, 1),
-('lucky_medium', 'Fortune Token', '+10% block probability for 3 minutes', 'lucky_charm', 10, 0, 3, 5000, 'crypto', 'standard', false, 1),
-('lucky_large', 'Jackpot Charm', '+20% block probability for 5 minutes', 'lucky_charm', 20, 0, 5, 12000, 'crypto', 'elite', false, 1),
+('lucky_small', 'Lucky Coin', '+5% block probability for 5 minutes', 'lucky_charm', 5, 0, 5, 2000, 'crypto', 'basic', false, 1),
+('lucky_medium', 'Fortune Token', '+10% block probability for 10 minutes', 'lucky_charm', 10, 0, 10, 5000, 'crypto', 'standard', false, 1),
+('lucky_large', 'Jackpot Charm', '+20% block probability for 20 minutes', 'lucky_charm', 20, 0, 20, 12000, 'crypto', 'elite', false, 1),
 
 -- Overclock Mode (hashrate boost + energy penalty)
-('overclock_small', 'Overclock Lite', '+25% hashrate, +15% energy for 1 minute', 'overclock', 25, 15, 1, 1500, 'crypto', 'basic', false, 1),
-('overclock_medium', 'Overclock Pro', '+40% hashrate, +25% energy for 3 minutes', 'overclock', 40, 25, 3, 3500, 'crypto', 'standard', false, 1),
-('overclock_large', 'Overclock Max', '+60% hashrate, +35% energy for 5 minutes', 'overclock', 60, 35, 5, 7500, 'crypto', 'elite', false, 1),
+('overclock_small', 'Overclock Lite', '+25% hashrate, +15% energy for 5 minutes', 'overclock', 25, 15, 5, 1500, 'crypto', 'basic', false, 1),
+('overclock_medium', 'Overclock Pro', '+40% hashrate, +25% energy for 10 minutes', 'overclock', 40, 25, 10, 3500, 'crypto', 'standard', false, 1),
+('overclock_large', 'Overclock Max', '+60% hashrate, +35% energy for 20 minutes', 'overclock', 60, 35, 20, 7500, 'crypto', 'elite', false, 1),
 
 -- Coolant Injection
-('coolant_small', 'Cooling Gel', '-20% temperature gain for 1 minute', 'coolant_injection', 20, 0, 1, 1200, 'crypto', 'basic', false, 1),
-('coolant_medium', 'Cryo Fluid', '-35% temperature gain for 3 minutes', 'coolant_injection', 35, 0, 3, 3000, 'crypto', 'standard', false, 1),
-('coolant_large', 'Liquid Nitrogen', '-50% temperature gain for 5 minutes', 'coolant_injection', 50, 0, 5, 6500, 'crypto', 'elite', false, 1),
+('coolant_small', 'Cooling Gel', '-20% temperature gain for 5 minutes', 'coolant_injection', 20, 0, 5, 1200, 'crypto', 'basic', false, 1),
+('coolant_medium', 'Cryo Fluid', '-35% temperature gain for 10 minutes', 'coolant_injection', 35, 0, 10, 3000, 'crypto', 'standard', false, 1),
+('coolant_large', 'Liquid Nitrogen', '-50% temperature gain for 20 minutes', 'coolant_injection', 50, 0, 20, 6500, 'crypto', 'elite', false, 1),
 
 -- Durability Shield
-('durability_small', 'Wear Guard', '-20% condition deterioration for 1 minute', 'durability_shield', 20, 0, 1, 1200, 'crypto', 'basic', false, 1),
-('durability_medium', 'Shield Coat', '-35% condition deterioration for 3 minutes', 'durability_shield', 35, 0, 3, 3000, 'crypto', 'standard', false, 1),
-('durability_large', 'Diamond Shell', '-50% condition deterioration for 5 minutes', 'durability_shield', 50, 0, 5, 6500, 'crypto', 'elite', false, 1)
-ON CONFLICT (id) DO NOTHING;
+('durability_small', 'Wear Guard', '-20% condition deterioration for 5 minutes', 'durability_shield', 20, 0, 5, 1200, 'crypto', 'basic', false, 1),
+('durability_medium', 'Shield Coat', '-35% condition deterioration for 10 minutes', 'durability_shield', 35, 0, 10, 3000, 'crypto', 'standard', false, 1),
+('durability_large', 'Diamond Shell', '-50% condition deterioration for 20 minutes', 'durability_shield', 50, 0, 20, 6500, 'crypto', 'elite', false, 1)
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  boost_type = EXCLUDED.boost_type,
+  effect_value = EXCLUDED.effect_value,
+  secondary_value = EXCLUDED.secondary_value,
+  duration_minutes = EXCLUDED.duration_minutes,
+  base_price = EXCLUDED.base_price,
+  currency = EXCLUDED.currency,
+  tier = EXCLUDED.tier;
 
 -- Obtener todos los boost items disponibles
 DROP FUNCTION IF EXISTS get_boost_items() CASCADE;
@@ -4058,6 +4066,62 @@ BEGIN
       WHERE cp.player_id = p_player_id
       ORDER BY cp.purchased_at DESC
       LIMIT p_limit
+    ) t
+  );
+END;
+$$;
+
+-- =====================================================
+-- SISTEMA DE ANUNCIOS (INFO BAR)
+-- =====================================================
+
+-- Tabla de anuncios
+CREATE TABLE IF NOT EXISTS announcements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message TEXT NOT NULL,
+  message_es TEXT,  -- Mensaje en español (opcional)
+  type TEXT NOT NULL DEFAULT 'info' CHECK (type IN ('info', 'warning', 'success', 'error', 'maintenance')),
+  icon TEXT DEFAULT '📢',
+  link_url TEXT,
+  link_text TEXT,
+  is_active BOOLEAN DEFAULT true,
+  priority INTEGER DEFAULT 0,  -- Mayor prioridad = se muestra primero
+  starts_at TIMESTAMPTZ DEFAULT NOW(),
+  ends_at TIMESTAMPTZ,  -- NULL = sin fecha de fin
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_announcements_active ON announcements(is_active, starts_at, ends_at);
+
+-- Función para obtener anuncios activos
+DROP FUNCTION IF EXISTS get_active_announcements() CASCADE;
+CREATE OR REPLACE FUNCTION get_active_announcements()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.priority DESC, t.created_at DESC), '[]'::JSON)
+    FROM (
+      SELECT
+        id,
+        message,
+        message_es,
+        type,
+        icon,
+        link_url,
+        link_text,
+        priority,
+        starts_at,
+        ends_at
+      FROM announcements
+      WHERE is_active = true
+        AND starts_at <= NOW()
+        AND (ends_at IS NULL OR ends_at > NOW())
+      ORDER BY priority DESC, created_at DESC
+      LIMIT 5
     ) t
   );
 END;

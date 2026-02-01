@@ -552,3 +552,12 @@ export async function resetPlayerAccount(playerId: string) {
   return data;
 }
 
+// === ANNOUNCEMENTS ===
+
+export async function getActiveAnnouncements() {
+  const { data, error } = await supabase.rpc('get_active_announcements');
+
+  if (error) throw error;
+  return data;
+}
+
