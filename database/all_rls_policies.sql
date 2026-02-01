@@ -611,3 +611,46 @@ CREATE POLICY "Sistema puede gestionar logs de retiros"
   USING (false)
   WITH CHECK (false);
 -- Nota: Solo accesible via funciones SECURITY DEFINER
+
+-- =====================================================
+-- POLÍTICAS PARA PENDING_BLOCKS (Bloques pendientes)
+-- =====================================================
+
+ALTER TABLE pending_blocks ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own pending blocks" ON pending_blocks;
+CREATE POLICY "Users can view own pending blocks"
+  ON pending_blocks FOR SELECT
+  USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "System can insert pending blocks" ON pending_blocks;
+CREATE POLICY "System can insert pending blocks"
+  ON pending_blocks FOR INSERT
+  WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Users can update own pending blocks" ON pending_blocks;
+CREATE POLICY "Users can update own pending blocks"
+  ON pending_blocks FOR UPDATE
+  USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA PREMIUM_SUBSCRIPTIONS (Suscripciones)
+-- =====================================================
+
+ALTER TABLE premium_subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ver propias suscripciones" ON premium_subscriptions;
+CREATE POLICY "Ver propias suscripciones"
+  ON premium_subscriptions FOR SELECT
+  USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA RON_DEPOSITS (Depósitos de RON)
+-- =====================================================
+
+ALTER TABLE ron_deposits ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ver propios depositos" ON ron_deposits;
+CREATE POLICY "Ver propios depositos"
+  ON ron_deposits FOR SELECT
+  USING (auth.uid() = player_id);

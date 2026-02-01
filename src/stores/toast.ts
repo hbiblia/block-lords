@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { playSound } from '@/utils/sounds';
+import { i18n } from '@/plugins/i18n';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -108,31 +109,46 @@ export const useToastStore = defineStore('toast', () => {
   }
 
   function rigToggled(rigName: string, isActive: boolean) {
+    const t = i18n.global.t;
+    const translatedRigName = t(`data.rigs.${rigName}.name`);
+    const message = isActive
+      ? t('toast.rigActivated', { rigName: translatedRigName })
+      : t('toast.rigDeactivated', { rigName: translatedRigName });
+    return show(message, 'info', { icon: isActive ? '▶️' : '⏹️', duration: 2000, sound: false });
+  }
+
+  function quickTogglePenalty(temperature: number) {
+    const t = i18n.global.t;
     return show(
-      isActive ? `${rigName} activado` : `${rigName} desactivado`,
-      'info',
-      { icon: isActive ? '▶️' : '⏹️', duration: 2000, sound: false }
+      t('toast.rigQuickTogglePenalty', { temp: Math.round(temperature) }),
+      'warning',
+      { icon: '🔥', duration: 5000 }
     );
   }
 
   function purchaseSuccess(itemName: string) {
-    return show(`${itemName} adquirido`, 'success', { icon: '🛒' });
+    const t = i18n.global.t;
+    return show(t('toast.purchased', { item: itemName }), 'success', { icon: '🛒' });
   }
 
   function resourceLow(resource: 'energy' | 'internet', percent: number) {
+    const t = i18n.global.t;
     const icon = resource === 'energy' ? '⚡' : '📡';
-    return show(`${resource === 'energy' ? 'Energía' : 'Internet'} al ${percent}%`, 'warning', { icon });
+    const resourceName = resource === 'energy' ? t('nav.energy') : 'Internet';
+    return show(t('toast.resourceLow', { resource: resourceName, percent }), 'warning', { icon });
   }
 
   function boostInstalled(boostName: string, rigName: string) {
-    return show(`${boostName} activado en ${rigName}`, 'success', {
+    const t = i18n.global.t;
+    return show(t('toast.boostActivated', { boost: boostName, rig: rigName }), 'success', {
       icon: '🚀',
       duration: 4000
     });
   }
 
   function boostExpired(boostName: string, rigName: string) {
-    return show(`${boostName} expiró en ${rigName}`, 'warning', {
+    const t = i18n.global.t;
+    return show(t('toast.boostExpired', { boost: boostName, rig: rigName }), 'warning', {
       icon: '⏱️',
       duration: 5000
     });
@@ -149,6 +165,7 @@ export const useToastStore = defineStore('toast', () => {
     info,
     blockMined,
     rigToggled,
+    quickTogglePenalty,
     purchaseSuccess,
     resourceLow,
     boostInstalled,

@@ -36,8 +36,9 @@ function handleToggleSound() {
 // Resource values
 const energy = computed(() => authStore.player?.energy ?? 100);
 const internet = computed(() => authStore.player?.internet ?? 100);
-const maxEnergy = computed(() => authStore.player?.max_energy ?? 100);
-const maxInternet = computed(() => authStore.player?.max_internet ?? 100);
+// Use effective max values that include premium bonus (+500 for premium users)
+const maxEnergy = computed(() => authStore.effectiveMaxEnergy);
+const maxInternet = computed(() => authStore.effectiveMaxInternet);
 
 // Percentage for bar display
 const energyPercent = computed(() => maxEnergy.value > 0 ? (energy.value / maxEnergy.value) * 100 : 0);

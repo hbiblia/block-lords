@@ -6,6 +6,7 @@ import { useAuthStore } from './auth';
 import { useNotificationsStore } from './notifications';
 import { useToastStore } from './toast';
 import { playSound } from '@/utils/sounds';
+import { i18n } from '@/plugins/i18n';
 
 // Types
 interface Rig {
@@ -49,6 +50,8 @@ interface Block {
     id: string;
     username: string;
   };
+  reward?: number;
+  is_premium?: boolean;
 }
 
 // Calculate block reward based on height (mirrors database calculate_block_reward function)
@@ -452,9 +455,19 @@ export const useMiningStore = defineStore('mining', () => {
     const authStore = useAuthStore();
     const toastStore = useToastStore();
 
+    // Calculate reward with premium bonus if applicable (only for current user)
+    const baseReward = calculateBlockReward(block.height);
+    const isOwnBlock = winner?.id === authStore.player?.id;
+    const isPremiumBlock = isOwnBlock && authStore.isPremium;
+    const reward = isPremiumBlock ? baseReward * 1.5 : baseReward;
+
+    // Add block to recent list
+    // Note: For other users' blocks, is_premium will be undefined until data is refreshed from server
     recentBlocks.value.unshift({
       ...block,
       miner: winner,
+      reward: isOwnBlock ? reward : undefined, // Only set reward for own blocks where we know premium status
+      is_premium: isOwnBlock ? isPremiumBlock : undefined,
     });
     recentBlocks.value = recentBlocks.value.slice(0, 5);
 
@@ -480,8 +493,9 @@ export const useMiningStore = defineStore('mining', () => {
     if (winner?.id === authStore.player?.id) {
       playSound('block_mined');
       authStore.fetchPlayer();
-      // Show toast with reward calculated from block height
-      const reward = calculateBlockReward(block.height);
+      // Show toast with reward calculated from block height (with premium bonus if applicable)
+      const baseReward = calculateBlockReward(block.height);
+      const reward = authStore.isPremium ? baseReward * 1.5 : baseReward;
       toastStore.blockMined(reward, true);
     }
   }
@@ -490,6 +504,7 @@ export const useMiningStore = defineStore('mining', () => {
   async function toggleRig(rigId: string) {
     const authStore = useAuthStore();
     const notificationsStore = useNotificationsStore();
+    const toastStore = useToastStore();
 
     if (!authStore.player) return { success: false, error: 'No player' };
 
@@ -535,38 +550,22 @@ export const useMiningStore = defineStore('mining', () => {
       if (!result.success) {
         await loadData();
         playSound('error');
-        notificationsStore.addNotification({
-          type: 'rig_broken',
-          title: 'common.error',
-          message: 'mining.toggleError',
-          icon: '⚠️',
-          severity: 'error',
-          data: { error: result.error },
-        });
+        toastStore.error(result.error || i18n.global.t('toast.rigToggleError'), '⚠️');
         return result;
       }
 
-      // Send notification based on action
+      // Show toast notification for rig toggle
       if (wasTurningOn) {
         playSound('success');
-        notificationsStore.addNotification({
-          type: 'rig_turned_on',
-          title: 'notifications.rigTurnedOn.title',
-          message: 'notifications.rigTurnedOn.message',
-          icon: '⛏️',
-          severity: 'success',
-          data: { rigName: rig.rig.name },
-        });
+        // Check for quick toggle penalty
+        if (result.quickTogglePenalty && result.temperature) {
+          toastStore.quickTogglePenalty(result.temperature);
+        } else {
+          toastStore.rigToggled(rig.rig.id, true);
+        }
       } else {
         playSound('click');
-        notificationsStore.addNotification({
-          type: 'rig_turned_off',
-          title: 'notifications.rigTurnedOff.title',
-          message: 'notifications.rigTurnedOff.message',
-          icon: '🛑',
-          severity: 'info',
-          data: { rigName: rig.rig.name },
-        });
+        toastStore.rigToggled(rig.rig.id, false);
       }
 
       return result;

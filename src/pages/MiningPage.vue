@@ -835,13 +835,20 @@ onUnmounted(() => {
                 v-for="(block, index) in recentBlocks"
                 :key="block.id"
                 class="px-2.5 py-2 rounded-lg"
-                :class="block.miner?.id === authStore.player?.id ? 'bg-status-success/10 border border-status-success/20' : 'bg-bg-secondary/50'"
+                :class="[
+                  block.miner?.id === authStore.player?.id
+                    ? 'bg-status-success/10 border border-status-success/20'
+                    : block.is_premium
+                      ? 'bg-amber-500/10 border border-amber-500/20'
+                      : 'bg-bg-secondary/50'
+                ]"
               >
-                <!-- Row 1: Height + Time -->
+                <!-- Row 1: Height + Time + Premium -->
                 <div class="flex items-center justify-between mb-1">
                   <div class="flex items-center gap-1.5">
                     <span v-if="index === 0" class="text-xs">🆕</span>
-                    <span class="font-mono text-sm font-medium" :class="block.miner?.id === authStore.player?.id ? 'text-status-success' : 'text-accent-primary'">#{{ block.height }}</span>
+                    <span v-if="block.is_premium" class="text-xs" title="Premium">👑</span>
+                    <span class="font-mono text-sm font-medium" :class="block.miner?.id === authStore.player?.id ? 'text-status-success' : block.is_premium ? 'text-amber-400' : 'text-accent-primary'">#{{ block.height }}</span>
                   </div>
                   <span class="text-[10px] text-text-muted" :key="uptimeKey">{{ formatTimeAgo(block.created_at) }}</span>
                 </div>
@@ -850,7 +857,7 @@ onUnmounted(() => {
                   <span class="text-text-muted truncate max-w-[100px]">
                     {{ block.miner?.id === authStore.player?.id ? '⭐ ' + t('mining.you') : block.miner?.username ?? t('mining.unknown') }}
                   </span>
-                  <span class="font-mono text-status-warning">+{{ getBlockReward(block.height).toFixed(0) }} ₿</span>
+                  <span class="font-mono" :class="block.is_premium ? 'text-amber-400' : 'text-status-warning'">+{{ (block.reward ?? getBlockReward(block.height)).toFixed(0) }} ₿</span>
                 </div>
               </div>
             </div>

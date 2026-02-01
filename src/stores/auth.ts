@@ -43,6 +43,26 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!user.value && !!session.value && !!player.value);
   const token = computed(() => session.value?.access_token ?? null);
 
+  // Premium status - check if premium_until is in the future
+  const isPremium = computed(() => {
+    if (!player.value?.premium_until) return false;
+    return new Date(player.value.premium_until) > new Date();
+  });
+
+  // Premium bonus constant
+  const PREMIUM_RESOURCE_BONUS = 500;
+
+  // Effective max energy/internet with premium bonus
+  const effectiveMaxEnergy = computed(() => {
+    const base = player.value?.max_energy ?? 100;
+    return isPremium.value ? base + PREMIUM_RESOURCE_BONUS : base;
+  });
+
+  const effectiveMaxInternet = computed(() => {
+    const base = player.value?.max_internet ?? 100;
+    return isPremium.value ? base + PREMIUM_RESOURCE_BONUS : base;
+  });
+
   async function checkAuth() {
     // Prevenir llamadas concurrentes
     if (isCheckingAuth.value) return;
@@ -241,12 +261,14 @@ export const useAuthStore = defineStore('auth', () => {
     if (player.value) {
       const oldEnergy = player.value.energy;
       const oldInternet = player.value.internet;
-      const oldMaxEnergy = player.value.max_energy;
-      const oldMaxInternet = player.value.max_internet;
+      // Use effective max values (with premium bonus) for notifications
+      const oldMaxEnergy = effectiveMaxEnergy.value;
+      const oldMaxInternet = effectiveMaxInternet.value;
 
       player.value = { ...player.value, ...updates };
 
       // Check for resource depletion and trigger notifications
+      // Note: After update, effectiveMaxEnergy/Internet will recalculate with new premium_until if changed
       checkResourceNotifications(
         oldEnergy,
         oldInternet,
@@ -254,8 +276,8 @@ export const useAuthStore = defineStore('auth', () => {
         oldMaxInternet,
         player.value.energy,
         player.value.internet,
-        player.value.max_energy,
-        player.value.max_internet
+        effectiveMaxEnergy.value,
+        effectiveMaxInternet.value
       );
     }
   }
@@ -353,6 +375,9 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     initialized,
     token,
+    isPremium,
+    effectiveMaxEnergy,
+    effectiveMaxInternet,
     checkAuth,
     waitForInit,
     fetchPlayer,

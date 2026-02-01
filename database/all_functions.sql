@@ -70,6 +70,7 @@ DROP FUNCTION IF EXISTS process_mining_tick() CASCADE;
 DROP FUNCTION IF EXISTS game_tick() CASCADE;
 DROP FUNCTION IF EXISTS process_resource_decay() CASCADE;
 DROP FUNCTION IF EXISTS create_new_block(UUID, NUMERIC, NUMERIC) CASCADE;
+DROP FUNCTION IF EXISTS create_new_block(UUID, NUMERIC, NUMERIC, NUMERIC, BOOLEAN) CASCADE;
 DROP FUNCTION IF EXISTS calculate_block_reward(INTEGER) CASCADE;
 DROP FUNCTION IF EXISTS check_difficulty_adjustment(INTEGER) CASCADE;
 DROP FUNCTION IF EXISTS adjust_difficulty() CASCADE;
@@ -503,6 +504,7 @@ END;
 $$;
 
 -- Toggle rig (encender/apagar)
+-- Anti-exploit: Si el usuario apaga y enciende muy rápido (<60s), la temperatura se multiplica x10
 CREATE OR REPLACE FUNCTION toggle_rig(p_player_id UUID, p_rig_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -514,6 +516,11 @@ DECLARE
   v_internet_consumption NUMERIC;
   v_player_energy NUMERIC;
   v_player_internet NUMERIC;
+  v_new_temperature NUMERIC;
+  v_seconds_since_off NUMERIC;
+  v_quick_toggle_penalty BOOLEAN := false;
+  v_quick_toggle_threshold NUMERIC := 60; -- segundos
+  v_temperature_multiplier NUMERIC := 10; -- penalización x10
 BEGIN
   -- Obtener el rig (sin lock explícito - el UPDATE es atómico)
   SELECT * INTO v_rig
@@ -545,21 +552,63 @@ BEGIN
     IF v_player_internet < v_internet_consumption THEN
       RETURN json_build_object('success', false, 'error', 'Internet insuficiente. Necesitas al menos ' || v_internet_consumption || ' para este rig.');
     END IF;
+
+    -- Calcular nueva temperatura al encender
+    -- Si fue apagado hace menos de 60 segundos, aplicar penalización
+    IF v_rig.deactivated_at IS NOT NULL THEN
+      v_seconds_since_off := EXTRACT(EPOCH FROM (NOW() - v_rig.deactivated_at));
+
+      IF v_seconds_since_off < v_quick_toggle_threshold THEN
+        -- Penalización: temperatura x10 (pero mínimo 50°C para que duela)
+        v_new_temperature := LEAST(100, GREATEST(50, v_rig.temperature * v_temperature_multiplier));
+        v_quick_toggle_penalty := true;
+      ELSE
+        -- Enfriamiento gradual basado en tiempo apagado
+        -- Cada 60 segundos reduce 10 grados, mínimo temperatura ambiente (25)
+        v_new_temperature := GREATEST(25, v_rig.temperature - (v_seconds_since_off / 60) * 10);
+      END IF;
+    ELSE
+      -- Primera vez que se enciende, temperatura ambiente
+      v_new_temperature := 25;
+    END IF;
+
+    -- Encender el rig
+    UPDATE player_rigs
+    SET is_active = true,
+        activated_at = NOW(),
+        deactivated_at = NULL,
+        temperature = v_new_temperature
+    WHERE id = p_rig_id
+    RETURNING * INTO v_rig;
+
+    RETURN json_build_object(
+      'success', true,
+      'isActive', true,
+      'activatedAt', v_rig.activated_at,
+      'temperature', v_rig.temperature,
+      'quickTogglePenalty', v_quick_toggle_penalty,
+      'message', CASE
+        WHEN v_quick_toggle_penalty THEN 'Rig activado con penalización por toggle rápido'
+        ELSE 'Rig activado'
+      END
+    );
+  ELSE
+    -- Apagar el rig (conservar temperatura para anti-exploit)
+    UPDATE player_rigs
+    SET is_active = false,
+        activated_at = NULL,
+        deactivated_at = NOW()
+    WHERE id = p_rig_id
+    RETURNING * INTO v_rig;
+
+    RETURN json_build_object(
+      'success', true,
+      'isActive', false,
+      'deactivatedAt', v_rig.deactivated_at,
+      'temperature', v_rig.temperature,
+      'message', 'Rig desactivado'
+    );
   END IF;
-
-  UPDATE player_rigs
-  SET is_active = NOT is_active,
-      activated_at = CASE WHEN NOT is_active THEN NOW() ELSE NULL END,
-      temperature = 0
-  WHERE id = p_rig_id
-  RETURNING * INTO v_rig;
-
-  RETURN json_build_object(
-    'success', true,
-    'isActive', v_rig.is_active,
-    'activatedAt', v_rig.activated_at,
-    'message', CASE WHEN v_rig.is_active THEN 'Rig activado' ELSE 'Rig desactivado' END
-  );
 END;
 $$;
 
@@ -1021,7 +1070,7 @@ BEGIN
 END;
 $$;
 
--- Bloques recientes
+-- Bloques recientes (reward e is_premium se guardan en blocks)
 CREATE OR REPLACE FUNCTION get_recent_blocks(p_limit INT DEFAULT 20)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -1032,7 +1081,9 @@ BEGIN
     SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
     FROM (
       SELECT b.id, b.height, b.hash, b.difficulty, b.network_hashrate, b.created_at,
-             json_build_object('id', p.id, 'username', p.username) as miner
+             json_build_object('id', p.id, 'username', p.username) as miner,
+             COALESCE(b.reward, calculate_block_reward(b.height)) as reward,
+             COALESCE(b.is_premium, false) as is_premium
       FROM blocks b
       JOIN players p ON p.id = b.miner_id
       ORDER BY b.height DESC
@@ -1103,11 +1154,13 @@ BEGIN
 END;
 $$;
 
--- Crear nuevo bloque
+-- Crear nuevo bloque (con reward e is_premium para historial público)
 CREATE OR REPLACE FUNCTION create_new_block(
   p_miner_id UUID,
   p_difficulty NUMERIC,
-  p_network_hashrate NUMERIC
+  p_network_hashrate NUMERIC,
+  p_reward NUMERIC DEFAULT NULL,
+  p_is_premium BOOLEAN DEFAULT false
 )
 RETURNS blocks
 LANGUAGE plpgsql
@@ -1129,8 +1182,8 @@ BEGIN
     (v_new_height::TEXT || v_previous_hash || p_miner_id::TEXT || NOW()::TEXT || random()::TEXT)::BYTEA
   ), 'hex');
 
-  INSERT INTO blocks (height, hash, previous_hash, miner_id, difficulty, network_hashrate)
-  VALUES (v_new_height, v_new_hash, v_previous_hash, p_miner_id, p_difficulty, p_network_hashrate)
+  INSERT INTO blocks (height, hash, previous_hash, miner_id, difficulty, network_hashrate, reward, is_premium)
+  VALUES (v_new_height, v_new_hash, v_previous_hash, p_miner_id, p_difficulty, p_network_hashrate, p_reward, p_is_premium)
   RETURNING * INTO v_block;
 
   RETURN v_block;
@@ -1331,9 +1384,13 @@ BEGIN
       -- Eliminar boosts expirados
       DELETE FROM rig_boosts WHERE player_rig_id = v_rig.id AND remaining_seconds <= 0;
 
-      -- Si condición llega a 0, apagar el rig y resetear temperatura
+      -- Si condición llega a 0, apagar el rig (conservar temperatura para anti-exploit)
       IF (v_rig.condition - v_deterioration) <= 0 THEN
-        UPDATE player_rigs SET is_active = false, temperature = 0 WHERE id = v_rig.id;
+        UPDATE player_rigs
+        SET is_active = false,
+            deactivated_at = NOW(),
+            activated_at = NULL
+        WHERE id = v_rig.id;
         INSERT INTO player_events (player_id, type, data)
         VALUES (v_player.id, 'rig_broken', json_build_object(
           'rig_id', v_rig.id,
@@ -1354,9 +1411,13 @@ BEGIN
         internet = v_new_internet
     WHERE id = v_player.id;
 
-    -- Apagar rigs si no hay energía o internet y resetear temperatura
+    -- Apagar rigs si no hay energía o internet (conservar temperatura para anti-exploit)
     IF v_new_energy = 0 OR v_new_internet = 0 THEN
-      UPDATE player_rigs SET is_active = false, temperature = 0 WHERE player_id = v_player.id;
+      UPDATE player_rigs
+      SET is_active = false,
+          deactivated_at = NOW(),
+          activated_at = NULL
+      WHERE player_id = v_player.id AND is_active = true;
       INSERT INTO player_events (player_id, type, data)
       VALUES (v_player.id, 'rigs_shutdown', json_build_object(
         'reason', CASE WHEN v_new_energy = 0 THEN 'energy' ELSE 'internet' END
@@ -1536,29 +1597,44 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Crear bloque
-  v_block := create_new_block(v_winner_player_id, v_difficulty, v_network_hashrate);
+  -- Calcular altura del siguiente bloque y recompensa ANTES de crear
+  DECLARE
+    v_next_height INT;
+    v_is_premium BOOLEAN;
+    v_base_reward NUMERIC;
+  BEGIN
+    SELECT COALESCE(MAX(height), 0) + 1 INTO v_next_height FROM blocks;
+    v_base_reward := calculate_block_reward(v_next_height);
+    v_is_premium := is_player_premium(v_winner_player_id);
 
-  IF v_block.id IS NULL THEN
-    RETURN QUERY SELECT false, NULL::INT;
-    RETURN;
-  END IF;
+    -- Aplicar bonus premium (+50%)
+    IF v_is_premium THEN
+      v_reward := v_base_reward * 1.5;
+    ELSE
+      v_reward := v_base_reward;
+    END IF;
 
-  -- Recompensa
-  v_reward := calculate_block_reward(v_block.height);
+    -- Crear bloque con reward e is_premium guardados
+    v_block := create_new_block(v_winner_player_id, v_difficulty, v_network_hashrate, v_reward, v_is_premium);
 
-  UPDATE players
-  SET crypto_balance = crypto_balance + v_reward,
-      blocks_mined = COALESCE(blocks_mined, 0) + 1,
-      total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_reward
-  WHERE id = v_winner_player_id;
+    IF v_block.id IS NULL THEN
+      RETURN QUERY SELECT false, NULL::INT;
+      RETURN;
+    END IF;
 
-  INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (v_winner_player_id, 'mining_reward', v_reward, 'crypto', 'Recompensa por minar bloque #' || v_block.height);
+    UPDATE players
+    SET crypto_balance = crypto_balance + v_reward,
+        blocks_mined = COALESCE(blocks_mined, 0) + 1,
+        total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_reward
+    WHERE id = v_winner_player_id;
 
-  PERFORM update_reputation(v_winner_player_id, 0.1, 'block_mined');
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (v_winner_player_id, 'mining_reward', v_reward, 'crypto', 'Recompensa por minar bloque #' || v_block.height);
 
-  RETURN QUERY SELECT true, v_block.height;
+    PERFORM update_reputation(v_winner_player_id, 0.1, 'block_mined');
+
+    RETURN QUERY SELECT true, v_block.height;
+  END;
 END;
 $$;
 
@@ -1663,9 +1739,12 @@ BEGIN
 
   -- Apagar rigs de jugadores que acaban de ser marcados offline
   -- EXCEPTO los que tienen boost de autonomous_mining activo
+  -- Conservar temperatura para anti-exploit de toggle rápido
   IF v_inactive_marked > 0 THEN
     UPDATE player_rigs
-    SET is_active = false, temperature = 25, activated_at = NULL
+    SET is_active = false,
+        deactivated_at = NOW(),
+        activated_at = NULL
     WHERE player_id IN (
       SELECT id FROM players
       WHERE is_online = false
@@ -4203,3 +4282,515 @@ BEGIN
   );
 END;
 $$;
+
+-- =====================================================
+-- FUNCIONES BASICAS (desde migrations)
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION increment_balance(p_player_id UUID, p_amount DECIMAL, p_currency TEXT)
+RETURNS DECIMAL
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE new_balance DECIMAL;
+BEGIN
+  IF p_currency = 'gamecoin' THEN
+    UPDATE players SET gamecoin_balance = gamecoin_balance + p_amount, updated_at = NOW()
+    WHERE id = p_player_id RETURNING gamecoin_balance INTO new_balance;
+  ELSIF p_currency = 'crypto' THEN
+    UPDATE players SET crypto_balance = crypto_balance + p_amount, updated_at = NOW()
+    WHERE id = p_player_id RETURNING crypto_balance INTO new_balance;
+  END IF;
+  RETURN new_balance;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION update_reputation(p_player_id UUID, p_delta DECIMAL, p_reason TEXT)
+RETURNS DECIMAL
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE old_score DECIMAL; new_score DECIMAL;
+BEGIN
+  SELECT reputation_score INTO old_score FROM players WHERE id = p_player_id;
+  new_score := GREATEST(0, LEAST(100, old_score + p_delta));
+  UPDATE players SET reputation_score = new_score, updated_at = NOW() WHERE id = p_player_id;
+  INSERT INTO reputation_events (player_id, delta, reason, old_score, new_score)
+  VALUES (p_player_id, p_delta, p_reason, old_score, new_score);
+  RETURN new_score;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION generate_card_code()
+RETURNS TEXT LANGUAGE plpgsql AS $$
+DECLARE v_code TEXT; v_exists BOOLEAN;
+BEGIN
+  LOOP
+    v_code := UPPER(SUBSTRING(MD5(RANDOM()::TEXT || NOW()::TEXT) FROM 1 FOR 4) || '-' ||
+      SUBSTRING(MD5(RANDOM()::TEXT || NOW()::TEXT) FROM 5 FOR 4) || '-' ||
+      SUBSTRING(MD5(RANDOM()::TEXT || NOW()::TEXT) FROM 9 FOR 4));
+    SELECT EXISTS(SELECT 1 FROM player_cards WHERE code = v_code) INTO v_exists;
+    IF NOT v_exists THEN RETURN v_code; END IF;
+  END LOOP;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_players_updated_at ON players;
+CREATE TRIGGER update_players_updated_at BEFORE UPDATE ON players
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =====================================================
+-- FUNCIONES PREMIUM
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION is_player_premium(p_player_id UUID)
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_premium_until TIMESTAMPTZ;
+BEGIN
+  SELECT premium_until INTO v_premium_until FROM players WHERE id = p_player_id;
+  RETURN COALESCE(v_premium_until > NOW(), false);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_block_reward_multiplier(p_player_id UUID)
+RETURNS DECIMAL LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF is_player_premium(p_player_id) THEN RETURN 1.5; ELSE RETURN 1.0; END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_withdrawal_fee_rate(p_player_id UUID)
+RETURNS DECIMAL LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF is_player_premium(p_player_id) THEN RETURN 0.10; ELSE RETURN 0.25; END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_premium_resource_bonus()
+RETURNS INTEGER LANGUAGE plpgsql AS $$
+BEGIN RETURN 500; END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_effective_max_energy(p_player_id UUID)
+RETURNS INTEGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_base_max INTEGER; v_bonus INTEGER := 0;
+BEGIN
+  SELECT max_energy INTO v_base_max FROM players WHERE id = p_player_id;
+  IF is_player_premium(p_player_id) THEN v_bonus := get_premium_resource_bonus(); END IF;
+  RETURN COALESCE(v_base_max, 100) + v_bonus;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_effective_max_internet(p_player_id UUID)
+RETURNS INTEGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_base_max INTEGER; v_bonus INTEGER := 0;
+BEGIN
+  SELECT max_internet INTO v_base_max FROM players WHERE id = p_player_id;
+  IF is_player_premium(p_player_id) THEN v_bonus := get_premium_resource_bonus(); END IF;
+  RETURN COALESCE(v_base_max, 100) + v_bonus;
+END;
+$$;
+
+-- =====================================================
+-- FUNCIONES DE BLOQUES
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION get_pending_blocks(p_player_id UUID)
+RETURNS TABLE(id UUID, block_id UUID, block_height INTEGER, reward DECIMAL, created_at TIMESTAMPTZ)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  RETURN QUERY SELECT pb.id, pb.block_id, b.height, pb.reward, pb.created_at
+  FROM pending_blocks pb JOIN blocks b ON b.id = pb.block_id
+  WHERE pb.player_id = p_player_id AND pb.claimed = false ORDER BY pb.created_at DESC;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION claim_block(p_pending_id UUID)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_pending pending_blocks%ROWTYPE; v_player_id UUID;
+BEGIN
+  v_player_id := auth.uid();
+  IF v_player_id IS NULL THEN RETURN json_build_object('success', false, 'error', 'No autenticado'); END IF;
+  SELECT * INTO v_pending FROM pending_blocks WHERE id = p_pending_id AND player_id = v_player_id AND claimed = false;
+  IF v_pending.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Bloque no encontrado'); END IF;
+  UPDATE pending_blocks SET claimed = true, claimed_at = NOW() WHERE id = p_pending_id;
+  UPDATE players SET crypto_balance = crypto_balance + v_pending.reward,
+    blocks_mined = COALESCE(blocks_mined, 0) + 1,
+    total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_pending.reward WHERE id = v_player_id;
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (v_player_id, 'block_claim', v_pending.reward, 'crypto', 'Bloque reclamado');
+  RETURN json_build_object('success', true, 'reward', v_pending.reward, 'block_id', v_pending.block_id);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION claim_all_blocks()
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_player_id UUID; v_total_reward DECIMAL := 0; v_count INTEGER := 0; v_pending RECORD;
+BEGIN
+  v_player_id := auth.uid();
+  IF v_player_id IS NULL THEN RETURN json_build_object('success', false, 'error', 'No autenticado'); END IF;
+  FOR v_pending IN SELECT id, reward FROM pending_blocks WHERE player_id = v_player_id AND claimed = false LOOP
+    v_total_reward := v_total_reward + v_pending.reward; v_count := v_count + 1;
+    UPDATE pending_blocks SET claimed = true, claimed_at = NOW() WHERE id = v_pending.id;
+  END LOOP;
+  IF v_count = 0 THEN RETURN json_build_object('success', false, 'error', 'No hay bloques pendientes'); END IF;
+  UPDATE players SET crypto_balance = crypto_balance + v_total_reward,
+    blocks_mined = COALESCE(blocks_mined, 0) + v_count,
+    total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_total_reward WHERE id = v_player_id;
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (v_player_id, 'block_claim_all', v_total_reward, 'crypto', 'Reclamados ' || v_count || ' bloques');
+  RETURN json_build_object('success', true, 'total_reward', v_total_reward, 'blocks_claimed', v_count);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_pending_blocks_count(p_player_id UUID)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_count INTEGER; v_total_reward DECIMAL;
+BEGIN
+  SELECT COUNT(*), COALESCE(SUM(reward), 0) INTO v_count, v_total_reward
+  FROM pending_blocks WHERE player_id = p_player_id AND claimed = false;
+  RETURN json_build_object('count', v_count, 'total_reward', v_total_reward);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_recent_blocks(p_limit INT DEFAULT 20)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  RETURN (SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON) FROM (
+    SELECT b.id, b.height, b.hash, b.difficulty, b.network_hashrate, b.created_at,
+      json_build_object('id', p.id, 'username', p.username) as miner,
+      COALESCE(b.reward, calculate_block_reward(b.height)) as reward,
+      COALESCE(b.is_premium, false) as is_premium
+    FROM blocks b JOIN players p ON p.id = b.miner_id
+    ORDER BY b.height DESC LIMIT p_limit
+  ) t);
+END;
+$$;
+
+-- =====================================================
+-- FUNCIONES DE COMPRA PREMIUM
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION purchase_premium(p_player_id UUID)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_player players%ROWTYPE; v_price DECIMAL := 5; v_new_expires TIMESTAMPTZ; v_subscription_id UUID;
+BEGIN
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
+  IF v_player.premium_until IS NOT NULL AND v_player.premium_until > NOW() THEN
+    RETURN json_build_object('success', false, 'error', 'Ya tienes Premium activo', 'expires_at', v_player.premium_until);
+  END IF;
+  IF COALESCE(v_player.ron_balance, 0) < v_price THEN
+    RETURN json_build_object('success', false, 'error', 'Balance insuficiente', 'required', v_price, 'current', COALESCE(v_player.ron_balance, 0));
+  END IF;
+  v_new_expires := NOW() + INTERVAL '30 days';
+  UPDATE players SET ron_balance = ron_balance - v_price, premium_until = v_new_expires WHERE id = p_player_id;
+  INSERT INTO premium_subscriptions (player_id, expires_at, amount_paid) VALUES (p_player_id, v_new_expires, v_price) RETURNING id INTO v_subscription_id;
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'premium_purchase', -v_price, 'ron', 'Suscripcion Premium (30 dias)');
+  RETURN json_build_object('success', true, 'subscription_id', v_subscription_id, 'expires_at', v_new_expires, 'price', v_price);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_premium_status(p_player_id UUID)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_player players%ROWTYPE; v_is_premium BOOLEAN; v_days_remaining INTEGER;
+BEGIN
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
+  v_is_premium := COALESCE(v_player.premium_until > NOW(), false);
+  v_days_remaining := CASE WHEN v_is_premium THEN EXTRACT(DAY FROM (v_player.premium_until - NOW()))::INTEGER ELSE 0 END;
+  RETURN json_build_object('success', true, 'is_premium', v_is_premium, 'expires_at', v_player.premium_until,
+    'days_remaining', v_days_remaining, 'price', 5, 'benefits', json_build_object('block_bonus', '+50%', 'withdrawal_fee', '10%', 'resource_bonus', '+500'));
+END;
+$$;
+
+-- =====================================================
+-- FUNCIONES DE RON
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION deposit_ron(p_player_id UUID, p_amount DECIMAL, p_tx_hash TEXT)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_existing_id UUID; v_new_balance DECIMAL;
+BEGIN
+  IF p_amount <= 0 THEN RETURN json_build_object('success', false, 'error', 'Cantidad invalida'); END IF;
+  IF p_tx_hash IS NULL OR p_tx_hash = '' THEN RETURN json_build_object('success', false, 'error', 'Hash requerido'); END IF;
+  SELECT id INTO v_existing_id FROM ron_deposits WHERE tx_hash = p_tx_hash LIMIT 1;
+  IF v_existing_id IS NOT NULL THEN RETURN json_build_object('success', false, 'error', 'Transaccion ya procesada'); END IF;
+  INSERT INTO ron_deposits (player_id, amount, tx_hash, status) VALUES (p_player_id, p_amount, p_tx_hash, 'completed');
+  UPDATE players SET ron_balance = ron_balance + p_amount, updated_at = NOW() WHERE id = p_player_id RETURNING ron_balance INTO v_new_balance;
+  INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (p_player_id, 'ron_deposit', p_amount, 'ron', 'Deposito de RON');
+  RETURN json_build_object('success', true, 'amount', p_amount, 'new_balance', v_new_balance);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION request_ron_withdrawal(p_player_id UUID)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_player players%ROWTYPE; v_pending_count INTEGER; v_withdrawal_id UUID;
+  v_min_withdrawal DECIMAL := 0.01; v_fee_rate DECIMAL; v_fee DECIMAL; v_net_amount DECIMAL; v_is_premium BOOLEAN;
+BEGIN
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
+  IF v_player.ron_wallet IS NULL OR v_player.ron_wallet = '' THEN RETURN json_build_object('success', false, 'error', 'No tienes wallet'); END IF;
+  IF COALESCE(v_player.ron_balance, 0) < v_min_withdrawal THEN RETURN json_build_object('success', false, 'error', 'Balance insuficiente'); END IF;
+  v_is_premium := is_player_premium(p_player_id);
+  v_fee_rate := get_withdrawal_fee_rate(p_player_id);
+  v_fee := ROUND(v_player.ron_balance * v_fee_rate, 8);
+  v_net_amount := v_player.ron_balance - v_fee;
+  SELECT COUNT(*) INTO v_pending_count FROM ron_withdrawals WHERE player_id = p_player_id AND status IN ('pending', 'processing');
+  IF v_pending_count > 0 THEN RETURN json_build_object('success', false, 'error', 'Ya tienes un retiro en proceso'); END IF;
+  INSERT INTO ron_withdrawals (player_id, amount, fee, net_amount, wallet_address, status)
+  VALUES (p_player_id, v_player.ron_balance, v_fee, v_net_amount, v_player.ron_wallet, 'pending') RETURNING id INTO v_withdrawal_id;
+  UPDATE players SET ron_balance = 0 WHERE id = p_player_id;
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'ron_withdrawal', -v_player.ron_balance, 'ron', 'Retiro de ' || v_net_amount || ' RON');
+  RETURN json_build_object('success', true, 'withdrawal_id', v_withdrawal_id, 'amount', v_player.ron_balance,
+    'fee', v_fee, 'fee_rate', v_fee_rate, 'net_amount', v_net_amount, 'wallet', v_player.ron_wallet, 'is_premium', v_is_premium);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_withdrawal_history(p_player_id UUID, p_limit INTEGER DEFAULT 10)
+RETURNS TABLE(id UUID, amount DECIMAL, fee DECIMAL, net_amount DECIMAL, wallet_address TEXT, status TEXT, tx_hash TEXT, created_at TIMESTAMPTZ, processed_at TIMESTAMPTZ)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  RETURN QUERY SELECT w.id, w.amount, w.fee, w.net_amount, w.wallet_address, w.status, w.tx_hash, w.created_at, w.processed_at
+  FROM ron_withdrawals w WHERE w.player_id = p_player_id ORDER BY w.created_at DESC LIMIT p_limit;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION cancel_withdrawal(p_player_id UUID, p_withdrawal_id UUID)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_withdrawal ron_withdrawals%ROWTYPE;
+BEGIN
+  SELECT * INTO v_withdrawal FROM ron_withdrawals WHERE id = p_withdrawal_id AND player_id = p_player_id;
+  IF v_withdrawal.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Retiro no encontrado'); END IF;
+  IF v_withdrawal.status != 'pending' THEN RETURN json_build_object('success', false, 'error', 'Solo se pueden cancelar retiros pendientes'); END IF;
+  UPDATE ron_withdrawals SET status = 'cancelled' WHERE id = p_withdrawal_id;
+  UPDATE players SET ron_balance = COALESCE(ron_balance, 0) + v_withdrawal.amount WHERE id = p_player_id;
+  INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (p_player_id, 'withdrawal_cancelled', v_withdrawal.amount, 'ron', 'Retiro cancelado');
+  RETURN json_build_object('success', true, 'refunded', v_withdrawal.amount);
+END;
+$$;
+
+-- =====================================================
+-- FUNCIONES DE COMPRA
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION buy_crypto_package(p_player_id UUID, p_package_id TEXT, p_tx_hash TEXT DEFAULT NULL)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_player players%ROWTYPE; v_package crypto_packages%ROWTYPE; v_total_crypto NUMERIC; v_purchase_id UUID;
+BEGIN
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
+  SELECT * INTO v_package FROM crypto_packages WHERE id = p_package_id AND is_active = true;
+  IF v_package IS NULL THEN RETURN json_build_object('success', false, 'error', 'Paquete no disponible'); END IF;
+  IF COALESCE(v_player.ron_balance, 0) < v_package.ron_price THEN
+    RETURN json_build_object('success', false, 'error', 'Balance insuficiente', 'required', v_package.ron_price, 'current', v_player.ron_balance);
+  END IF;
+  v_total_crypto := v_package.crypto_amount * (1 + v_package.bonus_percent::NUMERIC / 100);
+  UPDATE players SET ron_balance = ron_balance - v_package.ron_price, crypto_balance = crypto_balance + v_total_crypto, updated_at = NOW() WHERE id = p_player_id;
+  INSERT INTO crypto_purchases (player_id, package_id, crypto_amount, ron_paid, tx_hash, status, completed_at)
+  VALUES (p_player_id, p_package_id, v_total_crypto, v_package.ron_price, NULL, 'completed', NOW()) RETURNING id INTO v_purchase_id;
+  INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (p_player_id, 'crypto_purchase', -v_package.ron_price, 'ron', 'Compra de ' || v_package.name);
+  INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (p_player_id, 'crypto_purchase', v_total_crypto, 'crypto', 'Compra de ' || v_package.name);
+  RETURN json_build_object('success', true, 'purchase_id', v_purchase_id, 'crypto_received', v_total_crypto, 'ron_paid', v_package.ron_price);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION redeem_prepaid_card(p_player_id UUID, p_code TEXT)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_player_card player_cards%ROWTYPE; v_card prepaid_cards%ROWTYPE; v_new_value NUMERIC; v_effective_max NUMERIC;
+BEGIN
+  SELECT * INTO v_player_card FROM player_cards WHERE code = UPPER(TRIM(p_code)) AND player_id = p_player_id;
+  IF v_player_card IS NULL THEN RETURN json_build_object('success', false, 'error', 'Codigo invalido'); END IF;
+  IF v_player_card.is_redeemed THEN RETURN json_build_object('success', false, 'error', 'Ya canjeada'); END IF;
+  SELECT * INTO v_card FROM prepaid_cards WHERE id = v_player_card.card_id;
+  IF v_card.card_type = 'energy' THEN
+    v_effective_max := get_effective_max_energy(p_player_id);
+    UPDATE players SET energy = LEAST(v_effective_max, energy + v_card.amount) WHERE id = p_player_id RETURNING energy INTO v_new_value;
+  ELSE
+    v_effective_max := get_effective_max_internet(p_player_id);
+    UPDATE players SET internet = LEAST(v_effective_max, internet + v_card.amount) WHERE id = p_player_id RETURNING internet INTO v_new_value;
+  END IF;
+  UPDATE player_cards SET is_redeemed = true, redeemed_at = NOW() WHERE id = v_player_card.id;
+  INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (p_player_id, v_card.card_type || '_recharge', v_card.amount, 'gamecoin', 'Recarga: ' || v_card.name);
+  RETURN json_build_object('success', true, 'card_type', v_card.card_type, 'amount', v_card.amount, 'new_value', v_new_value);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION claim_mission_reward(p_player_id UUID, p_mission_uuid UUID)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_pm player_missions%ROWTYPE; v_mission missions%ROWTYPE; v_effective_max NUMERIC;
+BEGIN
+  SELECT * INTO v_pm FROM player_missions WHERE id = p_mission_uuid AND player_id = p_player_id;
+  IF v_pm IS NULL THEN RETURN json_build_object('success', false, 'error', 'Mision no encontrada'); END IF;
+  IF NOT v_pm.is_completed THEN RETURN json_build_object('success', false, 'error', 'No completada'); END IF;
+  IF v_pm.is_claimed THEN RETURN json_build_object('success', false, 'error', 'Ya reclamada'); END IF;
+  SELECT * INTO v_mission FROM missions WHERE id = v_pm.mission_id;
+  IF v_mission.reward_type = 'gamecoin' THEN
+    UPDATE players SET gamecoin_balance = gamecoin_balance + v_mission.reward_amount WHERE id = p_player_id;
+  ELSIF v_mission.reward_type = 'crypto' THEN
+    UPDATE players SET crypto_balance = crypto_balance + v_mission.reward_amount, total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_mission.reward_amount WHERE id = p_player_id;
+  ELSIF v_mission.reward_type = 'energy' THEN
+    v_effective_max := get_effective_max_energy(p_player_id);
+    UPDATE players SET energy = LEAST(v_effective_max, energy + v_mission.reward_amount) WHERE id = p_player_id;
+  ELSIF v_mission.reward_type = 'internet' THEN
+    v_effective_max := get_effective_max_internet(p_player_id);
+    UPDATE players SET internet = LEAST(v_effective_max, internet + v_mission.reward_amount) WHERE id = p_player_id;
+  END IF;
+  UPDATE player_missions SET is_claimed = true, claimed_at = NOW() WHERE id = p_mission_uuid;
+  INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (p_player_id, 'mission_reward', v_mission.reward_amount, v_mission.reward_type, 'Mision: ' || v_mission.name);
+  RETURN json_build_object('success', true, 'rewardType', v_mission.reward_type, 'rewardAmount', v_mission.reward_amount, 'missionName', v_mission.name);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION apply_passive_regeneration(p_player_id UUID)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_player players%ROWTYPE; v_hours_offline NUMERIC; v_regen_rate NUMERIC := 5;
+  v_energy_regen NUMERIC := 0; v_internet_regen NUMERIC := 0; v_new_energy NUMERIC; v_new_internet NUMERIC;
+  v_max_energy_cap NUMERIC; v_max_internet_cap NUMERIC; v_effective_max_energy NUMERIC; v_effective_max_internet NUMERIC;
+BEGIN
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
+  IF v_player.last_seen IS NULL THEN RETURN json_build_object('success', true, 'energyGained', 0, 'internetGained', 0); END IF;
+  v_hours_offline := LEAST(24, EXTRACT(EPOCH FROM (NOW() - v_player.last_seen)) / 3600);
+  IF v_hours_offline < 0.0833 THEN RETURN json_build_object('success', true, 'energyGained', 0, 'internetGained', 0); END IF;
+  v_effective_max_energy := get_effective_max_energy(p_player_id);
+  v_effective_max_internet := get_effective_max_internet(p_player_id);
+  v_max_energy_cap := v_effective_max_energy * 0.5;
+  v_max_internet_cap := v_effective_max_internet * 0.5;
+  IF v_player.energy < v_max_energy_cap THEN
+    v_energy_regen := LEAST(v_max_energy_cap - v_player.energy, v_hours_offline * v_regen_rate);
+    v_new_energy := LEAST(v_max_energy_cap, v_player.energy + v_energy_regen);
+  ELSE v_new_energy := v_player.energy; END IF;
+  IF v_player.internet < v_max_internet_cap THEN
+    v_internet_regen := LEAST(v_max_internet_cap - v_player.internet, v_hours_offline * v_regen_rate);
+    v_new_internet := LEAST(v_max_internet_cap, v_player.internet + v_internet_regen);
+  ELSE v_new_internet := v_player.internet; END IF;
+  IF v_energy_regen > 0 OR v_internet_regen > 0 THEN
+    UPDATE players SET energy = v_new_energy, internet = v_new_internet, last_seen = NOW() WHERE id = p_player_id;
+  ELSE UPDATE players SET last_seen = NOW() WHERE id = p_player_id; END IF;
+  RETURN json_build_object('success', true, 'energyGained', ROUND(v_energy_regen, 1), 'internetGained', ROUND(v_internet_regen, 1),
+    'hoursOffline', ROUND(v_hours_offline, 2), 'effectiveMaxEnergy', v_effective_max_energy, 'effectiveMaxInternet', v_effective_max_internet);
+END;
+$$;
+
+-- =====================================================
+-- FUNCIONES DE PERFIL
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION update_ron_wallet(p_player_id UUID, p_wallet_address TEXT)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_clean_wallet TEXT;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM players WHERE id = p_player_id) THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
+  v_clean_wallet := TRIM(p_wallet_address);
+  IF v_clean_wallet IS NULL OR v_clean_wallet = '' THEN
+    UPDATE players SET ron_wallet = NULL, updated_at = NOW() WHERE id = p_player_id;
+    RETURN json_build_object('success', true, 'wallet', NULL);
+  END IF;
+  IF NOT (v_clean_wallet ~* '^0x[a-fA-F0-9]{40}$') THEN RETURN json_build_object('success', false, 'error', 'Formato invalido'); END IF;
+  UPDATE players SET ron_wallet = v_clean_wallet, updated_at = NOW() WHERE id = p_player_id;
+  RETURN json_build_object('success', true, 'wallet', v_clean_wallet);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION reset_player_account(p_player_id UUID)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM players WHERE id = p_player_id) THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
+  DELETE FROM player_rigs WHERE player_id = p_player_id;
+  DELETE FROM player_cooling WHERE player_id = p_player_id;
+  DELETE FROM player_inventory WHERE player_id = p_player_id;
+  DELETE FROM player_cards WHERE player_id = p_player_id;
+  DELETE FROM player_boosts WHERE player_id = p_player_id;
+  DELETE FROM player_missions WHERE player_id = p_player_id;
+  DELETE FROM player_streaks WHERE player_id = p_player_id;
+  DELETE FROM streak_claims WHERE player_id = p_player_id;
+  DELETE FROM market_orders WHERE player_id = p_player_id;
+  DELETE FROM transactions WHERE player_id = p_player_id;
+  UPDATE players SET gamecoin_balance = 1000, crypto_balance = 0, energy = 100, internet = 100, reputation_score = 50, rig_slots = 1, blocks_mined = 0, updated_at = NOW() WHERE id = p_player_id;
+  INSERT INTO player_rigs (player_id, rig_id, condition, is_active) VALUES (p_player_id, 'basic_miner', 100, false);
+  INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (p_player_id, 'account_reset', 1000, 'gamecoin', 'Cuenta reiniciada');
+  RETURN json_build_object('success', true, 'message', 'Cuenta reiniciada');
+END;
+$$;
+
+-- =====================================================
+-- FUNCIONES DE UPGRADES
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION upgrade_rig(p_player_id UUID, p_player_rig_id UUID, p_upgrade_type TEXT)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_player RECORD; v_player_rig RECORD; v_current_level INTEGER; v_next_level INTEGER; v_upgrade_cost RECORD;
+BEGIN
+  IF p_upgrade_type NOT IN ('hashrate', 'efficiency', 'thermal') THEN RETURN jsonb_build_object('success', false, 'error', 'Tipo invalido'); END IF;
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
+  SELECT pr.*, r.max_upgrade_level INTO v_player_rig FROM player_rigs pr JOIN rigs r ON pr.rig_id = r.id WHERE pr.id = p_player_rig_id AND pr.player_id = p_player_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Rig no encontrado'); END IF;
+  IF v_player_rig.is_active THEN RETURN jsonb_build_object('success', false, 'error', 'Deten el rig primero'); END IF;
+  CASE p_upgrade_type WHEN 'hashrate' THEN v_current_level := v_player_rig.hashrate_level;
+    WHEN 'efficiency' THEN v_current_level := v_player_rig.efficiency_level;
+    WHEN 'thermal' THEN v_current_level := v_player_rig.thermal_level; END CASE;
+  v_next_level := v_current_level + 1;
+  IF v_next_level > v_player_rig.max_upgrade_level THEN RETURN jsonb_build_object('success', false, 'error', 'Nivel maximo alcanzado'); END IF;
+  SELECT * INTO v_upgrade_cost FROM upgrade_costs WHERE level = v_next_level;
+  IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Nivel no valido'); END IF;
+  IF v_player.crypto_balance < v_upgrade_cost.crypto_cost THEN RETURN jsonb_build_object('success', false, 'error', 'Crypto insuficiente', 'required', v_upgrade_cost.crypto_cost); END IF;
+  UPDATE players SET crypto_balance = crypto_balance - v_upgrade_cost.crypto_cost WHERE id = p_player_id;
+  CASE p_upgrade_type WHEN 'hashrate' THEN UPDATE player_rigs SET hashrate_level = v_next_level WHERE id = p_player_rig_id;
+    WHEN 'efficiency' THEN UPDATE player_rigs SET efficiency_level = v_next_level WHERE id = p_player_rig_id;
+    WHEN 'thermal' THEN UPDATE player_rigs SET thermal_level = v_next_level WHERE id = p_player_rig_id; END CASE;
+  RETURN jsonb_build_object('success', true, 'upgrade_type', p_upgrade_type, 'new_level', v_next_level, 'crypto_spent', v_upgrade_cost.crypto_cost);
+END;
+$$;
+
+-- =====================================================
+-- FUNCIONES ADMIN PARA RETIROS
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION admin_get_pending_withdrawals()
+RETURNS TABLE(id UUID, player_id UUID, username TEXT, email TEXT, amount DECIMAL, fee DECIMAL, net_amount DECIMAL, wallet_address TEXT, status TEXT, created_at TIMESTAMPTZ)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  RETURN QUERY SELECT w.id, w.player_id, p.username, p.email, w.amount, w.fee, w.net_amount, w.wallet_address, w.status, w.created_at
+  FROM ron_withdrawals w JOIN players p ON p.id = w.player_id WHERE w.status IN ('pending', 'processing') ORDER BY w.created_at ASC;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION admin_complete_withdrawal(p_withdrawal_id UUID, p_tx_hash TEXT)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_withdrawal ron_withdrawals%ROWTYPE;
+BEGIN
+  SELECT * INTO v_withdrawal FROM ron_withdrawals WHERE id = p_withdrawal_id;
+  IF v_withdrawal.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Retiro no encontrado'); END IF;
+  IF v_withdrawal.status NOT IN ('pending', 'processing') THEN RETURN json_build_object('success', false, 'error', 'Ya procesado'); END IF;
+  UPDATE ron_withdrawals SET status = 'completed', tx_hash = p_tx_hash, processed_at = NOW() WHERE id = p_withdrawal_id;
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION admin_fail_withdrawal(p_withdrawal_id UUID, p_error_message TEXT)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_withdrawal ron_withdrawals%ROWTYPE;
+BEGIN
+  SELECT * INTO v_withdrawal FROM ron_withdrawals WHERE id = p_withdrawal_id;
+  IF v_withdrawal.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Retiro no encontrado'); END IF;
+  IF v_withdrawal.status NOT IN ('pending', 'processing') THEN RETURN json_build_object('success', false, 'error', 'Ya procesado'); END IF;
+  UPDATE ron_withdrawals SET status = 'failed', error_message = p_error_message, processed_at = NOW() WHERE id = p_withdrawal_id;
+  UPDATE players SET ron_balance = COALESCE(ron_balance, 0) + v_withdrawal.amount WHERE id = v_withdrawal.player_id;
+  INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (v_withdrawal.player_id, 'withdrawal_failed', v_withdrawal.amount, 'ron', 'Retiro fallido - devuelto');
+  RETURN json_build_object('success', true, 'refunded', v_withdrawal.amount);
+END;
+$$;
+
+-- =====================================================
+-- GRANTS PARA FUNCIONES
+-- =====================================================
+
+GRANT EXECUTE ON FUNCTION upgrade_rig TO authenticated;
+GRANT EXECUTE ON FUNCTION get_pending_blocks TO authenticated;
+GRANT EXECUTE ON FUNCTION claim_block TO authenticated;
+GRANT EXECUTE ON FUNCTION claim_all_blocks TO authenticated;
