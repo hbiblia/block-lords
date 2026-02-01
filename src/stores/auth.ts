@@ -21,6 +21,7 @@ interface Player {
   reputation_score: number;
   region: string;
   ron_wallet?: string | null;
+  premium_until?: string | null;
   created_at?: string;
   blocks_mined?: number;
   total_crypto_earned?: number;

@@ -60,6 +60,13 @@ const effectiveHashrate = computed(() => miningStore.effectiveHashrate);
 const miningChance = computed(() => miningStore.miningChance);
 const activeRigsCount = computed(() => miningStore.activeRigsCount);
 
+// Premium status
+const isPremium = computed(() => {
+  const premiumUntil = authStore.player?.premium_until;
+  if (!premiumUntil) return false;
+  return new Date(premiumUntil) > new Date();
+});
+
 // Slot functions
 function openSlotPurchaseConfirm() {
   if (!canAffordSlot()) return;
@@ -482,7 +489,16 @@ onUnmounted(() => {
                 ⛏️
               </div>
               <div>
-                <h2 class="text-lg font-semibold">{{ t('mining.miningCenter') }}</h2>
+                <div class="flex items-center gap-2">
+                  <h2 class="text-lg font-semibold">{{ t('mining.miningCenter') }}</h2>
+                  <span
+                    v-if="isPremium"
+                    class="px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1"
+                  >
+                    <span>👑</span>
+                    <span>Premium</span>
+                  </span>
+                </div>
                 <p class="text-sm text-text-muted">
                   {{ totalHashrate > 0 ? t('mining.activelyMining') : t('mining.rigsInactive') }}
                 </p>

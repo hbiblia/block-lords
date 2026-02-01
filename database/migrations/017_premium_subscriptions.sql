@@ -100,6 +100,15 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
   END IF;
 
+  -- Verificar que no tenga premium activo
+  IF v_player.premium_until IS NOT NULL AND v_player.premium_until > NOW() THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'Ya tienes Premium activo. Espera a que expire para renovar.',
+      'expires_at', v_player.premium_until
+    );
+  END IF;
+
   -- Verificar balance
   IF COALESCE(v_player.ron_balance, 0) < v_price THEN
     RETURN json_build_object(
@@ -110,13 +119,8 @@ BEGIN
     );
   END IF;
 
-  -- Calcular nueva fecha de expiración
-  -- Si ya tiene premium activo, extender desde la fecha actual de expiración
-  IF v_player.premium_until IS NOT NULL AND v_player.premium_until > NOW() THEN
-    v_new_expires := v_player.premium_until + v_duration;
-  ELSE
-    v_new_expires := NOW() + v_duration;
-  END IF;
+  -- Calcular nueva fecha de expiración (siempre desde ahora)
+  v_new_expires := NOW() + v_duration;
 
   -- Descontar RON
   UPDATE players

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { usePlayerStore } from '@/stores/player';
+import { useAuthStore } from '@/stores/auth';
 import { getPremiumStatus, purchasePremium, type PremiumStatus } from '@/utils/api';
-import { playSound } from '@/utils/audio';
+import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
-const playerStore = usePlayerStore();
+const authStore = useAuthStore();
 
 const loading = ref(true);
 const purchasing = ref(false);
@@ -16,7 +16,7 @@ const error = ref('');
 const isPremium = computed(() => premiumStatus.value?.is_premium ?? false);
 const daysRemaining = computed(() => premiumStatus.value?.days_remaining ?? 0);
 const price = computed(() => premiumStatus.value?.price ?? 2.5);
-const canAfford = computed(() => (playerStore.ronBalance ?? 0) >= price.value);
+const canAfford = computed(() => (authStore.player?.ron_balance ?? 0) >= price.value);
 
 const expiresDate = computed(() => {
   if (!premiumStatus.value?.expires_at) return '';
@@ -24,11 +24,11 @@ const expiresDate = computed(() => {
 });
 
 async function loadStatus() {
-  if (!playerStore.player?.id) return;
+  if (!authStore.player?.id) return;
 
   try {
     loading.value = true;
-    premiumStatus.value = await getPremiumStatus(playerStore.player.id);
+    premiumStatus.value = await getPremiumStatus(authStore.player.id);
   } catch (e) {
     console.error('Error loading premium status:', e);
   } finally {
@@ -37,17 +37,17 @@ async function loadStatus() {
 }
 
 async function handlePurchase() {
-  if (!playerStore.player?.id || purchasing.value) return;
+  if (!authStore.player?.id || purchasing.value) return;
 
   error.value = '';
   purchasing.value = true;
 
   try {
-    const result = await purchasePremium(playerStore.player.id);
+    const result = await purchasePremium(authStore.player.id);
 
     if (result.success) {
       playSound('success');
-      await playerStore.refreshPlayer();
+      await authStore.refreshPlayer();
       await loadStatus();
     } else {
       error.value = result.error || t('premium.error');
@@ -140,62 +140,46 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Comparison Table -->
-      <div class="bg-bg-tertiary rounded-xl p-3 mb-4">
-        <h4 class="text-sm font-medium text-center mb-3">{{ t('premium.comparison.title') }}</h4>
-        <div class="grid grid-cols-3 gap-2 text-sm">
-          <div></div>
-          <div class="text-center text-text-muted">{{ t('premium.comparison.free') }}</div>
-          <div class="text-center text-amber-400 font-medium">{{ t('premium.comparison.premium') }}</div>
-
-          <div class="text-text-muted">{{ t('premium.comparison.blockReward') }}</div>
-          <div class="text-center">100</div>
-          <div class="text-center text-status-success font-medium">150</div>
-
-          <div class="text-text-muted">{{ t('premium.comparison.withdrawalFee') }}</div>
-          <div class="text-center text-status-danger">25%</div>
-          <div class="text-center text-status-success font-medium">10%</div>
-        </div>
-      </div>
-
       <!-- Error -->
       <div v-if="error" class="bg-status-danger/10 border border-status-danger/30 rounded-lg p-3 mb-4 text-sm text-status-danger">
         {{ error }}
       </div>
 
-      <!-- Price & Buy Button -->
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-2xl font-bold text-amber-400">{{ price }} RON</p>
-          <p class="text-xs text-text-muted">{{ t('premium.price', { price }) }}</p>
+      <!-- Price & Buy Button (solo si NO tiene premium) -->
+      <template v-if="!isPremium">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-2xl font-bold text-amber-400">{{ price }} RON</p>
+            <p class="text-xs text-text-muted">{{ t('premium.price', { price }) }}</p>
+          </div>
+
+          <button
+            @click="handlePurchase"
+            :disabled="purchasing || !canAfford"
+            :class="[
+              'px-6 py-3 rounded-xl font-medium transition-all',
+              canAfford
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600'
+                : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
+            ]"
+          >
+            <span v-if="purchasing" class="flex items-center gap-2">
+              <span class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+              {{ t('premium.subscribing') }}
+            </span>
+            <span v-else>
+              {{ t('premium.subscribe') }}
+            </span>
+          </button>
         </div>
 
-        <button
-          @click="handlePurchase"
-          :disabled="purchasing || !canAfford"
-          :class="[
-            'px-6 py-3 rounded-xl font-medium transition-all',
-            canAfford
-              ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600'
-              : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
-          ]"
-        >
-          <span v-if="purchasing" class="flex items-center gap-2">
-            <span class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
-            {{ t('premium.subscribing') }}
-          </span>
-          <span v-else>
-            {{ isPremium ? t('premium.extend') : t('premium.subscribe') }}
-          </span>
-        </button>
-      </div>
-
-      <!-- Balance Warning -->
-      <p v-if="!canAfford" class="text-xs text-status-warning mt-2 text-center">
-        {{ t('premium.insufficientBalance', { required: price }) }}
-        <br>
-        {{ t('premium.currentBalance', { balance: (playerStore.ronBalance ?? 0).toFixed(4) }) }}
-      </p>
+        <!-- Balance Warning -->
+        <p v-if="!canAfford" class="text-xs text-status-warning mt-2 text-center">
+          {{ t('premium.insufficientBalance', { required: price }) }}
+          <br>
+          {{ t('premium.currentBalance', { balance: (authStore.player?.ron_balance ?? 0).toFixed(4) }) }}
+        </p>
+      </template>
     </template>
   </div>
 </template>
