@@ -28,7 +28,8 @@ watch(
 
 <template>
   <!-- Skeleton Layout mientras auth se inicializa -->
-  <div v-if="!authStore.initialized" class="min-h-screen bg-bg-primary">
+  <Transition name="fade">
+  <div v-if="!authStore.initialized" key="skeleton" class="min-h-screen bg-bg-primary absolute inset-0 z-50">
     <!-- Skeleton NavBar -->
     <nav class="fixed left-0 right-0 top-0 z-50 glass border-b border-border/50">
       <div class="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -179,30 +180,21 @@ watch(
     </main>
   </div>
 
-  <!-- App cuando está listo -->
-  <MainLayout v-else>
-    <RouterView v-slot="{ Component }">
-      <Transition name="page" mode="out-in">
-        <component :is="Component" />
-      </Transition>
-    </RouterView>
+  </Transition>
+
+  <!-- App siempre renderizado (skeleton lo cubre inicialmente) -->
+  <MainLayout>
+    <RouterView />
   </MainLayout>
 </template>
 
 <style>
-/* Page transitions */
-.page-enter-active,
-.page-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+/* Skeleton overlay fades out to reveal app underneath */
+.fade-leave-active {
+  transition: opacity 0.3s ease;
 }
 
-.page-enter-from {
+.fade-leave-to {
   opacity: 0;
-  transform: translateY(10px);
-}
-
-.page-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
 }
 </style>
