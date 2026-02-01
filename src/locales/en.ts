@@ -844,6 +844,8 @@ export default {
       daily_earn_500: { name: 'Good Day', desc: 'Earn 500 crypto from mining.' },
       daily_start_rig: { name: 'Start Engine', desc: 'Turn on a rig at least once.' },
       daily_active_60: { name: 'Rig Working', desc: 'Keep a rig active for 60 minutes.' },
+      daily_recharge: { name: 'Recharge', desc: 'Use a prepaid card.' },
+      recharge_once: { name: 'Recharge', desc: 'Use a prepaid card.' },
       // Daily - Medium
       daily_mine_5: { name: 'Mining Streak', desc: 'Mine 5 blocks today.' },
       daily_mine_10: { name: 'Digger', desc: 'Mine 10 blocks today.' },

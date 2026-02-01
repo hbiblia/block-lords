@@ -55,6 +55,8 @@ const rigBoosts = computed(() => miningStore.rigBoosts);
 const activeBoosts = computed(() => miningStore.activeBoosts);
 const slotInfo = computed(() => miningStore.slotInfo);
 const loading = computed(() => miningStore.loading);
+const dataLoaded = computed(() => miningStore.dataLoaded);
+const refreshing = computed(() => miningStore.refreshing);
 const totalHashrate = computed(() => miningStore.totalHashrate);
 const effectiveHashrate = computed(() => miningStore.effectiveHashrate);
 const miningChance = computed(() => miningStore.miningChance);
@@ -464,13 +466,15 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div v-if="loading" class="text-center py-20 text-text-muted">
+    <!-- Primera carga - solo si no hay datos en cache -->
+    <div v-if="loading && !dataLoaded" class="text-center py-20 text-text-muted">
       <div class="w-12 h-12 mx-auto rounded-xl bg-gradient-primary flex items-center justify-center text-2xl animate-pulse mb-4">
         ⛏️
       </div>
       {{ t('mining.loadingStation') }}
     </div>
 
+    <!-- Contenido (con datos en cache o cargados) -->
     <div v-else class="space-y-6">
       <!-- Mining Status Panel -->
       <div class="card relative overflow-hidden">

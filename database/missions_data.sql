@@ -16,7 +16,9 @@ VALUES
   ('daily_earn_100', 'daily_earn_100', 'daily_earn_100', 'earn_crypto', 100, 'gamecoin', 120, 'easy', '💰'),
   ('daily_earn_500', 'daily_earn_500', 'daily_earn_500', 'earn_crypto', 500, 'energy', 15, 'easy', '💰'),
   ('daily_start_rig', 'daily_start_rig', 'daily_start_rig', 'start_rig', 1, 'gamecoin', 50, 'easy', '🔌'),
-  ('daily_active_60', 'daily_active_60', 'daily_active_60', 'rig_active_time', 60, 'gamecoin', 200, 'easy', '⚡')
+  ('daily_active_60', 'daily_active_60', 'daily_active_60', 'rig_active_time', 60, 'gamecoin', 200, 'easy', '⚡'),
+  ('daily_recharge', 'daily_recharge', 'daily_recharge', 'use_prepaid_card', 1, 'gamecoin', 100, 'easy', '🔋'),
+  ('recharge_once', 'recharge_once', 'recharge_once', 'use_prepaid_card', 1, 'gamecoin', 100, 'easy', '🔋')
 ON CONFLICT (id) DO UPDATE SET
   mission_type = EXCLUDED.mission_type,
   target_value = EXCLUDED.target_value,

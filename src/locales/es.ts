@@ -844,6 +844,8 @@ export default {
       daily_earn_500: { name: 'Buen Dia', desc: 'Gana 500 crypto minando.' },
       daily_start_rig: { name: 'Encender Motor', desc: 'Enciende un rig al menos una vez.' },
       daily_active_60: { name: 'Rig Trabajando', desc: 'Manten un rig activo por 60 minutos.' },
+      daily_recharge: { name: 'Recarga', desc: 'Usa una tarjeta prepago.' },
+      recharge_once: { name: 'Recarga', desc: 'Usa una tarjeta prepago.' },
       // Diarias - Medias
       daily_mine_5: { name: 'Racha Minera', desc: 'Mina 5 bloques hoy.' },
       daily_mine_10: { name: 'Excavador', desc: 'Mina 10 bloques hoy.' },

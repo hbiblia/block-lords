@@ -3,10 +3,14 @@ import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
+import { useMiningStore } from '@/stores/mining';
+import { useMarketStore } from '@/stores/market';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
+const miningStore = useMiningStore();
+const marketStore = useMarketStore();
 
 const error = ref('');
 const loadingStep = ref(0);
@@ -32,11 +36,16 @@ onMounted(async () => {
 
   if (authStore.user) {
     loadingStep.value = loadingMessages.length - 1;
-    await new Promise(resolve => setTimeout(resolve, 500));
 
     if (authStore.needsUsername) {
       router.push('/setup-username');
     } else if (authStore.isAuthenticated) {
+      // Pre-cargar datos de minería y market mientras mostramos "Preparando estación..."
+      await Promise.all([
+        miningStore.loadData(),
+        marketStore.loadCatalogs(),
+      ]);
+
       realtimeStore.connect();
       router.push('/welcome');
     } else {

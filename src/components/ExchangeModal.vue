@@ -195,22 +195,19 @@ onMounted(() => {
 
         <!-- Content -->
         <div class="p-4 space-y-4">
-          <!-- Loading State -->
-          <div v-if="loadingRates" class="text-center py-8">
-            <div class="animate-spin w-8 h-8 border-2 border-accent-primary border-t-transparent rounded-full mx-auto mb-2"></div>
-            <p class="text-text-muted text-sm">{{ t('exchange.loadingRates') }}</p>
-          </div>
-
-          <template v-else-if="rates">
-          <!-- Rate Info -->
+          <!-- Rate Info (con loading inline) -->
           <div class="bg-bg-tertiary rounded-lg p-3 text-center text-sm">
             <span class="text-text-muted">{{ t('exchange.rate') }} </span>
-            <span v-if="activeTab === 'gamecoin'" class="text-status-warning font-medium">
+            <span v-if="loadingRates" class="inline-flex items-center gap-2">
+              <span class="animate-spin w-4 h-4 border-2 border-accent-primary border-t-transparent rounded-full"></span>
+            </span>
+            <span v-else-if="rates && activeTab === 'gamecoin'" class="text-status-warning font-medium">
               1 ₿ = {{ rates.crypto_to_gamecoin }} 🪙
             </span>
-            <span v-else class="text-purple-400 font-medium">
+            <span v-else-if="rates" class="text-purple-400 font-medium">
               1,000 ₿ = {{ formatRon(1000 * rates.crypto_to_ron) }} RON
             </span>
+            <span v-else class="text-status-danger">{{ t('common.error') }}</span>
           </div>
 
           <!-- Amount Input -->
@@ -273,16 +270,16 @@ onMounted(() => {
           </div>
 
           <!-- Min Amount Warning for RON -->
-          <div v-if="activeTab === 'ron'" class="text-xs text-text-muted text-center">
+          <div v-if="activeTab === 'ron' && rates" class="text-xs text-text-muted text-center">
             {{ t('exchange.minAmountWarning', { amount: formatNumber(rates.min_crypto_for_ron) }) }}
           </div>
 
           <!-- Exchange Button -->
           <button
             @click="handleExchange"
-            :disabled="!canExchange || exchanging"
+            :disabled="!canExchange || exchanging || loadingRates"
             class="w-full py-3 rounded-xl font-bold text-lg transition-all"
-            :class="canExchange && !exchanging
+            :class="canExchange && !exchanging && !loadingRates
               ? (activeTab === 'gamecoin'
                   ? 'bg-gradient-to-r from-status-warning to-yellow-500 text-black hover:opacity-90'
                   : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90')
@@ -290,15 +287,6 @@ onMounted(() => {
           >
             {{ exchanging ? t('common.processing') : (activeTab === 'gamecoin' ? t('exchange.convertToGamecoin') : t('exchange.convertToRon')) }}
           </button>
-          </template>
-
-          <!-- Error loading rates -->
-          <div v-else class="text-center py-8 text-status-danger">
-            <p>{{ t('exchange.errorLoadingRates') }}</p>
-            <button @click="loadRates" class="mt-2 text-sm text-accent-primary hover:underline">
-              {{ t('common.retry') }}
-            </button>
-          </div>
         </div>
       </div>
     </div>

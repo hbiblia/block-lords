@@ -1642,6 +1642,9 @@ BEGIN
 
     PERFORM update_reputation(v_winner_player_id, 0.1, 'block_mined');
 
+    -- Actualizar progreso de misiones de minado
+    PERFORM update_mission_progress(v_winner_player_id, 'mine_blocks', 1);
+
     RETURN QUERY SELECT true, v_block.height;
   END;
 END;
@@ -4665,6 +4668,8 @@ BEGIN
   END IF;
   UPDATE player_cards SET is_redeemed = true, redeemed_at = NOW() WHERE id = v_player_card.id;
   INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (p_player_id, v_card.card_type || '_recharge', v_card.amount, 'gamecoin', 'Recarga: ' || v_card.name);
+  -- Actualizar progreso de misiones de tarjetas prepago
+  PERFORM update_mission_progress(p_player_id, 'use_prepaid_card', 1);
   RETURN json_build_object('success', true, 'card_type', v_card.card_type, 'amount', v_card.amount, 'new_value', v_new_value);
 END;
 $$;

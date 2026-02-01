@@ -106,23 +106,68 @@ interface SlotInfo {
   } | null;
 }
 
+// LocalStorage cache
+const STORAGE_KEY = 'blocklords_mining_cache';
+
+// Default data for new accounts
+const DEFAULT_NETWORK_STATS: NetworkStats = {
+  difficulty: 1000,
+  hashrate: 50000,
+  latestBlock: null,
+  activeMiners: 25,
+};
+
+const DEFAULT_SLOT_INFO: SlotInfo = {
+  current_slots: 1,
+  used_slots: 0,
+  available_slots: 1,
+  max_slots: 10,
+  next_upgrade: {
+    slot_number: 2,
+    price: 1000,
+    currency: 'gamecoin',
+    name: 'Slot 2',
+    description: 'Unlock your second rig slot',
+  },
+};
+
+function loadFromCache(): { rigs: PlayerRig[]; networkStats: NetworkStats; slotInfo: SlotInfo | null } | null {
+  try {
+    const cached = localStorage.getItem(STORAGE_KEY);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch (e) {
+    console.error('Error loading mining cache:', e);
+  }
+  return null;
+}
+
+function saveToCache(data: { rigs: PlayerRig[]; networkStats: NetworkStats; slotInfo: SlotInfo | null }) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error('Error saving mining cache:', e);
+  }
+}
+
 export const useMiningStore = defineStore('mining', () => {
-  // State
-  const rigs = ref<PlayerRig[]>([]);
-  const networkStats = ref<NetworkStats>({
-    difficulty: 1000,
-    hashrate: 0,
-    latestBlock: null,
-    activeMiners: 0,
-  });
+  // Load from cache on init
+  const cached = loadFromCache();
+
+  // State - use cached data if available, otherwise use defaults
+  const rigs = ref<PlayerRig[]>(cached?.rigs ?? []);
+  const networkStats = ref<NetworkStats>(cached?.networkStats ?? DEFAULT_NETWORK_STATS);
   const recentBlocks = ref<Block[]>([]);
   const rigCooling = ref<Record<string, CoolingItem[]>>({});
   const rigBoosts = ref<Record<string, RigBoost[]>>({});
   const activeBoosts = ref<ActiveBoost[]>([]);
-  const slotInfo = ref<SlotInfo | null>(null);
+  const slotInfo = ref<SlotInfo | null>(cached?.slotInfo ?? DEFAULT_SLOT_INFO);
 
-  // Loading states
-  const loading = ref(true);
+  // Loading states - always have defaults, so show content immediately
+  const loading = ref(false);
+  const dataLoaded = ref(true); // Always true since we have defaults
+  const refreshing = ref(false);
   const togglingRig = ref<string | null>(null);
 
   // Realtime channels
@@ -245,6 +290,11 @@ export const useMiningStore = defineStore('mining', () => {
     const authStore = useAuthStore();
     if (!authStore.player?.id) return;
 
+    // Si ya se cargó antes, marcar como refreshing (muestra datos en cache)
+    if (dataLoaded.value) {
+      refreshing.value = true;
+    }
+
     try {
       const [rigsData, networkData, blocksData, slotData] = await Promise.all([
         getPlayerRigs(authStore.player.id),
@@ -260,14 +310,24 @@ export const useMiningStore = defineStore('mining', () => {
         slotInfo.value = slotData;
       }
 
+      // Save to localStorage cache
+      saveToCache({
+        rigs: rigs.value,
+        networkStats: networkStats.value,
+        slotInfo: slotInfo.value,
+      });
+
       // Load cooling and boosts in background
       loadRigsCooling();
       loadRigsBoosts();
       loadActiveBoosts();
+
+      dataLoaded.value = true;
     } catch (e) {
       console.error('Error loading mining data:', e);
     } finally {
       loading.value = false;
+      refreshing.value = false;
     }
   }
 
@@ -693,18 +753,14 @@ export const useMiningStore = defineStore('mining', () => {
 
   function clearState() {
     rigs.value = [];
-    networkStats.value = {
-      difficulty: 1000,
-      hashrate: 0,
-      latestBlock: null,
-      activeMiners: 0,
-    };
+    networkStats.value = DEFAULT_NETWORK_STATS;
     recentBlocks.value = [];
     rigCooling.value = {};
     rigBoosts.value = {};
     activeBoosts.value = [];
-    slotInfo.value = null;
-    loading.value = true;
+    slotInfo.value = DEFAULT_SLOT_INFO;
+    loading.value = false;
+    dataLoaded.value = true;
   }
 
   return {
@@ -717,6 +773,8 @@ export const useMiningStore = defineStore('mining', () => {
     activeBoosts,
     slotInfo,
     loading,
+    dataLoaded,
+    refreshing,
     togglingRig,
 
     // Computed

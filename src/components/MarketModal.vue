@@ -124,6 +124,11 @@ const processingError = ref<string>('');
 // Use store data
 const loading = computed(() => marketStore.loading);
 const buying = computed(() => marketStore.buying);
+const refreshing = computed(() => marketStore.refreshing);
+const catalogsLoaded = computed(() => marketStore.catalogsLoaded);
+
+// Disable purchases only while buying (refreshing is silent)
+const purchaseDisabled = computed(() => buying.value);
 const rigsForSale = computed(() => marketStore.rigsForSale);
 const coolingItems = computed(() => marketStore.coolingItems);
 const energyCards = computed(() => marketStore.energyCards);
@@ -589,13 +594,14 @@ watch(() => props.show, (newVal) => {
 
           <!-- Content Grid -->
           <div class="flex-1 p-4 overflow-y-auto">
-            <!-- Loading -->
-            <div v-if="loading" class="text-center py-12 text-text-muted">
+            <!-- First Load Loading -->
+            <div v-if="loading && !catalogsLoaded" class="text-center py-12 text-text-muted">
               {{ t('common.loading') }}
             </div>
 
-            <!-- Unified Grid -->
-            <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <!-- Unified Grid (show with cached data, even while refreshing) -->
+            <div v-else>
+              <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <!-- Rigs -->
               <template v-if="activeFilter === 'all' || activeFilter === 'rigs'">
                 <div
@@ -637,7 +643,7 @@ watch(() => props.show, (newVal) => {
                       :class="balance >= rig.base_price
                         ? 'bg-accent-primary text-white hover:bg-accent-primary/80'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-                      :disabled="buying || balance < rig.base_price"
+                      :disabled="purchaseDisabled || balance < rig.base_price"
                     >
                       {{ buying ? '...' : `${formatNumber(rig.base_price)} 🪙` }}
                     </button>
@@ -685,7 +691,7 @@ watch(() => props.show, (newVal) => {
                       :class="balance >= item.base_price
                         ? 'bg-cyan-500 text-white hover:bg-cyan-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-                      :disabled="buying || balance < item.base_price"
+                      :disabled="purchaseDisabled || balance < item.base_price"
                     >
                       {{ buying ? '...' : `${formatNumber(item.base_price)} 🪙` }}
                     </button>
@@ -728,7 +734,7 @@ watch(() => props.show, (newVal) => {
                       :class="(card.currency === 'crypto' ? cryptoBalance : balance) >= card.base_price
                         ? 'bg-amber-500 text-white hover:bg-amber-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-                      :disabled="buying || (card.currency === 'crypto' ? cryptoBalance : balance) < card.base_price"
+                      :disabled="purchaseDisabled || (card.currency === 'crypto' ? cryptoBalance : balance) < card.base_price"
                     >
                       {{ buying ? '...' : `${formatNumber(card.base_price)} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
                     </button>
@@ -771,7 +777,7 @@ watch(() => props.show, (newVal) => {
                       :class="(card.currency === 'crypto' ? cryptoBalance : balance) >= card.base_price
                         ? 'bg-cyan-500 text-white hover:bg-cyan-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-                      :disabled="buying || (card.currency === 'crypto' ? cryptoBalance : balance) < card.base_price"
+                      :disabled="purchaseDisabled || (card.currency === 'crypto' ? cryptoBalance : balance) < card.base_price"
                     >
                       {{ buying ? '...' : `${formatNumber(card.base_price)} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
                     </button>
@@ -821,7 +827,7 @@ watch(() => props.show, (newVal) => {
                       :class="canAffordBoost(boost)
                         ? 'bg-purple-500 text-white hover:bg-purple-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-                      :disabled="buying || !canAffordBoost(boost)"
+                      :disabled="purchaseDisabled || !canAffordBoost(boost)"
                     >
                       {{ buying ? '...' : `${formatNumber(boost.base_price)} ${boost.currency === 'crypto' ? '💎' : '🪙'}` }}
                     </button>
@@ -883,13 +889,14 @@ watch(() => props.show, (newVal) => {
                           ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-400 hover:to-purple-400 shadow-lg'
                           : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
                       ]"
-                      :disabled="buying || ronBalance < pkg.ron_price"
+                      :disabled="purchaseDisabled || ronBalance < pkg.ron_price"
                     >
                       {{ buying ? '...' : `${formatNumber(pkg.ron_price)} RON` }}
                     </button>
                   </div>
                 </div>
               </template>
+              </div>
             </div>
           </div>
         </div>
