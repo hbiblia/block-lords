@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, watch, computed, onUnmounted } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
+import { useMiningStore } from '@/stores/mining';
 import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling, getPlayerBoosts, installBoostToRig, getRigBoosts } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
+const miningStore = useMiningStore();
 
 interface RigData {
   id: string;
@@ -112,44 +114,24 @@ const showProcessingModal = ref(false);
 const processingStatus = ref<'processing' | 'success' | 'error'>('processing');
 const processingError = ref('');
 
-// Timer for boost countdown
-let boostTimer: number | null = null;
-
-function startBoostTimer() {
-  stopBoostTimer();
-  boostTimer = window.setInterval(() => {
-    // Only decrement if rig is active (mining)
-    if (props.rig?.is_active && installedBoosts.value.length > 0) {
-      installedBoosts.value = installedBoosts.value
-        .map(boost => ({
-          ...boost,
-          remaining_seconds: Math.max(0, boost.remaining_seconds - 1),
-        }))
-        .filter(boost => boost.remaining_seconds > 0);
+// Sync boosts from store when updated via realtime
+watch(
+  () => props.rig?.id ? miningStore.rigBoosts[props.rig.id] : null,
+  (storeBoosts) => {
+    if (storeBoosts && props.show) {
+      installedBoosts.value = storeBoosts;
     }
-  }, 1000);
-}
-
-function stopBoostTimer() {
-  if (boostTimer) {
-    clearInterval(boostTimer);
-    boostTimer = null;
-  }
-}
-
-onUnmounted(() => {
-  stopBoostTimer();
-});
+  },
+  { deep: true }
+);
 
 // Load data when modal opens
 watch(() => props.show, async (isOpen) => {
   if (isOpen && props.rig) {
     document.body.style.overflow = 'hidden';
     await loadData();
-    startBoostTimer();
   } else {
     document.body.style.overflow = '';
-    stopBoostTimer();
   }
 });
 

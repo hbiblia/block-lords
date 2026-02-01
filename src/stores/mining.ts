@@ -80,6 +80,7 @@ interface RigBoost {
   name: string;
   boost_type: string;
   effect_value: number;
+  secondary_value: number;
   tier: string;
 }
 
@@ -121,6 +122,8 @@ export const useMiningStore = defineStore('mining', () => {
   let rigsChannel: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let coolingChannel: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let boostsChannel: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let networkStatsChannel: any = null;
 
@@ -345,6 +348,19 @@ export const useMiningStore = defineStore('mining', () => {
     }, 500);
   }
 
+  // Debounce for boosts updates
+  let boostsDebounceTimer: number | null = null;
+
+  function handleBoostsUpdate() {
+    if (boostsDebounceTimer) {
+      clearTimeout(boostsDebounceTimer);
+    }
+    boostsDebounceTimer = window.setTimeout(() => {
+      loadRigsBoosts();
+      boostsDebounceTimer = null;
+    }, 500);
+  }
+
   async function handleBlockMined(block: any, winner: any) {
     const authStore = useAuthStore();
     const toastStore = useToastStore();
@@ -498,6 +514,22 @@ export const useMiningStore = defineStore('mining', () => {
       )
       .subscribe();
 
+    // Subscribe to rig_boosts changes
+    boostsChannel = supabase
+      .channel(`mining_boosts:${playerId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'rig_boosts',
+        },
+        () => {
+          handleBoostsUpdate();
+        }
+      )
+      .subscribe();
+
     // Subscribe to network_stats changes (global)
     // Note: network_stats table only has difficulty and hashrate columns
     // latestBlock comes from block-mined events, activeMiners from player_rigs
@@ -531,6 +563,10 @@ export const useMiningStore = defineStore('mining', () => {
       supabase.removeChannel(coolingChannel);
       coolingChannel = null;
     }
+    if (boostsChannel) {
+      supabase.removeChannel(boostsChannel);
+      boostsChannel = null;
+    }
     if (networkStatsChannel) {
       supabase.removeChannel(networkStatsChannel);
       networkStatsChannel = null;
@@ -538,6 +574,10 @@ export const useMiningStore = defineStore('mining', () => {
     if (coolingDebounceTimer) {
       clearTimeout(coolingDebounceTimer);
       coolingDebounceTimer = null;
+    }
+    if (boostsDebounceTimer) {
+      clearTimeout(boostsDebounceTimer);
+      boostsDebounceTimer = null;
     }
   }
 

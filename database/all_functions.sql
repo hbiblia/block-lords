@@ -4103,7 +4103,7 @@ SECURITY DEFINER
 AS $$
 BEGIN
   RETURN (
-    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.priority DESC, t.created_at DESC), '[]'::JSON)
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
     FROM (
       SELECT
         id,
