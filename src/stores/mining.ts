@@ -496,8 +496,11 @@ export const useMiningStore = defineStore('mining', () => {
     const rig = rigs.value.find(r => r.id === rigId);
     if (!rig) return { success: false, error: 'Rig not found' };
 
+    // Save original state to know what action we're doing
+    const wasTurningOn = !rig.is_active;
+
     // Pre-check resources if turning ON
-    if (!rig.is_active) {
+    if (wasTurningOn) {
       if (authStore.player.energy < rig.rig.power_consumption) {
         notificationsStore.addNotification({
           type: 'energy_depleted',
@@ -543,11 +546,27 @@ export const useMiningStore = defineStore('mining', () => {
         return result;
       }
 
-      if (!rig.is_active) {
-        // Was turning OFF
-        playSound('click');
-      } else {
+      // Send notification based on action
+      if (wasTurningOn) {
         playSound('success');
+        notificationsStore.addNotification({
+          type: 'rig_turned_on',
+          title: 'notifications.rigTurnedOn.title',
+          message: 'notifications.rigTurnedOn.message',
+          icon: '⛏️',
+          severity: 'success',
+          data: { rigName: rig.rig.name },
+        });
+      } else {
+        playSound('click');
+        notificationsStore.addNotification({
+          type: 'rig_turned_off',
+          title: 'notifications.rigTurnedOff.title',
+          message: 'notifications.rigTurnedOff.message',
+          icon: '🛑',
+          severity: 'info',
+          data: { rigName: rig.rig.name },
+        });
       }
 
       return result;

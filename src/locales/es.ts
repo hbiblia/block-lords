@@ -703,6 +703,14 @@ export default {
       title: '¡Bienvenido de vuelta!',
       message: 'Recursos regenerados: {resources}',
     },
+    rigTurnedOn: {
+      title: 'Rig Activado',
+      message: '"{rigName}" esta minando.',
+    },
+    rigTurnedOff: {
+      title: 'Rig Desactivado',
+      message: '"{rigName}" ha dejado de minar.',
+    },
   },
 
   streak: {
@@ -808,5 +816,35 @@ export default {
     verifyCaptcha: 'Completa el captcha para verificar que eres humano',
     claimVerified: 'Reclamar Bloque Verificado',
     captchaRequired: 'Cada bloque requiere verificacion humana para reclamar',
+  },
+
+  premium: {
+    title: 'Premium',
+    subtitle: 'Mejora tus recompensas de minería',
+    active: 'Activo',
+    inactive: 'No Activo',
+    daysRemaining: '{days} días restantes',
+    expiresOn: 'Expira el {date}',
+    price: '{price} RON/mes',
+    benefits: {
+      title: 'Beneficios',
+      blockBonus: '+50% Crypto por bloque',
+      withdrawalFee: 'Solo 10% comision de retiro',
+    },
+    subscribe: 'Suscribirse',
+    extend: 'Extender',
+    subscribing: 'Procesando...',
+    success: '¡Premium activado!',
+    successExtended: '¡Premium extendido!',
+    error: 'Error al comprar premium',
+    insufficientBalance: 'Balance insuficiente. Necesitas {required} RON',
+    currentBalance: 'Balance actual: {balance} RON',
+    comparison: {
+      title: 'Free vs Premium',
+      free: 'Gratis',
+      premium: 'Premium',
+      blockReward: 'Recompensa por Bloque',
+      withdrawalFee: 'Comision de Retiro',
+    },
   },
 };

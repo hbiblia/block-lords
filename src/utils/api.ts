@@ -691,3 +691,60 @@ export async function adminGetWithdrawalSystemStatus() {
   return data;
 }
 
+// === PREMIUM SUBSCRIPTIONS ===
+
+export interface PremiumStatus {
+  success: boolean;
+  is_premium: boolean;
+  expires_at: string | null;
+  days_remaining: number;
+  price: number;
+  benefits: {
+    block_bonus: string;
+    withdrawal_fee: string;
+  };
+  error?: string;
+}
+
+export interface PurchasePremiumResult {
+  success: boolean;
+  subscription_id?: string;
+  expires_at?: string;
+  price?: number;
+  new_balance?: number;
+  error?: string;
+  required?: number;
+  current?: number;
+}
+
+// Obtener estado premium del jugador actual
+export async function getPremiumStatus(playerId: string): Promise<PremiumStatus> {
+  const { data, error } = await supabase.rpc('get_premium_status', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data as PremiumStatus;
+}
+
+// Comprar suscripción premium
+export async function purchasePremium(playerId: string): Promise<PurchasePremiumResult> {
+  const { data, error } = await supabase.rpc('purchase_premium', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data as PurchasePremiumResult;
+}
+
+// Obtener historial de suscripciones premium
+export async function getPremiumHistory(playerId: string, limit: number = 10) {
+  const { data, error } = await supabase.rpc('get_premium_history', {
+    p_player_id: playerId,
+    p_limit: limit,
+  });
+
+  if (error) throw error;
+  return data;
+}
+

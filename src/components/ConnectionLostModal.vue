@@ -5,10 +5,6 @@ import { useRealtimeStore } from '@/stores/realtime';
 const { t } = useI18n();
 const realtimeStore = useRealtimeStore();
 
-function handleReconnect() {
-  realtimeStore.manualReconnect();
-}
-
 function handleRefresh() {
   window.location.reload();
 }
@@ -43,33 +39,13 @@ function handleRefresh() {
           {{ t('connection.description') }}
         </p>
 
-        <!-- Reconnecting indicator -->
-        <div v-if="realtimeStore.reconnecting" class="mb-4 flex items-center justify-center gap-2 text-accent-primary">
-          <div class="w-4 h-4 border-2 border-accent-primary border-t-transparent rounded-full animate-spin"></div>
-          <span class="text-sm">{{ t('connection.reconnecting') }}</span>
-        </div>
-
         <!-- Actions -->
-        <div class="flex gap-3">
-          <button
-            @click="handleReconnect"
-            :disabled="realtimeStore.reconnecting"
-            class="flex-1 py-3 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {{ t('connection.reconnect') }}
-          </button>
-          <button
-            @click="handleRefresh"
-            class="flex-1 py-3 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
-          >
-            {{ t('connection.reloadPage') }}
-          </button>
-        </div>
-
-        <!-- Help text -->
-        <p class="text-xs text-text-muted mt-4">
-          {{ t('connection.persistsNotice') }}
-        </p>
+        <button
+          @click="handleRefresh"
+          class="w-full py-3 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/80 transition-colors"
+        >
+          {{ t('connection.reloadPage') }}
+        </button>
       </div>
     </div>
   </Teleport>

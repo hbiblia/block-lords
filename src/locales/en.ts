@@ -703,6 +703,14 @@ export default {
       title: 'Welcome back!',
       message: 'Resources regenerated: {resources}',
     },
+    rigTurnedOn: {
+      title: 'Rig Activated',
+      message: '"{rigName}" is now mining.',
+    },
+    rigTurnedOff: {
+      title: 'Rig Deactivated',
+      message: '"{rigName}" has stopped mining.',
+    },
   },
 
   streak: {
@@ -808,5 +816,35 @@ export default {
     verifyCaptcha: 'Complete the captcha to verify you are human',
     claimVerified: 'Claim Verified Block',
     captchaRequired: 'Each block requires human verification to claim',
+  },
+
+  premium: {
+    title: 'Premium',
+    subtitle: 'Boost your mining rewards',
+    active: 'Active',
+    inactive: 'Not Active',
+    daysRemaining: '{days} days remaining',
+    expiresOn: 'Expires on {date}',
+    price: '{price} RON/month',
+    benefits: {
+      title: 'Benefits',
+      blockBonus: '+50% Crypto per block',
+      withdrawalFee: 'Only 10% withdrawal fee',
+    },
+    subscribe: 'Subscribe',
+    extend: 'Extend',
+    subscribing: 'Processing...',
+    success: 'Premium activated!',
+    successExtended: 'Premium extended!',
+    error: 'Error purchasing premium',
+    insufficientBalance: 'Insufficient balance. You need {required} RON',
+    currentBalance: 'Current balance: {balance} RON',
+    comparison: {
+      title: 'Free vs Premium',
+      free: 'Free',
+      premium: 'Premium',
+      blockReward: 'Block Reward',
+      withdrawalFee: 'Withdrawal Fee',
+    },
   },
 };

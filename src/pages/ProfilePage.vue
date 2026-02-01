@@ -3,9 +3,10 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { updateRonWallet, resetPlayerAccount, getPlayerTransactions, requestRonWithdrawal, getWithdrawalHistory } from '@/utils/api';
+import { updateRonWallet, resetPlayerAccount, getPlayerTransactions, requestRonWithdrawal, getWithdrawalHistory, getPremiumStatus, type PremiumStatus } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { formatGamecoin, formatCrypto, formatNumber, formatRon } from '@/utils/format';
+import PremiumCard from '@/components/PremiumCard.vue';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -35,6 +36,12 @@ const pendingWithdrawal = computed(() =>
   withdrawalHistory.value.find(w => w.status === 'pending' || w.status === 'processing')
 );
 
+// Premium status
+const premiumStatus = ref<PremiumStatus | null>(null);
+const isPremium = computed(() => premiumStatus.value?.is_premium ?? false);
+const withdrawalFeeRate = computed(() => isPremium.value ? 0.10 : 0.25);
+const withdrawalFeePercent = computed(() => isPremium.value ? 10 : 25);
+
 const player = computed(() => authStore.player);
 
 const memberSince = computed(() => {
@@ -56,12 +63,14 @@ const canWithdraw = computed(() =>
 async function loadData() {
   try {
     if (player.value?.id) {
-      const [txData, withdrawals] = await Promise.all([
+      const [txData, withdrawals, premium] = await Promise.all([
         getPlayerTransactions(player.value.id, 20),
         getWithdrawalHistory(player.value.id, 5),
+        getPremiumStatus(player.value.id),
       ]);
       transactions.value = txData || [];
       withdrawalHistory.value = withdrawals || [];
+      premiumStatus.value = premium;
     }
   } catch (e) {
     console.error('Error loading profile:', e);
@@ -351,6 +360,9 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <!-- Premium Subscription -->
+      <PremiumCard />
+
       <!-- RON Wallet Section -->
       <div class="card p-5">
         <div class="flex items-center justify-between mb-4">
@@ -586,13 +598,16 @@ onUnmounted(() => {
                 <span class="text-sm text-text-muted">{{ t('profile.withdraw.available', 'Disponible') }}</span>
                 <span class="font-medium">{{ formatRon(ronBalance) }} RON</span>
               </div>
-              <div class="flex justify-between items-center text-status-danger">
-                <span class="text-sm">{{ t('profile.withdraw.fee', 'Comision (25%)') }}</span>
-                <span class="font-medium">-{{ formatRon(ronBalance * 0.25) }} RON</span>
+              <div class="flex justify-between items-center" :class="isPremium ? 'text-status-success' : 'text-status-danger'">
+                <span class="text-sm flex items-center gap-1">
+                  {{ t('profile.withdraw.fee', 'Comision') }} ({{ withdrawalFeePercent }}%)
+                  <span v-if="isPremium" class="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">Premium</span>
+                </span>
+                <span class="font-medium">-{{ formatRon(ronBalance * withdrawalFeeRate) }} RON</span>
               </div>
               <div class="border-t border-border pt-3 flex justify-between items-center">
                 <span class="text-sm font-medium text-status-success">{{ t('profile.withdraw.youReceive', 'Recibiras') }}</span>
-                <span class="text-xl font-bold text-purple-400">{{ formatRon(ronBalance * 0.75) }} RON</span>
+                <span class="text-xl font-bold text-purple-400">{{ formatRon(ronBalance * (1 - withdrawalFeeRate)) }} RON</span>
               </div>
             </div>
 
