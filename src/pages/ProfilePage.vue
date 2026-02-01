@@ -3,9 +3,9 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { updateRonWallet, resetPlayerAccount, getPlayerTransactions } from '@/utils/api';
+import { updateRonWallet, resetPlayerAccount, getPlayerTransactions, requestRonWithdrawal, getWithdrawalHistory } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
-import { formatGamecoin, formatCrypto, formatNumber } from '@/utils/format';
+import { formatGamecoin, formatCrypto, formatNumber, formatRon } from '@/utils/format';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -26,6 +26,15 @@ const resetConfirmText = ref('');
 const resettingAccount = ref(false);
 const resetError = ref<string | null>(null);
 
+// RON Withdrawal
+const showWithdrawModal = ref(false);
+const withdrawing = ref(false);
+const withdrawError = ref<string | null>(null);
+const withdrawalHistory = ref<any[]>([]);
+const pendingWithdrawal = computed(() =>
+  withdrawalHistory.value.find(w => w.status === 'pending' || w.status === 'processing')
+);
+
 const player = computed(() => authStore.player);
 
 const memberSince = computed(() => {
@@ -39,11 +48,20 @@ const formattedWallet = computed(() => {
   return `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
 });
 
+const ronBalance = computed(() => player.value?.ron_balance ?? 0);
+const canWithdraw = computed(() =>
+  ronBalance.value > 0 && player.value?.ron_wallet && !pendingWithdrawal.value
+);
+
 async function loadData() {
   try {
     if (player.value?.id) {
-      const txData = await getPlayerTransactions(player.value.id, 20);
+      const [txData, withdrawals] = await Promise.all([
+        getPlayerTransactions(player.value.id, 20),
+        getWithdrawalHistory(player.value.id, 5),
+      ]);
       transactions.value = txData || [];
+      withdrawalHistory.value = withdrawals || [];
     }
   } catch (e) {
     console.error('Error loading profile:', e);
@@ -147,6 +165,47 @@ function copyWallet() {
   }
 }
 
+function openWithdrawModal() {
+  if (!canWithdraw.value) return;
+  withdrawError.value = null;
+  showWithdrawModal.value = true;
+}
+
+function closeWithdrawModal() {
+  showWithdrawModal.value = false;
+  withdrawError.value = null;
+}
+
+async function confirmWithdraw() {
+  if (withdrawing.value || !player.value || !canWithdraw.value) return;
+
+  withdrawing.value = true;
+  withdrawError.value = null;
+
+  try {
+    const result = await requestRonWithdrawal(player.value.id);
+
+    if (result.success) {
+      playSound('success');
+      closeWithdrawModal();
+      // Actualizar datos del jugador y historial
+      await Promise.all([
+        authStore.fetchPlayer(),
+        loadData(),
+      ]);
+    } else {
+      withdrawError.value = result.error || t('profile.withdraw.error');
+      playSound('error');
+    }
+  } catch (e) {
+    console.error('Error withdrawing:', e);
+    withdrawError.value = t('profile.withdraw.error');
+    playSound('error');
+  } finally {
+    withdrawing.value = false;
+  }
+}
+
 function getTransactionIcon(type: string): string {
   switch (type) {
     case 'welcome_bonus': return '🎁';
@@ -166,8 +225,8 @@ function getTransactionIcon(type: string): string {
 }
 
 // Lock body scroll when modal is open
-watch(showResetConfirm, (isOpen) => {
-  document.body.style.overflow = isOpen ? 'hidden' : '';
+watch([showResetConfirm, showWithdrawModal], ([reset, withdraw]) => {
+  document.body.style.overflow = (reset || withdraw) ? 'hidden' : '';
 });
 
 onMounted(loadData);
@@ -227,7 +286,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Balances -->
-      <div class="grid sm:grid-cols-2 gap-4">
+      <div class="grid sm:grid-cols-3 gap-4">
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
@@ -254,6 +313,41 @@ onUnmounted(() => {
               💎
             </div>
           </div>
+        </div>
+
+        <div class="card p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-sm text-text-muted">RON</div>
+              <div class="text-2xl font-bold text-purple-400">
+                {{ formatRon(ronBalance) }}
+              </div>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-2xl">
+              💎
+            </div>
+          </div>
+
+          <!-- Pending withdrawal status -->
+          <div v-if="pendingWithdrawal" class="mt-3 p-2 bg-status-warning/10 border border-status-warning/30 rounded-lg">
+            <div class="text-xs text-status-warning flex items-center gap-1">
+              <span class="animate-pulse">⏳</span>
+              {{ t('profile.withdraw.pending', 'Retiro pendiente') }}: {{ formatRon(pendingWithdrawal.net_amount || pendingWithdrawal.amount) }} RON
+            </div>
+            <div class="text-xs text-text-muted mt-1">
+              {{ t('profile.withdraw.processing', 'Procesando...') }}
+            </div>
+          </div>
+
+          <!-- Withdraw button -->
+          <button
+            v-else-if="ronBalance > 0"
+            @click="openWithdrawModal"
+            :disabled="!canWithdraw"
+            class="w-full mt-3 py-2 rounded-lg text-sm font-medium bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {{ player?.ron_wallet ? t('profile.withdraw.button', 'Retirar') : t('profile.withdraw.needWallet', 'Configura wallet') }}
+          </button>
         </div>
       </div>
 
@@ -461,6 +555,79 @@ onUnmounted(() => {
                   <span class="animate-spin">⏳</span>
                 </span>
                 <span v-else>{{ t('profile.reset.confirm', 'Reiniciar') }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- RON Withdrawal Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="showWithdrawModal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
+          <div
+            class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          ></div>
+          <div
+            class="relative bg-bg-primary border border-purple-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
+            @click.stop
+          >
+            <h3 class="text-lg font-bold mb-4 text-center text-purple-400">
+              💎 {{ t('profile.withdraw.title', 'Retirar RON') }}
+            </h3>
+
+            <!-- Balance y desglose de comision -->
+            <div class="bg-bg-tertiary rounded-xl p-4 mb-4 space-y-3">
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-text-muted">{{ t('profile.withdraw.available', 'Disponible') }}</span>
+                <span class="font-medium">{{ formatRon(ronBalance) }} RON</span>
+              </div>
+              <div class="flex justify-between items-center text-status-danger">
+                <span class="text-sm">{{ t('profile.withdraw.fee', 'Comision (25%)') }}</span>
+                <span class="font-medium">-{{ formatRon(ronBalance * 0.25) }} RON</span>
+              </div>
+              <div class="border-t border-border pt-3 flex justify-between items-center">
+                <span class="text-sm font-medium text-status-success">{{ t('profile.withdraw.youReceive', 'Recibiras') }}</span>
+                <span class="text-xl font-bold text-purple-400">{{ formatRon(ronBalance * 0.75) }} RON</span>
+              </div>
+            </div>
+
+            <div class="bg-bg-tertiary rounded-xl p-4 mb-4">
+              <div class="text-sm text-text-muted mb-1">{{ t('profile.withdraw.destination', 'Wallet destino') }}</div>
+              <div class="font-mono text-sm">{{ formattedWallet }}</div>
+            </div>
+
+            <div class="bg-status-warning/10 border border-status-warning/30 rounded-xl p-3 mb-4 text-sm">
+              <p class="text-status-warning">
+                ⚠️ {{ t('profile.withdraw.warning', 'Los retiros pueden tardar hasta 24 horas en procesarse.') }}
+              </p>
+            </div>
+
+            <div v-if="withdrawError" class="mb-4 p-3 rounded-lg bg-status-danger/20 border border-status-danger/30">
+              <p class="text-sm text-status-danger text-center">{{ withdrawError }}</p>
+            </div>
+
+            <div class="flex gap-3">
+              <button
+                @click="closeWithdrawModal"
+                :disabled="withdrawing"
+                class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+              >
+                {{ t('common.cancel') }}
+              </button>
+              <button
+                @click="confirmWithdraw"
+                :disabled="withdrawing"
+                class="flex-1 py-2.5 rounded-lg font-semibold bg-purple-500 text-white hover:bg-purple-500/90 transition-colors disabled:opacity-50"
+              >
+                <span v-if="withdrawing" class="flex items-center justify-center gap-2">
+                  <span class="animate-spin">⏳</span>
+                </span>
+                <span v-else>{{ t('profile.withdraw.confirm', 'Confirmar Retiro') }}</span>
               </button>
             </div>
           </div>

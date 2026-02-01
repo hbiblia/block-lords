@@ -413,6 +413,21 @@ export default {
       confirm: 'Reset',
       errorResetting: 'Error resetting account. Please try again.',
     },
+    withdraw: {
+      button: 'Withdraw',
+      needWallet: 'Setup wallet',
+      title: 'Withdraw RON',
+      available: 'Available',
+      fee: 'Fee (25%)',
+      youReceive: 'You will receive',
+      destination: 'Destination wallet',
+      warning: 'Withdrawals may take up to 24 hours to process.',
+      confirm: 'Confirm Withdrawal',
+      error: 'Error processing withdrawal. Please try again.',
+      pending: 'Pending withdrawal',
+      processing: 'Processing...',
+      success: 'Withdrawal request submitted',
+    },
   },
 
   leaderboard: {

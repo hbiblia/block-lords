@@ -609,3 +609,85 @@ export async function claimAllBlocks() {
   return data;
 }
 
+// === RON WITHDRAWALS ===
+
+export async function requestRonWithdrawal(playerId: string) {
+  const { data, error } = await supabase.rpc('request_ron_withdrawal', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getWithdrawalHistory(playerId: string, limit: number = 10) {
+  const { data, error } = await supabase.rpc('get_withdrawal_history', {
+    p_player_id: playerId,
+    p_limit: limit,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// === ADMIN: RON WITHDRAWALS ===
+
+export async function adminGetPendingWithdrawals() {
+  const { data, error } = await supabase.rpc('admin_get_pending_withdrawals');
+
+  if (error) throw error;
+  return data;
+}
+
+export async function adminStartProcessing(withdrawalId: string) {
+  const { data, error } = await supabase.rpc('admin_start_processing', {
+    p_withdrawal_id: withdrawalId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function adminCompleteWithdrawal(withdrawalId: string, txHash: string) {
+  const { data, error } = await supabase.rpc('admin_complete_withdrawal', {
+    p_withdrawal_id: withdrawalId,
+    p_tx_hash: txHash,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function adminFailWithdrawal(withdrawalId: string, errorMessage: string) {
+  const { data, error } = await supabase.rpc('admin_fail_withdrawal', {
+    p_withdrawal_id: withdrawalId,
+    p_error_message: errorMessage,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function adminGetWithdrawalStats() {
+  const { data, error } = await supabase.rpc('admin_get_withdrawal_stats');
+
+  if (error) throw error;
+  return data;
+}
+
+// Trigger manual del procesamiento de retiros (llama a la Edge Function)
+export async function adminTriggerWithdrawalProcessing() {
+  const { data, error } = await supabase.functions.invoke('process-withdrawals');
+
+  if (error) throw error;
+  return data;
+}
+
+// Obtener estado completo del sistema de retiros
+export async function adminGetWithdrawalSystemStatus() {
+  const { data, error } = await supabase.rpc('admin_get_withdrawal_system_status');
+
+  if (error) throw error;
+  return data;
+}
+

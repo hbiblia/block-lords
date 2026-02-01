@@ -137,7 +137,6 @@ onMounted(() => {
     <div
       v-if="show"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
-      @click.self="emit('close')"
     >
       <div class="bg-bg-secondary rounded-2xl w-full max-w-md mx-4 border border-border overflow-hidden">
         <!-- Header -->
@@ -207,7 +206,7 @@ onMounted(() => {
           <div class="bg-bg-tertiary rounded-lg p-3 text-center text-sm">
             <span class="text-text-muted">{{ t('exchange.rate') }} </span>
             <span v-if="activeTab === 'gamecoin'" class="text-status-warning font-medium">
-              1 ₿ = {{ formatGamecoin(rates.crypto_to_gamecoin) }} 🪙
+              1 ₿ = {{ rates.crypto_to_gamecoin }} 🪙
             </span>
             <span v-else class="text-purple-400 font-medium">
               1,000 ₿ = {{ formatRon(1000 * rates.crypto_to_ron) }} RON
@@ -268,7 +267,7 @@ onMounted(() => {
           <div class="bg-bg-primary rounded-xl p-4">
             <div class="text-xs text-text-muted mb-2 text-center">{{ t('exchange.youWillReceive') }}</div>
             <div class="text-3xl font-bold text-center font-mono" :class="activeTab === 'gamecoin' ? 'text-status-warning' : 'text-purple-400'">
-              {{ activeTab === 'gamecoin' ? formatGamecoin(estimatedReceive) : formatRon(estimatedReceive) }}
+              {{ activeTab === 'gamecoin' ? estimatedReceive.toFixed(2) : formatRon(estimatedReceive) }}
               <span class="text-lg">{{ activeTab === 'gamecoin' ? '🪙' : 'RON' }}</span>
             </div>
           </div>

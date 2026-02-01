@@ -413,6 +413,21 @@ export default {
       confirm: 'Reiniciar',
       errorResetting: 'Error al reiniciar la cuenta. Intenta de nuevo.',
     },
+    withdraw: {
+      button: 'Retirar',
+      needWallet: 'Configura wallet',
+      title: 'Retirar RON',
+      available: 'Disponible',
+      fee: 'Comision (25%)',
+      youReceive: 'Recibiras',
+      destination: 'Wallet destino',
+      warning: 'Los retiros pueden tardar hasta 24 horas en procesarse.',
+      confirm: 'Confirmar Retiro',
+      error: 'Error al procesar el retiro. Intenta de nuevo.',
+      pending: 'Retiro pendiente',
+      processing: 'Procesando...',
+      success: 'Solicitud de retiro enviada',
+    },
   },
 
   leaderboard: {
