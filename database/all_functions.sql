@@ -647,8 +647,13 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
   END IF;
 
-  -- Obtener max_condition actual (default 100 si es NULL)
-  v_current_max := COALESCE(v_rig.max_condition, 100);
+  -- Obtener max_condition actual (calculado basado en times_repaired si es NULL)
+  IF v_rig.max_condition IS NULL THEN
+    -- Si no tiene max_condition, calcularlo basado en reparaciones previas
+    v_current_max := GREATEST(10, 100 - (COALESCE(v_rig.times_repaired, 0) * v_degradation));
+  ELSE
+    v_current_max := v_rig.max_condition;
+  END IF;
 
   -- Verificar si el rig ya no se puede reparar
   IF v_current_max <= 10 THEN
@@ -1539,10 +1544,10 @@ BEGIN
     END LOOP;
 
     -- Calcular nuevo nivel de energía e internet
-    -- Internet consume más rápido que energía (incentiva comprar tarjetas de internet)
+    -- Ambos bajan proporcionalmente a su consumo real (mismo multiplicador)
     -- Los multiplicadores de boost ya fueron aplicados por rig en el loop anterior
     v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.1));
-    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.15));
+    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.1));
 
     -- Actualizar recursos del jugador
     UPDATE players
@@ -5558,6 +5563,207 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_referral_list TO authenticated;
+
+-- =====================================================
+-- FUNCIONES PARA DESTRUIR ITEMS INSTALADOS EN RIGS
+-- =====================================================
+
+-- Destruir/remover cooling instalado en un rig
+DROP FUNCTION IF EXISTS remove_cooling_from_rig(UUID, UUID, UUID) CASCADE;
+CREATE OR REPLACE FUNCTION remove_cooling_from_rig(
+  p_player_id UUID,
+  p_rig_id UUID,
+  p_cooling_id UUID  -- ID del registro en rig_cooling (no el cooling_item_id)
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rig player_rigs%ROWTYPE;
+  v_cooling RECORD;
+BEGIN
+  -- Verificar que el rig pertenece al jugador
+  SELECT * INTO v_rig
+  FROM player_rigs
+  WHERE id = p_rig_id AND player_id = p_player_id;
+
+  IF v_rig IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
+  END IF;
+
+  -- Verificar que el cooling está instalado en este rig
+  SELECT rc.id, rc.cooling_item_id, rc.durability, ci.name
+  INTO v_cooling
+  FROM rig_cooling rc
+  JOIN cooling_items ci ON ci.id = rc.cooling_item_id
+  WHERE rc.id = p_cooling_id AND rc.player_rig_id = p_rig_id;
+
+  IF v_cooling IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Refrigeración no encontrada en este rig');
+  END IF;
+
+  -- Eliminar el cooling (destruir - no se devuelve al inventario)
+  DELETE FROM rig_cooling WHERE id = p_cooling_id;
+
+  -- Marcar el rig como modificado (evita penalización por quick toggle)
+  UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'message', 'Refrigeración destruida',
+    'destroyed', json_build_object(
+      'name', v_cooling.name,
+      'durability', v_cooling.durability
+    )
+  );
+END;
+$$;
+
+-- Destruir/remover boost instalado en un rig
+DROP FUNCTION IF EXISTS remove_boost_from_rig(UUID, UUID, UUID) CASCADE;
+CREATE OR REPLACE FUNCTION remove_boost_from_rig(
+  p_player_id UUID,
+  p_rig_id UUID,
+  p_boost_id UUID  -- ID del registro en rig_boosts (no el boost_item_id)
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rig player_rigs%ROWTYPE;
+  v_boost RECORD;
+BEGIN
+  -- Verificar que el rig pertenece al jugador
+  SELECT * INTO v_rig
+  FROM player_rigs
+  WHERE id = p_rig_id AND player_id = p_player_id;
+
+  IF v_rig IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
+  END IF;
+
+  -- Verificar que el boost está instalado en este rig
+  SELECT rb.id, rb.boost_item_id, rb.remaining_seconds, bi.name
+  INTO v_boost
+  FROM rig_boosts rb
+  JOIN boost_items bi ON bi.id = rb.boost_item_id
+  WHERE rb.id = p_boost_id AND rb.player_rig_id = p_rig_id;
+
+  IF v_boost IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Boost no encontrado en este rig');
+  END IF;
+
+  -- Eliminar el boost (destruir - no se devuelve al inventario)
+  DELETE FROM rig_boosts WHERE id = p_boost_id;
+
+  -- Marcar el rig como modificado (evita penalización por quick toggle)
+  UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'message', 'Boost destruido',
+    'destroyed', json_build_object(
+      'name', v_boost.name,
+      'remaining_seconds', v_boost.remaining_seconds
+    )
+  );
+END;
+$$;
+
+-- Destruir TODOS los coolings de un rig
+DROP FUNCTION IF EXISTS remove_all_cooling_from_rig(UUID, UUID) CASCADE;
+CREATE OR REPLACE FUNCTION remove_all_cooling_from_rig(
+  p_player_id UUID,
+  p_rig_id UUID
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rig player_rigs%ROWTYPE;
+  v_count INTEGER;
+BEGIN
+  -- Verificar que el rig pertenece al jugador
+  SELECT * INTO v_rig
+  FROM player_rigs
+  WHERE id = p_rig_id AND player_id = p_player_id;
+
+  IF v_rig IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
+  END IF;
+
+  -- Contar cuántos hay
+  SELECT COUNT(*) INTO v_count FROM rig_cooling WHERE player_rig_id = p_rig_id;
+
+  IF v_count = 0 THEN
+    RETURN json_build_object('success', false, 'error', 'No hay refrigeración instalada');
+  END IF;
+
+  -- Eliminar todos
+  DELETE FROM rig_cooling WHERE player_rig_id = p_rig_id;
+
+  -- Marcar el rig como modificado
+  UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'message', 'Toda la refrigeración destruida',
+    'destroyed_count', v_count
+  );
+END;
+$$;
+
+-- Destruir TODOS los boosts de un rig
+DROP FUNCTION IF EXISTS remove_all_boosts_from_rig(UUID, UUID) CASCADE;
+CREATE OR REPLACE FUNCTION remove_all_boosts_from_rig(
+  p_player_id UUID,
+  p_rig_id UUID
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rig player_rigs%ROWTYPE;
+  v_count INTEGER;
+BEGIN
+  -- Verificar que el rig pertenece al jugador
+  SELECT * INTO v_rig
+  FROM player_rigs
+  WHERE id = p_rig_id AND player_id = p_player_id;
+
+  IF v_rig IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
+  END IF;
+
+  -- Contar cuántos hay
+  SELECT COUNT(*) INTO v_count FROM rig_boosts WHERE player_rig_id = p_rig_id;
+
+  IF v_count = 0 THEN
+    RETURN json_build_object('success', false, 'error', 'No hay boosts instalados');
+  END IF;
+
+  -- Eliminar todos
+  DELETE FROM rig_boosts WHERE player_rig_id = p_rig_id;
+
+  -- Marcar el rig como modificado
+  UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'message', 'Todos los boosts destruidos',
+    'destroyed_count', v_count
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION remove_cooling_from_rig TO authenticated;
+GRANT EXECUTE ON FUNCTION remove_boost_from_rig TO authenticated;
+GRANT EXECUTE ON FUNCTION remove_all_cooling_from_rig TO authenticated;
+GRANT EXECUTE ON FUNCTION remove_all_boosts_from_rig TO authenticated;
 
 -- =====================================================
 -- GRANTS PARA FUNCIONES

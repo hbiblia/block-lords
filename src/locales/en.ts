@@ -753,6 +753,13 @@ export default {
     newLevel: 'New Level',
     maxLevelReached: 'Max Level',
     stopToUpgrade: 'Turn off the rig to apply upgrades.',
+    // Destroy items
+    destroyItem: 'Destroy',
+    confirmDestroy: 'Destroy Item',
+    destroyWarning: 'This item will be permanently destroyed and cannot be recovered.',
+    destroy: 'Destroy',
+    durability: 'Durability',
+    remaining: 'Remaining',
   },
 
   connection: {

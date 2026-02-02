@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
 import { useToastStore } from '@/stores/toast';
-import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling, getPlayerBoosts, installBoostToRig, getRigBoosts, getRigUpgrades, upgradeRig } from '@/utils/api';
+import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling, getPlayerBoosts, installBoostToRig, getRigBoosts, getRigUpgrades, upgradeRig, removeCoolingFromRig, removeBoostFromRig } from '@/utils/api';
 import { formatCrypto } from '@/utils/format';
 import { playSound } from '@/utils/sounds';
 
@@ -120,15 +120,17 @@ const rigUpgrades = ref<RigUpgrades | null>(null);
 // Confirmation dialog
 const showConfirm = ref(false);
 const confirmAction = ref<{
-  type: 'install' | 'repair' | 'delete' | 'boost' | 'upgrade';
+  type: 'install' | 'repair' | 'delete' | 'boost' | 'upgrade' | 'destroy_cooling' | 'destroy_boost';
   data: {
     coolingId?: string;
     coolingName?: string;
     coolingPower?: number;
+    coolingDurability?: number;
     boostId?: string;
     boostName?: string;
     boostEffect?: string;
     boostDuration?: number;
+    boostRemainingSeconds?: number;
     upgradeType?: 'hashrate' | 'efficiency' | 'thermal';
     upgradeCost?: number;
     upgradeBonus?: number;
@@ -383,6 +385,32 @@ function requestUpgrade(upgradeType: 'hashrate' | 'efficiency' | 'thermal') {
   showConfirm.value = true;
 }
 
+function requestDestroyCooling(cooling: InstalledCooling) {
+  confirmAction.value = {
+    type: 'destroy_cooling',
+    data: {
+      coolingId: cooling.id,
+      coolingName: getCoolingName(cooling.cooling_item_id, cooling.name),
+      coolingPower: cooling.cooling_power,
+      coolingDurability: cooling.durability,
+    },
+  };
+  showConfirm.value = true;
+}
+
+function requestDestroyBoost(boost: InstalledBoost) {
+  confirmAction.value = {
+    type: 'destroy_boost',
+    data: {
+      boostId: boost.id,
+      boostName: getBoostName(boost.boost_item_id, boost.name),
+      boostEffect: getBoostEffectText(boost),
+      boostRemainingSeconds: boost.remaining_seconds,
+    },
+  };
+  showConfirm.value = true;
+}
+
 async function confirmUse() {
   if (!confirmAction.value || !authStore.player || !props.rig) return;
 
@@ -405,6 +433,10 @@ async function confirmUse() {
       result = await deleteRig(authStore.player.id, props.rig.id);
     } else if (type === 'upgrade' && data.upgradeType) {
       result = await upgradeRig(authStore.player.id, props.rig.id, data.upgradeType);
+    } else if (type === 'destroy_cooling' && data.coolingId) {
+      result = await removeCoolingFromRig(authStore.player.id, props.rig.id, data.coolingId);
+    } else if (type === 'destroy_boost' && data.boostId) {
+      result = await removeBoostFromRig(authStore.player.id, props.rig.id, data.boostId);
     }
 
     if (result?.success) {
@@ -427,6 +459,10 @@ async function confirmUse() {
         const upgradeName = data.upgradeType === 'hashrate' ? 'Hashrate' :
           data.upgradeType === 'efficiency' ? 'Eficiencia' : 'Térmica';
         toastStore.success(`${rigName}: ${upgradeName} mejorado a Lv${data.upgradeNewLevel}`);
+      } else if (type === 'destroy_cooling' && data.coolingName) {
+        toastStore.success(`${data.coolingName} destruido`);
+      } else if (type === 'destroy_boost' && data.boostName) {
+        toastStore.success(`${data.boostName} destruido`);
       }
 
       // Close modal after delete
@@ -600,9 +636,21 @@ function closeProcessingModal() {
                         <div class="text-xs text-text-muted">❄️ -{{ cooling.cooling_power }}° • ⚡ +{{ (cooling.energy_cost || 0).toFixed(1) }}/t</div>
                       </div>
                     </div>
-                    <div class="text-right">
-                      <div class="font-mono text-sm text-cyan-400">{{ cooling.durability.toFixed(0) }}%</div>
-                      <div class="text-xs text-text-muted">durabilidad</div>
+                    <div class="flex items-center gap-2">
+                      <div class="text-right">
+                        <div class="font-mono text-sm text-cyan-400">{{ cooling.durability.toFixed(0) }}%</div>
+                        <div class="text-xs text-text-muted">durabilidad</div>
+                      </div>
+                      <button
+                        @click="requestDestroyCooling(cooling)"
+                        :disabled="rig.is_active || processing"
+                        class="p-1.5 rounded-lg text-status-danger/70 hover:text-status-danger hover:bg-status-danger/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        :title="t('rigManage.destroyItem', 'Destruir')"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -622,9 +670,21 @@ function closeProcessingModal() {
                         <div class="text-xs text-text-muted">{{ getBoostEffectText(boost) }}</div>
                       </div>
                     </div>
-                    <div class="text-right">
-                      <div class="font-mono text-sm text-purple-400">{{ formatTime(boost.remaining_seconds) }}</div>
-                      <div v-if="boost.stack_count > 1" class="text-xs text-text-muted">x{{ boost.stack_count }}</div>
+                    <div class="flex items-center gap-2">
+                      <div class="text-right">
+                        <div class="font-mono text-sm text-purple-400">{{ formatTime(boost.remaining_seconds) }}</div>
+                        <div v-if="boost.stack_count > 1" class="text-xs text-text-muted">x{{ boost.stack_count }}</div>
+                      </div>
+                      <button
+                        @click="requestDestroyBoost(boost)"
+                        :disabled="rig.is_active || processing"
+                        class="p-1.5 rounded-lg text-status-danger/70 hover:text-status-danger hover:bg-status-danger/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        :title="t('rigManage.destroyItem', 'Destruir')"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -898,10 +958,10 @@ function closeProcessingModal() {
         <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
           <div class="text-center mb-4">
             <div class="text-4xl mb-3">
-              {{ confirmAction.type === 'install' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'repair' ? '🔧' : confirmAction.type === 'upgrade' ? '⬆️' : '🗑️' }}
+              {{ confirmAction.type === 'install' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'repair' ? '🔧' : confirmAction.type === 'upgrade' ? '⬆️' : confirmAction.type === 'destroy_cooling' ? '❄️' : confirmAction.type === 'destroy_boost' ? '🚀' : '🗑️' }}
             </div>
             <h3 class="text-lg font-bold mb-1">
-              {{ confirmAction.type === 'install' ? t('rigManage.confirmInstall') : confirmAction.type === 'boost' ? t('rigManage.confirmApplyBoost', 'Aplicar Boost') : confirmAction.type === 'repair' ? t('rigManage.confirmRepair') : confirmAction.type === 'upgrade' ? t('rigManage.confirmUpgrade', 'Confirmar Mejora') : t('rigManage.confirmDelete') }}
+              {{ confirmAction.type === 'install' ? t('rigManage.confirmInstall') : confirmAction.type === 'boost' ? t('rigManage.confirmApplyBoost', 'Aplicar Boost') : confirmAction.type === 'repair' ? t('rigManage.confirmRepair') : confirmAction.type === 'upgrade' ? t('rigManage.confirmUpgrade', 'Confirmar Mejora') : (confirmAction.type === 'destroy_cooling' || confirmAction.type === 'destroy_boost') ? t('rigManage.confirmDestroy', 'Destruir Item') : t('rigManage.confirmDelete') }}
             </h3>
             <p class="text-text-muted text-sm">{{ t('inventory.confirm.areYouSure') }}</p>
           </div>
@@ -957,6 +1017,36 @@ function closeProcessingModal() {
                 <span class="font-bold text-amber-400">💎 {{ formatCrypto(confirmAction.data.upgradeCost ?? 0) }}</span>
               </div>
             </template>
+            <template v-else-if="confirmAction.type === 'destroy_cooling'">
+              <p class="text-sm text-status-danger mb-3">{{ t('rigManage.destroyWarning', 'Este item será destruido permanentemente y no podrá recuperarse.') }}</p>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">{{ t('rigManage.cooling') }}</span>
+                <span class="font-medium text-cyan-400">{{ confirmAction.data.coolingName }}</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">{{ t('rigManage.power') }}</span>
+                <span class="font-bold text-cyan-400">-{{ confirmAction.data.coolingPower }}°</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-text-muted text-sm">{{ t('rigManage.durability', 'Durabilidad') }}</span>
+                <span class="font-bold text-cyan-400">{{ confirmAction.data.coolingDurability?.toFixed(0) }}%</span>
+              </div>
+            </template>
+            <template v-else-if="confirmAction.type === 'destroy_boost'">
+              <p class="text-sm text-status-danger mb-3">{{ t('rigManage.destroyWarning', 'Este item será destruido permanentemente y no podrá recuperarse.') }}</p>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Boost</span>
+                <span class="font-medium text-purple-400">{{ confirmAction.data.boostName }}</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">{{ t('rigManage.effect', 'Efecto') }}</span>
+                <span class="font-bold text-purple-400">{{ confirmAction.data.boostEffect }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-text-muted text-sm">{{ t('rigManage.remaining', 'Restante') }}</span>
+                <span class="font-bold text-purple-400">{{ formatTime(confirmAction.data.boostRemainingSeconds ?? 0) }}</span>
+              </div>
+            </template>
             <template v-else-if="confirmAction.type === 'delete'">
               <p class="text-sm text-status-danger">{{ t('rigManage.deleteConfirmText') }}</p>
             </template>
@@ -973,7 +1063,7 @@ function closeProcessingModal() {
               @click="confirmUse"
               :disabled="processing"
               class="flex-1 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50"
-              :class="confirmAction.type === 'delete'
+              :class="confirmAction.type === 'delete' || confirmAction.type === 'destroy_cooling' || confirmAction.type === 'destroy_boost'
                 ? 'bg-status-danger text-white hover:bg-status-danger/80'
                 : confirmAction.type === 'repair'
                   ? 'bg-status-warning text-white hover:bg-status-warning/80'
@@ -983,7 +1073,7 @@ function closeProcessingModal() {
                       ? 'bg-amber-500 text-black hover:bg-amber-400'
                       : 'bg-cyan-500 text-white hover:bg-cyan-400'"
             >
-              {{ t('common.confirm') }}
+              {{ (confirmAction.type === 'destroy_cooling' || confirmAction.type === 'destroy_boost') ? t('rigManage.destroy', 'Destruir') : t('common.confirm') }}
             </button>
           </div>
         </div>

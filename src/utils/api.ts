@@ -534,6 +534,32 @@ export async function buyBoost(playerId: string, boostId: string) {
   return data;
 }
 
+// === DESTROY INSTALLED ITEMS ===
+
+// Destruir cooling instalado en un rig
+export async function removeCoolingFromRig(playerId: string, rigId: string, coolingId: string) {
+  const { data, error } = await supabase.rpc('remove_cooling_from_rig', {
+    p_player_id: playerId,
+    p_rig_id: rigId,
+    p_cooling_id: coolingId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Destruir boost instalado en un rig
+export async function removeBoostFromRig(playerId: string, rigId: string, boostId: string) {
+  const { data, error } = await supabase.rpc('remove_boost_from_rig', {
+    p_player_id: playerId,
+    p_rig_id: rigId,
+    p_boost_id: boostId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 // === RIG-SPECIFIC BOOSTS ===
 
 // Instalar boost en un rig específico
