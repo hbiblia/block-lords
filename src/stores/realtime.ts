@@ -16,6 +16,8 @@ export const useRealtimeStore = defineStore('realtime', () => {
   let visibilityHandler: (() => void) | null = null;
   let onlineHandler: (() => void) | null = null;
   let offlineHandler: (() => void) | null = null;
+  let focusHandler: (() => void) | null = null;
+  let blurHandler: (() => void) | null = null;
 
   const isConnected = computed(() => connected.value);
   const showDisconnectedModal = computed(() => wasConnected.value && !connected.value && !reconnecting.value);
@@ -100,6 +102,45 @@ export const useRealtimeStore = defineStore('realtime', () => {
     window.addEventListener('offline', offlineHandler);
   }
 
+  // Manejar eventos de focus/blur de la ventana (diferente de visibilitychange)
+  function setupFocusHandlers() {
+    if (focusHandler) return;
+
+    focusHandler = () => {
+      console.log('Ventana recuperó el foco, verificando conexión...');
+      // Verificar inmediatamente el estado de los canales
+      if (wasConnected.value) {
+        let needsReconnect = false;
+
+        // Si no estamos conectados, reconectar
+        if (!connected.value) {
+          needsReconnect = true;
+        } else {
+          // Verificar que los canales sigan activos
+          channels.value.forEach((channel) => {
+            if (channel.state !== 'joined' && channel.state !== 'joining') {
+              needsReconnect = true;
+            }
+          });
+        }
+
+        if (needsReconnect) {
+          console.log('Reconectando después de recuperar foco...');
+          manualReconnect();
+        }
+      }
+    };
+
+    blurHandler = () => {
+      // Cuando la ventana pierde foco, el navegador puede throttle la conexión
+      // Solo logueamos para debug, no desconectamos activamente
+      console.log('Ventana perdió el foco');
+    };
+
+    window.addEventListener('focus', focusHandler);
+    window.addEventListener('blur', blurHandler);
+  }
+
   function cleanupHandlers() {
     stopHeartbeat();
 
@@ -116,6 +157,16 @@ export const useRealtimeStore = defineStore('realtime', () => {
     if (offlineHandler) {
       window.removeEventListener('offline', offlineHandler);
       offlineHandler = null;
+    }
+
+    if (focusHandler) {
+      window.removeEventListener('focus', focusHandler);
+      focusHandler = null;
+    }
+
+    if (blurHandler) {
+      window.removeEventListener('blur', blurHandler);
+      blurHandler = null;
     }
   }
 
@@ -151,6 +202,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
     startHeartbeat();
     setupVisibilityHandler();
     setupNetworkHandlers();
+    setupFocusHandlers();
   }
 
   function handleChannelError() {
