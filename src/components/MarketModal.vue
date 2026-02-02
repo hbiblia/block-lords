@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMarketStore } from '@/stores/market';
+import { useToastStore } from '@/stores/toast';
 import { formatGamecoin, formatCrypto, formatNumber, formatRon } from '@/utils/format';
 import { playSound } from '@/utils/sounds';
 
@@ -60,6 +61,7 @@ const { t } = useI18n();
 
 const authStore = useAuthStore();
 const marketStore = useMarketStore();
+const toastStore = useToastStore();
 
 const props = defineProps<{
   show: boolean;
@@ -330,6 +332,7 @@ async function buyRig(rigId: string) {
 
   if (result.success) {
     processingStatus.value = 'success';
+    toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
     emit('purchased');
   } else if (result.requiresRon) {
     // RON payment requires wallet integration
@@ -364,6 +367,7 @@ async function buyCooling(coolingId: string) {
 
   if (result.success) {
     processingStatus.value = 'success';
+    toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
     emit('purchased');
   } else {
     processingStatus.value = 'error';
@@ -393,6 +397,7 @@ async function buyCard(cardId: string) {
 
   if (result.success) {
     processingStatus.value = 'success';
+    toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
     emit('purchased');
   } else {
     processingStatus.value = 'error';
@@ -422,6 +427,7 @@ async function buyBoost(boostId: string) {
 
   if (result.success) {
     processingStatus.value = 'success';
+    toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
     emit('purchased');
   } else {
     processingStatus.value = 'error';
@@ -454,6 +460,7 @@ async function buyCryptoPackage(packageId: string) {
 
   if (result.success) {
     processingStatus.value = 'success';
+    toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
     emit('purchased');
   } else {
     processingStatus.value = 'error';

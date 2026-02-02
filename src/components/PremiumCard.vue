@@ -12,11 +12,13 @@ const loading = ref(true);
 const purchasing = ref(false);
 const premiumStatus = ref<PremiumStatus | null>(null);
 const error = ref('');
+const showConfirm = ref(false);
 
 const isPremium = computed(() => premiumStatus.value?.is_premium ?? false);
 const daysRemaining = computed(() => premiumStatus.value?.days_remaining ?? 0);
 const price = computed(() => premiumStatus.value?.price ?? 2.5);
 const canAfford = computed(() => (authStore.player?.ron_balance ?? 0) >= price.value);
+const ronBalance = computed(() => authStore.player?.ron_balance ?? 0);
 
 const expiresDate = computed(() => {
   if (!premiumStatus.value?.expires_at) return '';
@@ -36,9 +38,20 @@ async function loadStatus() {
   }
 }
 
-async function handlePurchase() {
+function requestPurchase() {
+  playSound('click');
+  showConfirm.value = true;
+}
+
+function cancelPurchase() {
+  playSound('click');
+  showConfirm.value = false;
+}
+
+async function confirmPurchase() {
   if (!authStore.player?.id || purchasing.value) return;
 
+  showConfirm.value = false;
   error.value = '';
   purchasing.value = true;
 
@@ -166,7 +179,7 @@ onMounted(() => {
           </div>
 
           <button
-            @click="handlePurchase"
+            @click="requestPurchase"
             :disabled="purchasing || !canAfford"
             :class="[
               'px-6 py-3 rounded-xl font-medium transition-all',
@@ -193,5 +206,62 @@ onMounted(() => {
         </p>
       </template>
     </template>
+
+    <!-- Confirmation Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showConfirm"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="cancelPurchase"></div>
+
+        <div class="relative bg-bg-secondary rounded-xl p-6 max-w-sm w-full border border-border animate-fade-in">
+          <div class="text-center mb-4">
+            <div class="text-4xl mb-3">&#x1F451;</div>
+            <h3 class="text-lg font-bold mb-1">{{ t('premium.confirmTitle', 'Activar Premium') }}</h3>
+            <p class="text-text-muted text-sm">{{ t('premium.confirmQuestion', '¿Deseas activar el plan premium?') }}</p>
+          </div>
+
+          <div class="bg-bg-primary rounded-lg p-4 mb-4">
+            <div class="font-medium text-amber-400 mb-2 text-center">{{ t('premium.title') }}</div>
+            <div class="text-xs text-text-muted mb-3 space-y-1">
+              <p>✓ {{ t('premium.benefits.blockBonus') }}</p>
+              <p>✓ {{ t('premium.benefits.withdrawalFee') }}</p>
+              <p>✓ {{ t('premium.benefits.resourceBonus') }}</p>
+            </div>
+            <div class="flex items-center justify-between border-t border-border/50 pt-3">
+              <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.price', 'Precio') }}</span>
+              <span class="font-bold text-amber-400">{{ price }} RON</span>
+            </div>
+            <div class="flex items-center justify-between mt-1">
+              <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.yourBalance', 'Tu balance') }}</span>
+              <span class="font-mono" :class="canAfford ? 'text-status-success' : 'text-status-danger'">
+                {{ ronBalance.toFixed(4) }} RON
+              </span>
+            </div>
+            <div class="flex items-center justify-between mt-1 pt-2 border-t border-border/50">
+              <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.after', 'Después') }}</span>
+              <span class="font-mono text-white">{{ (ronBalance - price).toFixed(4) }} RON</span>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <button
+              @click="cancelPurchase"
+              class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+            >
+              {{ t('common.cancel') }}
+            </button>
+            <button
+              @click="confirmPurchase"
+              :disabled="purchasing"
+              class="flex-1 py-2.5 rounded-lg font-medium bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 transition-colors disabled:opacity-50"
+            >
+              {{ purchasing ? '...' : t('common.confirm') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
