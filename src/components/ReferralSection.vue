@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
-import { getReferralInfo, applyReferralCode, updateReferralCode, getReferralList, type ReferralInfo, type ReferralListResponse, type ReferralListItem } from '@/utils/api';
+import { getReferralInfo, applyReferralCode, updateReferralCode, getReferralList, type ReferralInfo, type ReferralListResponse } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { formatCrypto } from '@/utils/format';
 
