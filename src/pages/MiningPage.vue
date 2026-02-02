@@ -606,7 +606,8 @@ onUnmounted(() => {
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <div class="bg-bg-secondary rounded-xl p-3 text-center">
             <div class="text-lg font-bold font-mono">
-              <span :class="effectiveHashrate < totalHashrate ? 'text-status-warning' : ''">{{ Math.round(effectiveHashrate).toLocaleString() }}</span>
+              <span v-if="activeRigsCount > 0" :class="effectiveHashrate < totalHashrate ? 'text-status-warning' : ''">{{ Math.round(effectiveHashrate).toLocaleString() }}</span>
+              <span v-else class="text-text-muted">--</span>
             </div>
             <div class="text-[10px] text-text-muted">{{ t('mining.hashrate') }}</div>
           </div>
@@ -618,39 +619,41 @@ onUnmounted(() => {
             v-tooltip="t('mining.tooltips.probPerBlock')"
             class="bg-bg-secondary rounded-xl p-3 text-center cursor-help"
           >
-            <div class="text-lg font-bold font-mono text-status-warning">{{ miningChance.toFixed(2) }}%</div>
+            <div class="text-lg font-bold font-mono" :class="activeRigsCount > 0 ? 'text-status-warning' : 'text-text-muted'">
+              {{ activeRigsCount > 0 ? miningChance.toFixed(2) + '%' : '--' }}
+            </div>
             <div class="text-[10px] text-text-muted">{{ t('mining.probPerBlock') }}</div>
           </div>
           <!-- Mining Estimate Stats -->
           <div
-            v-if="isEstimateMining && estimatedTimeText"
             v-tooltip="t('mining.tooltips.nextBlock')"
-            class="bg-accent-primary/10 border border-accent-primary/30 rounded-xl p-3 text-center cursor-help"
+            class="rounded-xl p-3 text-center cursor-help"
+            :class="activeRigsCount > 0 && isEstimateMining ? 'bg-accent-primary/10 border border-accent-primary/30' : 'bg-bg-secondary'"
           >
-            <div class="text-lg font-bold font-mono text-accent-primary">{{ estimatedTimeText }}</div>
+            <div class="text-lg font-bold font-mono" :class="activeRigsCount > 0 && estimatedTimeText ? 'text-accent-primary' : 'text-text-muted'">
+              {{ activeRigsCount > 0 && estimatedTimeText ? estimatedTimeText : '--' }}
+            </div>
             <div class="text-[10px] text-text-muted flex items-center justify-center gap-1">
               <span>⏱️</span> {{ t('mining.nextBlock') }}
             </div>
           </div>
           <div
-            v-if="isEstimateMining && timeRangeText"
             v-tooltip="t('mining.tooltips.estimateRange')"
             class="bg-bg-secondary rounded-xl p-3 text-center cursor-help"
           >
-            <div class="text-lg font-bold font-mono text-text-muted">{{ timeRangeText }}</div>
+            <div class="text-lg font-bold font-mono text-text-muted">
+              {{ activeRigsCount > 0 && timeRangeText ? timeRangeText : '--' }}
+            </div>
             <div class="text-[10px] text-text-muted">{{ t('mining.estimateRange') }}</div>
           </div>
           <div
-            v-if="isEstimateMining && blocksPerDayText"
             v-tooltip="t('mining.tooltips.blocksPerDay')"
             class="bg-bg-secondary rounded-xl p-3 text-center cursor-help"
           >
-            <div class="text-lg font-bold font-mono text-status-success">{{ blocksPerDayText }}</div>
+            <div class="text-lg font-bold font-mono" :class="activeRigsCount > 0 && blocksPerDayText ? 'text-status-success' : 'text-text-muted'">
+              {{ activeRigsCount > 0 && blocksPerDayText ? blocksPerDayText : '--' }}
+            </div>
             <div class="text-[10px] text-text-muted">{{ t('mining.blocksPerDay') }}</div>
-          </div>
-          <!-- Loading state -->
-          <div v-if="estimateLoading && !isEstimateMining" class="bg-bg-secondary rounded-xl p-3 text-center col-span-3">
-            <div class="text-sm text-text-muted animate-pulse">{{ t('mining.calculatingEstimate', 'Calculando...') }}</div>
           </div>
         </div>
       </div>
