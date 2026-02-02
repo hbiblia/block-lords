@@ -84,6 +84,8 @@ router.beforeEach(async (to, _from, next) => {
     next({ name: 'login', query: { redirect: to.fullPath } });
   } else if (to.meta.guest && authStore.isAuthenticated) {
     next({ name: 'mining' });
+  } else if (to.name === 'home' && authStore.isAuthenticated) {
+    next({ name: 'welcome' });
   } else {
     next();
   }

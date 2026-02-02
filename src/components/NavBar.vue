@@ -268,9 +268,6 @@ async function handleLogout() {
           >
             {{ currentLocale === 'en' ? '🇺🇸 EN' : '🇪🇸 ES' }}
           </button>
-          <RouterLink to="/login" class="btn-primary">
-            {{ t('nav.login') }}
-          </RouterLink>
         </template>
       </div>
     </div>

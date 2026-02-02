@@ -44,6 +44,14 @@ function getRankIcon(score: number): string {
   if (score >= 30) return '🥈';
   return '🥉';
 }
+
+function formatCurrency(value: number | undefined, decimals: number = 0): string {
+  if (value === undefined || value === null) return decimals > 0 ? '0.00' : '0';
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
 </script>
 
 <template>
@@ -83,15 +91,15 @@ function getRankIcon(score: number): string {
       >
         <div class="card py-4">
           <div class="text-2xl font-bold text-status-warning">
-            {{ player?.gamecoin_balance?.toFixed(0) ?? '0' }}
+            {{ formatCurrency(player?.gamecoin_balance, 0) }}
           </div>
           <div class="text-xs text-text-muted mt-1">🪙 GameCoin</div>
         </div>
         <div class="card py-4">
           <div class="text-2xl font-bold text-accent-tertiary">
-            {{ player?.crypto_balance?.toFixed(2) ?? '0.00' }}
+            {{ formatCurrency(player?.crypto_balance, 2) }}
           </div>
-          <div class="text-xs text-text-muted mt-1">₿ Crypto</div>
+          <div class="text-xs text-text-muted mt-1">💎 Crypto</div>
         </div>
         <div class="card py-4">
           <div class="text-2xl font-bold text-accent-primary">
