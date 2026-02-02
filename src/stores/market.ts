@@ -152,17 +152,33 @@ export const useMarketStore = defineStore('market', () => {
   const buying = ref(false);
   const refreshing = ref(false); // True when reloading data (not first load)
 
+  // Currency order for sorting (gamecoin first, then crypto, then ron)
+  const currencyOrder: Record<string, number> = {
+    gamecoin: 0,
+    crypto: 1,
+    ron: 2,
+  };
+
+  function sortByCurrencyAndPrice<T extends { base_price: number; currency?: string }>(items: T[]): T[] {
+    return [...items].sort((a, b) => {
+      const currA = currencyOrder[a.currency ?? 'gamecoin'] ?? 99;
+      const currB = currencyOrder[b.currency ?? 'gamecoin'] ?? 99;
+      if (currA !== currB) return currA - currB;
+      return a.base_price - b.base_price;
+    });
+  }
+
   // Computed
   const rigsForSale = computed(() =>
-    rigs.value.filter(r => r.base_price > 0)
+    sortByCurrencyAndPrice(rigs.value.filter(r => r.base_price > 0))
   );
 
   const energyCards = computed(() =>
-    prepaidCards.value.filter(c => c.card_type === 'energy')
+    sortByCurrencyAndPrice(prepaidCards.value.filter(c => c.card_type === 'energy'))
   );
 
   const internetCards = computed(() =>
-    prepaidCards.value.filter(c => c.card_type === 'internet')
+    sortByCurrencyAndPrice(prepaidCards.value.filter(c => c.card_type === 'internet'))
   );
 
   const loading = computed(() => loadingCatalogs.value || loadingQuantities.value);
