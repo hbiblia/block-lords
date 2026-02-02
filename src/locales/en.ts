@@ -1013,6 +1013,32 @@ export default {
     },
   },
 
+  referral: {
+    title: 'Referral System',
+    subtitle: 'Invite friends and earn rewards',
+    invited: 'invited',
+    yourCode: 'Your referral code',
+    copyLink: 'Copy link',
+    share: 'Share',
+    shareText: 'Join Block Lords and receive 200 GameCoin welcome bonus!',
+    rewards: 'Referral rewards',
+    rewardsDesc: 'You receive 500 GameCoin and your friend receives 200 GameCoin upon registration.',
+    referredBy: 'Referred by',
+    haveCode: 'Have a referral code?',
+    enterCode: 'Enter code',
+    apply: 'Apply',
+    applyHint: 'You can only apply a code within the first 7 days.',
+    applySuccess: 'Code applied! You received {bonus} GameCoin from {username}.',
+    recentReferrals: 'Recent referrals',
+    errors: {
+      invalid_code: 'Invalid referral code',
+      own_code: 'You cannot use your own code',
+      already_referred: 'You already have a referral code applied',
+      too_late: 'You can only apply a code within the first 7 days',
+      generic: 'Error applying code. Please try again.',
+    },
+  },
+
   // Game data translations
   data: {
     rigs: {

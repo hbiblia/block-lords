@@ -774,3 +774,43 @@ export async function getPremiumHistory(playerId: string, limit: number = 10) {
   return data;
 }
 
+// === REFERRAL SYSTEM ===
+
+export interface ReferralInfo {
+  success: boolean;
+  referralCode: string;
+  referralCount: number;
+  referredBy: string | null;
+  recentReferrals: Array<{ username: string; joinedAt: string }>;
+  error?: string;
+}
+
+export interface ApplyReferralResult {
+  success: boolean;
+  referrerUsername?: string;
+  referrerBonus?: number;
+  playerBonus?: number;
+  error?: string;
+}
+
+// Obtener información de referidos del jugador
+export async function getReferralInfo(playerId: string): Promise<ReferralInfo> {
+  const { data, error } = await supabase.rpc('get_referral_info', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data as ReferralInfo;
+}
+
+// Aplicar código de referido
+export async function applyReferralCode(playerId: string, referralCode: string): Promise<ApplyReferralResult> {
+  const { data, error } = await supabase.rpc('apply_referral_code', {
+    p_player_id: playerId,
+    p_referral_code: referralCode,
+  });
+
+  if (error) throw error;
+  return data as ApplyReferralResult;
+}
+

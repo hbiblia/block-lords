@@ -1013,6 +1013,32 @@ export default {
     },
   },
 
+  referral: {
+    title: 'Sistema de Referidos',
+    subtitle: 'Invita amigos y gana recompensas',
+    invited: 'invitados',
+    yourCode: 'Tu codigo de referido',
+    copyLink: 'Copiar enlace',
+    share: 'Compartir',
+    shareText: 'Unete a Block Lords y recibe 200 GameCoin de bienvenida!',
+    rewards: 'Recompensas por referido',
+    rewardsDesc: 'Tu recibes 500 GameCoin y tu amigo recibe 200 GameCoin al registrarse.',
+    referredBy: 'Referido por',
+    haveCode: 'Tienes un codigo de referido?',
+    enterCode: 'Ingresa el codigo',
+    apply: 'Aplicar',
+    applyHint: 'Solo puedes aplicar un codigo en los primeros 7 dias.',
+    applySuccess: 'Codigo aplicado! Recibiste {bonus} GameCoin de {username}.',
+    recentReferrals: 'Ultimos referidos',
+    errors: {
+      invalid_code: 'Codigo de referido invalido',
+      own_code: 'No puedes usar tu propio codigo',
+      already_referred: 'Ya tienes un codigo de referido aplicado',
+      too_late: 'Solo puedes aplicar un codigo en los primeros 7 dias',
+      generic: 'Error al aplicar el codigo. Intenta de nuevo.',
+    },
+  },
+
   // Traducciones de datos del juego
   data: {
     rigs: {

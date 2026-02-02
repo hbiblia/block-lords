@@ -8,6 +8,7 @@ import { playSound } from '@/utils/sounds';
 import { formatGamecoin, formatCrypto, formatNumber, formatRon } from '@/utils/format';
 import { useRoninWallet } from '@/composables/useRoninWallet';
 import PremiumCard from '@/components/PremiumCard.vue';
+import ReferralSection from '@/components/ReferralSection.vue';
 
 const roninWallet = useRoninWallet();
 
@@ -478,6 +479,9 @@ onUnmounted(() => {
 
       <!-- Premium Subscription -->
       <PremiumCard />
+
+      <!-- Referral System -->
+      <ReferralSection />
 
       <!-- RON Wallet Section -->
       <div class="card p-5">

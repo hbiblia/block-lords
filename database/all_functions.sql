@@ -4854,9 +4854,185 @@ END;
 $$;
 
 -- =====================================================
+-- FUNCIONES DEL SISTEMA DE REFERIDOS
+-- =====================================================
+
+-- Función para generar código único de referido
+CREATE OR REPLACE FUNCTION generate_referral_code()
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_code TEXT;
+  v_exists BOOLEAN;
+BEGIN
+  LOOP
+    -- Generar código aleatorio de 8 caracteres
+    v_code := UPPER(SUBSTRING(MD5(RANDOM()::text || NOW()::text), 1, 8));
+    -- Verificar si ya existe
+    SELECT EXISTS(SELECT 1 FROM players WHERE referral_code = v_code) INTO v_exists;
+    IF NOT v_exists THEN
+      RETURN v_code;
+    END IF;
+  END LOOP;
+END;
+$$;
+
+-- Trigger para asignar código al crear jugador
+CREATE OR REPLACE FUNCTION assign_referral_code()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.referral_code IS NULL THEN
+    NEW.referral_code := generate_referral_code();
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trigger_assign_referral_code ON players;
+CREATE TRIGGER trigger_assign_referral_code
+  BEFORE INSERT ON players
+  FOR EACH ROW
+  EXECUTE FUNCTION assign_referral_code();
+
+-- Generar códigos para jugadores existentes que no tienen
+UPDATE players
+SET referral_code = UPPER(SUBSTRING(MD5(id::text || COALESCE(created_at::text, NOW()::text)), 1, 8))
+WHERE referral_code IS NULL;
+
+-- Función para obtener info de referidos
+DROP FUNCTION IF EXISTS get_referral_info(UUID);
+CREATE OR REPLACE FUNCTION get_referral_info(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player RECORD;
+  v_referrer_username TEXT;
+  v_recent_referrals JSON;
+BEGIN
+  -- Obtener datos del jugador
+  SELECT referral_code, referred_by, referral_count
+  INTO v_player
+  FROM players
+  WHERE id = p_player_id;
+
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Obtener username del referrer si existe
+  IF v_player.referred_by IS NOT NULL THEN
+    SELECT username INTO v_referrer_username
+    FROM players WHERE id = v_player.referred_by;
+  END IF;
+
+  -- Obtener últimos 5 referidos
+  SELECT json_agg(json_build_object(
+    'username', p.username,
+    'joinedAt', p.created_at
+  ) ORDER BY p.created_at DESC)
+  INTO v_recent_referrals
+  FROM (
+    SELECT username, created_at
+    FROM players
+    WHERE referred_by = p_player_id
+    ORDER BY created_at DESC
+    LIMIT 5
+  ) p;
+
+  RETURN json_build_object(
+    'success', true,
+    'referralCode', v_player.referral_code,
+    'referralCount', COALESCE(v_player.referral_count, 0),
+    'referredBy', v_referrer_username,
+    'recentReferrals', COALESCE(v_recent_referrals, '[]'::json)
+  );
+END;
+$$;
+
+-- Función para aplicar código de referido
+DROP FUNCTION IF EXISTS apply_referral_code(UUID, TEXT);
+CREATE OR REPLACE FUNCTION apply_referral_code(p_player_id UUID, p_referral_code TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_referrer_id UUID;
+  v_referrer_username TEXT;
+  v_player_referred_by UUID;
+  v_player_created_at TIMESTAMPTZ;
+  v_referrer_bonus INTEGER := 500;  -- GameCoin para quien refiere
+  v_player_bonus INTEGER := 200;    -- GameCoin para el nuevo jugador
+BEGIN
+  -- Normalizar código
+  p_referral_code := UPPER(TRIM(p_referral_code));
+
+  -- Buscar quien tiene ese código
+  SELECT id, username INTO v_referrer_id, v_referrer_username
+  FROM players
+  WHERE referral_code = p_referral_code;
+
+  IF v_referrer_id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_code');
+  END IF;
+
+  -- No puede usar su propio código
+  IF v_referrer_id = p_player_id THEN
+    RETURN json_build_object('success', false, 'error', 'own_code');
+  END IF;
+
+  -- Verificar que el jugador no tenga ya un referrer
+  SELECT referred_by, created_at INTO v_player_referred_by, v_player_created_at
+  FROM players WHERE id = p_player_id;
+
+  IF v_player_referred_by IS NOT NULL THEN
+    RETURN json_build_object('success', false, 'error', 'already_referred');
+  END IF;
+
+  -- Solo se puede aplicar código en los primeros 7 días
+  IF v_player_created_at < NOW() - INTERVAL '7 days' THEN
+    RETURN json_build_object('success', false, 'error', 'too_late');
+  END IF;
+
+  -- Aplicar referido
+  UPDATE players SET referred_by = v_referrer_id WHERE id = p_player_id;
+
+  -- Incrementar contador del referrer
+  UPDATE players SET referral_count = COALESCE(referral_count, 0) + 1 WHERE id = v_referrer_id;
+
+  -- Dar bonus de GameCoin
+  UPDATE players SET gamecoin_balance = gamecoin_balance + v_referrer_bonus WHERE id = v_referrer_id;
+  UPDATE players SET gamecoin_balance = gamecoin_balance + v_player_bonus WHERE id = p_player_id;
+
+  -- Registrar transacciones
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES
+    (v_referrer_id, 'referral_bonus', v_referrer_bonus, 'gamecoin', 'Bonus por referir un amigo'),
+    (p_player_id, 'referral_bonus', v_player_bonus, 'gamecoin', 'Bonus por usar código de referido');
+
+  -- Actualizar progreso de misiones de referidos
+  PERFORM update_mission_progress(v_referrer_id, 'referrals', 1);
+
+  RETURN json_build_object(
+    'success', true,
+    'referrerUsername', v_referrer_username,
+    'referrerBonus', v_referrer_bonus,
+    'playerBonus', v_player_bonus
+  );
+END;
+$$;
+
+-- =====================================================
 -- GRANTS PARA FUNCIONES
 -- =====================================================
 
+GRANT EXECUTE ON FUNCTION get_referral_info TO authenticated;
+GRANT EXECUTE ON FUNCTION apply_referral_code TO authenticated;
 GRANT EXECUTE ON FUNCTION upgrade_rig TO authenticated;
 GRANT EXECUTE ON FUNCTION get_pending_blocks TO authenticated;
 GRANT EXECUTE ON FUNCTION get_pending_blocks_count TO authenticated;

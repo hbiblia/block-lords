@@ -36,29 +36,19 @@ function handleBlockMined(event: CustomEvent) {
   }
 }
 
-// Cargar estado de streak, misiones y bloques pendientes al inicio
+// Escuchar evento de bloque minado
 onMounted(() => {
-  if (authStore.isAuthenticated) {
+  window.addEventListener('block-mined', handleBlockMined as EventListener);
+});
+
+// Cargar datos cuando cambia el estado de autenticación
+watch(() => authStore.isAuthenticated, (isAuth) => {
+  if (isAuth) {
+    // Cargar streak, misiones y bloques pendientes
     streakStore.fetchStatus();
     missionsStore.fetchMissions();
     missionsStore.startHeartbeat();
     pendingBlocksStore.fetchPendingBlocks();
-    // Inicializar AdSense
-    try {
-      ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-    } catch (e) {
-      console.error('AdSense error:', e);
-    }
-  }
-
-  // Escuchar evento de bloque minado
-  window.addEventListener('block-mined', handleBlockMined as EventListener);
-});
-
-// Iniciar/detener heartbeat cuando cambia el estado de autenticación
-watch(() => authStore.isAuthenticated, (isAuth) => {
-  if (isAuth) {
-    missionsStore.startHeartbeat();
     // Inicializar AdSense cuando el usuario se autentica
     nextTick(() => {
       try {
@@ -70,7 +60,7 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
   } else {
     missionsStore.stopHeartbeat();
   }
-});
+}, { immediate: true });
 
 onUnmounted(() => {
   missionsStore.stopHeartbeat();

@@ -588,6 +588,18 @@ CREATE INDEX IF NOT EXISTS idx_premium_player ON premium_subscriptions(player_id
 CREATE INDEX IF NOT EXISTS idx_premium_expires ON premium_subscriptions(expires_at);
 
 -- =====================================================
+-- 13. REFERRAL SYSTEM
+-- =====================================================
+
+-- Columnas para sistema de referidos
+ALTER TABLE players ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS referred_by UUID REFERENCES players(id);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS referral_count INTEGER DEFAULT 0;
+
+-- Índice para búsqueda rápida de códigos
+CREATE INDEX IF NOT EXISTS idx_players_referral_code ON players(referral_code);
+
+-- =====================================================
 -- NOTA: Las funciones están en all_functions.sql
 -- NOTA: Las políticas RLS están en all_rls_policies.sql
 -- =====================================================
