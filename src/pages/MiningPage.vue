@@ -119,6 +119,17 @@ function closeRigManage() {
   selectedRigForManage.value = null;
 }
 
+async function handleRigUpdated() {
+  await miningStore.loadData();
+  // Update selected rig reference with fresh data
+  if (selectedRigForManage.value) {
+    const updatedRig = miningStore.rigs.find(r => r.id === selectedRigForManage.value?.id);
+    if (updatedRig) {
+      selectedRigForManage.value = updatedRig;
+    }
+  }
+}
+
 // Boost helpers
 function getBoostIcon(boostType: string): string {
   switch (boostType) {
@@ -915,7 +926,7 @@ onUnmounted(() => {
       :show="showRigManage"
       :rig="selectedRigForManage"
       @close="closeRigManage"
-      @updated="miningStore.loadData()"
+      @updated="handleRigUpdated"
     />
 
     <!-- Slot Purchase Confirmation Modal -->

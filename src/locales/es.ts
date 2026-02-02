@@ -646,7 +646,7 @@ export default {
       currentCondition: 'Condicion actual:',
       repairTo: 'Reparar a:',
       cost: 'Costo:',
-      maxConditionWarning: 'La condicion maxima se reducira en 5% despues de cada reparacion.',
+      maxConditionWarning: 'La condicion maxima se reducira en 30% despues de cada reparacion (max 3 reparaciones).',
       deleteWarning: 'Esta accion no se puede deshacer. El rig sera eliminado permanentemente.',
     },
   },

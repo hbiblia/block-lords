@@ -646,7 +646,7 @@ export default {
       currentCondition: 'Current condition:',
       repairTo: 'Repair to:',
       cost: 'Cost:',
-      maxConditionWarning: 'Max condition will be reduced by 5% after each repair.',
+      maxConditionWarning: 'Max condition will be reduced by 30% after each repair (max 3 repairs).',
       deleteWarning: 'This action cannot be undone. The rig will be permanently deleted.',
     },
   },

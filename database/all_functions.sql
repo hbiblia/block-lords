@@ -621,8 +621,8 @@ END;
 $$;
 
 -- Reparar rig (con degradación permanente)
--- Cada reparación reduce max_condition en 5%
--- Cuando max_condition <= 10%, el rig ya no se puede reparar
+-- Cada reparación reduce max_condition en 30%
+-- Cuando max_condition <= 10%, el rig ya no se puede reparar (máximo 3 reparaciones)
 CREATE OR REPLACE FUNCTION repair_rig(p_player_id UUID, p_rig_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -634,7 +634,7 @@ DECLARE
   v_repair_cost NUMERIC;
   v_current_max NUMERIC;
   v_new_max NUMERIC;
-  v_degradation NUMERIC := 5;  -- 5% de degradación por reparación
+  v_degradation NUMERIC := 30;  -- 30% de degradación por reparación (máximo 3 reparaciones)
 BEGIN
   SELECT pr.*, r.repair_cost as base_repair_cost, r.name as rig_name
   INTO v_rig
