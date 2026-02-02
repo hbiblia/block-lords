@@ -96,6 +96,7 @@ DROP FUNCTION IF EXISTS get_player_cooling(UUID) CASCADE;
 DROP FUNCTION IF EXISTS install_cooling(UUID, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS buy_cooling(UUID, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS buy_rig(UUID, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS confirm_ron_rig_purchase(UUID, TEXT, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS get_prepaid_cards() CASCADE;
 DROP FUNCTION IF EXISTS get_player_cards(UUID) CASCADE;
 DROP FUNCTION IF EXISTS buy_prepaid_card(UUID, TEXT) CASCADE;
@@ -741,7 +742,7 @@ BEGIN
 END;
 $$;
 
--- Comprar rig
+-- Comprar rig (soporta gamecoin, crypto, ron)
 CREATE OR REPLACE FUNCTION buy_rig(p_player_id UUID, p_rig_id TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -793,20 +794,53 @@ BEGIN
     );
   END IF;
 
-  -- Verificar balance
-  IF v_player.gamecoin_balance < v_rig.base_price THEN
-    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+  -- Manejar según la moneda del rig
+  IF v_rig.currency = 'gamecoin' THEN
+    -- Verificar balance de GameCoin
+    IF v_player.gamecoin_balance < v_rig.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+    END IF;
+
+    -- Descontar GameCoin
+    UPDATE players
+    SET gamecoin_balance = gamecoin_balance - v_rig.base_price
+    WHERE id = p_player_id;
+
+    -- Registrar transacción
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'rig_purchase', -v_rig.base_price, 'gamecoin',
+            'Compra de rig: ' || v_rig.name);
+
+  ELSIF v_rig.currency = 'crypto' THEN
+    -- Verificar balance de Crypto
+    IF v_player.crypto_balance < v_rig.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'Crypto insuficiente');
+    END IF;
+
+    -- Descontar Crypto
+    UPDATE players
+    SET crypto_balance = crypto_balance - v_rig.base_price
+    WHERE id = p_player_id;
+
+    -- Registrar transacción
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'rig_purchase', -v_rig.base_price, 'crypto',
+            'Compra de rig: ' || v_rig.name);
+
+  ELSIF v_rig.currency = 'ron' THEN
+    -- RON requiere pago externo via blockchain
+    -- Retornar info para que el frontend procese el pago
+    RETURN json_build_object(
+      'success', false,
+      'requires_ron_payment', true,
+      'ron_amount', v_rig.base_price,
+      'rig', row_to_json(v_rig),
+      'slots_used', v_total_rigs,
+      'slots_total', v_player.rig_slots
+    );
+  ELSE
+    RETURN json_build_object('success', false, 'error', 'Moneda no soportada');
   END IF;
-
-  -- Descontar GameCoin
-  UPDATE players
-  SET gamecoin_balance = gamecoin_balance - v_rig.base_price
-  WHERE id = p_player_id;
-
-  -- Registrar transacción
-  INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'rig_purchase', -v_rig.base_price, 'gamecoin',
-          'Compra de rig: ' || v_rig.name);
 
   -- Dar el rig al jugador
   INSERT INTO player_rigs (player_id, rig_id, condition, is_active, temperature)
@@ -815,6 +849,82 @@ BEGIN
   RETURN json_build_object(
     'success', true,
     'rig', row_to_json(v_rig),
+    'slots_used', v_total_rigs + 1,
+    'slots_total', v_player.rig_slots
+  );
+END;
+$$;
+
+-- Confirmar compra de rig con RON (llamar después de verificar tx blockchain)
+CREATE OR REPLACE FUNCTION confirm_ron_rig_purchase(
+  p_player_id UUID,
+  p_rig_id TEXT,
+  p_tx_hash TEXT
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_rig rigs%ROWTYPE;
+  v_existing_count INT;
+  v_total_rigs INT;
+BEGIN
+  -- Verificar jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Verificar rig
+  SELECT * INTO v_rig FROM rigs WHERE id = p_rig_id;
+  IF v_rig IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
+  END IF;
+
+  -- Verificar que sea un rig de RON
+  IF v_rig.currency != 'ron' THEN
+    RETURN json_build_object('success', false, 'error', 'Este rig no se compra con RON');
+  END IF;
+
+  -- Verificar si ya lo tiene
+  SELECT COUNT(*) INTO v_existing_count
+  FROM player_rigs
+  WHERE player_id = p_player_id AND rig_id = p_rig_id;
+
+  IF v_existing_count > 0 THEN
+    RETURN json_build_object('success', false, 'error', 'Ya tienes este rig');
+  END IF;
+
+  -- Verificar slots disponibles
+  SELECT COUNT(*) INTO v_total_rigs
+  FROM player_rigs
+  WHERE player_id = p_player_id;
+
+  IF v_total_rigs >= v_player.rig_slots THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'No tienes slots disponibles',
+      'slots_used', v_total_rigs,
+      'slots_total', v_player.rig_slots
+    );
+  END IF;
+
+  -- Registrar transacción con hash de blockchain
+  INSERT INTO transactions (player_id, type, amount, currency, description, metadata)
+  VALUES (p_player_id, 'rig_purchase', -v_rig.base_price, 'ron',
+          'Compra de rig: ' || v_rig.name,
+          json_build_object('tx_hash', p_tx_hash));
+
+  -- Dar el rig al jugador
+  INSERT INTO player_rigs (player_id, rig_id, condition, is_active, temperature)
+  VALUES (p_player_id, p_rig_id, 100, false, 25);
+
+  RETURN json_build_object(
+    'success', true,
+    'rig', row_to_json(v_rig),
+    'tx_hash', p_tx_hash,
     'slots_used', v_total_rigs + 1,
     'slots_total', v_player.rig_slots
   );

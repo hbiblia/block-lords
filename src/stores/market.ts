@@ -15,6 +15,7 @@ interface Rig {
   repair_cost: number;
   tier: string;
   base_price: number;
+  currency: 'gamecoin' | 'crypto' | 'ron';
 }
 
 interface CoolingItem {
@@ -80,9 +81,9 @@ interface MarketCache {
 
 // Default data for new accounts (shown while real data loads)
 const DEFAULT_RIGS: Rig[] = [
-  { id: 'default-1', name: 'Basic Miner', description: 'Entry-level mining rig', hashrate: 100, power_consumption: 50, internet_consumption: 10, repair_cost: 50, tier: 'common', base_price: 500 },
-  { id: 'default-2', name: 'Advanced Miner', description: 'Mid-tier mining rig', hashrate: 250, power_consumption: 100, internet_consumption: 20, repair_cost: 100, tier: 'uncommon', base_price: 1500 },
-  { id: 'default-3', name: 'Pro Miner', description: 'High-performance rig', hashrate: 500, power_consumption: 200, internet_consumption: 40, repair_cost: 200, tier: 'rare', base_price: 4000 },
+  { id: 'default-1', name: 'Basic Miner', description: 'Entry-level mining rig', hashrate: 100, power_consumption: 50, internet_consumption: 10, repair_cost: 50, tier: 'common', base_price: 500, currency: 'gamecoin' },
+  { id: 'default-2', name: 'Advanced Miner', description: 'Mid-tier mining rig', hashrate: 250, power_consumption: 100, internet_consumption: 20, repair_cost: 100, tier: 'uncommon', base_price: 1500, currency: 'gamecoin' },
+  { id: 'default-3', name: 'Pro Miner', description: 'High-performance rig', hashrate: 500, power_consumption: 200, internet_consumption: 40, repair_cost: 200, tier: 'rare', base_price: 4000, currency: 'gamecoin' },
 ];
 
 const DEFAULT_COOLING: CoolingItem[] = [
@@ -301,7 +302,7 @@ export const useMarketStore = defineStore('market', () => {
   }
 
   // Purchase actions
-  async function buyRig(rigId: string): Promise<{ success: boolean; error?: string }> {
+  async function buyRig(rigId: string): Promise<{ success: boolean; error?: string; requiresRon?: boolean; ronAmount?: number }> {
     const authStore = useAuthStore();
     if (!authStore.player) return { success: false, error: 'No player' };
 
@@ -321,10 +322,53 @@ export const useMarketStore = defineStore('market', () => {
         return { success: true };
       }
 
+      // Handle RON payment requirement
+      if (data?.requires_ron_payment) {
+        return {
+          success: false,
+          requiresRon: true,
+          ronAmount: data.ron_amount,
+          error: 'RON payment required',
+        };
+      }
+
       playSound('error');
       return { success: false, error: data?.error ?? 'Error buying rig' };
     } catch (e) {
       console.error('Error buying rig:', e);
+      playSound('error');
+      return { success: false, error: 'Connection error' };
+    } finally {
+      buying.value = false;
+    }
+  }
+
+  // Confirm RON rig purchase after blockchain tx
+  async function confirmRonRigPurchase(rigId: string, txHash: string): Promise<{ success: boolean; error?: string }> {
+    const authStore = useAuthStore();
+    if (!authStore.player) return { success: false, error: 'No player' };
+
+    buying.value = true;
+    try {
+      const { data, error } = await supabase.rpc('confirm_ron_rig_purchase', {
+        p_player_id: authStore.player.id,
+        p_rig_id: rigId,
+        p_tx_hash: txHash,
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        await loadPlayerQuantities();
+        await authStore.fetchPlayer();
+        playSound('purchase');
+        return { success: true };
+      }
+
+      playSound('error');
+      return { success: false, error: data?.error ?? 'Error confirming purchase' };
+    } catch (e) {
+      console.error('Error confirming RON rig purchase:', e);
       playSound('error');
       return { success: false, error: 'Connection error' };
     } finally {
@@ -496,6 +540,7 @@ export const useMarketStore = defineStore('market', () => {
     loadPlayerQuantities,
     loadData,
     buyRig,
+    confirmRonRigPurchase,
     buyCooling,
     buyCard,
     buyBoost,

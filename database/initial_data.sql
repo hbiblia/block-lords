@@ -5,23 +5,25 @@
 -- Translations handled in frontend: t(`data.rigs.${id}.name`)
 
 -- Rigs (internet consumes more than energy to incentivize upgrades)
-INSERT INTO rigs (id, name, description, hashrate, power_consumption, internet_consumption, repair_cost, tier, base_price)
+-- Currency: gamecoin (basic/standard), crypto (asic_s9), ron (advanced/elite)
+INSERT INTO rigs (id, name, description, hashrate, power_consumption, internet_consumption, repair_cost, tier, base_price, currency)
 VALUES
-  ('basic_miner', 'basic_miner', 'basic_miner', 100, 2.5, 3.5, 80, 'basic', 0),
-  ('home_miner', 'home_miner', 'home_miner', 250, 5.0, 7.0, 500, 'basic', 600),
-  ('gpu_rig', 'gpu_rig', 'gpu_rig', 500, 8.0, 12.0, 1200, 'standard', 1800),
-  ('asic_s9', 'asic_s9', 'asic_s9', 1000, 12.0, 18.0, 2500, 'standard', 5000),
-  ('asic_s19', 'asic_s19', 'asic_s19', 2500, 18.0, 28.0, 5000, 'advanced', 15000),
-  ('mining_farm_small', 'mining_farm_small', 'mining_farm_small', 5000, 28.0, 42.0, 12000, 'advanced', 45000),
-  ('mining_farm_large', 'mining_farm_large', 'mining_farm_large', 10000, 40.0, 60.0, 25000, 'elite', 120000),
-  ('quantum_miner', 'quantum_miner', 'quantum_miner', 25000, 55.0, 85.0, 50000, 'elite', 350000)
+  ('basic_miner', 'basic_miner', 'basic_miner', 100, 2.5, 3.5, 80, 'basic', 0, 'gamecoin'),
+  ('home_miner', 'home_miner', 'home_miner', 250, 5.0, 7.0, 500, 'basic', 600, 'gamecoin'),
+  ('gpu_rig', 'gpu_rig', 'gpu_rig', 500, 8.0, 12.0, 1200, 'standard', 1800, 'gamecoin'),
+  ('asic_s9', 'asic_s9', 'asic_s9', 1000, 12.0, 18.0, 2500, 'standard', 1000, 'crypto'),
+  ('asic_s19', 'asic_s19', 'asic_s19', 2500, 18.0, 28.0, 5000, 'advanced', 5, 'ron'),
+  ('mining_farm_small', 'mining_farm_small', 'mining_farm_small', 5000, 28.0, 42.0, 12000, 'advanced', 10, 'ron'),
+  ('mining_farm_large', 'mining_farm_large', 'mining_farm_large', 10000, 40.0, 60.0, 25000, 'elite', 20, 'ron'),
+  ('quantum_miner', 'quantum_miner', 'quantum_miner', 25000, 55.0, 85.0, 50000, 'elite', 50, 'ron')
 ON CONFLICT (id) DO UPDATE SET
   hashrate = EXCLUDED.hashrate,
   power_consumption = EXCLUDED.power_consumption,
   internet_consumption = EXCLUDED.internet_consumption,
   repair_cost = EXCLUDED.repair_cost,
   tier = EXCLUDED.tier,
-  base_price = EXCLUDED.base_price;
+  base_price = EXCLUDED.base_price,
+  currency = EXCLUDED.currency;
 
 -- Badges
 INSERT INTO badges (id, name, description, icon)

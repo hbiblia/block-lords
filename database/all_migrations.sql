@@ -53,9 +53,17 @@ CREATE TABLE IF NOT EXISTS rigs (
   repair_cost DECIMAL(10, 2) NOT NULL CHECK (repair_cost >= 0),
   tier TEXT NOT NULL CHECK (tier IN ('basic', 'standard', 'advanced', 'elite')),
   base_price DECIMAL(10, 2) NOT NULL CHECK (base_price >= 0),
+  currency TEXT NOT NULL DEFAULT 'gamecoin' CHECK (currency IN ('gamecoin', 'crypto', 'ron')),
   max_upgrade_level INTEGER DEFAULT 3,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add currency column for existing databases
+ALTER TABLE rigs ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'gamecoin';
+DO $$ BEGIN
+  ALTER TABLE rigs ADD CONSTRAINT rigs_currency_check CHECK (currency IN ('gamecoin', 'crypto', 'ron'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS player_rigs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -156,8 +164,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   amount DECIMAL(18, 8) NOT NULL,
   currency TEXT NOT NULL CHECK (currency IN ('gamecoin', 'crypto', 'ron', 'energy', 'internet')),
   description TEXT,
+  metadata JSONB DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add metadata column for existing databases
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT NULL;
 
 CREATE TABLE IF NOT EXISTS reputation_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

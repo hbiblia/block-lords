@@ -14,6 +14,7 @@ interface RigItem {
   base_price: number;
   power_consumption: number;
   internet_consumption: number;
+  currency: 'gamecoin' | 'crypto' | 'ron';
 }
 
 interface CoolingItemType {
@@ -271,6 +272,22 @@ function canAffordBoost(boost: BoostItemType): boolean {
   return balance.value >= boost.base_price;
 }
 
+function canAffordRig(rig: RigItem): boolean {
+  const currency = rig.currency || 'gamecoin';
+  if (currency === 'crypto') {
+    return cryptoBalance.value >= rig.base_price;
+  } else if (currency === 'ron') {
+    return ronBalance.value >= rig.base_price;
+  }
+  return balance.value >= rig.base_price;
+}
+
+function getRigCurrencyIcon(currency: string): string {
+  if (currency === 'crypto') return '💎';
+  if (currency === 'ron') return 'RON';
+  return '🪙';
+}
+
 function getCryptoPackageName(id: string): string {
   const key = `market.items.crypto_packages.${id}.name`;
   const translated = t(key);
@@ -298,7 +315,7 @@ function requestBuyRig(rig: RigItem) {
     name: getRigName(rig.id),
     price: rig.base_price,
     description: `${formatNumber(rig.hashrate)} H/s - ${rig.tier}`,
-    currency: 'gamecoin',
+    currency: rig.currency || 'gamecoin',
   };
   showConfirm.value = true;
 }
@@ -314,6 +331,11 @@ async function buyRig(rigId: string) {
   if (result.success) {
     processingStatus.value = 'success';
     emit('purchased');
+  } else if (result.requiresRon) {
+    // RON payment requires wallet integration
+    // For now, show a message that this feature is coming soon
+    processingStatus.value = 'error';
+    processingError.value = t('market.processing.ronPaymentRequired', 'RON payment via Ronin wallet coming soon');
   } else {
     processingStatus.value = 'error';
     processingError.value = result.error ?? t('market.processing.errorBuyingRig');
@@ -647,12 +669,16 @@ watch(() => props.show, (newVal) => {
                     <button
                       @click="requestBuyRig(rig)"
                       class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
-                      :class="balance >= rig.base_price
-                        ? 'bg-accent-primary text-white hover:bg-accent-primary/80'
+                      :class="canAffordRig(rig)
+                        ? rig.currency === 'ron'
+                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-400 hover:to-purple-400'
+                          : rig.currency === 'crypto'
+                            ? 'bg-accent-primary text-white hover:bg-accent-primary/80'
+                            : 'bg-accent-primary text-white hover:bg-accent-primary/80'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-                      :disabled="purchaseDisabled || balance < rig.base_price"
+                      :disabled="purchaseDisabled || !canAffordRig(rig)"
                     >
-                      {{ buying ? '...' : `${formatNumber(rig.base_price)} 🪙` }}
+                      {{ buying ? '...' : `${formatNumber(rig.base_price)} ${getRigCurrencyIcon(rig.currency || 'gamecoin')}` }}
                     </button>
                   </div>
                 </div>
