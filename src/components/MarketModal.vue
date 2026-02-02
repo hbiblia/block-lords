@@ -712,6 +712,8 @@ watch(() => props.show, (newVal) => {
                     <span class="font-mono font-bold text-xs sm:text-sm text-cyan-400">-{{ item.cooling_power }}°C</span>
                   </div>
 
+                  <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ getCoolingDescription(item.id) }}</p>
+
                   <!-- Show owned quantity if any -->
                   <div v-if="getCoolingOwned(item.id).total > 0" class="flex items-center flex-wrap gap-1 text-[10px] sm:text-xs mb-1 sm:mb-2">
                     <span v-if="getCoolingOwned(item.id).installed > 0" class="px-1.5 sm:px-2 py-0.5 rounded bg-status-success/20 text-status-success">
@@ -721,8 +723,6 @@ watch(() => props.show, (newVal) => {
                       {{ getCoolingOwned(item.id).inventory }} {{ t('market.cooling.inventory') }}
                     </span>
                   </div>
-
-                  <p v-else class="hidden sm:block text-xs text-text-muted mb-2 line-clamp-2">{{ getCoolingDescription(item.id) }}</p>
 
                   <div class="mt-auto">
                     <button
@@ -759,13 +759,14 @@ watch(() => props.show, (newVal) => {
                     <span class="font-mono font-bold text-sm sm:text-lg text-amber-400">+{{ card.amount }}</span>
                   </div>
 
+                  <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ getCardDescription(card.id) }}</p>
+
                   <!-- Show owned quantity if any -->
                   <div v-if="getCardOwned(card.id) > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
                     <span class="px-1.5 sm:px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">
                       {{ getCardOwned(card.id) }} {{ t('market.cooling.inventory') }}
                     </span>
                   </div>
-                  <p v-else class="hidden sm:block text-xs text-text-muted mb-2 line-clamp-2">{{ getCardDescription(card.id) }}</p>
 
                   <div class="mt-auto">
                     <button
@@ -802,13 +803,14 @@ watch(() => props.show, (newVal) => {
                     <span class="font-mono font-bold text-sm sm:text-lg text-cyan-400">+{{ card.amount }}</span>
                   </div>
 
+                  <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ getCardDescription(card.id) }}</p>
+
                   <!-- Show owned quantity if any -->
                   <div v-if="getCardOwned(card.id) > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
                     <span class="px-1.5 sm:px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400">
                       {{ getCardOwned(card.id) }} {{ t('market.cooling.inventory') }}
                     </span>
                   </div>
-                  <p v-else class="hidden sm:block text-xs text-text-muted mb-2 line-clamp-2">{{ getCardDescription(card.id) }}</p>
 
                   <div class="mt-auto">
                     <button
@@ -840,8 +842,8 @@ watch(() => props.show, (newVal) => {
                     <span class="text-lg sm:text-2xl ml-1">{{ getBoostIcon(boost.boost_type) }}</span>
                   </div>
 
-                  <!-- Boost type description (hidden on mobile) -->
-                  <p class="hidden sm:block text-xs text-text-muted mb-2">{{ getBoostTypeDescription(boost.boost_type) }}</p>
+                  <!-- Boost type description -->
+                  <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-1">{{ getBoostTypeDescription(boost.boost_type) }}</p>
 
                   <div class="flex items-center justify-between mb-0.5 sm:mb-1">
                     <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
@@ -918,7 +920,7 @@ watch(() => props.show, (newVal) => {
                     </span>
                   </div>
 
-                  <p class="hidden sm:block text-xs text-text-muted mb-3 line-clamp-2">{{ getCryptoPackageDescription(pkg.id) }}</p>
+                  <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-3 line-clamp-2">{{ getCryptoPackageDescription(pkg.id) }}</p>
 
                   <div class="mt-auto">
                     <button
