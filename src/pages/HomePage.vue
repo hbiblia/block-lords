@@ -23,8 +23,8 @@ const loadingStats = ref(true);
 // Top miners and recent blocks
 interface TopMiner {
   username: string;
-  total_blocks: number;
-  total_crypto: number;
+  blocksMined: number;
+  hashrate: number;
 }
 
 interface RecentBlock {
@@ -89,7 +89,8 @@ function formatTimeAgo(dateStr: string): string {
   return t('home.timeAgo.days', { n: Math.floor(seconds / 86400) });
 }
 
-function formatNumber(num: number): string {
+function formatNumber(num: number | undefined | null): string {
+  if (num == null) return '0';
   if (num >= 1000000) {
     return (num / 1000000).toFixed(1) + 'M';
   } else if (num >= 1000) {
@@ -98,7 +99,8 @@ function formatNumber(num: number): string {
   return num.toLocaleString();
 }
 
-function formatVolume(num: number): string {
+function formatVolume(num: number | undefined | null): string {
+  if (num == null) return '$0';
   if (num >= 1000000) {
     return '$' + (num / 1000000).toFixed(1) + 'M';
   } else if (num >= 1000) {
@@ -365,10 +367,10 @@ onUnmounted(() => {
             </div>
             <div class="flex-1 min-w-0">
               <div class="font-medium text-white truncate">{{ miner.username }}</div>
-              <div class="text-xs text-text-muted">{{ formatNumber(miner.total_blocks) }} {{ t('home.topMiners.blocks') }}</div>
+              <div class="text-xs text-text-muted">{{ formatNumber(miner.blocksMined) }} {{ t('home.topMiners.blocks') }}</div>
             </div>
             <div class="text-right">
-              <div class="text-sm font-bold text-accent-primary">💎 {{ miner.total_crypto?.toFixed(2) ?? '0.00' }}</div>
+              <div class="text-sm font-bold text-accent-primary">⚡ {{ miner.hashrate?.toFixed(1) ?? '0' }}</div>
             </div>
           </div>
         </div>

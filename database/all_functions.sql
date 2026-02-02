@@ -569,16 +569,16 @@ BEGIN
         ELSE
           -- Hubo modificaciones (cooling, boost, reparación, upgrade), no penalizar
           -- Enfriamiento gradual normal
-          v_new_temperature := GREATEST(25, v_rig.temperature - (v_seconds_since_off / 60) * 10);
+          v_new_temperature := GREATEST(0, v_rig.temperature - (v_seconds_since_off / 60) * 15);
         END IF;
       ELSE
         -- Enfriamiento gradual basado en tiempo apagado
-        -- Cada 60 segundos reduce 10 grados, mínimo temperatura ambiente (25)
-        v_new_temperature := GREATEST(25, v_rig.temperature - (v_seconds_since_off / 60) * 10);
+        -- Cada 60 segundos reduce 15 grados, mínimo 0°C
+        v_new_temperature := GREATEST(0, v_rig.temperature - (v_seconds_since_off / 60) * 15);
       END IF;
     ELSE
-      -- Primera vez que se enciende, temperatura ambiente
-      v_new_temperature := 25;
+      -- Primera vez que se enciende, temperatura 0
+      v_new_temperature := 0;
     END IF;
 
     -- Encender el rig
@@ -849,7 +849,7 @@ BEGIN
 
   -- Dar el rig al jugador
   INSERT INTO player_rigs (player_id, rig_id, condition, is_active, temperature)
-  VALUES (p_player_id, p_rig_id, 100, false, 25);
+  VALUES (p_player_id, p_rig_id, 100, false, 0);
 
   RETURN json_build_object(
     'success', true,
@@ -924,7 +924,7 @@ BEGIN
 
   -- Dar el rig al jugador
   INSERT INTO player_rigs (player_id, rig_id, condition, is_active, temperature)
-  VALUES (p_player_id, p_rig_id, 100, false, 25);
+  VALUES (p_player_id, p_rig_id, 100, false, 0);
 
   RETURN json_build_object(
     'success', true,
@@ -1354,7 +1354,7 @@ DECLARE
   v_new_temp NUMERIC;
   v_deterioration NUMERIC;
   v_base_deterioration NUMERIC;
-  v_ambient_temp NUMERIC := 25;  -- Temperatura ambiente base
+  v_ambient_temp NUMERIC := 0;  -- Temperatura base cuando rig está apagado
   -- Boost multipliers
   v_boosts JSON;
   v_energy_mult NUMERIC;
@@ -1425,35 +1425,29 @@ BEGIN
       v_total_internet := v_total_internet + (v_rig.internet_consumption * v_internet_mult);
 
       -- Calcular aumento de temperatura basado en consumo de energía
-      -- Calentamiento GRADUAL para que no sea abrupto
-      -- Sin cooling: 1-2 min para llegar a temperatura peligrosa
-      -- Con cooling apropiado: se mantiene estable
+      -- Calentamiento más notorio para que el jugador note el efecto
+      -- Sin cooling: temperatura sube rápidamente
+      -- Con cooling apropiado: temperatura se estabiliza
       -- Aplicar multiplicador de boost de coolant_injection
       IF v_rig_cooling_power <= 0 THEN
-        -- Sin cooling: calentamiento gradual (max 10°C por tick)
-        -- Minero Básico (2.5): +1.25°C/tick → peligro en ~8 min
-        -- ASIC S19 (18): +9°C/tick → peligro en ~1 min
-        -- Quantum (55): +10°C/tick (cap) → peligro en ~1 min
-        v_temp_increase := LEAST(v_rig.power_consumption * 0.5, 10) * v_temp_mult;
+        -- Sin cooling: calentamiento significativo (max 15°C por tick)
+        -- Minero Básico (2.5): +2.5°C/tick → peligro en ~4 min
+        -- ASIC S19 (18): +15°C/tick → peligro en ~40s
+        -- Quantum (55): +15°C/tick (cap) → peligro en ~40s
+        v_temp_increase := LEAST(v_rig.power_consumption * 1.0, 15) * v_temp_mult;
       ELSE
-        -- Con cooling: calentamiento reducido menos poder de refrigeración
-        v_temp_increase := v_rig.power_consumption * 0.3;
+        -- Con cooling: calentamiento reducido por poder de refrigeración
+        v_temp_increase := v_rig.power_consumption * 0.8;
         v_temp_increase := GREATEST(0, v_temp_increase - v_rig_cooling_power) * v_temp_mult;
       END IF;
 
       -- Calcular nueva temperatura
       v_new_temp := v_rig.temperature + v_temp_increase;
 
-      -- Enfriamiento pasivo hacia temperatura ambiente
-      IF v_new_temp > v_ambient_temp THEN
-        IF v_rig_cooling_power <= 0 THEN
-          -- Sin cooling: enfriamiento pasivo mínimo (1°C por tick)
-          v_new_temp := v_new_temp - 1.0;
-        ELSE
-          -- Con cooling: enfriamiento basado en poder de refrigeración
-          -- Cooling fuerte = enfriamiento rápido hacia temp ambiente
-          v_new_temp := v_new_temp - (1.0 + (v_rig_cooling_power * 0.1));
-        END IF;
+      -- Enfriamiento pasivo (solo con cooling instalado)
+      IF v_new_temp > v_ambient_temp AND v_rig_cooling_power > 0 THEN
+        -- Con cooling: enfriamiento basado en poder de refrigeración
+        v_new_temp := v_new_temp - (v_rig_cooling_power * 0.15);
         v_new_temp := GREATEST(v_ambient_temp, v_new_temp);
       END IF;
 
@@ -1571,10 +1565,10 @@ BEGIN
     v_processed := v_processed + 1;
   END LOOP;
 
-  -- Enfriar rigs inactivos hacia temperatura ambiente
+  -- Enfriar rigs inactivos hacia 0°C (más rápido que antes)
   UPDATE player_rigs
-  SET temperature = GREATEST(v_ambient_temp, temperature - 2)
-  WHERE is_active = false AND temperature > v_ambient_temp;
+  SET temperature = GREATEST(0, temperature - 5)
+  WHERE is_active = false AND temperature > 0;
 
   RETURN v_processed;
 END;
