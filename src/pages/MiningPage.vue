@@ -392,6 +392,17 @@ function handleInventoryUsed() {
   miningStore.loadData();
 }
 
+// Handle mobile floating bar events
+function handleOpenMarket() {
+  showMarket.value = true;
+}
+function handleOpenExchange() {
+  showExchange.value = true;
+}
+function handleOpenInventory() {
+  showInventory.value = true;
+}
+
 onMounted(() => {
   miningStore.loadData();
   miningStore.subscribeToRealtime();
@@ -401,6 +412,9 @@ onMounted(() => {
 
   window.addEventListener('block-mined', handleBlockMined as EventListener);
   window.addEventListener('inventory-used', handleInventoryUsed as EventListener);
+  window.addEventListener('open-market', handleOpenMarket);
+  window.addEventListener('open-exchange', handleOpenExchange);
+  window.addEventListener('open-inventory', handleOpenInventory);
 });
 
 onUnmounted(() => {
@@ -411,6 +425,9 @@ onUnmounted(() => {
 
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
   window.removeEventListener('inventory-used', handleInventoryUsed as EventListener);
+  window.removeEventListener('open-market', handleOpenMarket);
+  window.removeEventListener('open-exchange', handleOpenExchange);
+  window.removeEventListener('open-inventory', handleOpenInventory);
 });
 </script>
 
@@ -425,25 +442,25 @@ onUnmounted(() => {
         <span class="badge" :class="activeRigsCount > 0 ? 'badge-success' : 'badge-warning'">
           {{ t('mining.activeRigs', { count: activeRigsCount }) }}
         </span>
-        <div class="flex items-center gap-1 px-1 py-1 bg-bg-secondary/50 rounded-lg">
-          <button @click="showMarket = true" class="px-3 py-1.5 text-sm font-medium rounded-md bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30 transition-all flex items-center gap-1.5">
-            <span>🛒</span>
+        <div class="hidden sm:flex items-center gap-1 px-1 py-1 bg-bg-secondary/50 rounded-lg">
+          <button @click="showMarket = true" class="px-2 py-1 sm:px-3 sm:py-1.5 text-sm font-medium rounded-md bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30 transition-all flex items-center gap-1.5">
+            <span class="text-base sm:text-sm">🛒</span>
             <span class="hidden sm:inline">{{ t('mining.market') }}</span>
           </button>
           <button
             @click="showExchange = true"
-            class="px-3 py-1.5 text-sm font-medium rounded-md bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-all flex items-center gap-1.5"
+            class="px-2 py-1 sm:px-3 sm:py-1.5 text-sm font-medium rounded-md bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-all flex items-center gap-1.5"
             :title="t('nav.exchange')"
           >
-            <span>💱</span>
+            <span class="text-base sm:text-sm">💱</span>
             <span class="hidden sm:inline">{{ t('nav.exchange') }}</span>
           </button>
           <button
             @click="showInventory = true"
-            class="px-3 py-1.5 text-sm font-medium rounded-md bg-bg-tertiary hover:bg-bg-tertiary/80 transition-all flex items-center gap-1.5"
+            class="px-2 py-1 sm:px-3 sm:py-1.5 text-sm font-medium rounded-md bg-bg-tertiary hover:bg-bg-tertiary/80 transition-all flex items-center gap-1.5"
             :title="t('nav.inventory')"
           >
-            <span>🎒</span>
+            <span class="text-base sm:text-sm">🎒</span>
             <span class="hidden sm:inline">{{ t('nav.inventory') }}</span>
           </button>
         </div>

@@ -146,7 +146,7 @@ function getSelectedBlock() {
       ></div>
 
       <!-- Modal -->
-      <div class="relative w-full max-w-lg max-h-[85vh] overflow-hidden card animate-fade-in">
+      <div class="relative w-full max-w-lg max-h-[85vh] overflow-hidden card animate-fade-in p-0">
         <!-- Header -->
         <div class="flex items-center justify-between p-4 border-b border-border/50">
           <div class="flex items-center gap-3">

@@ -353,27 +353,27 @@ onMounted(() => {
           </div>
 
           <!-- Unified Grid - All items together -->
-          <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div v-else class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
             <!-- Prepaid Cards -->
             <div
               v-for="card in cardItems"
               :key="card.id"
-              class="rounded-lg border p-4 flex flex-col h-full min-h-[160px]"
+              class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
               :class="card.card_type === 'energy'
                 ? 'bg-amber-500/10 border-amber-500/30'
                 : 'bg-cyan-500/10 border-cyan-500/30'"
             >
-              <div class="flex items-start justify-between mb-3">
-                <div>
-                  <h4 class="font-medium" :class="card.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">{{ getCardName(card.card_id) }}</h4>
-                  <p class="text-xs text-text-muted uppercase">{{ card.tier }}</p>
+              <div class="flex items-start justify-between mb-2 sm:mb-3">
+                <div class="min-w-0 flex-1">
+                  <h4 class="font-medium text-xs sm:text-sm truncate" :class="card.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">{{ getCardName(card.card_id) }}</h4>
+                  <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ card.tier }}</p>
                 </div>
-                <span class="text-2xl">{{ card.card_type === 'energy' ? '⚡' : '📡' }}</span>
+                <span class="text-lg sm:text-2xl ml-1">{{ card.card_type === 'energy' ? '⚡' : '📡' }}</span>
               </div>
 
-              <div class="flex items-center justify-between mb-3">
-                <span class="text-xs text-text-muted font-mono">{{ card.code }}</span>
-                <span class="font-mono font-bold text-lg" :class="card.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">
+              <div class="flex items-center justify-between mb-2 sm:mb-3">
+                <span class="text-[10px] sm:text-xs text-text-muted font-mono truncate">{{ card.code }}</span>
+                <span class="font-mono font-bold text-sm sm:text-lg ml-1" :class="card.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">
                   +{{ card.amount }}%
                 </span>
               </div>
@@ -382,12 +382,12 @@ onMounted(() => {
                 <button
                   @click="requestRedeemCard(card)"
                   :disabled="using"
-                  class="w-full py-2 rounded text-sm font-medium transition-colors disabled:opacity-50"
+                  class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
                   :class="card.card_type === 'energy'
                     ? 'bg-amber-500 text-white hover:bg-amber-400'
                     : 'bg-cyan-500 text-white hover:bg-cyan-400'"
                 >
-                  {{ using ? t('common.processing') : t('inventory.cards.recharge') }}
+                  {{ using ? '...' : t('inventory.cards.recharge') }}
                 </button>
               </div>
             </div>
@@ -396,29 +396,29 @@ onMounted(() => {
             <div
               v-for="item in coolingItems"
               :key="item.inventory_id"
-              class="rounded-lg border p-4 flex flex-col h-full min-h-[160px]"
+              class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
               :class="[getTierBorder(item.tier), getTierBg(item.tier)]"
             >
-              <div class="flex items-start justify-between mb-3">
-                <div>
-                  <h4 class="font-medium" :class="getTierColor(item.tier)">{{ getCoolingName(item.id) }}</h4>
-                  <p class="text-xs text-text-muted uppercase">{{ item.tier }}</p>
+              <div class="flex items-start justify-between mb-2 sm:mb-3">
+                <div class="min-w-0 flex-1">
+                  <h4 class="font-medium text-xs sm:text-sm truncate" :class="getTierColor(item.tier)">{{ getCoolingName(item.id) }}</h4>
+                  <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ item.tier }}</p>
                 </div>
-                <span class="text-2xl">❄️</span>
+                <span class="text-lg sm:text-2xl ml-1">❄️</span>
               </div>
 
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-xs text-text-muted">{{ t('inventory.cooling.power', 'Potencia') }}</span>
-                <span class="font-mono font-bold text-lg text-cyan-400">-{{ item.cooling_power }}°</span>
+              <div class="flex items-center justify-between mb-1 sm:mb-2">
+                <span class="text-[10px] sm:text-xs text-text-muted">{{ t('inventory.cooling.power', 'Potencia') }}</span>
+                <span class="font-mono font-bold text-sm sm:text-lg text-cyan-400">-{{ item.cooling_power }}°</span>
               </div>
 
-              <div class="flex items-center justify-between text-xs text-text-muted mb-2">
+              <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
                 <span>⚡ +{{ item.energy_cost }}/t</span>
                 <span class="font-medium">x{{ item.quantity }}</span>
               </div>
 
               <div class="mt-auto">
-                <p class="text-xs text-text-muted/70 italic text-center py-2">
+                <p class="text-[10px] sm:text-xs text-text-muted/70 italic text-center py-1 sm:py-2">
                   {{ t('inventory.cooling.installHint', 'Instalar desde gestion de rig') }}
                 </p>
               </div>
@@ -428,31 +428,31 @@ onMounted(() => {
             <div
               v-for="boost in boostItems"
               :key="boost.id"
-              class="rounded-lg border p-4 flex flex-col h-full min-h-[160px] bg-purple-500/10 border-purple-500/30"
+              class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full bg-purple-500/10 border-purple-500/30"
             >
-              <div class="flex items-start justify-between mb-2">
-                <div>
-                  <h4 class="font-medium text-purple-400">{{ getBoostName(boost.boost_id) }}</h4>
-                  <p class="text-xs text-text-muted uppercase">{{ boost.tier }}</p>
+              <div class="flex items-start justify-between mb-1 sm:mb-2">
+                <div class="min-w-0 flex-1">
+                  <h4 class="font-medium text-xs sm:text-sm text-purple-400 truncate">{{ getBoostName(boost.boost_id) }}</h4>
+                  <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ boost.tier }}</p>
                 </div>
-                <span class="text-2xl">{{ getBoostIcon(boost.boost_type) }}</span>
+                <span class="text-lg sm:text-2xl ml-1">{{ getBoostIcon(boost.boost_type) }}</span>
               </div>
 
-              <!-- Boost type description -->
-              <p class="text-xs text-text-muted mb-2">{{ getBoostTypeDescription(boost.boost_type) }}</p>
+              <!-- Boost type description (hidden on mobile) -->
+              <p class="hidden sm:block text-xs text-text-muted mb-2">{{ getBoostTypeDescription(boost.boost_type) }}</p>
 
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
-                <span class="font-mono font-bold text-purple-400">{{ formatBoostEffect(boost) }}</span>
+              <div class="flex items-center justify-between mb-0.5 sm:mb-1">
+                <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
+                <span class="font-mono font-bold text-xs sm:text-sm text-purple-400">{{ formatBoostEffect(boost) }}</span>
               </div>
 
-              <div class="flex items-center justify-between text-xs text-text-muted mb-2">
+              <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
                 <span>{{ formatDuration(boost.duration_minutes) }}</span>
                 <span class="font-medium">x{{ boost.quantity }}</span>
               </div>
 
               <div class="mt-auto">
-                <p class="text-xs text-text-muted/70 italic text-center py-2">
+                <p class="text-[10px] sm:text-xs text-text-muted/70 italic text-center py-1 sm:py-2">
                   {{ t('inventory.boosts.installHint', 'Instalar desde gestion de rig') }}
                 </p>
               </div>
@@ -460,16 +460,16 @@ onMounted(() => {
           </div>
 
           <!-- Active Boosts Bar -->
-          <div v-if="activeBoosts.length > 0" class="mt-4">
-            <h3 class="text-sm font-medium text-text-muted mb-2">{{ t('inventory.boosts.active') }}</h3>
-            <div class="flex flex-wrap gap-2">
+          <div v-if="activeBoosts.length > 0" class="mt-3 sm:mt-4">
+            <h3 class="text-xs sm:text-sm font-medium text-text-muted mb-1.5 sm:mb-2">{{ t('inventory.boosts.active') }}</h3>
+            <div class="flex flex-wrap gap-1.5 sm:gap-2">
               <div
                 v-for="boost in activeBoosts"
                 :key="boost.id"
-                class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30"
+                class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30"
               >
-                <span class="text-sm font-medium text-purple-400">{{ getBoostName(boost.boost_id) }}</span>
-                <span class="text-xs text-text-muted">{{ formatTimeRemaining(boost.seconds_remaining) }}</span>
+                <span class="text-xs sm:text-sm font-medium text-purple-400">{{ getBoostName(boost.boost_id) }}</span>
+                <span class="text-[10px] sm:text-xs text-text-muted">{{ formatTimeRemaining(boost.seconds_remaining) }}</span>
               </div>
             </div>
           </div>

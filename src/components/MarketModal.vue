@@ -491,27 +491,29 @@ watch(() => props.show, (newVal) => {
       ></div>
 
       <!-- Modal -->
-      <div class="relative w-full max-w-5xl h-[90vh] overflow-hidden card animate-fade-in flex flex-col bg-bg-primary">
+      <div class="relative w-full max-w-5xl h-[90vh] overflow-hidden card animate-fade-in flex flex-col bg-bg-primary p-2">
         <!-- Header -->
-        <div class="flex items-center justify-between p-4 border-b border-border/50">
-          <h2 class="text-xl font-display font-bold">
-            <span class="gradient-text">{{ t('market.title') }}</span>
-          </h2>
-          <div class="flex items-center gap-4">
-            <span class="text-sm text-text-muted flex items-center gap-3">
-              {{ t('market.balance') }}
-              <span class="font-bold text-status-warning">{{ formatGamecoin(balance) }} 🪙</span>
-              <span class="font-bold text-accent-primary">{{ formatCrypto(cryptoBalance) }} 💎</span>
-              <span class="font-bold text-purple-400">{{ formatRon(ronBalance) }} RON</span>
-            </span>
+        <div class="p-4 border-b border-border/50">
+          <!-- Title row -->
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl font-display font-bold">
+              <span class="gradient-text">{{ t('market.title') }}</span>
+            </h2>
             <button
               @click="emit('close')"
-              class="w-8 h-8 rounded-lg bg-bg-tertiary hover:bg-bg-secondary flex items-center justify-center transition-colors"
+              class="w-8 h-8 rounded-lg bg-bg-tertiary hover:bg-bg-secondary flex items-center justify-center transition-colors shrink-0"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          </div>
+          <!-- Balance row -->
+          <div class="flex items-center gap-2 sm:gap-3 mt-2 text-xs sm:text-sm flex-wrap">
+            <span class="text-text-muted hidden sm:inline">{{ t('market.balance') }}</span>
+            <span class="font-bold text-status-warning">{{ formatGamecoin(balance) }} 🪙</span>
+            <span class="font-bold text-accent-primary">{{ formatCrypto(cryptoBalance) }} 💎</span>
+            <span class="font-bold text-purple-400">{{ formatRon(ronBalance) }} RON</span>
           </div>
         </div>
 
@@ -600,37 +602,37 @@ watch(() => props.show, (newVal) => {
 
             <!-- Unified Grid (show with cached data, even while refreshing) -->
             <div v-else>
-              <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
               <!-- Rigs -->
               <template v-if="activeFilter === 'all' || activeFilter === 'rigs'">
                 <div
                   v-for="rig in rigsForSale"
                   :key="rig.id"
-                  class="rounded-lg border p-4 flex flex-col min-h-[200px] bg-bg-secondary transition-all hover:scale-[1.01]"
+                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col bg-bg-secondary transition-all hover:scale-[1.01]"
                   :class="getTierBorder(rig.tier)"
                 >
-                  <div class="flex items-start justify-between mb-2">
-                    <div>
-                      <h4 class="font-medium">{{ getRigName(rig.id) }}</h4>
-                      <p class="text-xs uppercase" :class="getTierColor(rig.tier)">{{ rig.tier }}</p>
+                  <div class="flex items-start justify-between mb-1.5 sm:mb-2">
+                    <div class="min-w-0 flex-1">
+                      <h4 class="font-medium text-xs sm:text-sm truncate">{{ getRigName(rig.id) }}</h4>
+                      <p class="text-[10px] sm:text-xs uppercase" :class="getTierColor(rig.tier)">{{ rig.tier }}</p>
                     </div>
-                    <span class="text-2xl">⛏️</span>
+                    <span class="text-lg sm:text-2xl ml-1">⛏️</span>
                   </div>
 
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs text-text-muted">Hashrate</span>
-                    <span class="font-mono font-bold text-accent-primary">{{ formatNumber(rig.hashrate) }} H/s</span>
+                  <div class="flex items-center justify-between mb-1 sm:mb-2">
+                    <span class="text-[10px] sm:text-xs text-text-muted">Hashrate</span>
+                    <span class="font-mono font-bold text-xs sm:text-sm text-accent-primary">{{ formatNumber(rig.hashrate) }} H/s</span>
                   </div>
 
-                  <div class="flex items-center gap-2 text-xs text-text-muted mb-2">
+                  <div class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
                     <span>⚡{{ rig.power_consumption }}/t</span>
                     <span>•</span>
                     <span>📡{{ rig.internet_consumption }}/t</span>
                   </div>
 
                   <!-- Show owned quantity if any -->
-                  <div v-if="getRigOwned(rig.id) > 0" class="flex items-center gap-2 text-xs mb-2">
-                    <span class="px-2 py-0.5 rounded bg-status-success/20 text-status-success">
+                  <div v-if="getRigOwned(rig.id) > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
+                    <span class="px-1.5 sm:px-2 py-0.5 rounded bg-status-success/20 text-status-success">
                       {{ getRigOwned(rig.id) }} {{ t('market.rigs.owned', 'Adquirido') }}
                     </span>
                   </div>
@@ -638,7 +640,7 @@ watch(() => props.show, (newVal) => {
                   <div class="mt-auto">
                     <button
                       @click="requestBuyRig(rig)"
-                      class="w-full py-2 rounded text-sm font-medium transition-colors disabled:opacity-50"
+                      class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
                       :class="balance >= rig.base_price
                         ? 'bg-accent-primary text-white hover:bg-accent-primary/80'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
@@ -655,38 +657,38 @@ watch(() => props.show, (newVal) => {
                 <div
                   v-for="item in coolingItems"
                   :key="item.id"
-                  class="rounded-lg border p-4 flex flex-col min-h-[200px] bg-bg-secondary transition-all hover:scale-[1.01]"
+                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col bg-bg-secondary transition-all hover:scale-[1.01]"
                   :class="getTierBorder(item.tier)"
                 >
-                  <div class="flex items-start justify-between mb-2">
-                    <div>
-                      <h4 class="font-medium">{{ getCoolingName(item.id) }}</h4>
-                      <p class="text-xs uppercase" :class="getTierColor(item.tier)">{{ item.tier }}</p>
+                  <div class="flex items-start justify-between mb-1.5 sm:mb-2">
+                    <div class="min-w-0 flex-1">
+                      <h4 class="font-medium text-xs sm:text-sm truncate">{{ getCoolingName(item.id) }}</h4>
+                      <p class="text-[10px] sm:text-xs uppercase" :class="getTierColor(item.tier)">{{ item.tier }}</p>
                     </div>
-                    <span class="text-2xl">❄️</span>
+                    <span class="text-lg sm:text-2xl ml-1">❄️</span>
                   </div>
 
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs text-text-muted">{{ t('inventory.cooling.power', 'Potencia') }}</span>
-                    <span class="font-mono font-bold text-cyan-400">-{{ item.cooling_power }}°C</span>
+                  <div class="flex items-center justify-between mb-1 sm:mb-2">
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ t('inventory.cooling.power', 'Potencia') }}</span>
+                    <span class="font-mono font-bold text-xs sm:text-sm text-cyan-400">-{{ item.cooling_power }}°C</span>
                   </div>
 
                   <!-- Show owned quantity if any -->
-                  <div v-if="getCoolingOwned(item.id).total > 0" class="flex items-center gap-2 text-xs mb-2">
-                    <span v-if="getCoolingOwned(item.id).installed > 0" class="px-2 py-0.5 rounded bg-status-success/20 text-status-success">
+                  <div v-if="getCoolingOwned(item.id).total > 0" class="flex items-center flex-wrap gap-1 text-[10px] sm:text-xs mb-1 sm:mb-2">
+                    <span v-if="getCoolingOwned(item.id).installed > 0" class="px-1.5 sm:px-2 py-0.5 rounded bg-status-success/20 text-status-success">
                       {{ getCoolingOwned(item.id).installed }} {{ t('market.cooling.installed') }}
                     </span>
-                    <span v-if="getCoolingOwned(item.id).inventory > 0" class="px-2 py-0.5 rounded bg-accent-primary/20 text-accent-primary">
+                    <span v-if="getCoolingOwned(item.id).inventory > 0" class="px-1.5 sm:px-2 py-0.5 rounded bg-accent-primary/20 text-accent-primary">
                       {{ getCoolingOwned(item.id).inventory }} {{ t('market.cooling.inventory') }}
                     </span>
                   </div>
 
-                  <p v-else class="text-xs text-text-muted mb-2 line-clamp-2">{{ getCoolingDescription(item.id) }}</p>
+                  <p v-else class="hidden sm:block text-xs text-text-muted mb-2 line-clamp-2">{{ getCoolingDescription(item.id) }}</p>
 
                   <div class="mt-auto">
                     <button
                       @click="requestBuyCooling(item)"
-                      class="w-full py-2 rounded text-sm font-medium transition-colors disabled:opacity-50"
+                      class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
                       :class="balance >= item.base_price
                         ? 'bg-cyan-500 text-white hover:bg-cyan-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
@@ -703,33 +705,33 @@ watch(() => props.show, (newVal) => {
                 <div
                   v-for="card in energyCards"
                   :key="card.id"
-                  class="rounded-lg border p-4 flex flex-col min-h-[200px] bg-amber-500/10 border-amber-500/30 transition-all hover:scale-[1.01]"
+                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col bg-amber-500/10 border-amber-500/30 transition-all hover:scale-[1.01]"
                 >
-                  <div class="flex items-start justify-between mb-2">
-                    <div>
-                      <h4 class="font-medium text-amber-400">{{ getCardName(card.id) }}</h4>
-                      <p class="text-xs text-text-muted uppercase">{{ card.tier }}</p>
+                  <div class="flex items-start justify-between mb-1.5 sm:mb-2">
+                    <div class="min-w-0 flex-1">
+                      <h4 class="font-medium text-xs sm:text-sm text-amber-400 truncate">{{ getCardName(card.id) }}</h4>
+                      <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ card.tier }}</p>
                     </div>
-                    <span class="text-2xl">⚡</span>
+                    <span class="text-lg sm:text-2xl ml-1">⚡</span>
                   </div>
 
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs text-text-muted">{{ t('market.energy') }}</span>
-                    <span class="font-mono font-bold text-lg text-amber-400">+{{ card.amount }}</span>
+                  <div class="flex items-center justify-between mb-1 sm:mb-2">
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.energy') }}</span>
+                    <span class="font-mono font-bold text-sm sm:text-lg text-amber-400">+{{ card.amount }}</span>
                   </div>
 
                   <!-- Show owned quantity if any -->
-                  <div v-if="getCardOwned(card.id) > 0" class="flex items-center gap-2 text-xs mb-2">
-                    <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">
+                  <div v-if="getCardOwned(card.id) > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
+                    <span class="px-1.5 sm:px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">
                       {{ getCardOwned(card.id) }} {{ t('market.cooling.inventory') }}
                     </span>
                   </div>
-                  <p v-else class="text-xs text-text-muted mb-2 line-clamp-2">{{ getCardDescription(card.id) }}</p>
+                  <p v-else class="hidden sm:block text-xs text-text-muted mb-2 line-clamp-2">{{ getCardDescription(card.id) }}</p>
 
                   <div class="mt-auto">
                     <button
                       @click="requestBuyCard(card)"
-                      class="w-full py-2 rounded text-sm font-medium transition-colors disabled:opacity-50"
+                      class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
                       :class="(card.currency === 'crypto' ? cryptoBalance : balance) >= card.base_price
                         ? 'bg-amber-500 text-white hover:bg-amber-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
@@ -746,33 +748,33 @@ watch(() => props.show, (newVal) => {
                 <div
                   v-for="card in internetCards"
                   :key="card.id"
-                  class="rounded-lg border p-4 flex flex-col min-h-[200px] bg-cyan-500/10 border-cyan-500/30 transition-all hover:scale-[1.01]"
+                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col bg-cyan-500/10 border-cyan-500/30 transition-all hover:scale-[1.01]"
                 >
-                  <div class="flex items-start justify-between mb-2">
-                    <div>
-                      <h4 class="font-medium text-cyan-400">{{ getCardName(card.id) }}</h4>
-                      <p class="text-xs text-text-muted uppercase">{{ card.tier }}</p>
+                  <div class="flex items-start justify-between mb-1.5 sm:mb-2">
+                    <div class="min-w-0 flex-1">
+                      <h4 class="font-medium text-xs sm:text-sm text-cyan-400 truncate">{{ getCardName(card.id) }}</h4>
+                      <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ card.tier }}</p>
                     </div>
-                    <span class="text-2xl">📡</span>
+                    <span class="text-lg sm:text-2xl ml-1">📡</span>
                   </div>
 
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs text-text-muted">{{ t('market.internet') }}</span>
-                    <span class="font-mono font-bold text-lg text-cyan-400">+{{ card.amount }}</span>
+                  <div class="flex items-center justify-between mb-1 sm:mb-2">
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.internet') }}</span>
+                    <span class="font-mono font-bold text-sm sm:text-lg text-cyan-400">+{{ card.amount }}</span>
                   </div>
 
                   <!-- Show owned quantity if any -->
-                  <div v-if="getCardOwned(card.id) > 0" class="flex items-center gap-2 text-xs mb-2">
-                    <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400">
+                  <div v-if="getCardOwned(card.id) > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
+                    <span class="px-1.5 sm:px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400">
                       {{ getCardOwned(card.id) }} {{ t('market.cooling.inventory') }}
                     </span>
                   </div>
-                  <p v-else class="text-xs text-text-muted mb-2 line-clamp-2">{{ getCardDescription(card.id) }}</p>
+                  <p v-else class="hidden sm:block text-xs text-text-muted mb-2 line-clamp-2">{{ getCardDescription(card.id) }}</p>
 
                   <div class="mt-auto">
                     <button
                       @click="requestBuyCard(card)"
-                      class="w-full py-2 rounded text-sm font-medium transition-colors disabled:opacity-50"
+                      class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
                       :class="(card.currency === 'crypto' ? cryptoBalance : balance) >= card.base_price
                         ? 'bg-cyan-500 text-white hover:bg-cyan-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
@@ -789,32 +791,32 @@ watch(() => props.show, (newVal) => {
                 <div
                   v-for="boost in boostItems"
                   :key="boost.id"
-                  class="rounded-lg border p-4 flex flex-col min-h-[200px] bg-purple-500/10 border-purple-500/30 transition-all hover:scale-[1.01]"
+                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col bg-purple-500/10 border-purple-500/30 transition-all hover:scale-[1.01]"
                 >
-                  <div class="flex items-start justify-between mb-2">
-                    <div>
-                      <h4 class="font-medium text-purple-400">{{ getBoostName(boost.id) }}</h4>
-                      <p class="text-xs text-text-muted uppercase">{{ boost.tier }}</p>
+                  <div class="flex items-start justify-between mb-1 sm:mb-2">
+                    <div class="min-w-0 flex-1">
+                      <h4 class="font-medium text-xs sm:text-sm text-purple-400 truncate">{{ getBoostName(boost.id) }}</h4>
+                      <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ boost.tier }}</p>
                     </div>
-                    <span class="text-2xl">{{ getBoostIcon(boost.boost_type) }}</span>
+                    <span class="text-lg sm:text-2xl ml-1">{{ getBoostIcon(boost.boost_type) }}</span>
                   </div>
 
-                  <!-- Boost type description -->
-                  <p class="text-xs text-text-muted mb-2">{{ getBoostTypeDescription(boost.boost_type) }}</p>
+                  <!-- Boost type description (hidden on mobile) -->
+                  <p class="hidden sm:block text-xs text-text-muted mb-2">{{ getBoostTypeDescription(boost.boost_type) }}</p>
 
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
-                    <span class="font-mono font-bold text-purple-400">{{ formatBoostEffect(boost) }}</span>
+                  <div class="flex items-center justify-between mb-0.5 sm:mb-1">
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
+                    <span class="font-mono font-bold text-xs sm:text-sm text-purple-400">{{ formatBoostEffect(boost) }}</span>
                   </div>
 
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs text-text-muted">{{ t('market.boosts.duration') }}</span>
-                    <span class="font-mono text-sm">{{ formatDuration(boost.duration_minutes) }}</span>
+                  <div class="flex items-center justify-between mb-1 sm:mb-2">
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.boosts.duration') }}</span>
+                    <span class="font-mono text-xs sm:text-sm">{{ formatDuration(boost.duration_minutes) }}</span>
                   </div>
 
                   <!-- Show owned quantity if any -->
-                  <div v-if="getBoostOwned(boost.id) > 0" class="flex items-center gap-2 text-xs mb-2">
-                    <span class="px-2 py-0.5 rounded bg-purple-500/20 text-purple-400">
+                  <div v-if="getBoostOwned(boost.id) > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
+                    <span class="px-1.5 sm:px-2 py-0.5 rounded bg-purple-500/20 text-purple-400">
                       {{ getBoostOwned(boost.id) }} {{ t('market.cooling.inventory') }}
                     </span>
                   </div>
@@ -822,7 +824,7 @@ watch(() => props.show, (newVal) => {
                   <div class="mt-auto">
                     <button
                       @click="requestBuyBoost(boost)"
-                      class="w-full py-2 rounded text-sm font-medium transition-colors disabled:opacity-50"
+                      class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
                       :class="canAffordBoost(boost)
                         ? 'bg-purple-500 text-white hover:bg-purple-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
@@ -839,7 +841,7 @@ watch(() => props.show, (newVal) => {
                 <div
                   v-for="pkg in cryptoPackages"
                   :key="pkg.id"
-                  class="rounded-lg border p-4 flex flex-col min-h-[200px] transition-all hover:scale-[1.01] relative overflow-hidden"
+                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col transition-all hover:scale-[1.01] relative overflow-hidden"
                   :class="[
                     pkg.is_featured
                       ? 'bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 border-blue-500/50'
@@ -849,41 +851,41 @@ watch(() => props.show, (newVal) => {
                   <!-- Featured badge -->
                   <div
                     v-if="pkg.is_featured"
-                    class="absolute top-0 right-0 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg"
+                    class="absolute top-0 right-0 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-0.5 sm:py-1 rounded-bl-lg"
                   >
                     {{ t('market.crypto.featured', 'Popular') }}
                   </div>
 
-                  <div class="flex items-start justify-between mb-3">
-                    <div>
-                      <h4 class="font-medium text-blue-400">{{ getCryptoPackageName(pkg.id) }}</h4>
-                      <p class="text-xs text-text-muted uppercase">{{ pkg.tier }}</p>
+                  <div class="flex items-start justify-between mb-2 sm:mb-3">
+                    <div class="min-w-0 flex-1">
+                      <h4 class="font-medium text-xs sm:text-sm text-blue-400 truncate">{{ getCryptoPackageName(pkg.id) }}</h4>
+                      <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ pkg.tier }}</p>
                     </div>
-                    <span class="text-3xl">💎</span>
+                    <span class="text-xl sm:text-3xl ml-1">💎</span>
                   </div>
 
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs text-text-muted">{{ t('market.crypto.amount', 'Cantidad') }}</span>
+                  <div class="flex items-center justify-between mb-1 sm:mb-2">
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.crypto.amount', 'Cantidad') }}</span>
                     <div class="text-right">
-                      <span class="font-mono font-bold text-xl text-blue-400">{{ pkg.total_crypto }}</span>
-                      <span class="text-blue-400 ml-1">💎</span>
+                      <span class="font-mono font-bold text-sm sm:text-xl text-blue-400">{{ pkg.total_crypto }}</span>
+                      <span class="text-blue-400 ml-0.5 sm:ml-1 text-xs sm:text-base">💎</span>
                     </div>
                   </div>
 
                   <!-- Bonus badge -->
-                  <div v-if="pkg.bonus_percent > 0" class="flex items-center justify-center mb-2">
-                    <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-bold">
+                  <div v-if="pkg.bonus_percent > 0" class="flex items-center justify-center mb-1 sm:mb-2">
+                    <span class="px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-green-500/20 text-green-400 text-[10px] sm:text-sm font-bold">
                       +{{ pkg.bonus_percent }}% BONUS
                     </span>
                   </div>
 
-                  <p class="text-xs text-text-muted mb-3 line-clamp-2">{{ getCryptoPackageDescription(pkg.id) }}</p>
+                  <p class="hidden sm:block text-xs text-text-muted mb-3 line-clamp-2">{{ getCryptoPackageDescription(pkg.id) }}</p>
 
                   <div class="mt-auto">
                     <button
                       @click="requestBuyCryptoPackage(pkg)"
                       :class="[
-                        'w-full py-2.5 rounded-lg text-sm font-bold transition-all disabled:opacity-50',
+                        'w-full py-1.5 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all disabled:opacity-50',
                         ronBalance >= pkg.ron_price
                           ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-400 hover:to-purple-400 shadow-lg'
                           : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
@@ -903,12 +905,12 @@ watch(() => props.show, (newVal) => {
       </div>
 
       <!-- Mobile Category Button (floating circle centered at bottom) -->
-      <div class="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[5]">
+      <div class="md:hidden fixed bottom-20 left-1/2 -translate-x-1/2 z-[5]">
         <button
           @click="showMobileCategories = true"
-          class="w-14 h-14 flex items-center justify-center bg-accent-primary rounded-full shadow-lg hover:bg-accent-primary/90 transition-all active:scale-95"
+          class="w-12 h-12 flex items-center justify-center bg-accent-primary rounded-full shadow-lg hover:bg-accent-primary/90 transition-all active:scale-95"
         >
-          <span class="text-2xl">{{ getCategoryIcon(activeFilter) }}</span>
+          <span class="text-xl">{{ getCategoryIcon(activeFilter) }}</span>
         </button>
       </div>
 
@@ -981,88 +983,88 @@ watch(() => props.show, (newVal) => {
           class="absolute inset-0 flex items-end justify-center bg-black/50 z-10 md:hidden"
           @click.self="showMobileCategories = false"
         >
-          <div class="w-full bg-bg-secondary rounded-t-2xl p-4 animate-slide-up">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-bold">{{ t('market.filters.selectCategory', 'Categoría') }}</h3>
+          <div class="w-full bg-bg-secondary rounded-t-2xl p-3 animate-slide-up safe-area-bottom">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-bold text-sm">{{ t('market.filters.selectCategory', 'Categoría') }}</h3>
               <button
                 @click="showMobileCategories = false"
-                class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center"
+                class="w-7 h-7 rounded-lg bg-bg-tertiary flex items-center justify-center"
               >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-4 gap-1.5">
               <button
                 @click="selectCategory('all')"
-                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-colors"
                 :class="activeFilter === 'all'
                   ? 'bg-accent-primary/20 text-accent-primary border border-accent-primary/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-xl">🏪</span>
-                <span class="font-medium">{{ t('market.filters.all', 'Todos') }}</span>
+                <span class="text-lg">🏪</span>
+                <span class="text-[10px] font-medium">{{ t('market.filters.all', 'Todos') }}</span>
               </button>
               <button
                 @click="selectCategory('rigs')"
-                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-colors"
                 :class="activeFilter === 'rigs'
                   ? 'bg-accent-primary/20 text-accent-primary border border-accent-primary/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-xl">⛏️</span>
-                <span class="font-medium">{{ t('market.tabs.rigs') }}</span>
+                <span class="text-lg">⛏️</span>
+                <span class="text-[10px] font-medium">Rigs</span>
               </button>
               <button
                 @click="selectCategory('cooling')"
-                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-colors"
                 :class="activeFilter === 'cooling'
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-xl">❄️</span>
-                <span class="font-medium">{{ t('market.tabs.cooling') }}</span>
+                <span class="text-lg">❄️</span>
+                <span class="text-[10px] font-medium">Cooling</span>
               </button>
               <button
                 @click="selectCategory('energy')"
-                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-colors"
                 :class="activeFilter === 'energy'
                   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-xl">⚡</span>
-                <span class="font-medium">{{ t('market.energy') }}</span>
+                <span class="text-lg">⚡</span>
+                <span class="text-[10px] font-medium">Energy</span>
               </button>
               <button
                 @click="selectCategory('internet')"
-                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-colors"
                 :class="activeFilter === 'internet'
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-xl">📡</span>
-                <span class="font-medium">{{ t('market.internet') }}</span>
+                <span class="text-lg">📡</span>
+                <span class="text-[10px] font-medium">Internet</span>
               </button>
               <button
                 @click="selectCategory('boosts')"
-                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-colors"
                 :class="activeFilter === 'boosts'
                   ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-xl">🚀</span>
-                <span class="font-medium">{{ t('market.tabs.boosts') }}</span>
+                <span class="text-lg">🚀</span>
+                <span class="text-[10px] font-medium">Boosts</span>
               </button>
               <button
                 @click="selectCategory('crypto')"
-                class="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors col-span-2"
+                class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-colors col-span-2"
                 :class="activeFilter === 'crypto'
                   ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 border border-blue-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-xl">💎</span>
-                <span class="font-medium">{{ t('market.tabs.crypto', 'Comprar Crypto') }}</span>
+                <span class="text-lg">💎</span>
+                <span class="text-[10px] font-medium">Crypto</span>
               </button>
             </div>
           </div>
@@ -1146,5 +1148,9 @@ watch(() => props.show, (newVal) => {
 .modal-enter-from,
 .modal-leave-to {
   opacity: 0;
+}
+
+.safe-area-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 </style>
