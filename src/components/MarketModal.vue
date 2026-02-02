@@ -905,7 +905,7 @@ watch(() => props.show, (newVal) => {
       </div>
 
       <!-- Mobile Category Button (floating circle centered at bottom) -->
-      <div class="md:hidden fixed bottom-20 left-1/2 -translate-x-1/2 z-[5]">
+      <div class="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[60]">
         <button
           @click="showMobileCategories = true"
           class="w-12 h-12 flex items-center justify-center bg-accent-primary rounded-full shadow-lg hover:bg-accent-primary/90 transition-all active:scale-95"
