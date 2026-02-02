@@ -56,11 +56,6 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: '/leaderboard',
-      name: 'leaderboard',
-      component: () => import('@/pages/LeaderboardPage.vue'),
-    },
-    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/pages/NotFoundPage.vue'),

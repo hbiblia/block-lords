@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(del \"d:\\\\software\\\\block-lords\\\\src\\\\pages\\\\LeaderboardPage.vue\")"
+    ]
+  }
+}
