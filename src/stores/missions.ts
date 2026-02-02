@@ -37,11 +37,13 @@ export const useMissionsStore = defineStore('missions', () => {
   const mediumMissions = computed(() => missions.value.filter(m => m.difficulty === 'medium'));
   const hardMissions = computed(() => missions.value.filter(m => m.difficulty === 'hard'));
 
-  async function fetchMissions() {
+  async function fetchMissions(silent = false) {
     const authStore = useAuthStore();
     if (!authStore.player?.id) return;
 
-    loading.value = true;
+    if (!silent) {
+      loading.value = true;
+    }
     error.value = null;
 
     try {
@@ -73,8 +75,8 @@ export const useMissionsStore = defineStore('missions', () => {
       if (result.success) {
         // Actualizar balances del jugador
         await authStore.fetchPlayer();
-        // Recargar misiones
-        await fetchMissions();
+        // Recargar misiones (silencioso para evitar parpadeo)
+        await fetchMissions(true);
         return result;
       } else {
         error.value = result.error ?? 'errors.claimReward';
@@ -97,9 +99,9 @@ export const useMissionsStore = defineStore('missions', () => {
       const result = await recordOnlineHeartbeat(authStore.player.id);
       if (result.success) {
         onlineMinutes.value = result.minutesOnline ?? onlineMinutes.value;
-        // Si se agregaron minutos, refrescar misiones para actualizar progreso
+        // Si se agregaron minutos, refrescar misiones para actualizar progreso (silencioso)
         if (result.added > 0) {
-          await fetchMissions();
+          await fetchMissions(true);
         }
       }
     } catch (e) {

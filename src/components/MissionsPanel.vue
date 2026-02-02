@@ -110,8 +110,8 @@ function formatProgress(progress: number, target: number): string {
                 <div class="flex items-center gap-2">
                   <span class="text-2xl">{{ mission.icon }}</span>
                   <div>
-                    <h3 class="font-medium">{{ mission.name }}</h3>
-                    <p class="text-xs text-text-muted">{{ mission.description }}</p>
+                    <h3 class="font-medium">{{ t(`missions.items.${mission.missionId}.name`) }}</h3>
+                    <p class="text-xs text-text-muted">{{ t(`missions.items.${mission.missionId}.desc`) }}</p>
                   </div>
                 </div>
                 <span

@@ -809,7 +809,7 @@ export default {
       earn_crypto: 'Earn crypto',
       repair_rig: 'Repair rig',
       use_cooling: 'Use cooling',
-      recharge_resource: 'Recharge resources',
+      use_prepaid_card: 'Use prepaid card',
       start_rig: 'Start rig',
       rig_active_time: 'Rig active time',
       upgrade_rig: 'Upgrade rig',
