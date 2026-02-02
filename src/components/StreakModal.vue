@@ -117,6 +117,7 @@ function formatTimeRemaining(dateStr: string | null) {
 }
 
 function handleClose() {
+  playSound('click');
   streakStore.closeModal();
   emit('close');
 }

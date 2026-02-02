@@ -146,6 +146,7 @@ function cancelClaim() {
 }
 
 function handleClose() {
+  playSound('click');
   pendingStore.closeModal();
   emit('close');
 }

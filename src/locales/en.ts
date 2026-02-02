@@ -159,6 +159,8 @@ export default {
     title: 'Mining',
     activeRigs: '{count} active rig | {count} active rigs',
     market: 'Market',
+    exchange: 'Exchange',
+    inventory: 'Inventory',
     loadingStation: 'Loading mining station...',
     miningCenter: 'Mining Center',
     activelyMining: 'Actively mining...',
@@ -765,6 +767,7 @@ export default {
   streak: {
     title: 'Daily Streak',
     button: 'Streak',
+    short: 'Streak',
     days: 'days',
     claim: 'CLAIM!',
     consecutiveDays: 'consecutive days',
@@ -787,6 +790,7 @@ export default {
   missions: {
     title: 'Daily Missions',
     button: 'Missions',
+    short: 'Missions',
     completed: 'completed',
     loading: 'Loading missions...',
     progress: 'Progress',

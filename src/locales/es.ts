@@ -159,6 +159,8 @@ export default {
     title: 'Mineria',
     activeRigs: '{count} rig activo | {count} rigs activos',
     market: 'Mercado',
+    exchange: 'Cambio',
+    inventory: 'Inventario',
     loadingStation: 'Cargando estacion de mineria...',
     miningCenter: 'Centro de Mineria',
     activelyMining: 'Minando activamente...',
@@ -765,6 +767,7 @@ export default {
   streak: {
     title: 'Racha Diaria',
     button: 'Racha',
+    short: 'Racha',
     days: 'dias',
     claim: '¡CLAIM!',
     consecutiveDays: 'dias consecutivos',
@@ -787,6 +790,7 @@ export default {
   missions: {
     title: 'Misiones Diarias',
     button: 'Misiones',
+    short: 'Misiones',
     completed: 'completadas',
     loading: 'Cargando misiones...',
     progress: 'Progreso',

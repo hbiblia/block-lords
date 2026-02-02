@@ -59,6 +59,7 @@ async function handleClaim(missionId: string) {
 }
 
 function handleClose() {
+  playSound('click');
   missionsStore.closePanel();
   emit('close');
 }

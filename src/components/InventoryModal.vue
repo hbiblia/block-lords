@@ -32,6 +32,11 @@ onUnmounted(() => {
   document.body.style.overflow = '';
 });
 
+function handleClose() {
+  playSound('click');
+  emit('close');
+}
+
 const loading = ref(false);
 const using = ref(false);
 
@@ -316,7 +321,7 @@ onMounted(() => {
       <!-- Overlay -->
       <div
         class="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        @click="emit('close')"
+        @click="handleClose"
       ></div>
 
       <!-- Modal -->
@@ -328,7 +333,7 @@ onMounted(() => {
             <span>{{ t('inventory.title') }}</span>
           </h2>
           <button
-            @click="emit('close')"
+            @click="handleClose"
             class="p-2 hover:bg-bg-tertiary rounded-lg transition-colors text-text-muted hover:text-white"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

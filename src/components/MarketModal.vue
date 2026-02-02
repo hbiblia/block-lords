@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMarketStore } from '@/stores/market';
 import { formatGamecoin, formatCrypto, formatNumber, formatRon } from '@/utils/format';
+import { playSound } from '@/utils/sounds';
 
 // Types for items
 interface RigItem {
@@ -81,6 +82,11 @@ watch(() => props.show, (isOpen) => {
 onUnmounted(() => {
   document.body.style.overflow = '';
 });
+
+function handleClose() {
+  playSound('click');
+  emit('close');
+}
 
 const activeFilter = ref<'all' | 'rigs' | 'cooling' | 'energy' | 'internet' | 'boosts' | 'crypto'>('all');
 
@@ -487,7 +493,7 @@ watch(() => props.show, (newVal) => {
       <!-- Backdrop -->
       <div
         class="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        @click="emit('close')"
+        @click="handleClose"
       ></div>
 
       <!-- Modal -->
@@ -500,7 +506,7 @@ watch(() => props.show, (newVal) => {
               <span class="gradient-text">{{ t('market.title') }}</span>
             </h2>
             <button
-              @click="emit('close')"
+              @click="handleClose"
               class="w-8 h-8 rounded-lg bg-bg-tertiary hover:bg-bg-secondary flex items-center justify-center transition-colors shrink-0"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
