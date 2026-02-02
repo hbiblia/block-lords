@@ -25,7 +25,6 @@ const {
   estimatedTimeText,
   timeRangeText,
   blocksPerDayText,
-  loading: estimateLoading,
   refresh: refreshEstimate
 } = useMiningEstimate(authStore.player?.id ?? '', 60000);
 
