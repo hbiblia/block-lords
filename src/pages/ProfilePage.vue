@@ -372,7 +372,8 @@ onUnmounted(() => {
       <div class="card p-6">
         <div class="flex items-start gap-4">
           <!-- Avatar -->
-          <div class="w-16 h-16 rounded-xl bg-gradient-primary flex items-center justify-center text-2xl font-bold shrink-0">
+          <div
+            class="w-16 h-16 rounded-xl bg-gradient-primary flex items-center justify-center text-2xl font-bold shrink-0">
             {{ player?.username?.charAt(0).toUpperCase() }}
           </div>
 
@@ -444,10 +445,12 @@ onUnmounted(() => {
           </div>
 
           <!-- Pending withdrawal status -->
-          <div v-if="pendingWithdrawal" class="mt-3 p-2 bg-status-warning/10 border border-status-warning/30 rounded-lg">
+          <div v-if="pendingWithdrawal"
+            class="mt-3 p-2 bg-status-warning/10 border border-status-warning/30 rounded-lg">
             <div class="text-xs text-status-warning flex items-center gap-1">
               <span class="animate-pulse">⏳</span>
-              {{ t('profile.withdraw.pending', 'Retiro pendiente') }}: {{ formatRon(pendingWithdrawal.net_amount || pendingWithdrawal.amount) }} RON
+              {{ t('profile.withdraw.pending', 'Retiro pendiente') }}: {{ formatRon(pendingWithdrawal.net_amount ||
+              pendingWithdrawal.amount) }} RON
             </div>
             <div class="text-xs text-text-muted mt-1">
               {{ t('profile.withdraw.processing', 'Procesando...') }}
@@ -457,21 +460,16 @@ onUnmounted(() => {
           <!-- Action buttons -->
           <div v-else class="flex gap-2 mt-3">
             <!-- Reload button - always visible -->
-            <button
-              @click="openReloadModal"
-              class="flex-1 py-2 rounded-lg text-sm font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors"
-            >
+            <button @click="openReloadModal"
+              class="flex-1 py-2 rounded-lg text-sm font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors">
               {{ t('profile.reload.button', 'Recargar') }}
             </button>
 
             <!-- Withdraw button - only if has balance -->
-            <button
-              v-if="ronBalance > 0"
-              @click="openWithdrawModal"
-              :disabled="!canWithdraw"
-              class="flex-1 py-2 rounded-lg text-sm font-medium bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {{ player?.ron_wallet ? t('profile.withdraw.button', 'Retirar') : t('profile.withdraw.needWallet', 'Configura wallet') }}
+            <button v-if="ronBalance > 0" @click="openWithdrawModal" :disabled="!canWithdraw"
+              class="flex-1 py-2 rounded-lg text-sm font-medium bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              {{ player?.ron_wallet ? t('profile.withdraw.button', 'Retirar') : t('profile.withdraw.needWallet',
+              'Configura wallet') }}
             </button>
           </div>
         </div>
@@ -490,11 +488,8 @@ onUnmounted(() => {
             <span class="text-xl">👛</span>
             {{ t('profile.wallet.title', 'RON Wallet') }}
           </h3>
-          <button
-            v-if="!editingWallet"
-            @click="startEditWallet"
-            class="text-sm text-accent-primary hover:text-accent-primary/80 transition-colors"
-          >
+          <button v-if="!editingWallet" @click="startEditWallet"
+            class="text-sm text-accent-primary hover:text-accent-primary/80 transition-colors">
             {{ player?.ron_wallet ? t('common.edit', 'Editar') : t('profile.wallet.add', 'Agregar') }}
           </button>
         </div>
@@ -505,13 +500,12 @@ onUnmounted(() => {
             <div class="flex-1 bg-bg-tertiary rounded-lg px-4 py-3 font-mono text-sm">
               {{ formattedWallet }}
             </div>
-            <button
-              @click="copyWallet"
+            <button @click="copyWallet"
               class="p-2.5 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
-              :title="t('common.copy', 'Copiar')"
-            >
+              :title="t('common.copy', 'Copiar')">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
             </button>
           </div>
@@ -523,13 +517,9 @@ onUnmounted(() => {
         <!-- Edit mode -->
         <div v-else class="space-y-3">
           <div>
-            <input
-              v-model="walletInput"
-              type="text"
-              :placeholder="t('profile.wallet.placeholder', '0x...')"
+            <input v-model="walletInput" type="text" :placeholder="t('profile.wallet.placeholder', '0x...')"
               class="w-full bg-bg-tertiary border border-border rounded-lg px-4 py-2.5 font-mono text-sm focus:outline-none focus:border-accent-primary transition-colors"
-              :disabled="savingWallet"
-            />
+              :disabled="savingWallet" />
             <p class="text-xs text-text-muted mt-1.5">
               {{ t('profile.wallet.hint', 'Ingresa una direccion de wallet valida (formato Ethereum/RON)') }}
             </p>
@@ -540,18 +530,12 @@ onUnmounted(() => {
           </div>
 
           <div class="flex gap-2">
-            <button
-              @click="cancelEditWallet"
-              :disabled="savingWallet"
-              class="flex-1 py-2 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
-            >
+            <button @click="cancelEditWallet" :disabled="savingWallet"
+              class="flex-1 py-2 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
               {{ t('common.cancel') }}
             </button>
-            <button
-              @click="saveWallet"
-              :disabled="savingWallet"
-              class="flex-1 py-2 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/90 transition-colors disabled:opacity-50"
-            >
+            <button @click="saveWallet" :disabled="savingWallet"
+              class="flex-1 py-2 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/90 transition-colors disabled:opacity-50">
               <span v-if="savingWallet" class="flex items-center justify-center gap-2">
                 <span class="animate-spin">⏳</span>
               </span>
@@ -574,11 +558,8 @@ onUnmounted(() => {
         </div>
 
         <div v-else class="space-y-2 max-h-64 overflow-y-auto">
-          <div
-            v-for="tx in transactions"
-            :key="tx.id"
-            class="flex items-center gap-3 py-2 border-b border-border/30 last:border-0"
-          >
+          <div v-for="tx in transactions" :key="tx.id"
+            class="flex items-center gap-3 py-2 border-b border-border/30 last:border-0">
             <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center">
               {{ getTransactionIcon(tx.type) }}
             </div>
@@ -589,11 +570,9 @@ onUnmounted(() => {
               </div>
             </div>
             <div class="text-right">
-              <div
-                class="font-medium text-sm"
-                :class="tx.amount >= 0 ? 'text-status-success' : 'text-status-danger'"
-              >
-                {{ tx.amount >= 0 ? '+' : '' }}{{ tx.currency === 'crypto' ? formatCrypto(tx.amount) : formatGamecoin(tx.amount) }}
+              <div class="font-medium text-sm" :class="tx.amount >= 0 ? 'text-status-success' : 'text-status-danger'">
+                {{ tx.amount >= 0 ? '+' : '' }}{{ tx.currency === 'crypto' ? formatCrypto(tx.amount) :
+                  formatGamecoin(tx.amount) }}
               </div>
               <div class="text-xs text-text-muted">
                 {{ tx.currency === 'crypto' ? '💎' : '🪙' }}
@@ -613,10 +592,8 @@ onUnmounted(() => {
           {{ t('profile.dangerZoneDesc', 'Estas acciones son irreversibles. Procede con cuidado.') }}
         </p>
 
-        <button
-          @click="openResetConfirm"
-          class="px-4 py-2.5 rounded-lg font-medium bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30 transition-colors"
-        >
+        <button @click="openResetConfirm"
+          class="px-4 py-2.5 rounded-lg font-medium bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30 transition-colors">
           🔄 {{ t('profile.reset.button', 'Reiniciar Cuenta') }}
         </button>
       </div>
@@ -625,24 +602,17 @@ onUnmounted(() => {
     <!-- Reset Account Confirmation Modal -->
     <Teleport to="body">
       <Transition name="modal">
-        <div
-          v-if="showResetConfirm"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-        >
-          <div
-            class="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            @click="closeResetConfirm"
-          ></div>
-          <div
-            class="relative bg-bg-primary border border-status-danger/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
-            @click.stop
-          >
+        <div v-if="showResetConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeResetConfirm"></div>
+          <div class="relative bg-bg-primary border border-status-danger/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
+            @click.stop>
             <h3 class="text-lg font-bold mb-2 text-center text-status-danger">
               ⚠️ {{ t('profile.reset.title', 'Reiniciar Cuenta?') }}
             </h3>
 
             <div class="bg-status-danger/10 rounded-xl p-4 mb-4 text-sm">
-              <p class="text-status-danger font-medium mb-2">{{ t('profile.reset.warning', 'Esta accion eliminara:') }}</p>
+              <p class="text-status-danger font-medium mb-2">{{ t('profile.reset.warning', 'Esta accion eliminara:') }}
+              </p>
               <ul class="text-text-muted space-y-1">
                 <li>• {{ t('profile.reset.item1', 'Todos tus rigs y equipamiento') }}</li>
                 <li>• {{ t('profile.reset.item2', 'Todo tu inventario (cooling, tarjetas, boosts)') }}</li>
@@ -657,13 +627,9 @@ onUnmounted(() => {
                 {{ t('profile.reset.confirmLabel', 'Escribe tu nombre de usuario para confirmar:') }}
                 <strong class="text-white">{{ player?.username }}</strong>
               </label>
-              <input
-                v-model="resetConfirmText"
-                type="text"
-                :placeholder="player?.username"
+              <input v-model="resetConfirmText" type="text" :placeholder="player?.username"
                 class="w-full bg-bg-tertiary border border-border rounded-lg px-4 py-2.5 focus:outline-none focus:border-status-danger transition-colors"
-                :disabled="resettingAccount"
-              />
+                :disabled="resettingAccount" />
             </div>
 
             <div v-if="resetError" class="mb-4 p-3 rounded-lg bg-status-danger/20 border border-status-danger/30">
@@ -671,18 +637,12 @@ onUnmounted(() => {
             </div>
 
             <div class="flex gap-3">
-              <button
-                @click="closeResetConfirm"
-                :disabled="resettingAccount"
-                class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
-              >
+              <button @click="closeResetConfirm" :disabled="resettingAccount"
+                class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
                 {{ t('common.cancel') }}
               </button>
-              <button
-                @click="confirmResetAccount"
-                :disabled="resettingAccount || resetConfirmText !== player?.username"
-                class="flex-1 py-2.5 rounded-lg font-semibold bg-status-danger text-white hover:bg-status-danger/90 transition-colors disabled:opacity-50"
-              >
+              <button @click="confirmResetAccount" :disabled="resettingAccount || resetConfirmText !== player?.username"
+                class="flex-1 py-2.5 rounded-lg font-semibold bg-status-danger text-white hover:bg-status-danger/90 transition-colors disabled:opacity-50">
                 <span v-if="resettingAccount" class="flex items-center justify-center gap-2">
                   <span class="animate-spin">⏳</span>
                 </span>
@@ -697,17 +657,10 @@ onUnmounted(() => {
     <!-- RON Withdrawal Modal -->
     <Teleport to="body">
       <Transition name="modal">
-        <div
-          v-if="showWithdrawModal"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-        >
-          <div
-            class="absolute inset-0 bg-black/70 backdrop-blur-sm"
-          ></div>
-          <div
-            class="relative bg-bg-primary border border-purple-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
-            @click.stop
-          >
+        <div v-if="showWithdrawModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+          <div class="relative bg-bg-primary border border-purple-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
+            @click.stop>
             <h3 class="text-lg font-bold mb-4 text-center text-purple-400">
               💎 {{ t('profile.withdraw.title', 'Retirar RON') }}
             </h3>
@@ -718,16 +671,20 @@ onUnmounted(() => {
                 <span class="text-sm text-text-muted">{{ t('profile.withdraw.available', 'Disponible') }}</span>
                 <span class="font-medium">{{ formatRon(ronBalance) }} RON</span>
               </div>
-              <div class="flex justify-between items-center" :class="isPremium ? 'text-status-success' : 'text-status-danger'">
+              <div class="flex justify-between items-center"
+                :class="isPremium ? 'text-status-success' : 'text-status-danger'">
                 <span class="text-sm flex items-center gap-1">
                   {{ t('profile.withdraw.fee', 'Comision') }} ({{ withdrawalFeePercent }}%)
-                  <span v-if="isPremium" class="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">Premium</span>
+                  <span v-if="isPremium"
+                    class="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">Premium</span>
                 </span>
                 <span class="font-medium">-{{ formatRon(ronBalance * withdrawalFeeRate) }} RON</span>
               </div>
               <div class="border-t border-border pt-3 flex justify-between items-center">
-                <span class="text-sm font-medium text-status-success">{{ t('profile.withdraw.youReceive', 'Recibiras') }}</span>
-                <span class="text-xl font-bold text-purple-400">{{ formatRon(ronBalance * (1 - withdrawalFeeRate)) }} RON</span>
+                <span class="text-sm font-medium text-status-success">{{ t('profile.withdraw.youReceive', 'Recibiras')
+                  }}</span>
+                <span class="text-xl font-bold text-purple-400">{{ formatRon(ronBalance * (1 - withdrawalFeeRate)) }}
+                  RON</span>
               </div>
             </div>
 
@@ -747,18 +704,12 @@ onUnmounted(() => {
             </div>
 
             <div class="flex gap-3">
-              <button
-                @click="closeWithdrawModal"
-                :disabled="withdrawing"
-                class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
-              >
+              <button @click="closeWithdrawModal" :disabled="withdrawing"
+                class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
                 {{ t('common.cancel') }}
               </button>
-              <button
-                @click="confirmWithdraw"
-                :disabled="withdrawing"
-                class="flex-1 py-2.5 rounded-lg font-semibold bg-purple-500 text-white hover:bg-purple-500/90 transition-colors disabled:opacity-50"
-              >
+              <button @click="confirmWithdraw" :disabled="withdrawing"
+                class="flex-1 py-2.5 rounded-lg font-semibold bg-purple-500 text-white hover:bg-purple-500/90 transition-colors disabled:opacity-50">
                 <span v-if="withdrawing" class="flex items-center justify-center gap-2">
                   <span class="animate-spin">⏳</span>
                 </span>
@@ -773,18 +724,10 @@ onUnmounted(() => {
     <!-- RON Reload/Deposit Modal -->
     <Teleport to="body">
       <Transition name="modal">
-        <div
-          v-if="showReloadModal"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-        >
-          <div
-            class="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            @click="closeReloadModal"
-          ></div>
-          <div
-            class="relative bg-bg-primary border border-status-success/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
-            @click.stop
-          >
+        <div v-if="showReloadModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeReloadModal"></div>
+          <div class="relative bg-bg-primary border border-status-success/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
+            @click.stop>
             <!-- Input State -->
             <template v-if="reloadStep === 'input'">
               <h3 class="text-lg font-bold mb-4 text-center text-status-success">
@@ -797,30 +740,20 @@ onUnmounted(() => {
 
               <!-- Amount input -->
               <div class="mb-4">
-                <label class="text-sm text-text-muted block mb-2">{{ t('profile.reload.amount', 'Cantidad a depositar') }}</label>
-                <input
-                  v-model="reloadAmount"
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  placeholder="0.00"
-                  class="w-full bg-bg-tertiary border border-border rounded-lg px-4 py-3 text-xl font-bold text-center focus:outline-none focus:border-status-success transition-colors"
-                />
+                <label class="text-sm text-text-muted block mb-2">{{ t('profile.reload.amount', 'Cantidad a depositar')
+                  }}</label>
+                <input v-model="reloadAmount" type="number" min="0.1" step="0.1" placeholder="0.00"
+                  class="w-full bg-bg-tertiary border border-border rounded-lg px-4 py-3 text-xl font-bold text-center focus:outline-none focus:border-status-success transition-colors" />
               </div>
 
               <!-- Quick amount buttons -->
               <div class="grid grid-cols-4 gap-2 mb-4">
-                <button
-                  v-for="amount in reloadAmounts"
-                  :key="amount"
-                  @click="selectReloadAmount(amount)"
-                  :class="[
-                    'py-2 rounded-lg text-sm font-medium transition-colors',
-                    reloadAmount === amount.toString()
-                      ? 'bg-status-success text-white'
-                      : 'bg-bg-tertiary text-text-muted hover:bg-bg-tertiary/80'
-                  ]"
-                >
+                <button v-for="amount in reloadAmounts" :key="amount" @click="selectReloadAmount(amount)" :class="[
+                  'py-2 rounded-lg text-sm font-medium transition-colors',
+                  reloadAmount === amount.toString()
+                    ? 'bg-status-success text-white'
+                    : 'bg-bg-tertiary text-text-muted hover:bg-bg-tertiary/80'
+                ]">
                   {{ amount }} RON
                 </button>
               </div>
@@ -836,17 +769,12 @@ onUnmounted(() => {
               </div>
 
               <div class="flex gap-3">
-                <button
-                  @click="closeReloadModal"
-                  class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
-                >
+                <button @click="closeReloadModal"
+                  class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
                   {{ t('common.cancel') }}
                 </button>
-                <button
-                  @click="confirmReload"
-                  :disabled="!reloadAmount || parseFloat(reloadAmount) <= 0"
-                  class="flex-1 py-2.5 rounded-lg font-semibold bg-status-success text-white hover:bg-status-success/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
+                <button @click="confirmReload" :disabled="!reloadAmount || parseFloat(reloadAmount) <= 0"
+                  class="flex-1 py-2.5 rounded-lg font-semibold bg-status-success text-white hover:bg-status-success/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   {{ t('profile.reload.continue', 'Continuar') }}
                 </button>
               </div>
@@ -857,13 +785,15 @@ onUnmounted(() => {
               <div class="text-center py-4">
                 <div class="relative w-16 h-16 mx-auto mb-4">
                   <div class="absolute inset-0 border-4 border-status-success/20 rounded-full"></div>
-                  <div class="absolute inset-0 border-4 border-status-success border-t-transparent rounded-full animate-spin"></div>
+                  <div
+                    class="absolute inset-0 border-4 border-status-success border-t-transparent rounded-full animate-spin">
+                  </div>
                 </div>
                 <h3 class="text-lg font-bold mb-2">
                   {{ reloadStep === 'connecting' ? t('profile.reload.connecting', 'Conectando wallet...') :
-                     reloadStep === 'sending' ? t('profile.reload.sending', 'Enviando transaccion...') :
-                     reloadStep === 'confirming' ? t('profile.reload.confirming', 'Confirmando...') :
-                     t('profile.reload.crediting', 'Acreditando RON...') }}
+                    reloadStep === 'sending' ? t('profile.reload.sending', 'Enviando transaccion...') :
+                      reloadStep === 'confirming' ? t('profile.reload.confirming', 'Confirmando...') :
+                        t('profile.reload.crediting', 'Acreditando RON...') }}
                 </h3>
                 <p class="text-text-muted text-sm">
                   {{ reloadStep === 'connecting' ? t('profile.reload.connectingDesc', 'Aprueba la conexion en tu Ronin Wallet') :
@@ -874,9 +804,14 @@ onUnmounted(() => {
                 <!-- Progress indicator -->
                 <div class="mt-4 flex justify-center gap-2">
                   <div class="w-2 h-2 rounded-full" :class="reloadStep ? 'bg-status-success' : 'bg-bg-tertiary'"></div>
-                  <div class="w-2 h-2 rounded-full" :class="['sending', 'confirming', 'crediting'].includes(reloadStep) ? 'bg-status-success' : 'bg-bg-tertiary'"></div>
-                  <div class="w-2 h-2 rounded-full" :class="['confirming', 'crediting'].includes(reloadStep) ? 'bg-status-success' : 'bg-bg-tertiary'"></div>
-                  <div class="w-2 h-2 rounded-full" :class="reloadStep === 'crediting' ? 'bg-status-success' : 'bg-bg-tertiary'"></div>
+                  <div class="w-2 h-2 rounded-full"
+                    :class="['sending', 'confirming', 'crediting'].includes(reloadStep) ? 'bg-status-success' : 'bg-bg-tertiary'">
+                  </div>
+                  <div class="w-2 h-2 rounded-full"
+                    :class="['confirming', 'crediting'].includes(reloadStep) ? 'bg-status-success' : 'bg-bg-tertiary'">
+                  </div>
+                  <div class="w-2 h-2 rounded-full"
+                    :class="reloadStep === 'crediting' ? 'bg-status-success' : 'bg-bg-tertiary'"></div>
                 </div>
               </div>
             </template>
@@ -897,10 +832,8 @@ onUnmounted(() => {
                   <div class="text-sm text-text-muted mb-1">{{ t('profile.reload.deposited', 'Depositado') }}</div>
                   <div class="text-2xl font-bold text-status-success">+{{ reloadAmount }} RON</div>
                 </div>
-                <button
-                  @click="closeReloadModal"
-                  class="w-full py-2.5 rounded-lg font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors"
-                >
+                <button @click="closeReloadModal"
+                  class="w-full py-2.5 rounded-lg font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors">
                   {{ t('common.close', 'Cerrar') }}
                 </button>
               </div>
@@ -917,23 +850,17 @@ onUnmounted(() => {
                 <h3 class="text-lg font-bold text-status-danger mb-2">{{ t('profile.reload.errorTitle', 'Error') }}</h3>
                 <p class="text-text-muted text-sm mb-4">{{ reloadError }}</p>
                 <div class="flex flex-col gap-2">
-                  <button
-                    v-if="reloadError === t('profile.reload.walletNotInstalled')"
+                  <button v-if="reloadError === t('profile.reload.walletNotInstalled')"
                     @click="roninWallet.openInstallPage()"
-                    class="w-full py-2.5 rounded-lg font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
-                  >
+                    class="w-full py-2.5 rounded-lg font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors">
                     {{ t('profile.reload.installWallet', 'Instalar Ronin Wallet') }}
                   </button>
-                  <button
-                    @click="reloadStep = 'input'; reloadError = null"
-                    class="w-full py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
-                  >
+                  <button @click="reloadStep = 'input'; reloadError = null"
+                    class="w-full py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
                     {{ t('common.tryAgain', 'Intentar de nuevo') }}
                   </button>
-                  <button
-                    @click="closeReloadModal"
-                    class="w-full py-2.5 rounded-lg font-medium text-text-muted hover:text-white transition-colors"
-                  >
+                  <button @click="closeReloadModal"
+                    class="w-full py-2.5 rounded-lg font-medium text-text-muted hover:text-white transition-colors">
                     {{ t('common.cancel') }}
                   </button>
                 </div>

@@ -5202,6 +5202,82 @@ BEGIN
 END;
 $$;
 
+-- Función para actualizar código de referido (cuesta 500 crypto)
+DROP FUNCTION IF EXISTS update_referral_code(UUID, TEXT);
+CREATE OR REPLACE FUNCTION update_referral_code(p_player_id UUID, p_new_code TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player RECORD;
+  v_cost INTEGER := 500;  -- Costo en crypto
+  v_code_exists BOOLEAN;
+  v_clean_code TEXT;
+BEGIN
+  -- Normalizar y validar código
+  v_clean_code := UPPER(TRIM(p_new_code));
+
+  -- Validar longitud (6-10 caracteres)
+  IF LENGTH(v_clean_code) < 6 OR LENGTH(v_clean_code) > 10 THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_length');
+  END IF;
+
+  -- Validar que solo contenga letras y números
+  IF v_clean_code !~ '^[A-Z0-9]+$' THEN
+    RETURN json_build_object('success', false, 'error', 'invalid_characters');
+  END IF;
+
+  -- Obtener datos del jugador
+  SELECT id, crypto_balance, referral_code
+  INTO v_player
+  FROM players
+  WHERE id = p_player_id;
+
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'player_not_found');
+  END IF;
+
+  -- Verificar si el código es el mismo
+  IF v_player.referral_code = v_clean_code THEN
+    RETURN json_build_object('success', false, 'error', 'same_code');
+  END IF;
+
+  -- Verificar si el código ya existe
+  SELECT EXISTS(
+    SELECT 1 FROM players WHERE referral_code = v_clean_code AND id != p_player_id
+  ) INTO v_code_exists;
+
+  IF v_code_exists THEN
+    RETURN json_build_object('success', false, 'error', 'code_taken');
+  END IF;
+
+  -- Verificar balance de crypto
+  IF v_player.crypto_balance < v_cost THEN
+    RETURN json_build_object('success', false, 'error', 'insufficient_balance');
+  END IF;
+
+  -- Descontar crypto y actualizar código
+  UPDATE players
+  SET
+    crypto_balance = crypto_balance - v_cost,
+    referral_code = v_clean_code
+  WHERE id = p_player_id;
+
+  -- Registrar transacción
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'referral_code_change', -v_cost, 'crypto', 'Cambio de código de referido');
+
+  RETURN json_build_object(
+    'success', true,
+    'newCode', v_clean_code,
+    'cost', v_cost
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION update_referral_code TO authenticated;
+
 -- =====================================================
 -- FUNCIÓN DE ESTIMACIÓN DE MINERÍA
 -- Calcula tiempo estimado hasta próximo bloque
@@ -5370,6 +5446,98 @@ BEGIN
   );
 END;
 $$;
+
+-- =====================================================
+-- FUNCIÓN PARA LISTAR REFERIDOS
+-- =====================================================
+
+DROP FUNCTION IF EXISTS get_referral_list(UUID, INTEGER, INTEGER);
+
+CREATE OR REPLACE FUNCTION get_referral_list(
+  p_player_id UUID,
+  p_limit INTEGER DEFAULT 50,
+  p_offset INTEGER DEFAULT 0
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_total_count INTEGER;
+  v_referrals JSON;
+  v_total_blocks_by_referrals INTEGER;
+  v_total_crypto_by_referrals NUMERIC;
+  v_active_referrals INTEGER;
+BEGIN
+  -- Verificar jugador
+  IF NOT EXISTS (SELECT 1 FROM players WHERE id = p_player_id) THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Contar total de referidos
+  SELECT COUNT(*) INTO v_total_count
+  FROM players WHERE referred_by = p_player_id;
+
+  -- Contar referidos activos (online en últimas 24h)
+  SELECT COUNT(*) INTO v_active_referrals
+  FROM players
+  WHERE referred_by = p_player_id
+    AND last_seen > NOW() - INTERVAL '24 hours';
+
+  -- Total de bloques minados por referidos
+  SELECT COALESCE(SUM(blocks_mined), 0) INTO v_total_blocks_by_referrals
+  FROM players WHERE referred_by = p_player_id;
+
+  -- Total de crypto generado por referidos
+  SELECT COALESCE(SUM(total_crypto_earned), 0) INTO v_total_crypto_by_referrals
+  FROM players WHERE referred_by = p_player_id;
+
+  -- Obtener lista de referidos con info detallada
+  SELECT json_agg(row_to_json(t))
+  INTO v_referrals
+  FROM (
+    SELECT
+      p.id,
+      p.username,
+      p.created_at as "joinedAt",
+      p.is_online as "isOnline",
+      p.last_seen as "lastSeen",
+      COALESCE(p.blocks_mined, 0) as "blocksMined",
+      COALESCE(p.total_crypto_earned, 0) as "cryptoEarned",
+      p.reputation_score as "reputation",
+      -- Calcular días desde que se unió
+      EXTRACT(DAY FROM (NOW() - p.created_at))::INTEGER as "daysAgo",
+      -- Verificar si está activo (conectado en últimas 24h)
+      (p.last_seen > NOW() - INTERVAL '24 hours') as "isActive",
+      -- Contar rigs activos
+      (SELECT COUNT(*) FROM player_rigs pr WHERE pr.player_id = p.id AND pr.is_active = true) as "activeRigs"
+    FROM players p
+    WHERE p.referred_by = p_player_id
+    ORDER BY p.created_at DESC
+    LIMIT p_limit
+    OFFSET p_offset
+  ) t;
+
+  RETURN json_build_object(
+    'success', true,
+    'referrals', COALESCE(v_referrals, '[]'::json),
+    'pagination', json_build_object(
+      'total', v_total_count,
+      'limit', p_limit,
+      'offset', p_offset,
+      'hasMore', (p_offset + p_limit) < v_total_count
+    ),
+    'stats', json_build_object(
+      'totalReferrals', v_total_count,
+      'activeReferrals', v_active_referrals,
+      'totalBlocksByReferrals', v_total_blocks_by_referrals,
+      'totalCryptoByReferrals', ROUND(v_total_crypto_by_referrals, 2)
+    )
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_referral_list TO authenticated;
 
 -- =====================================================
 -- GRANTS PARA FUNCIONES

@@ -851,6 +851,77 @@ export async function applyReferralCode(playerId: string, referralCode: string):
   return data as ApplyReferralResult;
 }
 
+export interface UpdateReferralCodeResult {
+  success: boolean;
+  newCode?: string;
+  cost?: number;
+  error?: string;
+}
+
+// Referral list interfaces
+export interface ReferralListItem {
+  id: string;
+  username: string;
+  joinedAt: string;
+  isOnline: boolean;
+  lastSeen: string | null;
+  blocksMined: number;
+  cryptoEarned: number;
+  reputation: number;
+  daysAgo: number;
+  isActive: boolean;
+  activeRigs: number;
+}
+
+export interface ReferralListPagination {
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+export interface ReferralListStats {
+  totalReferrals: number;
+  activeReferrals: number;
+  totalBlocksByReferrals: number;
+  totalCryptoByReferrals: number;
+}
+
+export interface ReferralListResponse {
+  success: boolean;
+  referrals: ReferralListItem[];
+  pagination: ReferralListPagination;
+  stats: ReferralListStats;
+  error?: string;
+}
+
+// Actualizar código de referido (cuesta 500 crypto)
+export async function updateReferralCode(playerId: string, newCode: string): Promise<UpdateReferralCodeResult> {
+  const { data, error } = await supabase.rpc('update_referral_code', {
+    p_player_id: playerId,
+    p_new_code: newCode,
+  });
+
+  if (error) throw error;
+  return data as UpdateReferralCodeResult;
+}
+
+// Obtener lista completa de referidos con paginación
+export async function getReferralList(
+  playerId: string,
+  limit: number = 50,
+  offset: number = 0
+): Promise<ReferralListResponse> {
+  const { data, error } = await supabase.rpc('get_referral_list', {
+    p_player_id: playerId,
+    p_limit: limit,
+    p_offset: offset,
+  });
+
+  if (error) throw error;
+  return data as ReferralListResponse;
+}
+
 // === RONIN WALLET PAYMENTS ===
 
 export interface VerifyRoninPaymentResult {
