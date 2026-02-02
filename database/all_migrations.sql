@@ -405,31 +405,32 @@ DROP TABLE IF EXISTS rig_slot_upgrades;
 CREATE TABLE rig_slot_upgrades (
   slot_number INTEGER PRIMARY KEY CHECK (slot_number >= 2 AND slot_number <= 20),
   price DECIMAL(18, 8) NOT NULL CHECK (price > 0),
-  currency TEXT NOT NULL DEFAULT 'gamecoin' CHECK (currency IN ('gamecoin', 'crypto')),
+  currency TEXT NOT NULL DEFAULT 'gamecoin' CHECK (currency IN ('gamecoin', 'crypto', 'ron')),
   name TEXT NOT NULL,
   description TEXT
 );
 
+-- Slot prices: #2 GameCoin, #3 Crypto, #4+ RON (10 RON fixed)
 INSERT INTO rig_slot_upgrades (slot_number, price, currency, name, description) VALUES
   (2, 500, 'gamecoin', 'Slot #2', 'slot2'),
   (3, 1000, 'crypto', 'Slot #3', 'slot3'),
-  (4, 2500, 'crypto', 'Slot #4', 'slot4'),
-  (5, 5000, 'crypto', 'Slot #5', 'slot5'),
-  (6, 10000, 'crypto', 'Slot #6', 'expansion'),
-  (7, 25000, 'crypto', 'Slot #7', 'expansion'),
-  (8, 50000, 'crypto', 'Slot #8', 'medium'),
-  (9, 100000, 'crypto', 'Slot #9', 'medium'),
-  (10, 200000, 'crypto', 'Slot #10', 'large'),
-  (11, 350000, 'crypto', 'Slot #11', 'smallFarm'),
-  (12, 500000, 'crypto', 'Slot #12', 'smallFarm'),
-  (13, 750000, 'crypto', 'Slot #13', 'mediumFarm'),
-  (14, 1000000, 'crypto', 'Slot #14', 'mediumFarm'),
-  (15, 1500000, 'crypto', 'Slot #15', 'largeFarm'),
-  (16, 2000000, 'crypto', 'Slot #16', 'largeFarm'),
-  (17, 3000000, 'crypto', 'Slot #17', 'megaFarm'),
-  (18, 5000000, 'crypto', 'Slot #18', 'megaFarm'),
-  (19, 7500000, 'crypto', 'Slot #19', 'industrial'),
-  (20, 10000000, 'crypto', 'Slot #20', 'maxPower')
+  (4, 10, 'ron', 'Slot #4', 'slot4'),
+  (5, 10, 'ron', 'Slot #5', 'slot5'),
+  (6, 10, 'ron', 'Slot #6', 'expansion'),
+  (7, 10, 'ron', 'Slot #7', 'expansion'),
+  (8, 10, 'ron', 'Slot #8', 'medium'),
+  (9, 10, 'ron', 'Slot #9', 'medium'),
+  (10, 10, 'ron', 'Slot #10', 'large'),
+  (11, 10, 'ron', 'Slot #11', 'smallFarm'),
+  (12, 10, 'ron', 'Slot #12', 'smallFarm'),
+  (13, 10, 'ron', 'Slot #13', 'mediumFarm'),
+  (14, 10, 'ron', 'Slot #14', 'mediumFarm'),
+  (15, 10, 'ron', 'Slot #15', 'largeFarm'),
+  (16, 10, 'ron', 'Slot #16', 'largeFarm'),
+  (17, 10, 'ron', 'Slot #17', 'megaFarm'),
+  (18, 10, 'ron', 'Slot #18', 'megaFarm'),
+  (19, 10, 'ron', 'Slot #19', 'industrial'),
+  (20, 10, 'ron', 'Slot #20', 'maxPower')
 ON CONFLICT (slot_number) DO NOTHING;
 
 -- =====================================================

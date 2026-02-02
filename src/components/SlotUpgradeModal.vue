@@ -59,12 +59,15 @@ const allUpgrades = ref<Array<{
 
 const balance = computed(() => authStore.player?.gamecoin_balance ?? 0);
 const cryptoBalance = computed(() => authStore.player?.crypto_balance ?? 0);
+const ronBalance = computed(() => authStore.player?.ron_balance ?? 0);
 
 const canAffordNextUpgrade = computed(() => {
   if (!slotInfo.value?.next_upgrade) return false;
   const upgrade = slotInfo.value.next_upgrade;
   if (upgrade.currency === 'gamecoin') {
     return balance.value >= upgrade.price;
+  } else if (upgrade.currency === 'ron') {
+    return ronBalance.value >= upgrade.price;
   }
   return cryptoBalance.value >= upgrade.price;
 });
@@ -121,6 +124,9 @@ async function handleBuySlot() {
 }
 
 function formatPrice(price: number, currency: string): string {
+  if (currency === 'ron') {
+    return `${price.toLocaleString()} RON`;
+  }
   if (currency === 'crypto') {
     return `${price.toLocaleString()} Crypto`;
   }
@@ -128,7 +134,9 @@ function formatPrice(price: number, currency: string): string {
 }
 
 function getCurrencyIcon(currency: string): string {
-  return currency === 'crypto' ? '💎' : '🪙';
+  if (currency === 'ron') return '🔷';
+  if (currency === 'crypto') return '💎';
+  return '🪙';
 }
 
 function getDescription(descriptionKey: string): string {

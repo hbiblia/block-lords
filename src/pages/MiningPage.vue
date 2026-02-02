@@ -108,8 +108,22 @@ function canAffordSlot(): boolean {
   const upgrade = slotInfo.value.next_upgrade;
   if (upgrade.currency === 'gamecoin') {
     return (authStore.player?.gamecoin_balance ?? 0) >= upgrade.price;
+  } else if (upgrade.currency === 'ron') {
+    return (authStore.player?.ron_balance ?? 0) >= upgrade.price;
   }
   return (authStore.player?.crypto_balance ?? 0) >= upgrade.price;
+}
+
+function getSlotCurrencyIcon(currency: string): string {
+  if (currency === 'ron') return '🔷';
+  if (currency === 'crypto') return '💎';
+  return '🪙';
+}
+
+function getSlotCurrencyName(currency: string): string {
+  if (currency === 'ron') return 'RON';
+  if (currency === 'crypto') return 'Crypto';
+  return 'GC';
 }
 
 // Open market modal via global event
@@ -834,9 +848,9 @@ onUnmounted(() => {
 
                 <div class="text-center py-3">
                   <div class="text-2xl font-bold" :class="canAffordSlot() ? 'text-status-success' : 'text-text-muted'">
-                    <span>{{ slotInfo.next_upgrade.currency === 'crypto' ? '💎' : '🪙' }}</span>
+                    <span>{{ getSlotCurrencyIcon(slotInfo.next_upgrade.currency) }}</span>
                     {{ slotInfo.next_upgrade.price.toLocaleString() }}
-                    <span class="text-sm">{{ slotInfo.next_upgrade.currency === 'crypto' ? 'Crypto' : 'GC' }}</span>
+                    <span class="text-sm">{{ getSlotCurrencyName(slotInfo.next_upgrade.currency) }}</span>
                   </div>
                 </div>
               </div>

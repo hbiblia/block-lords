@@ -1067,6 +1067,26 @@ BEGIN
     INSERT INTO transactions (player_id, type, amount, currency, description)
     VALUES (p_player_id, 'slot_purchase', -v_upgrade.price, 'crypto',
             'Compra de ' || v_upgrade.name);
+
+  ELSIF v_upgrade.currency = 'ron' THEN
+    IF COALESCE(v_player.ron_balance, 0) < v_upgrade.price THEN
+      RETURN json_build_object(
+        'success', false,
+        'error', 'RON insuficiente',
+        'required', v_upgrade.price,
+        'current', COALESCE(v_player.ron_balance, 0)
+      );
+    END IF;
+
+    -- Descontar RON
+    UPDATE players
+    SET ron_balance = ron_balance - v_upgrade.price
+    WHERE id = p_player_id;
+
+    -- Registrar transacción
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'slot_purchase', -v_upgrade.price, 'ron',
+            'Compra de ' || v_upgrade.name);
   END IF;
 
   -- Aumentar slots
