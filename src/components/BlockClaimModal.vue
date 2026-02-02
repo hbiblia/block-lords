@@ -15,6 +15,27 @@ const emit = defineEmits<{
   close: [];
 }>();
 
+// Confetti state
+const showConfetti = ref(false);
+const confettiPieces = ref<{ id: number; left: number; color: string; delay: number; size: number }[]>([]);
+
+function triggerConfetti() {
+  const colors = ['#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6', '#ef4444'];
+  confettiPieces.value = Array.from({ length: 50 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    delay: Math.random() * 0.5,
+    size: Math.random() * 8 + 6,
+  }));
+  showConfetti.value = true;
+
+  setTimeout(() => {
+    showConfetti.value = false;
+    confettiPieces.value = [];
+  }, 3000);
+}
+
 // Estado del captcha
 const selectedBlockId = ref<string | null>(null);
 const captchaVerified = ref(false);
@@ -114,6 +135,7 @@ async function handleClaimAfterCaptcha() {
   const result = await pendingStore.claim(selectedBlockId.value);
   if (result) {
     playSound('reward');
+    triggerConfetti();
     // Reset para el siguiente bloque
     resetCaptcha();
   }
@@ -135,6 +157,22 @@ function getSelectedBlock() {
 
 <template>
   <Teleport to="body">
+    <!-- Confetti Overlay -->
+    <div v-if="showConfetti" class="fixed inset-0 z-[100] pointer-events-none overflow-hidden">
+      <div
+        v-for="piece in confettiPieces"
+        :key="piece.id"
+        class="confetti-piece"
+        :style="{
+          left: `${piece.left}%`,
+          backgroundColor: piece.color,
+          width: `${piece.size}px`,
+          height: `${piece.size}px`,
+          animationDelay: `${piece.delay}s`,
+        }"
+      ></div>
+    </div>
+
     <div
       v-if="show"
       class="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -316,3 +354,72 @@ function getSelectedBlock() {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.confetti-piece {
+  position: absolute;
+  top: -20px;
+  border-radius: 2px;
+  animation: confetti-fall 3s ease-out forwards;
+  transform-origin: center;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  25% {
+    transform: translateY(25vh) rotate(180deg) scale(0.9);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(50vh) rotate(360deg) scale(0.8);
+    opacity: 0.9;
+  }
+  75% {
+    transform: translateY(75vh) rotate(540deg) scale(0.7);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.confetti-piece:nth-child(odd) {
+  animation-name: confetti-fall-wobble;
+}
+
+@keyframes confetti-fall-wobble {
+  0% {
+    transform: translateY(0) translateX(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  25% {
+    transform: translateY(25vh) translateX(20px) rotate(180deg) scale(0.9);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(50vh) translateX(-15px) rotate(360deg) scale(0.8);
+    opacity: 0.9;
+  }
+  75% {
+    transform: translateY(75vh) translateX(10px) rotate(540deg) scale(0.7);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(100vh) translateX(-5px) rotate(720deg) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.confetti-piece:nth-child(3n) {
+  border-radius: 50%;
+}
+
+.confetti-piece:nth-child(4n) {
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+</style>
