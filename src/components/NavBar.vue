@@ -162,7 +162,7 @@ async function handleLogout() {
                   'text-status-danger animate-pulse': energyStatus === 'critical',
                   'text-status-warning': energyStatus !== 'critical'
                 }"
-              >{{ formatNumber(energy) }}</span>
+              >{{ formatNumber(energy) }}/{{ formatNumber(maxEnergy) }}</span>
             </div>
 
             <!-- Internet Bar -->
@@ -193,7 +193,7 @@ async function handleLogout() {
                   'text-status-danger animate-pulse': internetStatus === 'critical',
                   'text-accent-tertiary': internetStatus !== 'critical'
                 }"
-              >{{ formatNumber(internet) }}</span>
+              >{{ formatNumber(internet) }}/{{ formatNumber(maxInternet) }}</span>
             </div>
           </div>
 

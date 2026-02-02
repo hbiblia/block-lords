@@ -377,18 +377,6 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- AdSense Banner (inline) -->
-    <div
-      v-if="authStore.isAuthenticated"
-      class="w-full flex justify-center bg-bg-secondary/50 border-t border-border/30 py-2"
-    >
-      <ins class="adsbygoogle"
-        style="display:block; max-width:728px; width:100%; height:90px;"
-        data-ad-format="horizontal"
-        data-ad-client="ca-pub-7500429866047477"
-        data-ad-slot="7767935377"></ins>
-    </div>
-
     <!-- Footer -->
     <footer class="border-t border-border/30 py-6 text-center">
       <p class="text-text-muted text-sm">Block Lords &copy; 2025</p>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
@@ -432,6 +432,15 @@ onMounted(() => {
   requestWakeLock();
 
   window.addEventListener('block-mined', handleBlockMined as EventListener);
+
+  // Initialize AdSense
+  nextTick(() => {
+    try {
+      ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+    } catch (e) {
+      console.error('AdSense error:', e);
+    }
+  });
 });
 
 onUnmounted(() => {
@@ -926,6 +935,18 @@ onUnmounted(() => {
                   <span class="font-mono" :class="block.is_premium ? 'text-amber-400' : 'text-status-warning'">+{{ (block.reward ?? getBlockReward(block.height)).toFixed(0) }} ₿</span>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- AdSense Banner -->
+          <div class="card p-3 text-center">
+            <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
+            <div class="flex justify-center">
+              <ins class="adsbygoogle"
+                style="display:block; max-width:300px; width:100%; height:250px;"
+                data-ad-format="rectangle"
+                data-ad-client="ca-pub-7500429866047477"
+                data-ad-slot="7767935377"></ins>
             </div>
           </div>
         </div>

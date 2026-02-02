@@ -49,18 +49,20 @@ export const useAuthStore = defineStore('auth', () => {
     return new Date(player.value.premium_until) > new Date();
   });
 
-  // Premium bonus constant
-  const PREMIUM_RESOURCE_BONUS = 500;
+  // Premium max resource limit (fixed for premium users)
+  const PREMIUM_MAX_RESOURCE = 500;
 
-  // Effective max energy/internet with premium bonus
+  // Effective max energy/internet - uses database values for free, fixed for premium
   const effectiveMaxEnergy = computed(() => {
-    const base = player.value?.max_energy ?? 100;
-    return isPremium.value ? base + PREMIUM_RESOURCE_BONUS : base;
+    if (isPremium.value) return PREMIUM_MAX_RESOURCE;
+    // Use database value for free users (defaults to 100 in DB)
+    return player.value?.max_energy ?? 100;
   });
 
   const effectiveMaxInternet = computed(() => {
-    const base = player.value?.max_internet ?? 100;
-    return isPremium.value ? base + PREMIUM_RESOURCE_BONUS : base;
+    if (isPremium.value) return PREMIUM_MAX_RESOURCE;
+    // Use database value for free users (defaults to 100 in DB)
+    return player.value?.max_internet ?? 100;
   });
 
   async function checkAuth() {
