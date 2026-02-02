@@ -442,28 +442,6 @@ onUnmounted(() => {
         <span class="badge" :class="activeRigsCount > 0 ? 'badge-success' : 'badge-warning'">
           {{ t('mining.activeRigs', { count: activeRigsCount }) }}
         </span>
-        <div class="hidden sm:flex items-center gap-1 px-1 py-1 bg-bg-secondary/50 rounded-lg">
-          <button @click="showMarket = true" class="px-2 py-1 sm:px-3 sm:py-1.5 text-sm font-medium rounded-md bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30 transition-all flex items-center gap-1.5">
-            <span class="text-base sm:text-sm">🛒</span>
-            <span class="hidden sm:inline">{{ t('mining.market') }}</span>
-          </button>
-          <button
-            @click="showExchange = true"
-            class="px-2 py-1 sm:px-3 sm:py-1.5 text-sm font-medium rounded-md bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-all flex items-center gap-1.5"
-            :title="t('nav.exchange')"
-          >
-            <span class="text-base sm:text-sm">💱</span>
-            <span class="hidden sm:inline">{{ t('nav.exchange') }}</span>
-          </button>
-          <button
-            @click="showInventory = true"
-            class="px-2 py-1 sm:px-3 sm:py-1.5 text-sm font-medium rounded-md bg-bg-tertiary hover:bg-bg-tertiary/80 transition-all flex items-center gap-1.5"
-            :title="t('nav.inventory')"
-          >
-            <span class="text-base sm:text-sm">🎒</span>
-            <span class="hidden sm:inline">{{ t('nav.inventory') }}</span>
-          </button>
-        </div>
       </div>
     </div>
 
@@ -647,20 +625,20 @@ onUnmounted(() => {
                 <div class="flex items-center gap-2">
                   <!-- Upgrade levels indicator -->
                   <div v-if="(playerRig.hashrate_level ?? 1) > 1 || (playerRig.efficiency_level ?? 1) > 1 || (playerRig.thermal_level ?? 1) > 1"
-                       class="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-purple-500/20 rounded"
-                       :title="`⚡${playerRig.hashrate_level ?? 1} 💡${playerRig.efficiency_level ?? 1} ❄️${playerRig.thermal_level ?? 1}`">
+                       class="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-purple-500/20 rounded cursor-help"
+                       :title="t('mining.tooltips.upgrades') + ` - ⚡${playerRig.hashrate_level ?? 1} 💡${playerRig.efficiency_level ?? 1} ❄️${playerRig.thermal_level ?? 1}`">
                     <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400">⚡{{ playerRig.hashrate_level }}</span>
                     <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">💡{{ playerRig.efficiency_level }}</span>
                     <span v-if="(playerRig.thermal_level ?? 1) > 1" class="text-cyan-400">❄️{{ playerRig.thermal_level }}</span>
                   </div>
-                  <span class="text-[11px] text-text-muted uppercase px-2 py-0.5 bg-bg-tertiary/50 rounded">
+                  <span class="text-[11px] text-text-muted uppercase px-2 py-0.5 bg-bg-tertiary/50 rounded cursor-help" :title="t('mining.tooltips.tier')">
                     {{ playerRig.rig.tier }}
                   </span>
                 </div>
               </div>
 
               <!-- Hashrate -->
-              <div class="flex items-baseline gap-1.5 mb-3">
+              <div class="flex items-baseline gap-1.5 mb-3 cursor-help" :title="t('mining.tooltips.hashrate')">
                 <span
                   class="text-xl font-bold font-mono"
                   :class="playerRig.is_active
@@ -688,15 +666,15 @@ onUnmounted(() => {
 
               <!-- Stats row -->
               <div class="flex items-center gap-4 text-xs text-text-muted mb-3">
-                <span class="flex items-center gap-1">
+                <span class="flex items-center gap-1 cursor-help" :title="t('mining.tooltips.energy')">
                   <span class="text-status-warning">⚡</span>{{ (getUpgradedPower(playerRig) + getRigCoolingEnergy(playerRig.id)).toFixed(0) }}/t
                   <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">(-{{ getEfficiencyBonus(playerRig) }}%)</span>
                   <span v-if="miningStore.getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger">(+{{ miningStore.getPowerPenaltyPercent(playerRig) }}%)</span>
                 </span>
-                <span class="flex items-center gap-1">
+                <span class="flex items-center gap-1 cursor-help" :title="t('mining.tooltips.internet')">
                   <span class="text-accent-tertiary">📡</span>{{ playerRig.rig.internet_consumption }}/t
                 </span>
-                <span v-if="rigCooling[playerRig.id]?.length > 0 || getThermalBonus(playerRig) > 0" class="flex items-center gap-1">
+                <span v-if="rigCooling[playerRig.id]?.length > 0 || getThermalBonus(playerRig) > 0" class="flex items-center gap-1 cursor-help" :title="t('mining.tooltips.cooling')">
                   <span :class="isAnyCoolingDegraded(playerRig.id) ? 'text-status-warning' : 'text-cyan-400'">❄️</span>
                   <span :class="isAnyCoolingDegraded(playerRig.id) ? 'text-status-warning' : 'text-cyan-400'">
                     -{{ (getRigTotalCoolingPower(playerRig.id) + getThermalBonus(playerRig)).toFixed(0) }}°
@@ -706,11 +684,11 @@ onUnmounted(() => {
                     ⚠️
                   </span>
                 </span>
-                <span v-if="rigBoosts[playerRig.id]?.length > 0" class="flex items-center gap-1" :title="rigBoosts[playerRig.id].map((b: any) => b.name).join(', ')">
+                <span v-if="rigBoosts[playerRig.id]?.length > 0" class="flex items-center gap-1 cursor-help" :title="t('mining.tooltips.boosts') + ': ' + rigBoosts[playerRig.id].map((b: any) => b.name).join(', ')">
                   <span class="text-purple-400">🚀</span>
                   <span class="text-purple-400">{{ rigBoosts[playerRig.id].length }}</span>
                 </span>
-                <span v-if="playerRig.is_active && playerRig.activated_at" class="flex items-center gap-1 ml-auto" :key="uptimeKey">
+                <span v-if="playerRig.is_active && playerRig.activated_at" class="flex items-center gap-1 ml-auto cursor-help" :key="uptimeKey" :title="t('mining.tooltips.uptime')">
                   ⏱️ {{ formatUptime(playerRig.activated_at) }}
                 </span>
               </div>
@@ -718,7 +696,7 @@ onUnmounted(() => {
               <!-- Bars -->
               <div class="space-y-2 mb-3">
                 <!-- Temperature -->
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 cursor-help" :title="t('mining.tooltips.temperature')">
                   <span class="text-xs text-text-muted w-6">🌡️</span>
                   <div class="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
                     <div
@@ -732,7 +710,7 @@ onUnmounted(() => {
                   </span>
                 </div>
                 <!-- Condition -->
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 cursor-help" :title="t('mining.tooltips.condition')">
                   <span class="text-xs text-text-muted w-6">🔧</span>
                   <div class="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
                     <div

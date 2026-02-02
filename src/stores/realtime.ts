@@ -10,11 +10,114 @@ export const useRealtimeStore = defineStore('realtime', () => {
   const wasConnected = ref(false); // Track if we were ever connected
   const reconnecting = ref(false);
   const reconnectAttempts = ref(0);
-  const maxReconnectAttempts = 5;
+  const maxReconnectAttempts = 10;
   let reconnectTimeout: number | null = null;
+  let heartbeatInterval: number | null = null;
+  let visibilityHandler: (() => void) | null = null;
+  let onlineHandler: (() => void) | null = null;
+  let offlineHandler: (() => void) | null = null;
 
   const isConnected = computed(() => connected.value);
   const showDisconnectedModal = computed(() => wasConnected.value && !connected.value && !reconnecting.value);
+
+  // Heartbeat para detectar conexiones zombie
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatInterval = window.setInterval(() => {
+      if (connected.value && channels.value.size > 0) {
+        // Verificar si algún canal está en estado problemático
+        let hasActiveChannel = false;
+        channels.value.forEach((channel) => {
+          if (channel.state === 'joined' || channel.state === 'joining') {
+            hasActiveChannel = true;
+          }
+        });
+
+        if (!hasActiveChannel && wasConnected.value) {
+          console.warn('Heartbeat: No hay canales activos, reconectando...');
+          handleChannelError();
+        }
+      }
+    }, 30000); // Check every 30 seconds
+  }
+
+  function stopHeartbeat() {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+  }
+
+  // Manejar visibilidad del documento (cuando el usuario cambia de pestaña)
+  function setupVisibilityHandler() {
+    if (visibilityHandler) return;
+
+    visibilityHandler = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Página visible, verificando conexión...');
+        // Si estábamos conectados pero ya no lo estamos, reconectar
+        if (wasConnected.value && !connected.value) {
+          manualReconnect();
+        } else if (connected.value) {
+          // Verificar que los canales sigan activos
+          let needsReconnect = false;
+          channels.value.forEach((channel) => {
+            if (channel.state !== 'joined' && channel.state !== 'joining') {
+              needsReconnect = true;
+            }
+          });
+          if (needsReconnect) {
+            console.log('Canales en mal estado, reconectando...');
+            manualReconnect();
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', visibilityHandler);
+  }
+
+  // Manejar eventos de red online/offline
+  function setupNetworkHandlers() {
+    if (onlineHandler) return;
+
+    onlineHandler = () => {
+      console.log('Conexión de red restaurada');
+      if (wasConnected.value && !connected.value) {
+        // Esperar un momento para que la red se estabilice
+        setTimeout(() => {
+          manualReconnect();
+        }, 1000);
+      }
+    };
+
+    offlineHandler = () => {
+      console.log('Conexión de red perdida');
+      connected.value = false;
+    };
+
+    window.addEventListener('online', onlineHandler);
+    window.addEventListener('offline', offlineHandler);
+  }
+
+  function cleanupHandlers() {
+    stopHeartbeat();
+
+    if (visibilityHandler) {
+      document.removeEventListener('visibilitychange', visibilityHandler);
+      visibilityHandler = null;
+    }
+
+    if (onlineHandler) {
+      window.removeEventListener('online', onlineHandler);
+      onlineHandler = null;
+    }
+
+    if (offlineHandler) {
+      window.removeEventListener('offline', offlineHandler);
+      offlineHandler = null;
+    }
+  }
 
   function connect() {
     const authStore = useAuthStore();
@@ -43,6 +146,11 @@ export const useRealtimeStore = defineStore('realtime', () => {
     wasConnected.value = true;
     reconnecting.value = false;
     reconnectAttempts.value = 0;
+
+    // Iniciar heartbeat y handlers
+    startHeartbeat();
+    setupVisibilityHandler();
+    setupNetworkHandlers();
   }
 
   function handleChannelError() {
@@ -52,7 +160,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
       reconnecting.value = true;
       reconnectAttempts.value++;
 
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.value), 30000);
+      const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts.value), 15000);
       console.log(`Intentando reconectar en ${delay / 1000}s (intento ${reconnectAttempts.value}/${maxReconnectAttempts})`);
 
       if (reconnectTimeout) {
@@ -60,7 +168,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
       }
 
       reconnectTimeout = window.setTimeout(() => {
-        disconnect();
+        disconnect(false); // No limpiar handlers durante reconexión
         connect();
       }, delay);
     } else {
@@ -72,16 +180,22 @@ export const useRealtimeStore = defineStore('realtime', () => {
   function manualReconnect() {
     reconnectAttempts.value = 0;
     reconnecting.value = true;
-    disconnect();
+    disconnect(false); // No limpiar handlers durante reconexión
     connect();
   }
 
-  function disconnect() {
+  function disconnect(full = true) {
     channels.value.forEach((channel) => {
       supabase.removeChannel(channel);
     });
     channels.value.clear();
     connected.value = false;
+
+    // Solo limpiar handlers en desconexión completa (logout)
+    if (full) {
+      cleanupHandlers();
+      wasConnected.value = false;
+    }
   }
 
   function subscribeToPlayer(playerId: string) {
@@ -148,7 +262,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
           );
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Error en canal de bloques:', status);
+          handleChannelError();
+        }
+      });
 
     channels.value.set('blocks', channel);
   }
@@ -171,7 +290,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
           );
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Error en canal de network_stats:', status);
+          handleChannelError();
+        }
+      });
 
     channels.value.set('network_stats', channel);
   }
@@ -202,6 +326,9 @@ export const useRealtimeStore = defineStore('realtime', () => {
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           console.log('Suscrito a cambios de rigs');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Error en canal de rigs:', status);
+          handleChannelError();
         }
       });
 
@@ -233,6 +360,9 @@ export const useRealtimeStore = defineStore('realtime', () => {
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           console.log('Suscrito a cambios de cooling');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Error en canal de cooling:', status);
+          handleChannelError();
         }
       });
 
@@ -262,7 +392,11 @@ export const useRealtimeStore = defineStore('realtime', () => {
           );
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Error en canal de market:', status);
+        }
+      });
 
     channels.value.set(channelName, channel);
   }

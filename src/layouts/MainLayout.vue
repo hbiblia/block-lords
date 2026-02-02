@@ -221,18 +221,67 @@ onUnmounted(() => {
 
       <!-- Desktop Floating Cards -->
       <div class="hidden sm:flex flex-col gap-2">
+        <!-- Mining Actions (only on mining page) - At top -->
+        <template v-if="isMiningPage">
+          <!-- Market Button -->
+          <button
+            @click="openMarket"
+            class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
+          >
+            <div class="w-8 h-8 rounded-md flex items-center justify-center">
+              <span class="text-lg">🛒</span>
+            </div>
+            <div class="text-left">
+              <div class="text-xs font-semibold text-slate-200">{{ t('mining.market') }}</div>
+              <div class="text-[10px] text-slate-400">{{ t('market.buyRigs') }}</div>
+            </div>
+          </button>
+
+          <!-- Exchange Button -->
+          <button
+            @click="openExchange"
+            class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
+          >
+            <div class="w-8 h-8 rounded-md flex items-center justify-center">
+              <span class="text-lg">💱</span>
+            </div>
+            <div class="text-left">
+              <div class="text-xs font-semibold text-slate-200">{{ t('nav.exchange') }}</div>
+              <div class="text-[10px] text-slate-400">{{ t('exchange.convertCrypto') }}</div>
+            </div>
+          </button>
+
+          <!-- Inventory Button -->
+          <button
+            @click="openInventory"
+            class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
+          >
+            <div class="w-8 h-8 rounded-md flex items-center justify-center">
+              <span class="text-lg">🎒</span>
+            </div>
+            <div class="text-left">
+              <div class="text-xs font-semibold text-slate-200">{{ t('nav.inventory') }}</div>
+              <div class="text-[10px] text-slate-400">{{ t('inventory.manageItems') }}</div>
+            </div>
+          </button>
+
+          <div class="w-full h-px bg-border/30 my-1"></div>
+        </template>
+
         <!-- Pending Blocks Button -->
         <button
           v-if="pendingBlocksStore.hasPending"
           @click="pendingBlocksStore.openModal"
-          class="relative flex items-center justify-start gap-2 px-4 py-3 card hover:bg-bg-tertiary transition-colors ring-2 ring-accent-primary animate-pulse rounded-xl"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-green-500 hover:bg-slate-700 transition-all rounded-lg group animate-border-pulse-green"
         >
-          <span class="text-2xl">⛏️</span>
-          <div class="text-left">
-            <div class="text-xs text-text-muted">{{ t('blocks.claimTitle') }}</div>
-            <div class="text-sm font-bold">{{ pendingBlocksStore.totalReward.toFixed(2) }} ₿</div>
+          <div class="w-8 h-8 rounded-md flex items-center justify-center">
+            <span class="text-lg">⛏️</span>
           </div>
-          <div class="ml-2 px-2 py-0.5 bg-accent-primary/20 text-accent-primary text-xs font-bold rounded-full">
+          <div class="text-left">
+            <div class="text-xs font-semibold text-slate-200">{{ t('blocks.claimTitle') }}</div>
+            <div class="text-[10px] text-slate-400">{{ pendingBlocksStore.totalReward.toFixed(2) }} ₿</div>
+          </div>
+          <div class="ml-auto px-1.5 py-0.5 bg-green-500 text-white text-[10px] font-bold rounded-full">
             {{ pendingBlocksStore.count }}
           </div>
         </button>
@@ -240,17 +289,19 @@ onUnmounted(() => {
         <!-- Missions Button -->
         <button
           @click="missionsStore.openPanel"
-          class="relative flex items-center justify-start gap-2 px-4 py-3 card hover:bg-bg-tertiary transition-colors rounded-xl"
-          :class="{ 'ring-2 ring-status-success animate-pulse': missionsStore.claimableCount > 0 }"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
+          :class="{ 'border-green-500 animate-border-pulse-green': missionsStore.claimableCount > 0 }"
         >
-          <span class="text-2xl">🎯</span>
+          <div class="w-8 h-8 rounded-md flex items-center justify-center">
+            <span class="text-lg">🎯</span>
+          </div>
           <div class="text-left">
-            <div class="text-xs text-text-muted">{{ t('missions.button') }}</div>
-            <div class="text-sm font-bold">{{ missionsStore.completedCount }}/{{ missionsStore.totalCount }}</div>
+            <div class="text-xs font-semibold text-slate-200">{{ t('missions.button') }}</div>
+            <div class="text-[10px] text-slate-400">{{ missionsStore.completedCount }}/{{ missionsStore.totalCount }}</div>
           </div>
           <div
-            class="ml-2 px-2 py-0.5 text-xs font-bold rounded-full"
-            :class="missionsStore.claimableCount > 0 ? 'bg-status-success/20 text-status-success' : 'bg-bg-tertiary text-text-secondary'"
+            class="ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded-full"
+            :class="missionsStore.claimableCount > 0 ? 'bg-status-success text-white' : 'bg-slate-700 text-slate-300'"
           >
             {{ missionsStore.claimableCount > 0 ? missionsStore.claimableCount : `${missionsStore.completedCount}/${missionsStore.totalCount}` }}
           </div>
@@ -259,17 +310,19 @@ onUnmounted(() => {
         <!-- Streak Button -->
         <button
           @click="streakStore.openModal"
-          class="relative flex items-center justify-start gap-2 px-4 py-3 card hover:bg-bg-tertiary transition-colors rounded-xl"
-          :class="{ 'ring-2 ring-accent-primary animate-pulse': streakStore.canClaim }"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
+          :class="{ 'border-green-500 animate-border-pulse-green': streakStore.canClaim }"
         >
-          <span class="text-2xl">🔥</span>
+          <div class="w-8 h-8 rounded-md flex items-center justify-center">
+            <span class="text-lg">🔥</span>
+          </div>
           <div class="text-left">
-            <div class="text-xs text-text-muted">{{ t('streak.button') }}</div>
-            <div class="text-sm font-bold">{{ streakStore.currentStreak }} {{ t('streak.days') }}</div>
+            <div class="text-xs font-semibold text-slate-200">{{ t('streak.button') }}</div>
+            <div class="text-[10px] text-slate-400">{{ streakStore.currentStreak }} {{ t('streak.days') }}</div>
           </div>
           <div
-            class="ml-2 px-2 py-0.5 text-xs font-bold rounded-full"
-            :class="streakStore.canClaim ? 'bg-accent-primary/20 text-accent-primary' : 'bg-bg-tertiary text-text-secondary'"
+            class="ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded-full"
+            :class="streakStore.canClaim ? 'bg-accent-primary text-white' : 'bg-slate-700 text-slate-300'"
           >
             {{ streakStore.canClaim ? '!' : streakStore.currentStreak }}
           </div>
@@ -382,5 +435,19 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Border pulse animation - green */
+.animate-border-pulse-green {
+  animation: border-pulse-green 1.5s ease-in-out infinite;
+}
+
+@keyframes border-pulse-green {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px rgba(34, 197, 94, 0.6);
+  }
 }
 </style>

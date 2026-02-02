@@ -2947,6 +2947,8 @@ DECLARE
   v_crypto_reward DECIMAL(10, 4);
   v_item_type TEXT;
   v_item_id TEXT;
+  v_actual_card_id TEXT;
+  v_card_type TEXT;
 BEGIN
   -- Obtener streak actual
   SELECT * INTO v_streak FROM player_streaks WHERE player_id = p_player_id;
@@ -3017,21 +3019,84 @@ BEGIN
 
   -- Dar item si corresponde
   IF v_item_type = 'prepaid_card' AND v_item_id IS NOT NULL THEN
-    -- Crear tarjeta prepago para el jugador
-    INSERT INTO player_cards (player_id, card_id, code)
-    VALUES (p_player_id, v_item_id, generate_card_code());
+    -- Primero intentar con la tarjeta exacta
+    SELECT id INTO v_actual_card_id
+    FROM prepaid_cards
+    WHERE id = v_item_id
+    LIMIT 1;
+
+    -- Si no existe, buscar la tarjeta más pequeña del mismo tipo
+    IF v_actual_card_id IS NULL THEN
+      -- Extraer el tipo de tarjeta del item_id (ej: 'energy' de 'energy_10')
+      v_card_type := split_part(v_item_id, '_', 1);
+
+      SELECT id INTO v_actual_card_id
+      FROM prepaid_cards
+      WHERE card_type = v_card_type
+      ORDER BY amount ASC
+      LIMIT 1;
+    END IF;
+
+    -- Si encontramos una tarjeta válida, darla al jugador
+    IF v_actual_card_id IS NOT NULL THEN
+      INSERT INTO player_cards (player_id, card_id, code)
+      VALUES (p_player_id, v_actual_card_id, generate_card_code());
+      v_item_id := v_actual_card_id;
+    ELSE
+      -- No hay ninguna tarjeta de ese tipo, dar compensación en gamecoin
+      UPDATE players
+      SET gamecoin_balance = gamecoin_balance + 100
+      WHERE id = p_player_id;
+      v_gamecoin_reward := v_gamecoin_reward + 100;
+      v_item_id := NULL;
+      v_item_type := NULL;
+    END IF;
   ELSIF v_item_type = 'cooling' AND v_item_id IS NOT NULL THEN
-    -- Agregar cooling al inventario
-    INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
-    VALUES (p_player_id, 'cooling', v_item_id, 1)
-    ON CONFLICT (player_id, item_type, item_id)
-    DO UPDATE SET quantity = player_inventory.quantity + 1;
+    -- Verificar si el cooling existe
+    IF EXISTS (SELECT 1 FROM cooling_items WHERE id = v_item_id) THEN
+      INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+      VALUES (p_player_id, 'cooling', v_item_id, 1)
+      ON CONFLICT (player_id, item_type, item_id)
+      DO UPDATE SET quantity = player_inventory.quantity + 1;
+    ELSE
+      -- Buscar el cooling más barato que exista
+      SELECT id INTO v_item_id FROM cooling_items ORDER BY base_price ASC LIMIT 1;
+      IF v_item_id IS NOT NULL THEN
+        INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+        VALUES (p_player_id, 'cooling', v_item_id, 1)
+        ON CONFLICT (player_id, item_type, item_id)
+        DO UPDATE SET quantity = player_inventory.quantity + 1;
+      ELSE
+        -- No hay cooling, dar gamecoin
+        UPDATE players SET gamecoin_balance = gamecoin_balance + 100 WHERE id = p_player_id;
+        v_gamecoin_reward := v_gamecoin_reward + 100;
+        v_item_id := NULL;
+        v_item_type := NULL;
+      END IF;
+    END IF;
   ELSIF v_item_type = 'rig' AND v_item_id IS NOT NULL THEN
-    -- Agregar rig al inventario
-    INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
-    VALUES (p_player_id, 'rig', v_item_id, 1)
-    ON CONFLICT (player_id, item_type, item_id)
-    DO UPDATE SET quantity = player_inventory.quantity + 1;
+    -- Verificar si el rig existe
+    IF EXISTS (SELECT 1 FROM rigs WHERE id = v_item_id) THEN
+      INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+      VALUES (p_player_id, 'rig', v_item_id, 1)
+      ON CONFLICT (player_id, item_type, item_id)
+      DO UPDATE SET quantity = player_inventory.quantity + 1;
+    ELSE
+      -- Buscar el rig más barato que exista
+      SELECT id INTO v_item_id FROM rigs ORDER BY base_price ASC LIMIT 1;
+      IF v_item_id IS NOT NULL THEN
+        INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+        VALUES (p_player_id, 'rig', v_item_id, 1)
+        ON CONFLICT (player_id, item_type, item_id)
+        DO UPDATE SET quantity = player_inventory.quantity + 1;
+      ELSE
+        -- No hay rig, dar gamecoin
+        UPDATE players SET gamecoin_balance = gamecoin_balance + 100 WHERE id = p_player_id;
+        v_gamecoin_reward := v_gamecoin_reward + 100;
+        v_item_id := NULL;
+        v_item_type := NULL;
+      END IF;
+    END IF;
   END IF;
 
   -- Actualizar streak

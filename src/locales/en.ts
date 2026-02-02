@@ -98,6 +98,22 @@ export default {
       volume24h: '24h Volume',
       difficulty: 'Difficulty',
     },
+    topMiners: {
+      title: 'Top Miners',
+      blocks: 'blocks',
+      viewAll: 'View full leaderboard',
+      noData: 'No miners yet',
+    },
+    recentBlocks: {
+      title: 'Recent Blocks',
+      noData: 'No blocks mined yet',
+    },
+    timeAgo: {
+      seconds: '{n}s ago',
+      minutes: '{n}m ago',
+      hours: '{n}h ago',
+      days: '{n}d ago',
+    },
     footer: 'Block Lords © 2025',
   },
 
@@ -202,6 +218,18 @@ export default {
       normal: 'Normal',
       optimal: 'Optimal',
     },
+    tooltips: {
+      hashrate: 'Mining speed. Higher = more chances to mine blocks. Effective rate may be reduced by high temperature or low condition.',
+      energy: 'Energy consumed per tick. Includes rig + cooling. When energy reaches 0, all rigs stop.',
+      internet: 'Internet consumed per tick. When internet reaches 0, all rigs stop.',
+      cooling: 'Reduces temperature gain. Degraded cooling (⚠️) is less effective. Install new cooling in Manage.',
+      temperature: 'Rig temperature. Above 60°C reduces efficiency. Above 80°C causes rapid condition loss.',
+      condition: 'Rig health. At 0% the rig breaks and stops. Repair in Manage menu. Each repair reduces max condition by 5%.',
+      boosts: 'Active power-ups on this rig. Boosts provide temporary bonuses.',
+      uptime: 'Time since rig was turned on.',
+      tier: 'Rig quality tier. Higher tiers have better base stats.',
+      upgrades: 'Permanent upgrades: ⚡Hashrate 💡Efficiency ❄️Thermal',
+    },
     toggleError: 'Could not change rig state. Please try again.',
     connectionError: 'Connection error while changing rig state.',
     confirmStop: 'Stop rig?',
@@ -211,6 +239,7 @@ export default {
   market: {
     title: 'Market',
     subtitle: 'Buy rigs, cooling and prepaid cards',
+    buyRigs: 'Buy rigs and more',
     balance: 'Balance:',
     filters: {
       all: 'All',
@@ -526,6 +555,7 @@ export default {
 
   inventory: {
     title: 'Inventory',
+    manageItems: 'Manage your items',
     empty: 'Your inventory is empty',
     emptyHint: 'Buy items in the market',
     tabs: {
@@ -623,6 +653,7 @@ export default {
 
   exchange: {
     title: 'Exchange',
+    convertCrypto: 'Convert your crypto',
     yourCrypto: 'Your Crypto',
     yourRon: 'Your RON',
     tabs: {

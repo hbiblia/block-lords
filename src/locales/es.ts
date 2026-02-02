@@ -98,6 +98,22 @@ export default {
       volume24h: 'Volumen 24h',
       difficulty: 'Dificultad',
     },
+    topMiners: {
+      title: 'Top Mineros',
+      blocks: 'bloques',
+      viewAll: 'Ver ranking completo',
+      noData: 'Sin mineros aun',
+    },
+    recentBlocks: {
+      title: 'Bloques Recientes',
+      noData: 'Sin bloques minados aun',
+    },
+    timeAgo: {
+      seconds: 'hace {n}s',
+      minutes: 'hace {n}m',
+      hours: 'hace {n}h',
+      days: 'hace {n}d',
+    },
     footer: 'Block Lords © 2025',
   },
 
@@ -202,6 +218,18 @@ export default {
       normal: 'Normal',
       optimal: 'Optimo',
     },
+    tooltips: {
+      hashrate: 'Velocidad de minado. Mayor = mas probabilidad de minar bloques. La tasa efectiva puede reducirse por alta temperatura o baja condicion.',
+      energy: 'Energia consumida por tick. Incluye rig + cooling. Cuando la energia llega a 0, todos los rigs se detienen.',
+      internet: 'Internet consumido por tick. Cuando el internet llega a 0, todos los rigs se detienen.',
+      cooling: 'Reduce la ganancia de temperatura. Cooling degradado (⚠️) es menos efectivo. Instala nuevo cooling en Administrar.',
+      temperature: 'Temperatura del rig. Sobre 60°C reduce eficiencia. Sobre 80°C causa perdida rapida de condicion.',
+      condition: 'Salud del rig. Al 0% el rig se rompe y detiene. Repara en menu Administrar. Cada reparacion reduce la condicion maxima 5%.',
+      boosts: 'Power-ups activos en este rig. Los boosts dan bonuses temporales.',
+      uptime: 'Tiempo desde que el rig se encendio.',
+      tier: 'Nivel de calidad del rig. Niveles mas altos tienen mejores stats base.',
+      upgrades: 'Mejoras permanentes: ⚡Hashrate 💡Eficiencia ❄️Termica',
+    },
     toggleError: 'No se pudo cambiar el estado del rig. Intenta de nuevo.',
     connectionError: 'Error de conexion al cambiar estado del rig.',
     confirmStop: '¿Detener rig?',
@@ -211,6 +239,7 @@ export default {
   market: {
     title: 'Mercado',
     subtitle: 'Compra rigs, refrigeracion y tarjetas prepago',
+    buyRigs: 'Comprar rigs y más',
     balance: 'Balance:',
     filters: {
       all: 'Todos',
@@ -526,6 +555,7 @@ export default {
 
   inventory: {
     title: 'Inventario',
+    manageItems: 'Gestiona tus items',
     empty: 'Tu inventario esta vacio',
     emptyHint: 'Compra items en el mercado',
     tabs: {
@@ -623,6 +653,7 @@ export default {
 
   exchange: {
     title: 'Exchange',
+    convertCrypto: 'Convierte tu crypto',
     yourCrypto: 'Tu Crypto',
     yourRon: 'Tu RON',
     tabs: {

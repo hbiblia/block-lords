@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { exchangeCryptoToGamecoin, exchangeCryptoToRon, getExchangeRates } from '@/utils/api';
@@ -122,13 +122,21 @@ watch(() => props.show, (newVal) => {
   if (newVal) {
     loadRates();
     amount.value = '';
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
   }
 });
 
 onMounted(() => {
   if (props.show) {
     loadRates();
+    document.body.style.overflow = 'hidden';
   }
+});
+
+onUnmounted(() => {
+  document.body.style.overflow = '';
 });
 </script>
 
@@ -175,21 +183,23 @@ onMounted(() => {
         <div class="flex border-b border-border">
           <button
             @click="activeTab = 'gamecoin'"
-            class="flex-1 py-3 text-sm font-medium transition-colors"
+            class="flex-1 py-3 flex flex-col items-center gap-1 transition-colors"
             :class="activeTab === 'gamecoin'
               ? 'bg-status-warning/10 text-status-warning border-b-2 border-status-warning'
               : 'text-text-muted hover:bg-bg-tertiary'"
           >
-            🪙 {{ t('exchange.tabs.gamecoin') }}
+            <span class="text-2xl">🪙</span>
+            <span class="text-xs font-medium">{{ t('exchange.tabs.gamecoin') }}</span>
           </button>
           <button
             @click="activeTab = 'ron'"
-            class="flex-1 py-3 text-sm font-medium transition-colors"
+            class="flex-1 py-3 flex flex-col items-center gap-1 transition-colors"
             :class="activeTab === 'ron'
               ? 'bg-purple-500/10 text-purple-400 border-b-2 border-purple-400'
               : 'text-text-muted hover:bg-bg-tertiary'"
           >
-            💎 {{ t('exchange.tabs.ron') }}
+            <span class="text-2xl">💎</span>
+            <span class="text-xs font-medium">{{ t('exchange.tabs.ron') }}</span>
           </button>
         </div>
 
