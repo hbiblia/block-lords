@@ -520,6 +520,47 @@ export const useMarketStore = defineStore('market', () => {
     }
   }
 
+  // Buy crypto package with Ronin wallet (external RON payment)
+  async function buyCryptoPackageWithWallet(
+    packageId: string,
+    txHash: string,
+    ronAmount: number
+  ): Promise<{ success: boolean; error?: string; cryptoReceived?: number }> {
+    const authStore = useAuthStore();
+    if (!authStore.player) return { success: false, error: 'No player' };
+
+    buying.value = true;
+    try {
+      // Import dynamically to avoid circular dependencies
+      const { verifyRoninPayment } = await import('@/utils/api');
+
+      const result = await verifyRoninPayment(
+        txHash,
+        packageId,
+        authStore.player.id,
+        ronAmount
+      );
+
+      if (result.success) {
+        await authStore.fetchPlayer();
+        playSound('purchase');
+        return {
+          success: true,
+          cryptoReceived: result.cryptoReceived,
+        };
+      }
+
+      playSound('error');
+      return { success: false, error: result.error ?? 'Error verifying payment' };
+    } catch (e: any) {
+      console.error('Error buying crypto with wallet:', e);
+      playSound('error');
+      return { success: false, error: e.message || 'Connection error' };
+    } finally {
+      buying.value = false;
+    }
+  }
+
   function clearState() {
     rigQuantities.value = {};
     coolingQuantities.value = {};
@@ -561,6 +602,7 @@ export const useMarketStore = defineStore('market', () => {
     buyCard,
     buyBoost,
     buyCryptoPackage,
+    buyCryptoPackageWithWallet,
     clearState,
   };
 });

@@ -1,29 +1,30 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch, ref, provide, nextTick, computed } from 'vue';
+import { onMounted, onUnmounted, watch, ref, provide, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 import { useStreakStore } from '@/stores/streak';
 import { useMissionsStore } from '@/stores/missions';
 import { usePendingBlocksStore } from '@/stores/pendingBlocks';
+import { useMiningStore } from '@/stores/mining';
 
 const { t } = useI18n();
-const route = useRoute();
 
-// Check if on mining page for mobile action buttons
-const isMiningPage = computed(() => route.path === '/mining');
+// Global modals state
+const showMarket = ref(false);
+const showInventory = ref(false);
+const showExchange = ref(false);
 
-// Emit events for MiningPage to handle
 function openMarket() {
-  window.dispatchEvent(new CustomEvent('open-market'));
+  showMarket.value = true;
 }
 function openExchange() {
-  window.dispatchEvent(new CustomEvent('open-exchange'));
+  showExchange.value = true;
 }
 function openInventory() {
-  window.dispatchEvent(new CustomEvent('open-inventory'));
+  showInventory.value = true;
 }
+
 import NavBar from '@/components/NavBar.vue';
 import InfoBar from '@/components/InfoBar.vue';
 import ConnectionLostModal from '@/components/ConnectionLostModal.vue';
@@ -32,12 +33,26 @@ import StreakModal from '@/components/StreakModal.vue';
 import MissionsPanel from '@/components/MissionsPanel.vue';
 import ToastContainer from '@/components/ToastContainer.vue';
 import BlockClaimModal from '@/components/BlockClaimModal.vue';
+import MarketModal from '@/components/MarketModal.vue';
+import InventoryModal from '@/components/InventoryModal.vue';
+import ExchangeModal from '@/components/ExchangeModal.vue';
 
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
 const streakStore = useStreakStore();
 const missionsStore = useMissionsStore();
 const pendingBlocksStore = usePendingBlocksStore();
+const miningStore = useMiningStore();
+
+// Handle purchase events - reload mining data
+async function handlePurchased() {
+  await miningStore.loadData();
+}
+
+// Handle inventory used events
+function handleInventoryUsed() {
+  miningStore.loadData();
+}
 
 // InfoBar visibility state - shared via provide/inject
 const infoBarVisible = ref(false);
@@ -52,9 +67,23 @@ function handleBlockMined(event: CustomEvent) {
   }
 }
 
-// Escuchar evento de bloque minado
+// Event handlers for modal opening from other pages
+function handleOpenMarketEvent() {
+  showMarket.value = true;
+}
+function handleOpenExchangeEvent() {
+  showExchange.value = true;
+}
+function handleOpenInventoryEvent() {
+  showInventory.value = true;
+}
+
+// Escuchar eventos
 onMounted(() => {
   window.addEventListener('block-mined', handleBlockMined as EventListener);
+  window.addEventListener('open-market', handleOpenMarketEvent);
+  window.addEventListener('open-exchange', handleOpenExchangeEvent);
+  window.addEventListener('open-inventory', handleOpenInventoryEvent);
 });
 
 // Cargar datos cuando cambia el estado de autenticación
@@ -81,6 +110,9 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
 onUnmounted(() => {
   missionsStore.stopHeartbeat();
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
+  window.removeEventListener('open-market', handleOpenMarketEvent);
+  window.removeEventListener('open-exchange', handleOpenExchangeEvent);
+  window.removeEventListener('open-inventory', handleOpenInventoryEvent);
 });
 </script>
 
@@ -116,6 +148,27 @@ onUnmounted(() => {
     <BlockClaimModal
       :show="pendingBlocksStore.showModal"
       @close="pendingBlocksStore.closeModal"
+    />
+
+    <!-- Market Modal -->
+    <MarketModal
+      :show="showMarket"
+      @close="showMarket = false"
+      @purchased="handlePurchased"
+    />
+
+    <!-- Inventory Modal -->
+    <InventoryModal
+      :show="showInventory"
+      @close="showInventory = false"
+      @used="handleInventoryUsed"
+    />
+
+    <!-- Exchange Modal -->
+    <ExchangeModal
+      :show="showExchange"
+      @close="showExchange = false"
+      @exchanged="authStore.fetchPlayer()"
     />
 
     <!-- Main Content -->
@@ -193,80 +246,74 @@ onUnmounted(() => {
             <span class="mobile-action-label">{{ t('streak.short', 'Streak') }}</span>
           </button>
 
-          <!-- Divider (only on mining page) -->
-          <div v-if="isMiningPage" class="w-px h-8 bg-border/50"></div>
+          <!-- Divider -->
+          <div class="w-px h-8 bg-border/50"></div>
 
-          <!-- Mining Actions (only on mining page) -->
-          <template v-if="isMiningPage">
-            <!-- Market -->
-            <button @click="openMarket" class="mobile-action-btn">
-              <span class="text-xl">🛒</span>
-              <span class="mobile-action-label">{{ t('mining.market', 'Market') }}</span>
-            </button>
+          <!-- Market -->
+          <button @click="openMarket" class="mobile-action-btn">
+            <span class="text-xl">🛒</span>
+            <span class="mobile-action-label">{{ t('mining.market', 'Market') }}</span>
+          </button>
 
-            <!-- Exchange -->
-            <button @click="openExchange" class="mobile-action-btn">
-              <span class="text-xl">💱</span>
-              <span class="mobile-action-label">{{ t('mining.exchange', 'Exchange') }}</span>
-            </button>
+          <!-- Exchange -->
+          <button @click="openExchange" class="mobile-action-btn">
+            <span class="text-xl">💱</span>
+            <span class="mobile-action-label">{{ t('mining.exchange', 'Exchange') }}</span>
+          </button>
 
-            <!-- Inventory -->
-            <button @click="openInventory" class="mobile-action-btn">
-              <span class="text-xl">🎒</span>
-              <span class="mobile-action-label">{{ t('mining.inventory', 'Inventory') }}</span>
-            </button>
-          </template>
+          <!-- Inventory -->
+          <button @click="openInventory" class="mobile-action-btn">
+            <span class="text-xl">🎒</span>
+            <span class="mobile-action-label">{{ t('mining.inventory', 'Inventory') }}</span>
+          </button>
         </div>
       </div>
 
       <!-- Desktop Floating Cards -->
       <div class="hidden sm:flex flex-col gap-2">
-        <!-- Mining Actions (only on mining page) - At top -->
-        <template v-if="isMiningPage">
-          <!-- Market Button -->
-          <button
-            @click="openMarket"
-            class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
-          >
-            <div class="w-8 h-8 rounded-md flex items-center justify-center">
-              <span class="text-lg">🛒</span>
-            </div>
-            <div class="text-left">
-              <div class="text-xs font-semibold text-slate-200">{{ t('mining.market') }}</div>
-              <div class="text-[10px] text-slate-400">{{ t('market.buyRigs') }}</div>
-            </div>
-          </button>
+        <!-- Market Button -->
+        <button
+          @click="openMarket"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
+        >
+          <div class="w-8 h-8 rounded-md flex items-center justify-center">
+            <span class="text-lg">🛒</span>
+          </div>
+          <div class="text-left">
+            <div class="text-xs font-semibold text-slate-200">{{ t('mining.market') }}</div>
+            <div class="text-[10px] text-slate-400">{{ t('market.buyRigs') }}</div>
+          </div>
+        </button>
 
-          <!-- Exchange Button -->
-          <button
-            @click="openExchange"
-            class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
-          >
-            <div class="w-8 h-8 rounded-md flex items-center justify-center">
-              <span class="text-lg">💱</span>
-            </div>
-            <div class="text-left">
-              <div class="text-xs font-semibold text-slate-200">{{ t('nav.exchange') }}</div>
-              <div class="text-[10px] text-slate-400">{{ t('exchange.convertCrypto') }}</div>
-            </div>
-          </button>
+        <!-- Exchange Button -->
+        <button
+          @click="openExchange"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
+        >
+          <div class="w-8 h-8 rounded-md flex items-center justify-center">
+            <span class="text-lg">💱</span>
+          </div>
+          <div class="text-left">
+            <div class="text-xs font-semibold text-slate-200">{{ t('nav.exchange') }}</div>
+            <div class="text-[10px] text-slate-400">{{ t('exchange.convertCrypto') }}</div>
+          </div>
+        </button>
 
-          <!-- Inventory Button -->
-          <button
-            @click="openInventory"
-            class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
-          >
-            <div class="w-8 h-8 rounded-md flex items-center justify-center">
-              <span class="text-lg">🎒</span>
-            </div>
-            <div class="text-left">
-              <div class="text-xs font-semibold text-slate-200">{{ t('nav.inventory') }}</div>
-              <div class="text-[10px] text-slate-400">{{ t('inventory.manageItems') }}</div>
-            </div>
-          </button>
+        <!-- Inventory Button -->
+        <button
+          @click="openInventory"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
+        >
+          <div class="w-8 h-8 rounded-md flex items-center justify-center">
+            <span class="text-lg">🎒</span>
+          </div>
+          <div class="text-left">
+            <div class="text-xs font-semibold text-slate-200">{{ t('nav.inventory') }}</div>
+            <div class="text-[10px] text-slate-400">{{ t('inventory.manageItems') }}</div>
+          </div>
+        </button>
 
-          <div class="w-full h-px bg-border/30 my-1"></div>
-        </template>
+        <div class="w-full h-px bg-border/30 my-1"></div>
 
         <!-- Pending Blocks Button -->
         <button

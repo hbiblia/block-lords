@@ -7,9 +7,6 @@ import { buyRigSlot } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { useWakeLock } from '@/composables/useWakeLock';
 import { useMiningEstimate } from '@/composables/useMiningEstimate';
-import MarketModal from '@/components/MarketModal.vue';
-import InventoryModal from '@/components/InventoryModal.vue';
-import ExchangeModal from '@/components/ExchangeModal.vue';
 import RigEnhanceModal from '@/components/RigEnhanceModal.vue';
 
 // Wake Lock to keep screen on while mining
@@ -29,9 +26,6 @@ const {
 } = useMiningEstimate(authStore.player?.id ?? '', 60000);
 
 // Modals
-const showMarket = ref(false);
-const showInventory = ref(false);
-const showExchange = ref(false);
 const showRigManage = ref(false);
 const selectedRigForManage = ref<typeof miningStore.rigs[0] | null>(null);
 
@@ -116,6 +110,11 @@ function canAffordSlot(): boolean {
     return (authStore.player?.gamecoin_balance ?? 0) >= upgrade.price;
   }
   return (authStore.player?.crypto_balance ?? 0) >= upgrade.price;
+}
+
+// Open market modal via global event
+function openMarket() {
+  window.dispatchEvent(new CustomEvent('open-market'));
 }
 
 // Rig manage modal
@@ -411,22 +410,6 @@ function stopUptimeTimer() {
   }
 }
 
-// Inventory used handler
-function handleInventoryUsed() {
-  miningStore.loadData();
-}
-
-// Handle mobile floating bar events
-function handleOpenMarket() {
-  showMarket.value = true;
-}
-function handleOpenExchange() {
-  showExchange.value = true;
-}
-function handleOpenInventory() {
-  showInventory.value = true;
-}
-
 onMounted(() => {
   miningStore.loadData();
   miningStore.subscribeToRealtime();
@@ -435,10 +418,6 @@ onMounted(() => {
   requestWakeLock();
 
   window.addEventListener('block-mined', handleBlockMined as EventListener);
-  window.addEventListener('inventory-used', handleInventoryUsed as EventListener);
-  window.addEventListener('open-market', handleOpenMarket);
-  window.addEventListener('open-exchange', handleOpenExchange);
-  window.addEventListener('open-inventory', handleOpenInventory);
 });
 
 onUnmounted(() => {
@@ -448,10 +427,6 @@ onUnmounted(() => {
   releaseWakeLock();
 
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
-  window.removeEventListener('inventory-used', handleInventoryUsed as EventListener);
-  window.removeEventListener('open-market', handleOpenMarket);
-  window.removeEventListener('open-exchange', handleOpenExchange);
-  window.removeEventListener('open-inventory', handleOpenInventory);
 });
 </script>
 
@@ -674,7 +649,7 @@ onUnmounted(() => {
           <div v-if="rigs.length === 0" class="card text-center py-12">
             <div class="text-4xl mb-4">🛒</div>
             <p class="text-text-muted mb-4">{{ t('mining.noRigs') }}</p>
-            <button @click="showMarket = true" class="btn-primary">
+            <button @click="openMarket" class="btn-primary">
               {{ t('mining.goToMarket') }}
             </button>
           </div>
@@ -942,27 +917,6 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-
-    <!-- Market Modal -->
-    <MarketModal
-      :show="showMarket"
-      @close="showMarket = false"
-      @purchased="miningStore.loadData()"
-    />
-
-    <!-- Inventory Modal -->
-    <InventoryModal
-      :show="showInventory"
-      @close="showInventory = false"
-      @used="miningStore.loadData()"
-    />
-
-    <!-- Exchange Modal -->
-    <ExchangeModal
-      :show="showExchange"
-      @close="showExchange = false"
-      @exchanged="authStore.fetchPlayer()"
-    />
 
     <!-- Rig Enhance Modal -->
     <RigEnhanceModal

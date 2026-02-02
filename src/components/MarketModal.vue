@@ -997,6 +997,7 @@ watch(() => props.show, (newVal) => {
             </div>
           </div>
 
+          <!-- Purchase buttons -->
           <div class="flex gap-3">
             <button
               @click="cancelPurchase"
@@ -1007,7 +1008,12 @@ watch(() => props.show, (newVal) => {
             <button
               @click="confirmPurchase"
               :disabled="buying"
-              class="flex-1 py-2.5 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/80 transition-colors disabled:opacity-50"
+              :class="[
+                'flex-1 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50',
+                confirmAction.currency === 'ron'
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-400 hover:to-purple-400'
+                  : 'bg-accent-primary text-white hover:bg-accent-primary/80'
+              ]"
             >
               {{ buying ? t('market.confirmPurchase.buying') : t('common.confirm') }}
             </button>

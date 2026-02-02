@@ -851,3 +851,36 @@ export async function applyReferralCode(playerId: string, referralCode: string):
   return data as ApplyReferralResult;
 }
 
+// === RONIN WALLET PAYMENTS ===
+
+export interface VerifyRoninPaymentResult {
+  success: boolean;
+  cryptoReceived?: number;
+  txVerified?: boolean;
+  error?: string;
+}
+
+// Verify a Ronin blockchain transaction for crypto package purchase
+export async function verifyRoninPayment(
+  txHash: string,
+  packageId: string,
+  playerId: string,
+  expectedAmount: number
+): Promise<VerifyRoninPaymentResult> {
+  const { data, error } = await supabase.functions.invoke('verify-ronin-tx', {
+    body: {
+      txHash,
+      packageId,
+      playerId,
+      expectedAmount,
+    },
+  });
+
+  if (error) {
+    console.error('Error verifying Ronin payment:', error);
+    return { success: false, error: error.message || 'Error verifying payment' };
+  }
+
+  return data as VerifyRoninPaymentResult;
+}
+
