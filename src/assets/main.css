@@ -469,3 +469,31 @@ body {
     to { transform: scale(1); opacity: 1; }
   }
 }
+
+/* === FLOATING-VUE TOOLTIPS === */
+.v-popper--theme-tooltip {
+  --v-popper-bg: rgba(15, 16, 30, 0.95);
+  --v-popper-border: rgba(99, 102, 241, 0.3);
+  --v-popper-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.v-popper--theme-tooltip .v-popper__inner {
+  background: var(--v-popper-bg);
+  border: 1px solid var(--v-popper-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #e5e7eb;
+  max-width: 260px;
+  box-shadow: var(--v-popper-shadow);
+  backdrop-filter: blur(8px);
+}
+
+.v-popper--theme-tooltip .v-popper__arrow-outer {
+  border-color: var(--v-popper-border);
+}
+
+.v-popper--theme-tooltip .v-popper__arrow-inner {
+  border-color: var(--v-popper-bg);
+}

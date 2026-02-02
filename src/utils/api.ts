@@ -111,6 +111,43 @@ export async function getPlayerMiningStats(playerId: string) {
   return data;
 }
 
+// === MINING ESTIMATE ===
+
+export interface MiningEstimate {
+  success: boolean;
+  mining: boolean;
+  reason?: 'no_active_rigs' | 'offline';
+  // Hashrate info
+  playerHashrate: number;
+  networkHashrate: number;
+  networkShare: number;  // Porcentaje de la red
+  // Probabilidades
+  difficulty: number;
+  probabilityPerTick: number;  // % por minuto
+  // Estimaciones de tiempo
+  estimatedMinutes: number;
+  estimatedHours: number;
+  minMinutes: number;  // Percentil 25
+  maxMinutes: number;  // Percentil 75
+  // Bloques esperados
+  blocksPerHour: number;
+  blocksPerDay: number;
+  // Info adicional
+  activeRigs: number;
+  activeMiners: number;
+  reputationMultiplier: number;
+  error?: string;
+}
+
+export async function getMiningEstimate(playerId: string): Promise<MiningEstimate> {
+  const { data, error } = await supabase.rpc('get_mining_estimate', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data as MiningEstimate;
+}
+
 // Procesar tick de minería (normalmente llamado por cron/scheduler)
 export async function processMiningTick() {
   const { data, error } = await supabase.rpc('process_mining_tick');

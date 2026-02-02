@@ -5093,6 +5093,175 @@ END;
 $$;
 
 -- =====================================================
+-- FUNCIÓN DE ESTIMACIÓN DE MINERÍA
+-- Calcula tiempo estimado hasta próximo bloque
+-- =====================================================
+
+DROP FUNCTION IF EXISTS get_mining_estimate(UUID) CASCADE;
+
+CREATE OR REPLACE FUNCTION get_mining_estimate(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_network_stats network_stats%ROWTYPE;
+  v_rig RECORD;
+  v_player_hashrate NUMERIC := 0;
+  v_network_hashrate NUMERIC := 0;
+  v_difficulty NUMERIC;
+  v_rep_multiplier NUMERIC;
+  v_temp_penalty NUMERIC;
+  v_condition_penalty NUMERIC;
+  v_effective_hashrate NUMERIC;
+  v_boosts JSON;
+  v_hashrate_mult NUMERIC;
+  v_probability_per_tick NUMERIC;
+  v_player_probability NUMERIC;
+  v_estimated_minutes NUMERIC;
+  v_blocks_per_hour NUMERIC;
+  v_blocks_per_day NUMERIC;
+  v_network_share NUMERIC;
+  v_active_rigs INTEGER := 0;
+  v_total_active_miners INTEGER;
+  -- Para rango de confianza (distribución geométrica)
+  v_min_minutes NUMERIC;  -- percentil 25
+  v_max_minutes NUMERIC;  -- percentil 75
+BEGIN
+  -- Obtener jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Obtener stats de red
+  SELECT * INTO v_network_stats FROM network_stats WHERE id = 'current';
+  v_difficulty := COALESCE(v_network_stats.difficulty, 1000);
+  v_network_hashrate := COALESCE(v_network_stats.hashrate, 0);
+  v_total_active_miners := COALESCE(v_network_stats.active_miners, 0);
+
+  -- Calcular hashrate efectivo del jugador (mismo cálculo que process_mining_tick)
+  FOR v_rig IN
+    SELECT pr.id as rig_id, pr.condition, pr.temperature, r.hashrate,
+           pr.hashrate_level, pr.efficiency_level, pr.thermal_level
+    FROM player_rigs pr
+    JOIN rigs r ON r.id = pr.rig_id
+    WHERE pr.player_id = p_player_id AND pr.is_active = true
+  LOOP
+    v_active_rigs := v_active_rigs + 1;
+
+    -- Obtener multiplicadores de boost del rig
+    v_boosts := get_rig_boost_multipliers(v_rig.rig_id);
+    v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
+
+    -- Multiplicador de reputación
+    IF v_player.reputation_score >= 80 THEN
+      v_rep_multiplier := 1 + (v_player.reputation_score - 80) * 0.01;
+    ELSIF v_player.reputation_score < 50 THEN
+      v_rep_multiplier := 0.5 + (v_player.reputation_score / 100.0);
+    ELSE
+      v_rep_multiplier := 1;
+    END IF;
+
+    -- Penalización por temperatura (>50°C reduce hashrate)
+    v_temp_penalty := 1;
+    IF v_rig.temperature > 50 THEN
+      v_temp_penalty := 1 - ((v_rig.temperature - 50) * 0.014);
+      v_temp_penalty := GREATEST(0.3, v_temp_penalty);
+    END IF;
+
+    -- Penalización por condición
+    v_condition_penalty := 0.2 + (v_rig.condition / 100.0) * 0.8;
+
+    -- Bonus por nivel de hashrate upgrade (10% por nivel extra)
+    v_hashrate_mult := v_hashrate_mult * (1 + (COALESCE(v_rig.hashrate_level, 1) - 1) * 0.10);
+
+    -- Hashrate efectivo de este rig
+    v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty * v_hashrate_mult;
+    v_player_hashrate := v_player_hashrate + v_effective_hashrate;
+  END LOOP;
+
+  -- Si no tiene rigs activos o no está online
+  IF v_active_rigs = 0 OR NOT v_player.is_online THEN
+    RETURN json_build_object(
+      'success', true,
+      'mining', false,
+      'reason', CASE
+        WHEN v_active_rigs = 0 THEN 'no_active_rigs'
+        ELSE 'offline'
+      END,
+      'playerHashrate', 0,
+      'networkHashrate', v_network_hashrate,
+      'difficulty', v_difficulty,
+      'activeMiners', v_total_active_miners
+    );
+  END IF;
+
+  -- Si no hay hashrate en la red (solo este jugador)
+  IF v_network_hashrate = 0 THEN
+    v_network_hashrate := v_player_hashrate;
+  END IF;
+
+  -- Calcular probabilidades
+  -- Probabilidad de que se mine un bloque por tick
+  v_probability_per_tick := v_network_hashrate / v_difficulty;
+
+  -- Probabilidad de que ESTE jugador gane el bloque (dado que se mina uno)
+  v_network_share := v_player_hashrate / v_network_hashrate;
+
+  -- Probabilidad combinada: que se mine un bloque Y lo gane este jugador
+  v_player_probability := v_probability_per_tick * v_network_share;
+
+  -- Tiempo esperado (en minutos, ya que cada tick es 1 minuto)
+  -- E[X] para distribución geométrica = 1/p
+  IF v_player_probability > 0 THEN
+    v_estimated_minutes := 1 / v_player_probability;
+
+    -- Rango de confianza usando percentiles de distribución geométrica
+    -- P(X <= k) = 1 - (1-p)^k
+    -- Para encontrar k dado percentil: k = log(1-percentil) / log(1-p)
+    -- Percentil 25 (25% de chance de encontrar antes)
+    v_min_minutes := LN(1 - 0.25) / LN(1 - v_player_probability);
+    -- Percentil 75 (75% de chance de encontrar antes)
+    v_max_minutes := LN(1 - 0.75) / LN(1 - v_player_probability);
+  ELSE
+    v_estimated_minutes := 999999;
+    v_min_minutes := 999999;
+    v_max_minutes := 999999;
+  END IF;
+
+  -- Bloques esperados por hora y día
+  v_blocks_per_hour := v_player_probability * 60;
+  v_blocks_per_day := v_player_probability * 60 * 24;
+
+  RETURN json_build_object(
+    'success', true,
+    'mining', true,
+    -- Hashrate info
+    'playerHashrate', ROUND(v_player_hashrate, 2),
+    'networkHashrate', ROUND(v_network_hashrate, 2),
+    'networkShare', ROUND(v_network_share * 100, 4),  -- Porcentaje de la red
+    -- Probabilidades
+    'difficulty', v_difficulty,
+    'probabilityPerTick', ROUND(v_player_probability * 100, 6),  -- % por minuto
+    -- Estimaciones de tiempo
+    'estimatedMinutes', ROUND(v_estimated_minutes, 1),
+    'estimatedHours', ROUND(v_estimated_minutes / 60, 2),
+    'minMinutes', ROUND(v_min_minutes, 1),  -- Percentil 25
+    'maxMinutes', ROUND(v_max_minutes, 1),  -- Percentil 75
+    -- Bloques esperados
+    'blocksPerHour', ROUND(v_blocks_per_hour, 4),
+    'blocksPerDay', ROUND(v_blocks_per_day, 2),
+    -- Info adicional
+    'activeRigs', v_active_rigs,
+    'activeMiners', v_total_active_miners,
+    'reputationMultiplier', ROUND(v_rep_multiplier, 2)
+  );
+END;
+$$;
+
+-- =====================================================
 -- GRANTS PARA FUNCIONES
 -- =====================================================
 
@@ -5103,3 +5272,4 @@ GRANT EXECUTE ON FUNCTION get_pending_blocks TO authenticated;
 GRANT EXECUTE ON FUNCTION get_pending_blocks_count TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_block TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_all_blocks TO authenticated;
+GRANT EXECUTE ON FUNCTION get_mining_estimate TO authenticated;

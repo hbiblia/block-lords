@@ -6,6 +6,7 @@ import { useMiningStore } from '@/stores/mining';
 import { buyRigSlot } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { useWakeLock } from '@/composables/useWakeLock';
+import { useMiningEstimate } from '@/composables/useMiningEstimate';
 import MarketModal from '@/components/MarketModal.vue';
 import InventoryModal from '@/components/InventoryModal.vue';
 import ExchangeModal from '@/components/ExchangeModal.vue';
@@ -17,6 +18,16 @@ const { requestWakeLock, releaseWakeLock } = useWakeLock();
 const { t } = useI18n();
 const authStore = useAuthStore();
 const miningStore = useMiningStore();
+
+// Mining estimate
+const {
+  isMining: isEstimateMining,
+  estimatedTimeText,
+  timeRangeText,
+  blocksPerDayText,
+  loading: estimateLoading,
+  refresh: refreshEstimate
+} = useMiningEstimate(authStore.player?.id ?? '', 60000);
 
 // Modals
 const showMarket = ref(false);
@@ -121,6 +132,7 @@ function closeRigManage() {
 
 async function handleRigUpdated() {
   await miningStore.loadData();
+  refreshEstimate();
   // Update selected rig reference with fresh data
   if (selectedRigForManage.value) {
     const updatedRig = miningStore.rigs.find(r => r.id === selectedRigForManage.value?.id);
@@ -202,6 +214,7 @@ async function handleToggleRig(rigId: string) {
 
   // Turn on - handled by store
   await miningStore.toggleRig(rigId);
+  refreshEstimate();
 }
 
 async function confirmStopRig() {
@@ -218,6 +231,7 @@ async function confirmStopRig() {
     playSound('click');
     showConfirmStopRig.value = false;
     rigToStop.value = null;
+    refreshEstimate();
   }
 
   stoppingRig.value = false;
@@ -551,13 +565,8 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Stats Grid -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div class="bg-accent-primary/10 border border-accent-primary/30 rounded-xl p-3 text-center relative">
-              <div class="absolute top-1 right-1.5 text-[10px] text-accent-primary/70">👤</div>
-              <div class="text-lg font-bold text-status-warning">{{ miningChance.toFixed(2) }}%</div>
-              <div class="text-[10px] text-text-muted">{{ t('mining.probability') }}</div>
-            </div>
+          <!-- Stats Grid (Network stats only) -->
+          <div class="grid grid-cols-3 gap-3">
             <div class="bg-bg-secondary rounded-xl p-3 text-center relative">
               <div class="absolute top-1 right-1.5 text-[10px] text-text-muted/50">🌐</div>
               <div class="text-lg font-bold text-accent-tertiary">{{ networkStats.difficulty?.toLocaleString() ?? 0 }}</div>
@@ -585,6 +594,63 @@ onUnmounted(() => {
             <div class="text-6xl mb-4 animate-bounce">🎉</div>
             <div class="text-2xl font-bold text-status-success">{{ t('mining.blockMined') }}</div>
             <div class="text-lg text-white">#{{ lastBlockFound?.height }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Stats - Above Rigs -->
+      <div class="card mb-6">
+        <h3 class="font-semibold mb-4 flex items-center gap-2">
+          <span>📊</span> {{ t('mining.yourStats') }}
+        </h3>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div class="bg-bg-secondary rounded-xl p-3 text-center">
+            <div class="text-lg font-bold font-mono">
+              <span :class="effectiveHashrate < totalHashrate ? 'text-status-warning' : ''">{{ Math.round(effectiveHashrate).toLocaleString() }}</span>
+            </div>
+            <div class="text-[10px] text-text-muted">{{ t('mining.hashrate') }}</div>
+          </div>
+          <div class="bg-bg-secondary rounded-xl p-3 text-center">
+            <div class="text-lg font-bold font-mono">{{ activeRigsCount }} / {{ rigs.length }}</div>
+            <div class="text-[10px] text-text-muted">{{ t('mining.activeRigsLabel') }}</div>
+          </div>
+          <div
+            v-tooltip="t('mining.tooltips.probPerBlock')"
+            class="bg-bg-secondary rounded-xl p-3 text-center cursor-help"
+          >
+            <div class="text-lg font-bold font-mono text-status-warning">{{ miningChance.toFixed(2) }}%</div>
+            <div class="text-[10px] text-text-muted">{{ t('mining.probPerBlock') }}</div>
+          </div>
+          <!-- Mining Estimate Stats -->
+          <div
+            v-if="isEstimateMining && estimatedTimeText"
+            v-tooltip="t('mining.tooltips.nextBlock')"
+            class="bg-accent-primary/10 border border-accent-primary/30 rounded-xl p-3 text-center cursor-help"
+          >
+            <div class="text-lg font-bold font-mono text-accent-primary">{{ estimatedTimeText }}</div>
+            <div class="text-[10px] text-text-muted flex items-center justify-center gap-1">
+              <span>⏱️</span> {{ t('mining.nextBlock') }}
+            </div>
+          </div>
+          <div
+            v-if="isEstimateMining && timeRangeText"
+            v-tooltip="t('mining.tooltips.estimateRange')"
+            class="bg-bg-secondary rounded-xl p-3 text-center cursor-help"
+          >
+            <div class="text-lg font-bold font-mono text-text-muted">{{ timeRangeText }}</div>
+            <div class="text-[10px] text-text-muted">{{ t('mining.estimateRange') }}</div>
+          </div>
+          <div
+            v-if="isEstimateMining && blocksPerDayText"
+            v-tooltip="t('mining.tooltips.blocksPerDay')"
+            class="bg-bg-secondary rounded-xl p-3 text-center cursor-help"
+          >
+            <div class="text-lg font-bold font-mono text-status-success">{{ blocksPerDayText }}</div>
+            <div class="text-[10px] text-text-muted">{{ t('mining.blocksPerDay') }}</div>
+          </div>
+          <!-- Loading state -->
+          <div v-if="estimateLoading && !isEstimateMining" class="bg-bg-secondary rounded-xl p-3 text-center col-span-3">
+            <div class="text-sm text-text-muted animate-pulse">{{ t('mining.calculatingEstimate', 'Calculando...') }}</div>
           </div>
         </div>
       </div>
@@ -636,20 +702,20 @@ onUnmounted(() => {
                 <div class="flex items-center gap-2">
                   <!-- Upgrade levels indicator -->
                   <div v-if="(playerRig.hashrate_level ?? 1) > 1 || (playerRig.efficiency_level ?? 1) > 1 || (playerRig.thermal_level ?? 1) > 1"
-                       class="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-purple-500/20 rounded cursor-help"
-                       :title="t('mining.tooltips.upgrades') + ` - ⚡${playerRig.hashrate_level ?? 1} 💡${playerRig.efficiency_level ?? 1} ❄️${playerRig.thermal_level ?? 1}`">
+                       v-tooltip="t('mining.tooltips.upgrades') + ` - ⚡${playerRig.hashrate_level ?? 1} 💡${playerRig.efficiency_level ?? 1} ❄️${playerRig.thermal_level ?? 1}`"
+                       class="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-purple-500/20 rounded cursor-help">
                     <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400">⚡{{ playerRig.hashrate_level }}</span>
                     <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">💡{{ playerRig.efficiency_level }}</span>
                     <span v-if="(playerRig.thermal_level ?? 1) > 1" class="text-cyan-400">❄️{{ playerRig.thermal_level }}</span>
                   </div>
-                  <span class="text-[11px] text-text-muted uppercase px-2 py-0.5 bg-bg-tertiary/50 rounded cursor-help" :title="t('mining.tooltips.tier')">
+                  <span v-tooltip="t('mining.tooltips.tier')" class="text-[11px] text-text-muted uppercase px-2 py-0.5 bg-bg-tertiary/50 rounded cursor-help">
                     {{ playerRig.rig.tier }}
                   </span>
                 </div>
               </div>
 
               <!-- Hashrate -->
-              <div class="flex items-baseline gap-1.5 mb-3 cursor-help" :title="t('mining.tooltips.hashrate')">
+              <div v-tooltip="t('mining.tooltips.hashrate')" class="flex items-baseline gap-1.5 mb-3 cursor-help">
                 <span
                   class="text-xl font-bold font-mono"
                   :class="playerRig.is_active
@@ -677,15 +743,15 @@ onUnmounted(() => {
 
               <!-- Stats row -->
               <div class="flex items-center gap-4 text-xs text-text-muted mb-3">
-                <span class="flex items-center gap-1 cursor-help" :title="t('mining.tooltips.energy')">
+                <span v-tooltip="t('mining.tooltips.energy')" class="flex items-center gap-1 cursor-help">
                   <span class="text-status-warning">⚡</span>{{ (getUpgradedPower(playerRig) + getRigCoolingEnergy(playerRig.id)).toFixed(0) }}/t
                   <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">(-{{ getEfficiencyBonus(playerRig) }}%)</span>
                   <span v-if="miningStore.getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger">(+{{ miningStore.getPowerPenaltyPercent(playerRig) }}%)</span>
                 </span>
-                <span class="flex items-center gap-1 cursor-help" :title="t('mining.tooltips.internet')">
+                <span v-tooltip="t('mining.tooltips.internet')" class="flex items-center gap-1 cursor-help">
                   <span class="text-accent-tertiary">📡</span>{{ playerRig.rig.internet_consumption }}/t
                 </span>
-                <span v-if="rigCooling[playerRig.id]?.length > 0 || getThermalBonus(playerRig) > 0" class="flex items-center gap-1 cursor-help" :title="t('mining.tooltips.cooling')">
+                <span v-if="rigCooling[playerRig.id]?.length > 0 || getThermalBonus(playerRig) > 0" v-tooltip="t('mining.tooltips.cooling')" class="flex items-center gap-1 cursor-help">
                   <span :class="isAnyCoolingDegraded(playerRig.id) ? 'text-status-warning' : 'text-cyan-400'">❄️</span>
                   <span :class="isAnyCoolingDegraded(playerRig.id) ? 'text-status-warning' : 'text-cyan-400'">
                     -{{ (getRigTotalCoolingPower(playerRig.id) + getThermalBonus(playerRig)).toFixed(0) }}°
@@ -695,11 +761,11 @@ onUnmounted(() => {
                     ⚠️
                   </span>
                 </span>
-                <span v-if="rigBoosts[playerRig.id]?.length > 0" class="flex items-center gap-1 cursor-help" :title="t('mining.tooltips.boosts') + ': ' + rigBoosts[playerRig.id].map((b: any) => b.name).join(', ')">
+                <span v-if="rigBoosts[playerRig.id]?.length > 0" v-tooltip="t('mining.tooltips.boosts') + ': ' + rigBoosts[playerRig.id].map((b: any) => b.name).join(', ')" class="flex items-center gap-1 cursor-help">
                   <span class="text-purple-400">🚀</span>
                   <span class="text-purple-400">{{ rigBoosts[playerRig.id].length }}</span>
                 </span>
-                <span v-if="playerRig.is_active && playerRig.activated_at" class="flex items-center gap-1 ml-auto cursor-help" :key="uptimeKey" :title="t('mining.tooltips.uptime')">
+                <span v-if="playerRig.is_active && playerRig.activated_at" v-tooltip="t('mining.tooltips.uptime')" class="flex items-center gap-1 ml-auto cursor-help" :key="uptimeKey">
                   ⏱️ {{ formatUptime(playerRig.activated_at) }}
                 </span>
               </div>
@@ -707,7 +773,7 @@ onUnmounted(() => {
               <!-- Bars -->
               <div class="space-y-2 mb-3">
                 <!-- Temperature -->
-                <div class="flex items-center gap-2 cursor-help" :title="t('mining.tooltips.temperature')">
+                <div v-tooltip="t('mining.tooltips.temperature')" class="flex items-center gap-2 cursor-help">
                   <span class="text-xs text-text-muted w-6">🌡️</span>
                   <div class="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
                     <div
@@ -721,7 +787,7 @@ onUnmounted(() => {
                   </span>
                 </div>
                 <!-- Condition -->
-                <div class="flex items-center gap-2 cursor-help" :title="t('mining.tooltips.condition')">
+                <div v-tooltip="t('mining.tooltips.condition')" class="flex items-center gap-2 cursor-help">
                   <span class="text-xs text-text-muted w-6">🔧</span>
                   <div class="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
                     <div
@@ -868,31 +934,6 @@ onUnmounted(() => {
                   </span>
                   <span class="font-mono" :class="block.is_premium ? 'text-amber-400' : 'text-status-warning'">+{{ (block.reward ?? getBlockReward(block.height)).toFixed(0) }} ₿</span>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Quick Stats -->
-          <div class="card">
-            <h3 class="font-semibold mb-4 flex items-center gap-2">
-              <span>📊</span> {{ t('mining.yourStats') }}
-            </h3>
-            <div class="space-y-3">
-              <div class="flex justify-between items-center">
-                <span class="text-text-muted">{{ t('mining.hashrate') }}</span>
-                <span class="font-mono font-medium">
-                  <span :class="effectiveHashrate < totalHashrate ? 'text-status-warning' : ''">{{ Math.round(effectiveHashrate).toLocaleString() }}</span>
-                  <span class="text-text-muted">/{{ totalHashrate.toLocaleString() }}</span>
-                  <span class="text-xs text-text-muted ml-1">H/s</span>
-                </span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-text-muted">{{ t('mining.activeRigsLabel') }}</span>
-                <span class="font-mono font-medium">{{ activeRigsCount }} / {{ rigs.length }}</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-text-muted">{{ t('mining.probPerBlock') }}</span>
-                <span class="font-mono font-medium text-status-warning">{{ miningChance.toFixed(2) }}%</span>
               </div>
             </div>
           </div>
