@@ -139,14 +139,9 @@ function handleClose() {
 
         <!-- Content -->
         <div class="p-4 overflow-y-auto max-h-[60vh]">
-          <!-- Loading -->
-          <div v-if="streakStore.loading" class="text-center py-12 text-text-muted">
-            {{ t('common.loading') }}
-          </div>
-
           <!-- Claim Result -->
           <div
-            v-else-if="streakStore.lastClaimResult"
+            v-if="streakStore.lastClaimResult"
             class="text-center py-8"
           >
             <div class="text-6xl mb-4 animate-bounce">🎉</div>
@@ -181,11 +176,17 @@ function handleClose() {
             <!-- Stats -->
             <div class="grid grid-cols-2 gap-3 mb-6">
               <div class="bg-bg-secondary rounded-xl p-4 text-center">
-                <div class="text-3xl font-bold text-status-warning">{{ currentDay }}</div>
+                <div v-if="streakStore.loading" class="flex justify-center">
+                  <span class="animate-spin w-6 h-6 border-2 border-status-warning border-t-transparent rounded-full"></span>
+                </div>
+                <div v-else class="text-3xl font-bold text-status-warning">{{ currentDay }}</div>
                 <div class="text-xs text-text-muted">{{ t('streak.currentStreak') }}</div>
               </div>
               <div class="bg-bg-secondary rounded-xl p-4 text-center">
-                <div class="text-3xl font-bold text-accent-primary">{{ streakStore.longestStreak }}</div>
+                <div v-if="streakStore.loading" class="flex justify-center">
+                  <span class="animate-spin w-6 h-6 border-2 border-accent-primary border-t-transparent rounded-full"></span>
+                </div>
+                <div v-else class="text-3xl font-bold text-accent-primary">{{ streakStore.longestStreak }}</div>
                 <div class="text-xs text-text-muted">{{ t('streak.longestStreak') }}</div>
               </div>
             </div>

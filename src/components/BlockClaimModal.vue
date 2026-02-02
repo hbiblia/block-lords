@@ -172,13 +172,8 @@ function getSelectedBlock() {
 
         <!-- Content -->
         <div class="p-4 overflow-y-auto max-h-[60vh]">
-          <!-- Loading -->
-          <div v-if="pendingStore.loading" class="text-center py-12 text-text-muted">
-            {{ t('common.loading') }}
-          </div>
-
           <!-- Empty State -->
-          <div v-else-if="!pendingStore.hasPending" class="text-center py-12">
+          <div v-if="!pendingStore.loading && !pendingStore.hasPending" class="text-center py-12">
             <div class="text-5xl mb-4">✨</div>
             <h3 class="text-lg font-medium mb-2">{{ t('blocks.noPending') }}</h3>
             <p class="text-text-muted text-sm">{{ t('blocks.noPendingDesc') }}</p>
@@ -233,7 +228,10 @@ function getSelectedBlock() {
             <div class="bg-gradient-to-r from-accent-primary/20 to-accent-secondary/20 rounded-xl p-4 mb-4">
               <div class="text-center">
                 <div class="text-sm text-text-muted mb-1">{{ t('blocks.totalReward') }}</div>
-                <div class="text-3xl font-bold text-accent-primary">
+                <div v-if="pendingStore.loading && pendingStore.pendingBlocks.length === 0" class="flex justify-center py-2">
+                  <span class="animate-spin w-6 h-6 border-2 border-accent-primary border-t-transparent rounded-full"></span>
+                </div>
+                <div v-else class="text-3xl font-bold text-accent-primary">
                   {{ pendingStore.totalReward.toFixed(2) }} ₿
                 </div>
               </div>
@@ -251,6 +249,28 @@ function getSelectedBlock() {
             <div class="space-y-2">
               <h3 class="text-sm font-medium text-text-muted mb-2">{{ t('blocks.pendingList') }}</h3>
 
+              <!-- Skeleton Loading -->
+              <template v-if="pendingStore.loading && pendingStore.pendingBlocks.length === 0">
+                <div
+                  v-for="i in 3"
+                  :key="i"
+                  class="flex items-center justify-between p-3 bg-bg-secondary rounded-lg animate-pulse"
+                >
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-bg-tertiary"></div>
+                    <div>
+                      <div class="h-4 bg-bg-tertiary rounded w-24 mb-2"></div>
+                      <div class="h-3 bg-bg-tertiary rounded w-12"></div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div class="h-5 bg-bg-tertiary rounded w-16"></div>
+                    <div class="h-8 bg-bg-tertiary rounded w-16"></div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Actual Blocks -->
               <div
                 v-for="block in pendingStore.pendingBlocks"
                 :key="block.id"

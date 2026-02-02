@@ -88,13 +88,21 @@ function formatProgress(progress: number, target: number): string {
 
         <!-- Content -->
         <div class="p-4 overflow-y-auto max-h-[60vh]">
-          <!-- Loading -->
-          <div v-if="missionsStore.loading" class="text-center py-12 text-text-muted">
-            {{ t('missions.loading') }}
-          </div>
-
           <!-- Missions List -->
-          <div v-else class="space-y-3">
+          <div class="space-y-3">
+            <!-- Inline Loading -->
+            <div v-if="missionsStore.loading && missionsStore.missions.length === 0" class="space-y-3">
+              <div v-for="i in 3" :key="i" class="bg-bg-secondary rounded-xl p-4 border-l-4 border-border/50 animate-pulse">
+                <div class="flex items-start gap-3 mb-2">
+                  <div class="w-8 h-8 bg-bg-tertiary rounded"></div>
+                  <div class="flex-1">
+                    <div class="h-4 bg-bg-tertiary rounded w-32 mb-2"></div>
+                    <div class="h-3 bg-bg-tertiary rounded w-48"></div>
+                  </div>
+                </div>
+                <div class="h-2 bg-bg-tertiary rounded-full"></div>
+              </div>
+            </div>
             <div
               v-for="mission in missionsStore.missions"
               :key="mission.id"
@@ -172,7 +180,7 @@ function formatProgress(progress: number, target: number): string {
             </div>
 
             <!-- Empty State -->
-            <div v-if="missionsStore.missions.length === 0" class="text-center py-8 text-text-muted">
+            <div v-if="!missionsStore.loading && missionsStore.missions.length === 0" class="text-center py-8 text-text-muted">
               <div class="text-4xl mb-3">📋</div>
               <p>{{ t('missions.noMissions') }}</p>
               <p class="text-xs mt-1">{{ t('missions.comeBackTomorrow') }}</p>
