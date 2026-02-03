@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { getPendingBlocks, getPendingBlocksCount, claimBlock, claimAllBlocks } from '@/utils/api';
+import { getPendingBlocks, getPendingBlocksCount, claimBlock, claimAllBlocks, claimAllBlocksWithRon } from '@/utils/api';
 import { useAuthStore } from './auth';
 import { useToastStore } from './toast';
 
@@ -160,6 +160,68 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
     }
   }
 
+  // Claim all with RON payment (instant, 0.001 RON per block)
+  const RON_COST_PER_BLOCK = 0.001;
+
+  const totalRonCost = computed(() => count.value * RON_COST_PER_BLOCK);
+
+  async function claimAllWithRon() {
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) {
+      error.value = 'No autenticado';
+      return null;
+    }
+
+    claiming.value = true;
+    error.value = null;
+
+    // Save original state for rollback
+    const originalBlocks = [...pendingBlocks.value];
+
+    try {
+      const result = await claimAllBlocksWithRon(authStore.player.id);
+
+      if (result.success) {
+        // Clear local list AFTER successful API call
+        pendingBlocks.value = [];
+
+        // Update player balance - if this fails, blocks are still claimed on server
+        try {
+          await authStore.fetchPlayer();
+        } catch (e) {
+          console.warn('Error updating player after claim all with RON, will retry:', e);
+          // Schedule a retry in background
+          setTimeout(() => authStore.fetchPlayer().catch(() => {}), 2000);
+        }
+
+        // Toast de éxito
+        const toastStore = useToastStore();
+        toastStore.success(`¡${result.blocks_claimed} bloques reclamados! +${result.total_reward} ₿ (-${result.ron_spent} RON)`);
+
+        // Cerrar modal
+        showModal.value = false;
+
+        return result;
+      } else {
+        error.value = result.error ?? 'Error al reclamar bloques con RON';
+        // Show specific error for insufficient RON
+        if (result.error === 'RON insuficiente') {
+          const toastStore = useToastStore();
+          toastStore.error(`RON insuficiente. Necesitas ${result.required} RON (tienes ${result.current})`);
+        }
+        return null;
+      }
+    } catch (e) {
+      // Rollback on network error
+      pendingBlocks.value = originalBlocks;
+      error.value = 'Error de conexión. Intenta de nuevo.';
+      console.error('Error claiming all blocks with RON:', e);
+      return null;
+    } finally {
+      claiming.value = false;
+    }
+  }
+
   function openModal() {
     showModal.value = true;
     fetchPendingBlocks();
@@ -190,11 +252,14 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
     showModal,
     count,
     totalReward,
+    totalRonCost,
+    RON_COST_PER_BLOCK,
     hasPending,
     fetchPendingBlocks,
     fetchCount,
     claim,
     claimAll,
+    claimAllWithRon,
     openModal,
     closeModal,
     addPendingBlock,

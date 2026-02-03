@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted, nextTick } from 'vue';
+import { ref, watch, onUnmounted, nextTick, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { usePendingBlocksStore } from '@/stores/pendingBlocks';
+import { useAuthStore } from '@/stores/auth';
 import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 const pendingStore = usePendingBlocksStore();
+const authStore = useAuthStore();
+
+// RON balance check
+const ronBalance = computed(() => authStore.player?.ron_balance ?? 0);
+const canAffordRonClaim = computed(() => ronBalance.value >= pendingStore.totalRonCost);
 
 const props = defineProps<{
   show: boolean;
@@ -151,6 +157,17 @@ function handleClose() {
   emit('close');
 }
 
+// Claim all blocks with RON payment
+async function handleClaimAllWithRon() {
+  if (!canAffordRonClaim.value) return;
+
+  const result = await pendingStore.claimAllWithRon();
+  if (result) {
+    playSound('reward');
+    triggerConfetti();
+  }
+}
+
 function getSelectedBlock() {
   return pendingStore.pendingBlocks.find(b => b.id === selectedBlockId.value);
 }
@@ -274,6 +291,38 @@ function getSelectedBlock() {
                   {{ pendingStore.totalReward.toFixed(2) }} ₿
                 </div>
               </div>
+            </div>
+
+            <!-- Claim All with RON Button -->
+            <div v-if="pendingStore.hasPending" class="mb-4">
+              <button
+                @click="handleClaimAllWithRon"
+                :disabled="pendingStore.claiming || !canAffordRonClaim"
+                class="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <span v-if="pendingStore.claiming" class="flex items-center gap-2">
+                  <span class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+                  Reclamando...
+                </span>
+                <span v-else class="flex items-center gap-2">
+                  ⚡ Reclamar Todo ({{ pendingStore.totalRonCost.toFixed(2) }} RON)
+                </span>
+              </button>
+              <div class="text-center mt-2 text-xs">
+                <span v-if="canAffordRonClaim" class="text-text-muted">
+                  Tu balance: {{ ronBalance.toFixed(2) }} RON • {{ pendingStore.RON_COST_PER_BLOCK }} RON/bloque
+                </span>
+                <span v-else class="text-status-error">
+                  RON insuficiente (necesitas {{ pendingStore.totalRonCost.toFixed(2) }} RON, tienes {{ ronBalance.toFixed(2) }})
+                </span>
+              </div>
+            </div>
+
+            <!-- Separator -->
+            <div class="flex items-center gap-3 mb-4">
+              <div class="flex-1 h-px bg-border/50"></div>
+              <span class="text-xs text-text-muted">o reclama gratis uno a uno</span>
+              <div class="flex-1 h-px bg-border/50"></div>
             </div>
 
             <!-- Info about verification -->

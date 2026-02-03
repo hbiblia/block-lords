@@ -6046,6 +6046,96 @@ $$;
 GRANT EXECUTE ON FUNCTION get_player_pity_stats TO authenticated;
 
 -- =====================================================
+-- CLAIM ALL BLOCKS WITH RON (Instant Claim)
+-- Permite reclamar todos los bloques pendientes pagando RON
+-- Costo: 0.01 RON por bloque
+-- =====================================================
+
+DROP FUNCTION IF EXISTS claim_all_blocks_with_ron(UUID) CASCADE;
+CREATE OR REPLACE FUNCTION claim_all_blocks_with_ron(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_pending_count INTEGER;
+  v_total_reward DECIMAL := 0;
+  v_ron_cost_per_block DECIMAL := 0.001;
+  v_total_ron_cost DECIMAL;
+  v_pending RECORD;
+BEGIN
+  -- Verificar jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Contar bloques pendientes y calcular reward total
+  SELECT COUNT(*), COALESCE(SUM(reward), 0)
+  INTO v_pending_count, v_total_reward
+  FROM pending_blocks
+  WHERE player_id = p_player_id AND claimed = false;
+
+  -- Verificar que hay bloques pendientes
+  IF v_pending_count = 0 THEN
+    RETURN json_build_object('success', false, 'error', 'No hay bloques pendientes');
+  END IF;
+
+  -- Calcular costo total en RON
+  v_total_ron_cost := v_pending_count * v_ron_cost_per_block;
+
+  -- Verificar balance de RON
+  IF COALESCE(v_player.ron_balance, 0) < v_total_ron_cost THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'RON insuficiente',
+      'required', v_total_ron_cost,
+      'current', COALESCE(v_player.ron_balance, 0),
+      'blocks_count', v_pending_count,
+      'cost_per_block', v_ron_cost_per_block
+    );
+  END IF;
+
+  -- Descontar RON
+  UPDATE players
+  SET ron_balance = ron_balance - v_total_ron_cost
+  WHERE id = p_player_id;
+
+  -- Marcar todos los bloques como reclamados
+  UPDATE pending_blocks
+  SET claimed = true, claimed_at = NOW()
+  WHERE player_id = p_player_id AND claimed = false;
+
+  -- Dar crypto al jugador
+  UPDATE players
+  SET crypto_balance = crypto_balance + v_total_reward,
+      total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_total_reward
+  WHERE id = p_player_id;
+
+  -- Registrar transacción de RON gastado
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'instant_claim_fee', -v_total_ron_cost, 'ron',
+          'Claim instantáneo de ' || v_pending_count || ' bloques');
+
+  -- Registrar transacción de crypto recibido
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'block_claim_instant', v_total_reward, 'crypto',
+          'Reclamados ' || v_pending_count || ' bloques (instant)');
+
+  RETURN json_build_object(
+    'success', true,
+    'blocks_claimed', v_pending_count,
+    'total_reward', v_total_reward,
+    'ron_spent', v_total_ron_cost,
+    'cost_per_block', v_ron_cost_per_block
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION claim_all_blocks_with_ron TO authenticated;
+
+-- =====================================================
 -- GRANTS PARA FUNCIONES
 -- =====================================================
 
@@ -6056,4 +6146,5 @@ GRANT EXECUTE ON FUNCTION get_pending_blocks TO authenticated;
 GRANT EXECUTE ON FUNCTION get_pending_blocks_count TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_block TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_all_blocks TO authenticated;
+GRANT EXECUTE ON FUNCTION claim_all_blocks_with_ron TO authenticated;
 GRANT EXECUTE ON FUNCTION get_mining_estimate TO authenticated;

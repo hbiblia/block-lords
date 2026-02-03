@@ -712,6 +712,14 @@ export async function claimAllBlocks(playerId: string): Promise<any> {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function claimAllBlocksWithRon(playerId: string): Promise<any> {
+  // Critical: claiming blocks with RON payment is a financial operation
+  return rpcWithRetry('claim_all_blocks_with_ron', {
+    p_player_id: playerId,
+  }, { critical: true, maxRetries: 5 });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getPlayerPityStats(playerId: string): Promise<any> {
   return rpcWithRetry('get_player_pity_stats', {
     p_player_id: playerId,
