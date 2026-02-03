@@ -839,6 +839,10 @@ export default {
       title: 'Referral code applied!',
       message: 'You received {bonus} GameCoin from {referrer}',
     },
+    sessionExpired: {
+      title: 'Session expired',
+      message: 'Your session has expired. Please log in again to continue playing.',
+    },
     rigTurnedOn: {
       title: 'Rig Activated',
       message: '"{rigName}" is now mining.',

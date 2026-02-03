@@ -14,7 +14,8 @@ export type NotificationType =
   | 'welcome_back'
   | 'rig_turned_on'
   | 'rig_turned_off'
-  | 'referral_applied';
+  | 'referral_applied'
+  | 'session_expired';
 
 export interface GameNotification {
   id: string;
@@ -227,6 +228,19 @@ export const useNotificationsStore = defineStore('notifications', () => {
     });
   }
 
+  // Notify about session expired
+  function notifySessionExpired() {
+    if (!shouldNotify('session_expired')) return;
+
+    addNotification({
+      type: 'session_expired',
+      title: 'notifications.sessionExpired.title',
+      message: 'notifications.sessionExpired.message',
+      icon: '🔒',
+      severity: 'error',
+    });
+  }
+
   return {
     notifications,
     currentNotification,
@@ -247,5 +261,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
     notifyRigOverheated,
     notifyBlockMined,
     notifyCoolingExpired,
+    notifySessionExpired,
   };
 });

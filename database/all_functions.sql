@@ -1769,8 +1769,10 @@ BEGIN
     VALUES (v_block.id, v_winner_player_id, v_reward, v_is_premium);
 
     -- Actualizar contador de bloques minados (para leaderboard)
+    -- Resetear pity accumulator (encontró bloque real, no necesita pity)
     UPDATE players
-    SET blocks_mined = COALESCE(blocks_mined, 0) + 1
+    SET blocks_mined = COALESCE(blocks_mined, 0) + 1,
+        mining_bonus_accumulated = 0
     WHERE id = v_winner_player_id;
 
     PERFORM update_reputation(v_winner_player_id, 0.1, 'block_mined');
@@ -5840,9 +5842,10 @@ DECLARE
   v_rig RECORD;
   v_player_hashrates RECORD;
   v_bonus_rate DECIMAL;
-  -- Threshold bajo para dar ~20 bloques/día con 1000 hashrate (24/7)
-  -- Cálculo: 1000 hash × 0.000002315 × 1440 min = 3.33/día
-  -- 3.33 / 0.1667 = 20 bloques/día
+  -- Threshold para pity blocks
+  -- Cálculo: hashrate × rate × 1440 min / threshold = bloques/día
+  -- Free:    1000 × 0.00000926 × 1440 / 0.1667 = 80 bloques/día
+  -- Premium: 1000 × 0.00001736 × 1440 / 0.1667 = 150 bloques/día
   v_pity_threshold DECIMAL := 0.1667;
   v_pity_blocks_created INT := 0;
   v_total_bonus_distributed DECIMAL := 0;
@@ -5855,8 +5858,8 @@ DECLARE
   v_max_pity_percent DECIMAL := 0.5;  -- Máximo 50% del bloque normal
   -- Rate por hashrate por tick para acumulación
   -- Más hashrate = acumula más rápido
-  v_free_rate_per_hash DECIMAL := 0.000002315;
-  v_premium_rate_per_hash DECIMAL := 0.000011574;
+  v_free_rate_per_hash DECIMAL := 0.00000926;
+  v_premium_rate_per_hash DECIMAL := 0.00001736;
 BEGIN
   -- Obtener el reward actual de un bloque normal
   SELECT COALESCE(MAX(height), 0) INTO v_current_height FROM blocks;
@@ -5985,11 +5988,12 @@ BEGIN
   INTO v_accumulated, v_is_premium
   FROM players WHERE id = p_player_id;
 
-  -- Calcular rate por hora
+  -- Calcular rate por hora (basado en 1000 hashrate)
+  -- Free: 80 bloques/día, Premium: 150 bloques/día
   IF v_is_premium THEN
-    v_rate_per_hour := 0.011574 * 60;  -- ~0.694 RON/hora
+    v_rate_per_hour := 0.01736 * 60;  -- ~1.04/hora
   ELSE
-    v_rate_per_hour := 0.002315 * 60;  -- ~0.139 RON/hora
+    v_rate_per_hour := 0.00926 * 60;  -- ~0.56/hora
   END IF;
 
   -- Calcular horas hasta próximo pity block
@@ -6016,7 +6020,7 @@ BEGIN
     'totalPityClaimed', ROUND(v_total_pity_claimed, 2),
     'isPremium', v_is_premium,
     'ratePerHour', ROUND(v_rate_per_hour, 4),
-    'guaranteedPerMonth', CASE WHEN v_is_premium THEN 500 ELSE 100 END
+    'guaranteedPerMonth', CASE WHEN v_is_premium THEN 4500 ELSE 2400 END
   );
 END;
 $$;

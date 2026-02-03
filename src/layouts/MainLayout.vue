@@ -94,6 +94,8 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
     missionsStore.fetchMissions();
     missionsStore.startHeartbeat();
     pendingBlocksStore.fetchPendingBlocks();
+    // Iniciar verificación periódica de sesión
+    authStore.startSessionCheck();
     // Inicializar AdSense cuando el usuario se autentica
     nextTick(() => {
       try {
@@ -104,11 +106,13 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
     });
   } else {
     missionsStore.stopHeartbeat();
+    authStore.stopSessionCheck();
   }
 }, { immediate: true });
 
 onUnmounted(() => {
   missionsStore.stopHeartbeat();
+  authStore.stopSessionCheck();
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
   window.removeEventListener('open-market', handleOpenMarketEvent);
   window.removeEventListener('open-exchange', handleOpenExchangeEvent);

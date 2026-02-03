@@ -39,6 +39,10 @@ export const useAuthStore = defineStore('auth', () => {
   const isCheckingAuth = ref(false);
   // Flag para evitar aplicar regeneración múltiples veces en la misma sesión
   const hasAppliedRegeneration = ref(false);
+  // Intervalo para verificación periódica de sesión
+  const sessionCheckInterval = ref<ReturnType<typeof setInterval> | null>(null);
+  // Intervalo de verificación: cada 2 minutos
+  const SESSION_CHECK_INTERVAL = 2 * 60 * 1000;
 
   const isAuthenticated = computed(() => !!user.value && !!session.value && !!player.value);
   const token = computed(() => session.value?.access_token ?? null);
@@ -259,6 +263,9 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout() {
     loading.value = true;
 
+    // Detener verificación de sesión
+    stopSessionCheck();
+
     try {
       // Update offline status in background (don't block logout)
       if (user.value) {
@@ -396,6 +403,101 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // Verificar y refrescar la sesión periódicamente
+  async function verifyAndRefreshSession(): Promise<boolean> {
+    try {
+      // Obtener la sesión actual
+      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error('Error getting session:', sessionError);
+        return false;
+      }
+
+      // Si no hay sesión, la sesión expiró
+      if (!currentSession) {
+        console.warn('Session lost - no current session');
+        handleSessionLost();
+        return false;
+      }
+
+      // Verificar si el token está por expirar (menos de 5 minutos)
+      const expiresAt = currentSession.expires_at;
+      if (expiresAt) {
+        const expiresAtMs = expiresAt * 1000;
+        const now = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+
+        if (expiresAtMs - now < fiveMinutes) {
+          console.log('Session expiring soon, refreshing...');
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+
+          if (refreshError || !refreshData.session) {
+            console.error('Error refreshing session:', refreshError);
+            handleSessionLost();
+            return false;
+          }
+
+          // Actualizar la sesión local
+          session.value = refreshData.session;
+          user.value = refreshData.session.user;
+          console.log('Session refreshed successfully');
+        }
+      }
+
+      // Actualizar la sesión local si cambió
+      if (currentSession.access_token !== session.value?.access_token) {
+        session.value = currentSession;
+        user.value = currentSession.user;
+      }
+
+      return true;
+    } catch (e) {
+      console.error('Error verifying session:', e);
+      return false;
+    }
+  }
+
+  // Manejar pérdida de sesión
+  function handleSessionLost() {
+    const notificationsStore = useNotificationsStore();
+    notificationsStore.notifySessionExpired();
+
+    // Limpiar estado de autenticación
+    user.value = null;
+    player.value = null;
+    session.value = null;
+    needsUsername.value = false;
+    hasAppliedRegeneration.value = false;
+    stopSessionCheck();
+  }
+
+  // Iniciar verificación periódica de sesión
+  function startSessionCheck() {
+    if (sessionCheckInterval.value) return;
+
+    // Verificar inmediatamente
+    verifyAndRefreshSession();
+
+    // Configurar verificación periódica
+    sessionCheckInterval.value = setInterval(() => {
+      if (isAuthenticated.value) {
+        verifyAndRefreshSession();
+      }
+    }, SESSION_CHECK_INTERVAL);
+
+    console.log('Session check started (every 2 minutes)');
+  }
+
+  // Detener verificación periódica de sesión
+  function stopSessionCheck() {
+    if (sessionCheckInterval.value) {
+      clearInterval(sessionCheckInterval.value);
+      sessionCheckInterval.value = null;
+      console.log('Session check stopped');
+    }
+  }
+
   return {
     user,
     player,
@@ -417,5 +519,8 @@ export const useAuthStore = defineStore('auth', () => {
     completeProfile,
     logout,
     updatePlayer,
+    startSessionCheck,
+    stopSessionCheck,
+    verifyAndRefreshSession,
   };
 });
