@@ -216,7 +216,7 @@ class RigSoundManager {
   private targetVolume: number = 0;
   private isPlaying: boolean = false;
   private enabled: boolean = true;
-  private baseVolume: number = 0.3; // Volumen base del loop
+  private baseVolume: number = 0.15; // Volumen base del loop
 
   constructor() {
     this.loadSettings();

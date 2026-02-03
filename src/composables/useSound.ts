@@ -5,6 +5,7 @@
 
 import { ref, onMounted } from 'vue';
 import { soundManager, rigSoundManager, type SoundType } from '@/utils/sounds';
+import { useMiningStore } from '@/stores/mining';
 
 export function useSound() {
   const soundEnabled = ref(soundManager.isEnabled());
@@ -30,6 +31,19 @@ export function useSound() {
     soundEnabled.value = newState;
     // También sincronizar el rig loop
     rigSoundManager.setEnabled(newState);
+
+    // Si se activa el sonido y hay rigs activos, iniciar el sonido de rigs
+    if (newState) {
+      try {
+        const miningStore = useMiningStore();
+        if (miningStore.activeRigsCount > 0) {
+          rigSoundManager.start(miningStore.activeRigsCount);
+        }
+      } catch {
+        // Store might not be available yet
+      }
+    }
+
     return newState;
   }
 
