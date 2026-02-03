@@ -460,24 +460,43 @@ async function confirmUse() {
   processingStatus.value = 'processing';
   processingError.value = '';
 
+  // Timeout para evitar que el modal se quede cargando indefinidamente
+  const TIMEOUT_MS = 30000;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let isTimedOut = false;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      isTimedOut = true;
+      reject(new Error('TIMEOUT'));
+    }, TIMEOUT_MS);
+  });
+
   try {
     let result;
 
-    if (type === 'install' && data.coolingId) {
-      result = await installCoolingToRig(authStore.player.id, props.rig.id, data.coolingId);
-    } else if (type === 'boost' && data.boostId) {
-      result = await installBoostToRig(authStore.player.id, props.rig.id, data.boostId);
-    } else if (type === 'repair') {
-      result = await repairRig(authStore.player.id, props.rig.id);
-    } else if (type === 'delete') {
-      result = await deleteRig(authStore.player.id, props.rig.id);
-    } else if (type === 'upgrade' && data.upgradeType) {
-      result = await upgradeRig(authStore.player.id, props.rig.id, data.upgradeType);
-    } else if (type === 'destroy_cooling' && data.coolingId) {
-      result = await removeCoolingFromRig(authStore.player.id, props.rig.id, data.coolingId);
-    } else if (type === 'destroy_boost' && data.boostId) {
-      result = await removeBoostFromRig(authStore.player.id, props.rig.id, data.boostId);
-    }
+    // Crear la promesa de la operación
+    const operationPromise = (async () => {
+      if (type === 'install' && data.coolingId) {
+        return await installCoolingToRig(authStore.player!.id, props.rig!.id, data.coolingId);
+      } else if (type === 'boost' && data.boostId) {
+        return await installBoostToRig(authStore.player!.id, props.rig!.id, data.boostId);
+      } else if (type === 'repair') {
+        return await repairRig(authStore.player!.id, props.rig!.id);
+      } else if (type === 'delete') {
+        return await deleteRig(authStore.player!.id, props.rig!.id);
+      } else if (type === 'upgrade' && data.upgradeType) {
+        return await upgradeRig(authStore.player!.id, props.rig!.id, data.upgradeType);
+      } else if (type === 'destroy_cooling' && data.coolingId) {
+        return await removeCoolingFromRig(authStore.player!.id, props.rig!.id, data.coolingId);
+      } else if (type === 'destroy_boost' && data.boostId) {
+        return await removeBoostFromRig(authStore.player!.id, props.rig!.id, data.boostId);
+      }
+      return null;
+    })();
+
+    // Race entre la operación y el timeout
+    result = await Promise.race([operationPromise, timeoutPromise]);
 
     if (result?.success) {
       processingStatus.value = 'success';
@@ -488,8 +507,9 @@ async function confirmUse() {
       // Handle delete separately - close modal immediately
       if (type === 'delete') {
         toastStore.success(`${rigName} eliminado`);
-        await authStore.fetchPlayer();
-        await miningStore.reloadRigs();
+        // Reload data in background, don't block on it
+        authStore.fetchPlayer().catch(console.error);
+        miningStore.reloadRigs().catch(console.error);
         emit('updated');
         setTimeout(() => {
           closeProcessingModal();
@@ -498,11 +518,18 @@ async function confirmUse() {
         return;
       }
 
-      // For non-delete actions, reload data
-      dataLoaded.value = false; // Reset to force reload
-      await loadData();
-      await authStore.fetchPlayer();
-      await miningStore.reloadRigs();
+      // For non-delete actions, reload data (with error handling)
+      dataLoaded.value = false;
+      try {
+        await Promise.all([
+          loadData(),
+          authStore.fetchPlayer(),
+          miningStore.reloadRigs()
+        ]);
+      } catch (reloadError) {
+        console.error('Error reloading data:', reloadError);
+        // Don't fail the operation, data will refresh on next interaction
+      }
       emit('updated');
 
       // Show toast notification based on action type
@@ -526,14 +553,22 @@ async function confirmUse() {
       processingError.value = result?.error || t('common.error');
       playSound('error');
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error('Error:', e);
     processingStatus.value = 'error';
-    processingError.value = t('common.error');
+    if (isTimedOut || e?.message === 'TIMEOUT') {
+      processingError.value = 'La operación tardó demasiado. Por favor, intenta de nuevo.';
+    } else {
+      processingError.value = t('common.error');
+    }
     playSound('error');
+  } finally {
+    // Limpiar el timeout si aún está activo
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    confirmAction.value = null;
   }
-
-  confirmAction.value = null;
 }
 
 function cancelConfirm() {

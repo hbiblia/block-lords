@@ -49,6 +49,9 @@ ALTER TABLE players ADD COLUMN IF NOT EXISTS max_internet NUMERIC DEFAULT 300;
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS max_condition NUMERIC DEFAULT 100;
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS times_repaired INTEGER DEFAULT 0;
 
+-- Permitir múltiples rigs del mismo tipo por jugador (eliminar constraint único)
+ALTER TABLE player_rigs DROP CONSTRAINT IF EXISTS player_rigs_player_id_rig_id_key;
+
 -- =====================================================
 -- ELIMINAR FUNCIONES EXISTENTES
 -- =====================================================
@@ -2539,6 +2542,9 @@ DECLARE
   v_inventory_item player_inventory%ROWTYPE;
   v_cooling cooling_items%ROWTYPE;
   v_rig player_rigs%ROWTYPE;
+  v_existing rig_cooling%ROWTYPE;
+  v_new_durability NUMERIC;
+  v_max_durability NUMERIC := 200;  -- Cap máximo de durabilidad stackeada
 BEGIN
   -- Verificar que el rig pertenece al jugador
   SELECT * INTO v_rig
@@ -2561,6 +2567,11 @@ BEGIN
   -- Obtener datos del item
   SELECT * INTO v_cooling FROM cooling_items WHERE id = p_cooling_id;
 
+  -- Verificar si este cooling ya está instalado en el rig
+  SELECT * INTO v_existing
+  FROM rig_cooling
+  WHERE player_rig_id = p_rig_id AND cooling_item_id = p_cooling_id;
+
   -- Remover del inventario
   IF v_inventory_item.quantity > 1 THEN
     UPDATE player_inventory
@@ -2570,18 +2581,40 @@ BEGIN
     DELETE FROM player_inventory WHERE id = v_inventory_item.id;
   END IF;
 
-  -- Instalar refrigeración en el rig
-  INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability)
-  VALUES (p_rig_id, p_cooling_id, 100);
+  IF v_existing IS NOT NULL THEN
+    -- Ya está instalado: stackear durabilidad (máximo 200%)
+    v_new_durability := LEAST(v_max_durability, v_existing.durability + 100);
 
-  -- Marcar el rig como modificado (evita penalización por quick toggle)
-  UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+    UPDATE rig_cooling
+    SET durability = v_new_durability
+    WHERE id = v_existing.id;
 
-  RETURN json_build_object(
-    'success', true,
-    'message', 'Refrigeración instalada en el rig',
-    'item', row_to_json(v_cooling)
-  );
+    -- Marcar el rig como modificado
+    UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+    RETURN json_build_object(
+      'success', true,
+      'message', 'Durabilidad de refrigeración recargada',
+      'item', row_to_json(v_cooling),
+      'new_durability', v_new_durability,
+      'stacked', true
+    );
+  ELSE
+    -- No está instalado: insertar nuevo
+    INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability)
+    VALUES (p_rig_id, p_cooling_id, 100);
+
+    -- Marcar el rig como modificado (evita penalización por quick toggle)
+    UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+    RETURN json_build_object(
+      'success', true,
+      'message', 'Refrigeración instalada en el rig',
+      'item', row_to_json(v_cooling),
+      'new_durability', 100,
+      'stacked', false
+    );
+  END IF;
 END;
 $$;
 
