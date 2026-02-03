@@ -273,6 +273,7 @@ export default {
       installed: 'instalado',
       inInventory: 'En inventario',
       inventory: 'en inventario',
+      handles: 'Soporta',
     },
     cards: {
       energyCards: 'Tarjetas de Energia',

@@ -665,6 +665,8 @@ watch(() => props.show, (newVal) => {
                     <span>⚡{{ rig.power_consumption }}/t</span>
                     <span>•</span>
                     <span>📡{{ rig.internet_consumption }}/t</span>
+                    <span>•</span>
+                    <span class="text-orange-400">🔥{{ formatNumber(rig.power_consumption * 0.8, 1) }}°/t</span>
                   </div>
 
                   <!-- Show owned quantity if any -->
@@ -712,6 +714,11 @@ watch(() => props.show, (newVal) => {
                   <div class="flex items-center justify-between mb-1 sm:mb-2">
                     <span class="text-[10px] sm:text-xs text-text-muted">{{ t('inventory.cooling.power', 'Potencia') }}</span>
                     <span class="font-mono font-bold text-xs sm:text-sm text-cyan-400">-{{ item.cooling_power }}°C</span>
+                  </div>
+
+                  <div class="flex items-center justify-between mb-1 sm:mb-2">
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.cooling.handles', 'Maneja') }}</span>
+                    <span class="font-mono text-xs sm:text-sm text-orange-400">🔥≤{{ formatNumber(item.cooling_power / 0.8, 1) }}/t</span>
                   </div>
 
                   <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ getCoolingDescription(item.id) }}</p>

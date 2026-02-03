@@ -273,6 +273,7 @@ export default {
       installed: 'installed',
       inInventory: 'In inventory',
       inventory: 'in inventory',
+      handles: 'Handles',
     },
     cards: {
       energyCards: 'Energy Cards',
