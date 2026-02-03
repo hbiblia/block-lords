@@ -2506,7 +2506,6 @@ DECLARE
   v_inventory_item player_inventory%ROWTYPE;
   v_cooling cooling_items%ROWTYPE;
   v_rig player_rigs%ROWTYPE;
-  v_existing_cooling INT;
 BEGIN
   -- Verificar que el rig pertenece al jugador
   SELECT * INTO v_rig
@@ -2524,15 +2523,6 @@ BEGIN
 
   IF v_inventory_item IS NULL OR v_inventory_item.quantity <= 0 THEN
     RETURN json_build_object('success', false, 'error', 'No tienes este item en tu inventario');
-  END IF;
-
-  -- Verificar si este tipo de cooling ya está instalado en este rig
-  SELECT COUNT(*) INTO v_existing_cooling
-  FROM rig_cooling
-  WHERE player_rig_id = p_rig_id AND cooling_item_id = p_cooling_id;
-
-  IF v_existing_cooling > 0 THEN
-    RETURN json_build_object('success', false, 'error', 'Este rig ya tiene este tipo de refrigeración instalado');
   END IF;
 
   -- Obtener datos del item
@@ -4146,11 +4136,7 @@ BEGIN
   WHERE player_rig_id = p_rig_id AND boost_item_id = p_boost_id AND remaining_seconds > 0;
 
   IF v_existing IS NOT NULL THEN
-    IF NOT v_boost.is_stackable OR v_existing.stack_count >= v_boost.max_stack THEN
-      RETURN json_build_object('success', false, 'error', 'Este boost ya está activo en este rig');
-    END IF;
-
-    -- Stackear: agregar tiempo
+    -- Siempre permitir stackear: agregar tiempo
     UPDATE rig_boosts
     SET remaining_seconds = remaining_seconds + (v_boost.duration_minutes * 60),
         stack_count = stack_count + 1

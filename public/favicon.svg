@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="blockGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="pickGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fbbf24"/>
+      <stop offset="100%" style="stop-color:#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <!-- Block/Cube base -->
+  <path d="M16 2L4 9v14l12 7 12-7V9L16 2z" fill="url(#blockGrad)"/>
+  <!-- Block top face -->
+  <path d="M16 2L4 9l12 7 12-7L16 2z" fill="#818cf8" opacity="0.8"/>
+  <!-- Block right face -->
+  <path d="M28 9l-12 7v14l12-7V9z" fill="#4f46e5" opacity="0.6"/>
+  <!-- Pickaxe -->
+  <g transform="translate(8, 8) scale(0.5)">
+    <!-- Handle -->
+    <rect x="14" y="14" width="4" height="16" rx="1" fill="#78350f"/>
+    <!-- Head -->
+    <path d="M8 8L16 16L24 8L22 6L16 12L10 6L8 8Z" fill="url(#pickGrad)"/>
+    <!-- Shine -->
+    <path d="M10 7L16 13L14 11L9 6L10 7Z" fill="#fde68a" opacity="0.6"/>
+  </g>
+  <!-- Bitcoin symbol hint -->
+  <text x="16" y="22" font-family="Arial" font-size="8" font-weight="bold" fill="#fbbf24" text-anchor="middle">B</text>
+</svg>
