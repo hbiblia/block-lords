@@ -162,7 +162,7 @@ async function handleLogout() {
                   'text-status-danger animate-pulse': energyStatus === 'critical',
                   'text-status-warning': energyStatus !== 'critical'
                 }"
-              >{{ formatNumber(energy) }}/{{ formatNumber(maxEnergy) }}</span>
+              >{{ Math.round(energy) }}/{{ Math.round(maxEnergy) }}</span>
             </div>
 
             <!-- Internet Bar -->
@@ -193,7 +193,7 @@ async function handleLogout() {
                   'text-status-danger animate-pulse': internetStatus === 'critical',
                   'text-accent-tertiary': internetStatus !== 'critical'
                 }"
-              >{{ formatNumber(internet) }}/{{ formatNumber(maxInternet) }}</span>
+              >{{ Math.round(internet) }}/{{ Math.round(maxInternet) }}</span>
             </div>
           </div>
 
@@ -332,7 +332,7 @@ async function handleLogout() {
                 'text-status-warning': energyStatus === 'warning',
                 'text-white': energyStatus === 'normal'
               }"
-            >{{ formatNumber(energy) }} / {{ formatNumber(maxEnergy) }}</span>
+            >{{ Math.round(energy) }} / {{ Math.round(maxEnergy) }}</span>
           </div>
           <div
             class="h-2.5 rounded-full overflow-hidden"
@@ -367,7 +367,7 @@ async function handleLogout() {
                 'text-status-warning': internetStatus === 'warning',
                 'text-white': internetStatus === 'normal'
               }"
-            >{{ formatNumber(internet) }} / {{ formatNumber(maxInternet) }}</span>
+            >{{ Math.round(internet) }} / {{ Math.round(maxInternet) }}</span>
           </div>
           <div
             class="h-2.5 rounded-full overflow-hidden"

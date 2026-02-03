@@ -8,12 +8,22 @@
  * @param decimals - Number of decimal places (default: 0)
  * @returns Formatted string with thousands separators
  */
-export function formatNumber(value: number | undefined | null, decimals: number = 0): string {
-  if (value === undefined || value === null || isNaN(value)) {
+export function formatNumber(value: number | string | undefined | null, decimals: number = 0): string {
+  if (value === undefined || value === null) {
     return decimals > 0 ? '0.' + '0'.repeat(decimals) : '0';
   }
 
-  return value.toLocaleString('en-US', {
+  // Convert string to number if needed (handles DB NUMERIC type)
+  const numValue = typeof value === 'string' ? parseFloat(value) : value;
+
+  if (isNaN(numValue)) {
+    return decimals > 0 ? '0.' + '0'.repeat(decimals) : '0';
+  }
+
+  // Round to avoid floating point issues
+  const rounded = decimals === 0 ? Math.round(numValue) : numValue;
+
+  return rounded.toLocaleString('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
