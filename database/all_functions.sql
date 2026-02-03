@@ -5832,6 +5832,7 @@ GRANT EXECUTE ON FUNCTION remove_all_boosts_from_rig TO authenticated;
 -- Procesar bonus de tiempo de minado (llamado cada tick desde game_tick)
 -- El pity reward es proporcional al hashrate efectivo del jugador
 -- IMPORTANTE: El reward es en CRYPTO (₿), siempre menor al bloque normal
+-- Los pity blocks ahora se registran como bloques reales en la blockchain
 DROP FUNCTION IF EXISTS process_mining_time_bonus() CASCADE;
 CREATE OR REPLACE FUNCTION process_mining_time_bonus()
 RETURNS JSON
@@ -5860,7 +5861,15 @@ DECLARE
   -- Más hashrate = acumula más rápido
   v_free_rate_per_hash DECIMAL := 0.00000926;
   v_premium_rate_per_hash DECIMAL := 0.00001736;
+  -- Para crear bloque real
+  v_pity_block blocks%ROWTYPE;
+  v_network_difficulty DECIMAL;
+  v_network_hashrate DECIMAL;
 BEGIN
+  -- Obtener stats de la red para crear bloques
+  SELECT difficulty, hashrate INTO v_network_difficulty, v_network_hashrate
+  FROM network_stats WHERE id = 'current';
+
   -- Obtener el reward actual de un bloque normal
   SELECT COALESCE(MAX(height), 0) INTO v_current_height FROM blocks;
   v_current_block_reward := calculate_block_reward(v_current_height + 1);
@@ -5932,7 +5941,16 @@ BEGIN
         v_pity_reward := v_pity_reward * 1.5;
       END IF;
 
-      -- Crear pity block con reward basado en hashrate
+      -- Crear bloque real en la blockchain (igual que bloques normales)
+      v_pity_block := create_new_block(
+        v_player_hashrates.player_id,
+        COALESCE(v_network_difficulty, 1000),
+        COALESCE(v_network_hashrate, 0),
+        v_pity_reward,
+        v_is_premium
+      );
+
+      -- Crear entrada en pending_blocks vinculada al bloque real
       INSERT INTO pending_blocks (
         block_id,
         player_id,
@@ -5941,7 +5959,7 @@ BEGIN
         is_pity,
         created_at
       ) VALUES (
-        NULL,
+        v_pity_block.id,
         v_player_hashrates.player_id,
         v_pity_reward,
         v_is_premium,

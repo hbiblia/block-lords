@@ -559,9 +559,9 @@ export const useMiningStore = defineStore('mining', () => {
     if (winner?.id === authStore.player?.id) {
       playSound('block_mined');
       authStore.fetchPlayer();
-      // Show toast with reward calculated from block height (with premium bonus if applicable)
-      const baseReward = calculateBlockReward(block.height);
-      const reward = authStore.isPremium ? baseReward * 1.5 : baseReward;
+      // Show toast with actual reward from database (already includes premium bonus)
+      // Fall back to calculated reward only if block.reward is not available
+      const reward = block.reward ?? calculateBlockReward(block.height) * (authStore.isPremium ? 1.5 : 1);
       toastStore.blockMined(reward, true);
     }
   }

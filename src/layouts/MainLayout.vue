@@ -67,6 +67,13 @@ function handleBlockMined(event: CustomEvent) {
   }
 }
 
+// Escuchar evento de bloque pendiente creado (incluye pity blocks)
+// Ahora los pity blocks crean bloques reales, así que block-mined maneja la notificación
+function handlePendingBlockCreated() {
+  // Solo actualizar lista de pending blocks (toast se maneja en block-mined)
+  pendingBlocksStore.fetchPendingBlocks();
+}
+
 // Event handlers for modal opening from other pages
 function handleOpenMarketEvent() {
   showMarket.value = true;
@@ -81,6 +88,7 @@ function handleOpenInventoryEvent() {
 // Escuchar eventos
 onMounted(() => {
   window.addEventListener('block-mined', handleBlockMined as EventListener);
+  window.addEventListener('pending-block-created', handlePendingBlockCreated as EventListener);
   window.addEventListener('open-market', handleOpenMarketEvent);
   window.addEventListener('open-exchange', handleOpenExchangeEvent);
   window.addEventListener('open-inventory', handleOpenInventoryEvent);
@@ -114,6 +122,7 @@ onUnmounted(() => {
   missionsStore.stopHeartbeat();
   authStore.stopSessionCheck();
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
+  window.removeEventListener('pending-block-created', handlePendingBlockCreated as EventListener);
   window.removeEventListener('open-market', handleOpenMarketEvent);
   window.removeEventListener('open-exchange', handleOpenExchangeEvent);
   window.removeEventListener('open-inventory', handleOpenInventoryEvent);

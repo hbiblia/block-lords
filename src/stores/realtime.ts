@@ -190,6 +190,9 @@ export const useRealtimeStore = defineStore('realtime', () => {
     // Suscribirse a nuevos bloques
     subscribeToBlocks();
 
+    // Suscribirse a bloques pendientes (incluye pity blocks)
+    subscribeToPendingBlocks(authStore.player.id);
+
     // Suscribirse a stats de la red
     subscribeToNetworkStats();
 
@@ -322,6 +325,47 @@ export const useRealtimeStore = defineStore('realtime', () => {
       });
 
     channels.value.set('blocks', channel);
+  }
+
+  function subscribeToPendingBlocks(playerId: string) {
+    const channel = supabase
+      .channel(`pending_blocks:${playerId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'pending_blocks',
+          filter: `player_id=eq.${playerId}`,
+        },
+        (payload) => {
+          const pendingBlock = payload.new;
+
+          // Emitir evento para nuevo bloque pendiente (incluye pity blocks)
+          window.dispatchEvent(
+            new CustomEvent('pending-block-created', {
+              detail: {
+                id: pendingBlock.id,
+                block_id: pendingBlock.block_id,
+                reward: pendingBlock.reward,
+                is_premium: pendingBlock.is_premium,
+                is_pity: pendingBlock.is_pity,
+                created_at: pendingBlock.created_at,
+              },
+            })
+          );
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Suscrito a bloques pendientes');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Error en canal de pending_blocks:', status);
+          handleChannelError();
+        }
+      });
+
+    channels.value.set(`pending_blocks:${playerId}`, channel);
   }
 
   function subscribeToNetworkStats() {
