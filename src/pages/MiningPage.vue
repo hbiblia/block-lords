@@ -938,9 +938,6 @@ onUnmounted(() => {
             <div class="flex justify-center">
               <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7500429866047477"
                 data-ad-slot="6463255272" data-ad-format="auto" data-full-width-responsive="true"></ins>
-              <script>
-     (adsbygoogle = window.adsbygoogle || []).push({});
-</script>
             </div>
           </div>
         </div>

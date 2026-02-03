@@ -118,7 +118,7 @@ function formatCurrency(value: number | undefined, decimals: number = 0): string
           <div>
             <div class="flex justify-between text-sm mb-2">
               <span class="text-text-muted">⚡ {{ t('welcome.energy') }}</span>
-              <span class="text-status-warning font-medium">{{ player?.energy?.toFixed(0) ?? 100 }}%</span>
+              <span class="text-status-warning font-medium">{{ player?.energy?.toFixed(0) ?? 100 }}</span>
             </div>
             <div class="progress-bar progress-energy">
               <div class="progress-bar-fill" :style="{ width: `${player?.energy ?? 100}%` }"></div>
@@ -127,7 +127,7 @@ function formatCurrency(value: number | undefined, decimals: number = 0): string
           <div>
             <div class="flex justify-between text-sm mb-2">
               <span class="text-text-muted">📡 {{ t('welcome.internet') }}</span>
-              <span class="text-accent-tertiary font-medium">{{ player?.internet?.toFixed(0) ?? 100 }}%</span>
+              <span class="text-accent-tertiary font-medium">{{ player?.internet?.toFixed(0) ?? 100 }}</span>
             </div>
             <div class="progress-bar progress-internet">
               <div class="progress-bar-fill" :style="{ width: `${player?.internet ?? 100}%` }"></div>

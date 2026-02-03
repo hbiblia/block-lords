@@ -243,22 +243,50 @@ async function loadData() {
   }
 }
 
-// Computed: max condition (decreases with repairs)
-const maxCondition = computed(() => props.rig?.max_condition ?? 100);
+// Computed: repair system - 3 repairs max with fixed targets
 const timesRepaired = computed(() => props.rig?.times_repaired ?? 0);
-// Max repairs allowed per rig
 const maxRepairs = 3;
-// Repair bonus: how much % will be added to current condition
-// SQL repairs to current max_condition value
-const repairBonus = computed(() => {
-  if (!props.rig) return 0;
-  return Math.max(0, maxCondition.value - props.rig.condition);
+
+// Current max condition based on repairs already done: 100% -> 90% -> 70% -> 50%
+const maxCondition = computed(() => {
+  const repairs = timesRepaired.value;
+  if (repairs === 0) return 100;
+  if (repairs === 1) return 90;
+  if (repairs === 2) return 70;
+  if (repairs === 3) return 50;
+  return 50;
 });
+
+// Target condition for NEXT repair: 90% -> 70% -> 50%
+const repairTargetCondition = computed(() => {
+  const repairs = timesRepaired.value;
+  if (repairs === 0) return 90;
+  if (repairs === 1) return 70;
+  if (repairs === 2) return 50;
+  return 0; // No more repairs available
+});
+
+// Repair bonus: difference between target and current condition
+const repairBonus = computed(() => {
+  if (!props.rig || timesRepaired.value >= maxRepairs) return 0;
+  return Math.max(0, repairTargetCondition.value - props.rig.condition);
+});
+
+// Can repair: not at max repairs, condition below target, rig is off
 const canRepair = computed(() => {
   if (!props.rig) return false;
-  return props.rig.condition < maxCondition.value && maxCondition.value > 10 && !props.rig.is_active;
+  return timesRepaired.value < maxRepairs &&
+         props.rig.condition < repairTargetCondition.value &&
+         !props.rig.is_active;
 });
-const repairCost = computed(() => props.rig?.rig.repair_cost ?? 0);
+
+// Cost based on how much will be restored
+const repairCost = computed(() => {
+  if (!props.rig) return 0;
+  const baseCost = props.rig.rig.repair_cost ?? 0;
+  const percentToRepair = repairBonus.value / 100;
+  return Math.ceil(baseCost * percentToRepair);
+});
 const canAffordRepair = computed(() => (authStore.player?.gamecoin_balance ?? 0) >= repairCost.value);
 
 // Total cooling power installed (considering durability)
@@ -460,43 +488,24 @@ async function confirmUse() {
   processingStatus.value = 'processing';
   processingError.value = '';
 
-  // Timeout para evitar que el modal se quede cargando indefinidamente
-  const TIMEOUT_MS = 30000;
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let isTimedOut = false;
-
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => {
-      isTimedOut = true;
-      reject(new Error('TIMEOUT'));
-    }, TIMEOUT_MS);
-  });
-
   try {
     let result;
 
-    // Crear la promesa de la operación
-    const operationPromise = (async () => {
-      if (type === 'install' && data.coolingId) {
-        return await installCoolingToRig(authStore.player!.id, props.rig!.id, data.coolingId);
-      } else if (type === 'boost' && data.boostId) {
-        return await installBoostToRig(authStore.player!.id, props.rig!.id, data.boostId);
-      } else if (type === 'repair') {
-        return await repairRig(authStore.player!.id, props.rig!.id);
-      } else if (type === 'delete') {
-        return await deleteRig(authStore.player!.id, props.rig!.id);
-      } else if (type === 'upgrade' && data.upgradeType) {
-        return await upgradeRig(authStore.player!.id, props.rig!.id, data.upgradeType);
-      } else if (type === 'destroy_cooling' && data.coolingId) {
-        return await removeCoolingFromRig(authStore.player!.id, props.rig!.id, data.coolingId);
-      } else if (type === 'destroy_boost' && data.boostId) {
-        return await removeBoostFromRig(authStore.player!.id, props.rig!.id, data.boostId);
-      }
-      return null;
-    })();
-
-    // Race entre la operación y el timeout
-    result = await Promise.race([operationPromise, timeoutPromise]);
+    if (type === 'install' && data.coolingId) {
+      result = await installCoolingToRig(authStore.player.id, props.rig.id, data.coolingId);
+    } else if (type === 'boost' && data.boostId) {
+      result = await installBoostToRig(authStore.player.id, props.rig.id, data.boostId);
+    } else if (type === 'repair') {
+      result = await repairRig(authStore.player.id, props.rig.id);
+    } else if (type === 'delete') {
+      result = await deleteRig(authStore.player.id, props.rig.id);
+    } else if (type === 'upgrade' && data.upgradeType) {
+      result = await upgradeRig(authStore.player.id, props.rig.id, data.upgradeType);
+    } else if (type === 'destroy_cooling' && data.coolingId) {
+      result = await removeCoolingFromRig(authStore.player.id, props.rig.id, data.coolingId);
+    } else if (type === 'destroy_boost' && data.boostId) {
+      result = await removeBoostFromRig(authStore.player.id, props.rig.id, data.boostId);
+    }
 
     if (result?.success) {
       processingStatus.value = 'success';
@@ -507,9 +516,8 @@ async function confirmUse() {
       // Handle delete separately - close modal immediately
       if (type === 'delete') {
         toastStore.success(`${rigName} eliminado`);
-        // Reload data in background, don't block on it
-        authStore.fetchPlayer().catch(console.error);
-        miningStore.reloadRigs().catch(console.error);
+        await authStore.fetchPlayer();
+        await miningStore.reloadRigs();
         emit('updated');
         setTimeout(() => {
           closeProcessingModal();
@@ -518,18 +526,11 @@ async function confirmUse() {
         return;
       }
 
-      // For non-delete actions, reload data (with error handling)
-      dataLoaded.value = false;
-      try {
-        await Promise.all([
-          loadData(),
-          authStore.fetchPlayer(),
-          miningStore.reloadRigs()
-        ]);
-      } catch (reloadError) {
-        console.error('Error reloading data:', reloadError);
-        // Don't fail the operation, data will refresh on next interaction
-      }
+      // For non-delete actions, reload data
+      dataLoaded.value = false; // Reset to force reload
+      await loadData();
+      await authStore.fetchPlayer();
+      await miningStore.reloadRigs();
       emit('updated');
 
       // Show toast notification based on action type
@@ -553,20 +554,12 @@ async function confirmUse() {
       processingError.value = result?.error || t('common.error');
       playSound('error');
     }
-  } catch (e: any) {
+  } catch (e) {
     console.error('Error:', e);
     processingStatus.value = 'error';
-    if (isTimedOut || e?.message === 'TIMEOUT') {
-      processingError.value = 'La operación tardó demasiado. Por favor, intenta de nuevo.';
-    } else {
-      processingError.value = t('common.error');
-    }
+    processingError.value = t('common.error');
     playSound('error');
   } finally {
-    // Limpiar el timeout si aún está activo
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
     confirmAction.value = null;
   }
 }
@@ -949,8 +942,11 @@ function closeProcessingModal() {
                   </div>
                 </div>
 
-                <p v-if="maxCondition <= 50" class="text-xs text-status-warning mb-3">
-                  {{ t('rigManage.degradationWarning') }}
+                <p v-if="timesRepaired >= maxRepairs" class="text-xs text-status-danger mb-3">
+                  {{ t('rigManage.maxRepairsReached', 'Este rig ya alcanzó el máximo de 3 reparaciones.') }}
+                </p>
+                <p v-else-if="timesRepaired === 2" class="text-xs text-status-warning mb-3">
+                  {{ t('rigManage.lastRepairWarning', 'Esta será la última reparación disponible.') }}
                 </p>
 
                 <button
@@ -959,16 +955,16 @@ function closeProcessingModal() {
                   :disabled="!canAffordRepair || processing"
                   class="w-full py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-warning text-white hover:bg-status-warning/80"
                 >
-                  {{ !canAffordRepair ? t('rigManage.insufficientFunds') : t('rigManage.repair') }}
+                  {{ !canAffordRepair ? t('rigManage.insufficientFunds') : t('rigManage.repair') + ' → ' + repairTargetCondition + '%' }}
                 </button>
                 <p v-else-if="rig.is_active" class="text-sm text-text-muted text-center">
                   {{ t('rigManage.stopToRepair') }}
                 </p>
-                <p v-else-if="rig.condition >= maxCondition" class="text-sm text-status-success text-center">
-                  {{ t('rigManage.atMaxCondition') }}
+                <p v-else-if="timesRepaired >= maxRepairs" class="text-sm text-status-danger text-center">
+                  {{ t('rigManage.noMoreRepairs', 'No se puede reparar más. Debes eliminar el rig.') }}
                 </p>
-                <p v-else-if="maxCondition <= 10" class="text-sm text-status-danger text-center">
-                  {{ t('rigManage.tooDegrade') }}
+                <p v-else-if="rig.condition >= repairTargetCondition" class="text-sm text-status-success text-center">
+                  {{ t('rigManage.conditionAboveTarget', 'La condición debe estar por debajo de') }} {{ repairTargetCondition }}%
                 </p>
               </div>
 
@@ -1154,9 +1150,13 @@ function closeProcessingModal() {
                 <span class="text-text-muted text-sm">{{ t('rigManage.cost') }}</span>
                 <span class="font-bold text-status-warning">{{ repairCost }} GC</span>
               </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">{{ t('rigManage.targetCondition', 'Condición objetivo') }}</span>
+                <span class="font-bold text-status-success">{{ repairTargetCondition }}%</span>
+              </div>
               <div class="flex items-center justify-between">
-                <span class="text-text-muted text-sm">{{ t('rigManage.repairBonus', 'Reparación') }}</span>
-                <span class="font-bold text-status-success">+{{ repairBonus }}%</span>
+                <span class="text-text-muted text-sm">{{ t('rigManage.repairNumber', 'Reparación #') }}</span>
+                <span class="font-bold text-white">{{ timesRepaired + 1 }}/{{ maxRepairs }}</span>
               </div>
             </template>
             <template v-else-if="confirmAction.type === 'upgrade'">
