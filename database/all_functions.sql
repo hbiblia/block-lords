@@ -5164,14 +5164,20 @@ DECLARE
   v_referrer_username TEXT;
   v_player_referred_by UUID;
   v_player_created_at TIMESTAMPTZ;
+  v_referrer_referred_by UUID;
   v_referrer_bonus INTEGER := 500;  -- GameCoin para quien refiere
   v_player_bonus INTEGER := 200;    -- GameCoin para el nuevo jugador
 BEGIN
+  -- SEGURIDAD: Verificar que el usuario solo puede aplicar código a su propia cuenta
+  IF p_player_id != auth.uid() THEN
+    RETURN json_build_object('success', false, 'error', 'unauthorized');
+  END IF;
+
   -- Normalizar código
   p_referral_code := UPPER(TRIM(p_referral_code));
 
   -- Buscar quien tiene ese código
-  SELECT id, username INTO v_referrer_id, v_referrer_username
+  SELECT id, username, referred_by INTO v_referrer_id, v_referrer_username, v_referrer_referred_by
   FROM players
   WHERE referral_code = p_referral_code;
 
@@ -5182,6 +5188,11 @@ BEGIN
   -- No puede usar su propio código
   IF v_referrer_id = p_player_id THEN
     RETURN json_build_object('success', false, 'error', 'own_code');
+  END IF;
+
+  -- SEGURIDAD: Evitar referencia circular (mi referido no puede ser mi referrer)
+  IF v_referrer_referred_by = p_player_id THEN
+    RETURN json_build_object('success', false, 'error', 'circular_reference');
   END IF;
 
   -- Verificar que el jugador no tenga ya un referrer

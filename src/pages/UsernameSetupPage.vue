@@ -145,19 +145,19 @@ async function handleSubmit() {
 
           <!-- Bonificaciones de nuevo jugador -->
           <div class="bg-bg-secondary rounded-xl p-4 border border-border/50">
-            <div class="text-xs text-text-muted mb-3 text-center">🎁 {{ t('usernameSetup.welcomeBonus') }}</div>
+            <div class="text-xs text-text-muted mb-3 text-center">{{ t('usernameSetup.welcomeBonus') }}</div>
             <div class="grid grid-cols-3 gap-3 text-center">
               <div>
-                <div class="text-lg font-bold text-status-warning">100</div>
+                <div class="text-lg font-bold text-status-warning">1,000</div>
                 <div class="text-xs text-text-muted">🪙 GameCoin</div>
               </div>
               <div>
                 <div class="text-lg font-bold text-accent-primary">1</div>
-                <div class="text-xs text-text-muted">⛏️ {{ t('usernameSetup.basicRig') }}</div>
+                <div class="text-xs text-text-muted">{{ t('usernameSetup.basicRig') }}</div>
               </div>
               <div>
                 <div class="text-lg font-bold text-status-success">100%</div>
-                <div class="text-xs text-text-muted">⚡ {{ t('usernameSetup.energy') }}</div>
+                <div class="text-xs text-text-muted">{{ t('usernameSetup.energy') }}</div>
               </div>
             </div>
           </div>

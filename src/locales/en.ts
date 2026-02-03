@@ -1101,6 +1101,8 @@ export default {
       own_code: 'You cannot use your own code',
       already_referred: 'You already have a referral code applied',
       too_late: 'You can only apply a code within the first 7 days',
+      unauthorized: 'You are not authorized to perform this action',
+      circular_reference: 'You cannot use the code of someone who is already your referral',
       generic: 'Error applying code. Please try again.',
     },
     edit: {

@@ -1101,6 +1101,8 @@ export default {
       own_code: 'No puedes usar tu propio codigo',
       already_referred: 'Ya tienes un codigo de referido aplicado',
       too_late: 'Solo puedes aplicar un codigo en los primeros 7 dias',
+      unauthorized: 'No tienes permiso para realizar esta accion',
+      circular_reference: 'No puedes usar el codigo de alguien que ya es tu referido',
       generic: 'Error al aplicar el codigo. Intenta de nuevo.',
     },
     edit: {
