@@ -7,7 +7,7 @@ import { useRealtimeStore } from '@/stores/realtime';
 import { useMiningStore } from '@/stores/mining';
 import { toggleLocale, getLocale } from '@/plugins/i18n';
 import { useSound } from '@/composables/useSound';
-import { formatGamecoin, formatCrypto, formatNumber } from '@/utils/format';
+import { formatGamecoin, formatCrypto } from '@/utils/format';
 
 // Inject InfoBar visibility to adjust positioning
 const infoBarVisible = inject<Ref<boolean>>('infoBarVisible', ref(false));

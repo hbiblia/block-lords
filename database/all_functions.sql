@@ -1875,76 +1875,109 @@ BEGIN
 END;
 $$;
 
--- Ajustar dificultad dinámicamente basado en hashrate de red
--- La dificultad se ajusta para mantener ~10% probabilidad de bloque por tick
--- Fórmula: nueva_dificultad = hashrate / target_probability
+-- =====================================================
+-- AJUSTE DE DIFICULTAD ESTILO BITCOIN (TARGET DINÁMICO)
+-- Cada 6 horas, basado en bloques reales minados vs esperados
+-- Máximo ±25% de cambio por ajuste
+-- TARGET DINÁMICO: bloques esperados escalan con hashrate de red
+-- Fórmula: (hashrate/1000) * 6 bloques/hora * 6 horas
+-- Esto hace que más jugadores generen más bloques, no solo más rápido
+-- =====================================================
+
+-- Agregar columna para rastrear último ajuste (si no existe)
+ALTER TABLE network_stats ADD COLUMN IF NOT EXISTS last_difficulty_adjustment TIMESTAMPTZ DEFAULT NOW();
+
 CREATE OR REPLACE FUNCTION adjust_difficulty()
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
+  v_last_adjustment TIMESTAMPTZ;
+  v_hours_since NUMERIC;
+  v_blocks_expected INT;
+  v_blocks_actual INT;
+  v_adjustment_ratio NUMERIC;
+  v_new_difficulty NUMERIC;
   v_current_difficulty NUMERIC;
   v_current_hashrate NUMERIC;
-  v_new_difficulty NUMERIC;
-  v_target_probability NUMERIC := 0.10; -- 10% chance per tick
-  v_min_difficulty NUMERIC := 100;      -- Mínimo para evitar bloques muy fáciles
-  v_max_adjustment NUMERIC := 0.25;     -- Máximo 25% de cambio por ajuste
-  v_adjustment_factor NUMERIC;
+  v_max_change NUMERIC := 0.25;        -- Máximo 25% de cambio por ajuste
+  v_adjustment_hours INT := 6;          -- Ajustar cada 6 horas
+  v_blocks_per_1k_hashrate INT := 6;    -- 6 bloques/hora por cada 1000 H/s
+  v_min_difficulty NUMERIC := 100;      -- Dificultad mínima
+  v_max_difficulty NUMERIC := 1000000;  -- Dificultad máxima
 BEGIN
   -- Obtener valores actuales
-  SELECT difficulty, hashrate INTO v_current_difficulty, v_current_hashrate
+  SELECT difficulty, hashrate, last_difficulty_adjustment
+  INTO v_current_difficulty, v_current_hashrate, v_last_adjustment
   FROM network_stats WHERE id = 'current';
 
+  -- Valores por defecto si no existen
   IF v_current_difficulty IS NULL THEN v_current_difficulty := 1000; END IF;
-  IF v_current_hashrate IS NULL OR v_current_hashrate = 0 THEN
-    -- Sin hashrate, mantener dificultad mínima
+  IF v_last_adjustment IS NULL THEN v_last_adjustment := NOW() - INTERVAL '7 hours'; END IF;
+
+  -- Calcular horas desde último ajuste
+  v_hours_since := EXTRACT(EPOCH FROM (NOW() - v_last_adjustment)) / 3600;
+
+  -- Solo ajustar cada X horas
+  IF v_hours_since < v_adjustment_hours THEN
     RETURN json_build_object(
       'adjusted', false,
-      'reason', 'No hashrate',
-      'difficulty', v_current_difficulty
+      'reason', 'Too soon',
+      'hours_since_last', ROUND(v_hours_since, 2),
+      'next_adjustment_in_hours', ROUND(v_adjustment_hours - v_hours_since, 2),
+      'current_difficulty', v_current_difficulty
     );
   END IF;
 
-  -- Calcular dificultad ideal para el target de probabilidad
-  -- Probabilidad = hashrate / dificultad
-  -- Dificultad ideal = hashrate / target_probability
-  v_new_difficulty := v_current_hashrate / v_target_probability;
+  -- Contar bloques minados desde el último ajuste
+  SELECT COUNT(*) INTO v_blocks_actual
+  FROM blocks
+  WHERE created_at > v_last_adjustment;
 
-  -- Aplicar límites de ajuste suave (máx 25% de cambio)
-  v_adjustment_factor := v_new_difficulty / v_current_difficulty;
+  -- Bloques esperados (DINÁMICO): basado en hashrate de la red
+  -- Fórmula: (hashrate / 1000) * bloques_por_1k_hashrate * horas
+  -- Más jugadores/hashrate = más bloques esperados = dificultad estable
+  -- Mínimo 6 bloques esperados (1 por hora) para evitar división por 0
+  v_blocks_expected := GREATEST(6, ROUND((COALESCE(v_current_hashrate, 1000) / 1000.0) * v_blocks_per_1k_hashrate * v_adjustment_hours));
 
-  IF v_adjustment_factor > (1 + v_max_adjustment) THEN
-    v_new_difficulty := v_current_difficulty * (1 + v_max_adjustment);
-  ELSIF v_adjustment_factor < (1 - v_max_adjustment) THEN
-    v_new_difficulty := v_current_difficulty * (1 - v_max_adjustment);
+  -- Calcular ratio de ajuste basado en bloques reales vs esperados
+  IF v_blocks_actual = 0 THEN
+    -- Sin bloques minados: bajar dificultad al máximo permitido
+    v_adjustment_ratio := 1 - v_max_change;
+  ELSE
+    -- Ratio = actual / esperado
+    -- Si actual > esperado: ratio > 1 (subir dificultad)
+    -- Si actual < esperado: ratio < 1 (bajar dificultad)
+    v_adjustment_ratio := v_blocks_actual::NUMERIC / v_blocks_expected;
   END IF;
 
-  -- Aplicar dificultad mínima
-  v_new_difficulty := GREATEST(v_new_difficulty, v_min_difficulty);
+  -- Limitar cambio a ±max_change (25%)
+  v_adjustment_ratio := GREATEST(1 - v_max_change, LEAST(1 + v_max_change, v_adjustment_ratio));
 
-  -- Redondear para evitar decimales excesivos
-  v_new_difficulty := ROUND(v_new_difficulty);
+  -- Calcular nueva dificultad
+  v_new_difficulty := ROUND(v_current_difficulty * v_adjustment_ratio);
 
-  -- Actualizar si hay cambio significativo (>1%)
-  IF ABS(v_new_difficulty - v_current_difficulty) / v_current_difficulty > 0.01 THEN
-    UPDATE network_stats
-    SET difficulty = v_new_difficulty, updated_at = NOW()
-    WHERE id = 'current';
+  -- Aplicar límites de dificultad
+  v_new_difficulty := GREATEST(v_min_difficulty, LEAST(v_max_difficulty, v_new_difficulty));
 
-    RETURN json_build_object(
-      'adjusted', true,
-      'old_difficulty', v_current_difficulty,
-      'new_difficulty', v_new_difficulty,
-      'hashrate', v_current_hashrate,
-      'change_percent', ROUND(((v_new_difficulty - v_current_difficulty) / v_current_difficulty) * 100, 2)
-    );
-  END IF;
+  -- Actualizar dificultad y timestamp de ajuste
+  UPDATE network_stats
+  SET difficulty = v_new_difficulty,
+      last_difficulty_adjustment = NOW(),
+      updated_at = NOW()
+  WHERE id = 'current';
 
   RETURN json_build_object(
-    'adjusted', false,
-    'reason', 'No significant change needed',
-    'difficulty', v_current_difficulty
+    'adjusted', true,
+    'period_hours', v_adjustment_hours,
+    'network_hashrate', v_current_hashrate,
+    'blocks_expected', v_blocks_expected,
+    'blocks_actual', v_blocks_actual,
+    'old_difficulty', v_current_difficulty,
+    'new_difficulty', v_new_difficulty,
+    'change_percent', ROUND((v_adjustment_ratio - 1) * 100, 2),
+    'next_adjustment_at', NOW() + (v_adjustment_hours || ' hours')::INTERVAL
   );
 END;
 $$;
