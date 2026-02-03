@@ -21,6 +21,7 @@ interface RigItem {
 interface CoolingItemType {
   id: string;
   cooling_power: number;
+  energy_cost: number;
   tier: string;
   base_price: number;
 }
@@ -719,6 +720,11 @@ watch(() => props.show, (newVal) => {
                   <div class="flex items-center justify-between mb-1 sm:mb-2">
                     <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.cooling.handles', 'Maneja') }}</span>
                     <span class="font-mono text-xs sm:text-sm text-orange-400">🔥≤{{ formatNumber(item.cooling_power / 0.8, 1) }}/t</span>
+                  </div>
+
+                  <div class="flex items-center justify-between mb-1 sm:mb-2">
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.rigs.energyTick', 'Energía/tick') }}</span>
+                    <span class="font-mono text-xs sm:text-sm text-yellow-400">⚡{{ item.energy_cost }}/t</span>
                   </div>
 
                   <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ getCoolingDescription(item.id) }}</p>

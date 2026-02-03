@@ -117,6 +117,13 @@ const installedBoosts = ref<InstalledBoost[]>([]);
 // Rig upgrades
 const rigUpgrades = ref<RigUpgrades | null>(null);
 
+// Expanded cooling detail (for inline tooltip)
+const expandedCoolingId = ref<string | null>(null);
+
+function toggleCoolingDetail(id: string) {
+  expandedCoolingId.value = expandedCoolingId.value === id ? null : id;
+}
+
 // Confirmation dialog
 const showConfirm = ref(false);
 const confirmAction = ref<{
@@ -549,29 +556,52 @@ function closeProcessingModal() {
 
         <!-- Rig Status Summary -->
         <div class="p-4 border-b border-border bg-bg-primary/50">
+          <!-- Rig specs row -->
+          <div class="flex items-center justify-center gap-3 text-xs text-text-muted mb-3 flex-wrap">
+            <span
+              v-tooltip="t('rigManage.tooltips.hashrate')"
+              class="text-accent-primary font-mono cursor-help"
+            >⚡{{ rig.rig.hashrate }} H/s</span>
+            <span>•</span>
+            <span
+              v-tooltip="t('rigManage.tooltips.power')"
+              class="text-yellow-400 cursor-help"
+            >⚡{{ rig.rig.power_consumption }}/t</span>
+            <span>•</span>
+            <span
+              v-tooltip="t('rigManage.tooltips.internet')"
+              class="text-blue-400 cursor-help"
+            >📡{{ rig.rig.internet_consumption }}/t</span>
+            <span>•</span>
+            <span
+              v-tooltip="t('rigManage.tooltips.heat')"
+              class="text-orange-400 cursor-help"
+            >🔥{{ rigHeatGeneration.toFixed(1) }}°/t</span>
+          </div>
+          <!-- Status grid -->
           <div class="grid grid-cols-4 gap-3 text-center text-sm">
-            <div>
+            <div v-tooltip="t('rigManage.tooltips.condition')" class="cursor-help">
               <div class="text-text-muted text-xs mb-1">{{ t('rigManage.condition') }}</div>
               <div class="font-mono font-bold" :class="rig.condition < 30 ? 'text-status-danger' : rig.condition < 60 ? 'text-status-warning' : 'text-white'">
                 {{ rig.condition }}%
               </div>
             </div>
-            <div>
+            <div v-tooltip="t('rigManage.tooltips.temperature')" class="cursor-help">
               <div class="text-text-muted text-xs mb-1">{{ t('rigManage.temperature') }}</div>
               <div class="font-mono font-bold" :class="rig.temperature > 80 ? 'text-status-danger' : rig.temperature > 60 ? 'text-status-warning' : 'text-white'">
                 {{ rig.temperature.toFixed(0) }}°C
               </div>
             </div>
-            <div>
+            <div v-tooltip="t('rigManage.tooltips.coolingStatus')" class="cursor-help">
               <div class="text-text-muted text-xs mb-1">{{ t('rigManage.cooling') }}</div>
               <div class="font-mono font-bold text-cyan-400">
                 ❄️ -{{ totalCoolingPower.toFixed(1) }}°
               </div>
               <div class="font-mono text-xs" :class="isCoolingSufficient ? 'text-status-success' : 'text-status-danger'">
-                🔥 {{ rigHeatGeneration.toFixed(1) }}°/t
+                {{ isCoolingSufficient ? '✓' : '⚠' }} {{ netHeat.toFixed(1) }}° {{ isCoolingSufficient ? 'OK' : t('rigManage.excess', 'exceso') }}
               </div>
             </div>
-            <div>
+            <div v-tooltip="t('rigManage.tooltips.maxCondition')" class="cursor-help">
               <div class="text-text-muted text-xs mb-1">{{ t('rigManage.maxCond') }}</div>
               <div class="font-mono font-bold" :class="maxCondition <= 50 ? 'text-status-warning' : 'text-white'">
                 {{ maxCondition }}%
@@ -642,34 +672,81 @@ function closeProcessingModal() {
                   <div
                     v-for="cooling in installedCooling"
                     :key="cooling.id"
-                    class="flex items-center justify-between w-full px-3 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg"
+                    class="bg-cyan-500/10 border border-cyan-500/30 rounded-lg overflow-hidden"
                   >
-                    <div class="flex items-center gap-2">
-                      <span class="text-lg">❄️</span>
-                      <div>
-                        <div class="font-medium text-cyan-400 text-sm">{{ getCoolingName(cooling.cooling_item_id, cooling.name) }}</div>
-                        <div class="text-xs text-text-muted">
-                          ❄️ -{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°
-                          <span class="text-text-muted/50">({{ cooling.cooling_power }}° base)</span>
-                          • 🔥≤{{ (cooling.cooling_power / 0.8).toFixed(0) }}/t
+                    <div class="flex items-center justify-between w-full px-3 py-2">
+                      <div
+                        class="flex items-center gap-2 cursor-pointer flex-1"
+                        @click="toggleCoolingDetail(cooling.id)"
+                      >
+                        <span class="text-lg">❄️</span>
+                        <div class="flex-1 min-w-0">
+                          <div class="font-medium text-cyan-400 text-sm flex items-center gap-1">
+                            {{ getCoolingName(cooling.cooling_item_id, cooling.name) }}
+                            <svg
+                              class="w-3 h-3 text-text-muted transition-transform"
+                              :class="expandedCoolingId === cooling.id ? 'rotate-180' : ''"
+                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            >
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                          <div class="text-xs text-text-muted">
+                            ❄️ -{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°
+                            <span class="text-text-muted/50">({{ cooling.cooling_power }}° base)</span>
+                            • 🔥≤{{ (cooling.cooling_power / 0.8).toFixed(0) }}/t
+                            • <span class="text-yellow-400">⚡{{ (cooling.energy_cost * cooling.durability / 100).toFixed(1) }}/t</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <div class="text-right">
-                        <div class="font-mono text-sm" :class="cooling.durability < 30 ? 'text-status-danger' : cooling.durability < 60 ? 'text-status-warning' : 'text-cyan-400'">{{ cooling.durability.toFixed(0) }}%</div>
-                        <div class="text-xs text-text-muted">durabilidad</div>
+                      <div class="flex items-center gap-2">
+                        <div class="text-right">
+                          <div class="font-mono text-sm" :class="cooling.durability < 30 ? 'text-status-danger' : cooling.durability < 60 ? 'text-status-warning' : 'text-cyan-400'">{{ cooling.durability.toFixed(0) }}%</div>
+                          <div class="text-xs text-text-muted">durabilidad</div>
+                        </div>
+                        <button
+                          @click="requestDestroyCooling(cooling)"
+                          :disabled="rig.is_active || processing"
+                          class="p-1.5 rounded-lg text-status-danger/70 hover:text-status-danger hover:bg-status-danger/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          :title="t('rigManage.destroyItem', 'Destruir')"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       </div>
-                      <button
-                        @click="requestDestroyCooling(cooling)"
-                        :disabled="rig.is_active || processing"
-                        class="p-1.5 rounded-lg text-status-danger/70 hover:text-status-danger hover:bg-status-danger/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        :title="t('rigManage.destroyItem', 'Destruir')"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                    </div>
+                    <!-- Expandable detail section -->
+                    <div
+                      v-if="expandedCoolingId === cooling.id"
+                      class="px-3 py-2 border-t border-cyan-500/20 bg-cyan-500/5 text-xs"
+                    >
+                      <div class="grid grid-cols-2 gap-2">
+                        <div>
+                          <div class="text-text-muted mb-1">{{ t('rigManage.currentHeatHandle', 'Enfría actualmente') }}</div>
+                          <div class="text-cyan-400 font-mono">🔥≤{{ ((cooling.cooling_power * cooling.durability / 100) / 0.8).toFixed(1) }}/t</div>
+                        </div>
+                        <div>
+                          <div class="text-text-muted mb-1">{{ t('rigManage.maxHeatHandle', 'Enfría nuevo (100%)') }}</div>
+                          <div class="text-text-muted/70 font-mono">🔥≤{{ (cooling.cooling_power / 0.8).toFixed(1) }}/t</div>
+                        </div>
+                        <div>
+                          <div class="text-text-muted mb-1">{{ t('rigManage.currentCooling', 'Potencia actual') }}</div>
+                          <div class="text-cyan-400 font-mono">❄️ -{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</div>
+                        </div>
+                        <div>
+                          <div class="text-text-muted mb-1">{{ t('rigManage.baseCooling', 'Potencia base') }}</div>
+                          <div class="text-text-muted/70 font-mono">❄️ -{{ cooling.cooling_power }}°</div>
+                        </div>
+                        <div>
+                          <div class="text-text-muted mb-1">{{ t('rigManage.energyUsage', 'Consumo energía') }}</div>
+                          <div class="text-yellow-400 font-mono">⚡{{ (cooling.energy_cost * cooling.durability / 100).toFixed(1) }}/t</div>
+                        </div>
+                        <div>
+                          <div class="text-text-muted mb-1">{{ t('rigManage.durability', 'Durabilidad') }}</div>
+                          <div class="font-mono" :class="cooling.durability < 30 ? 'text-status-danger' : cooling.durability < 60 ? 'text-status-warning' : 'text-cyan-400'">{{ cooling.durability.toFixed(1) }}%</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -736,7 +813,7 @@ function closeProcessingModal() {
                       <div>
                         <div class="font-medium" :class="getTierColor(item.tier)">{{ getCoolingName(item.id) }}</div>
                         <div class="text-xs text-text-muted">
-                          ❄️ -{{ item.cooling_power }}° • 🔥≤{{ (item.cooling_power / 0.8).toFixed(0) }}/t • x{{ item.quantity }}
+                          ❄️ -{{ item.cooling_power }}° • 🔥≤{{ (item.cooling_power / 0.8).toFixed(0) }}/t • <span class="text-yellow-400">⚡{{ item.energy_cost }}/t</span> • x{{ item.quantity }}
                         </div>
                       </div>
                     </div>

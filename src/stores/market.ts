@@ -23,6 +23,7 @@ interface CoolingItem {
   name: string;
   description: string;
   cooling_power: number;
+  energy_cost: number;
   base_price: number;
   tier: string;
 }

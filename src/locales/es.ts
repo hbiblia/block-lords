@@ -765,6 +765,24 @@ export default {
     destroy: 'Destruir',
     durability: 'Durabilidad',
     remaining: 'Restante',
+    // Cooling tooltip
+    currentHeatHandle: 'Enfría actualmente',
+    maxHeatHandle: 'Enfría nuevo (100%)',
+    currentCooling: 'Potencia actual',
+    baseCooling: 'Potencia base',
+    energyUsage: 'Consumo energía',
+    excess: 'exceso',
+    // Rig stats tooltips
+    tooltips: {
+      hashrate: 'Velocidad de minado. Mayor = más bloques minados',
+      power: 'Consumo de energía por tick. Se descuenta de tu balance de energía',
+      internet: 'Consumo de internet por tick. Se descuenta de tu balance de internet',
+      heat: 'Calor generado por tick. Necesitas cooling suficiente para manejarlo',
+      condition: 'Condición actual del rig. Baja mientras mina. Repara antes de llegar a 0%',
+      temperature: 'Temperatura de operación. Alta temp = pérdida de condición más rápida',
+      coolingStatus: 'Potencia de enfriamiento vs calor generado. Verde = el cooling maneja todo el calor',
+      maxCondition: 'Condición máxima reparable. Disminuye con cada reparación (-5%)',
+    },
   },
 
   connection: {

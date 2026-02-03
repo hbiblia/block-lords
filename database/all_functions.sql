@@ -2237,7 +2237,7 @@ BEGIN
   RETURN (
     SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
     FROM (
-      SELECT id, name, description, cooling_power, base_price, tier
+      SELECT id, name, description, cooling_power, energy_cost, base_price, tier
       FROM cooling_items
       ORDER BY base_price ASC
     ) t

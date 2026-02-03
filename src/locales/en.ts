@@ -765,6 +765,24 @@ export default {
     destroy: 'Destroy',
     durability: 'Durability',
     remaining: 'Remaining',
+    // Cooling tooltip
+    currentHeatHandle: 'Currently cools',
+    maxHeatHandle: 'Cools when new (100%)',
+    currentCooling: 'Current power',
+    baseCooling: 'Base power',
+    energyUsage: 'Energy usage',
+    excess: 'excess',
+    // Rig stats tooltips
+    tooltips: {
+      hashrate: 'Mining speed. Higher = more blocks mined',
+      power: 'Energy consumption per tick. Deducted from your energy balance',
+      internet: 'Internet consumption per tick. Deducted from your internet balance',
+      heat: 'Heat generated per tick. You need enough cooling to handle it',
+      condition: 'Current rig condition. Decreases while mining. Repair before it reaches 0%',
+      temperature: 'Current operating temperature. High temp = faster condition loss',
+      coolingStatus: 'Total cooling power vs heat generated. Green = cooling handles all heat',
+      maxCondition: 'Maximum repairable condition. Decreases with each repair (-5%)',
+    },
   },
 
   connection: {
