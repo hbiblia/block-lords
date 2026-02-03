@@ -88,8 +88,8 @@ const DEFAULT_RIGS: Rig[] = [
 ];
 
 const DEFAULT_COOLING: CoolingItem[] = [
-  { id: 'cool-1', name: 'Basic Fan', description: 'Simple cooling fan', cooling_power: 10, base_price: 100, tier: 'common' },
-  { id: 'cool-2', name: 'Advanced Cooler', description: 'Efficient cooling system', cooling_power: 25, base_price: 300, tier: 'uncommon' },
+  { id: 'cool-1', name: 'Basic Fan', description: 'Simple cooling fan', cooling_power: 10, energy_cost: 0.5, base_price: 100, tier: 'common' },
+  { id: 'cool-2', name: 'Advanced Cooler', description: 'Efficient cooling system', cooling_power: 25, energy_cost: 1.0, base_price: 300, tier: 'uncommon' },
 ];
 
 const DEFAULT_CARDS: PrepaidCard[] = [
