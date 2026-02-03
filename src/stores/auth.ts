@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { supabase } from '@/utils/supabase';
-import { createPlayerProfile, getPlayerProfile, applyPassiveRegeneration } from '@/utils/api';
+import { createPlayerProfile, getPlayerProfile, applyPassiveRegeneration, applyReferralCode } from '@/utils/api';
 import { useNotificationsStore } from './notifications';
 import type { User, Session } from '@supabase/supabase-js';
 
@@ -217,6 +217,35 @@ export const useAuthStore = defineStore('auth', () => {
 
       player.value = result.player;
       needsUsername.value = false;
+
+      // Aplicar código de referido pendiente si existe
+      const pendingRefCode = localStorage.getItem('pendingReferralCode');
+      if (pendingRefCode && result.player) {
+        try {
+          const refResult = await applyReferralCode(result.player.id, pendingRefCode);
+          if (refResult.success) {
+            // Actualizar balance del jugador con el bonus
+            player.value = {
+              ...player.value!,
+              gamecoin_balance: (player.value?.gamecoin_balance ?? 0) + (refResult.playerBonus ?? 0),
+            };
+            // Notificar éxito
+            const notificationsStore = useNotificationsStore();
+            notificationsStore.addNotification({
+              type: 'referral_applied',
+              title: 'notifications.referralApplied.title',
+              message: 'notifications.referralApplied.message',
+              icon: '🎁',
+              severity: 'success',
+              data: { bonus: refResult.playerBonus, referrer: refResult.referrerUsername },
+            });
+          }
+        } catch (e) {
+          console.warn('Error applying pending referral code:', e);
+        } finally {
+          localStorage.removeItem('pendingReferralCode');
+        }
+      }
 
       return true;
     } catch (e) {

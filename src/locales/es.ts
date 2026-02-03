@@ -812,6 +812,10 @@ export default {
       title: '¡Bienvenido de vuelta!',
       message: 'Recursos regenerados: {resources}',
     },
+    referralApplied: {
+      title: '¡Código de referido aplicado!',
+      message: 'Recibiste {bonus} GameCoin de {referrer}',
+    },
     rigTurnedOn: {
       title: 'Rig Activado',
       message: '"{rigName}" esta minando.',

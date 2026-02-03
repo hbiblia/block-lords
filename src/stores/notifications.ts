@@ -13,7 +13,8 @@ export type NotificationType =
   | 'low_internet'
   | 'welcome_back'
   | 'rig_turned_on'
-  | 'rig_turned_off';
+  | 'rig_turned_off'
+  | 'referral_applied';
 
 export interface GameNotification {
   id: string;

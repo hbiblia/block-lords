@@ -66,6 +66,12 @@ const router = createRouter({
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore();
 
+  // Capturar código de referido de la URL si existe
+  const refCode = to.query.ref as string | undefined;
+  if (refCode && refCode.length >= 6) {
+    localStorage.setItem('pendingReferralCode', refCode.toUpperCase());
+  }
+
   // Esperar a que auth esté inicializado antes de verificar
   await authStore.waitForInit();
 
