@@ -340,9 +340,6 @@ export const useAuthStore = defineStore('auth', () => {
     if (isCheckingAuth.value) return;
 
     if (event === 'SIGNED_IN' && newSession) {
-      // Limpiar localStorage al iniciar sesión para evitar datos obsoletos
-      localStorage.clear();
-
       session.value = newSession;
       user.value = newSession.user;
       // Solo cargar el player si ya estamos inicializados (evita duplicar la carga inicial)

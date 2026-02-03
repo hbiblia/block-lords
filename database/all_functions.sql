@@ -1646,9 +1646,9 @@ BEGIN
       v_temp_penalty := GREATEST(0.3, v_temp_penalty);  -- Mínimo 30% hashrate
     END IF;
 
-    -- Penalización por condición: condición baja reduce hashrate
-    -- 100% condición = 100% hashrate, 0% condición = 20% hashrate
-    v_condition_penalty := 0.2 + (v_rig.condition / 100.0) * 0.8;
+    -- Penalización por condición: proporcional directo
+    -- 100% condición = 100% hashrate, 50% = 50%, mínimo 10%
+    v_condition_penalty := GREATEST(0.1, v_rig.condition / 100.0);
 
     -- Aplicar multiplicador de boost de hashrate
     v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty * v_hashrate_mult;
@@ -1718,7 +1718,11 @@ BEGIN
       v_temp_penalty := GREATEST(0.3, v_temp_penalty);
     END IF;
 
-    v_condition_penalty := 0.2 + (v_rig.condition / 100.0) * 0.8;
+    IF v_rig.condition >= 80 THEN
+      v_condition_penalty := 1.0;
+    ELSE
+      v_condition_penalty := 0.3 + (v_rig.condition / 80.0) * 0.7;
+    END IF;
 
     -- Aplicar multiplicador de boost de hashrate
     v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty * v_hashrate_mult;
@@ -5376,8 +5380,12 @@ BEGIN
       v_temp_penalty := GREATEST(0.3, v_temp_penalty);
     END IF;
 
-    -- Penalización por condición
-    v_condition_penalty := 0.2 + (v_rig.condition / 100.0) * 0.8;
+    -- Penalización por condición: solo penaliza bajo 70%
+    IF v_rig.condition >= 80 THEN
+      v_condition_penalty := 1.0;
+    ELSE
+      v_condition_penalty := 0.3 + (v_rig.condition / 80.0) * 0.7;
+    END IF;
 
     -- Bonus por nivel de hashrate upgrade (10% por nivel extra)
     v_hashrate_mult := v_hashrate_mult * (1 + (COALESCE(v_rig.hashrate_level, 1) - 1) * 0.10);

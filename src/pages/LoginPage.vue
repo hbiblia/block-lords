@@ -13,6 +13,9 @@ async function handleGoogleLogin() {
   error.value = '';
   loading.value = true;
 
+  // Limpiar localStorage al iniciar sesión para evitar datos obsoletos de sesiones anteriores
+  localStorage.clear();
+
   try {
     const success = await authStore.loginWithGoogle();
 
