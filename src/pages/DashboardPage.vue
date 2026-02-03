@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getPlayerMiningStats, getPlayerTransactions, getNetworkStats } from '@/utils/api';
@@ -9,6 +9,10 @@ const authStore = useAuthStore();
 
 const player = computed(() => authStore.player);
 const loading = ref(true);
+
+// Intervalo de actualización: cada 1 minuto (igual que heartbeat)
+const REFRESH_INTERVAL = 60 * 1000;
+let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
 const miningStats = ref({
   blocksMined: 0,
@@ -29,7 +33,8 @@ const recentActivity = ref<Array<{
   time: string;
 }>>([]);
 
-onMounted(async () => {
+// Función para cargar/actualizar estadísticas
+async function loadStats() {
   try {
     const [statsData, transactionsData, networkData] = await Promise.all([
       getPlayerMiningStats(authStore.player!.id),
@@ -47,9 +52,35 @@ onMounted(async () => {
     }));
   } catch (e) {
     console.error('Error loading dashboard:', e);
-  } finally {
-    loading.value = false;
   }
+}
+
+// Iniciar actualización periódica
+function startRefresh() {
+  if (refreshInterval) return;
+  refreshInterval = setInterval(() => {
+    if (authStore.isAuthenticated) {
+      loadStats();
+    }
+  }, REFRESH_INTERVAL);
+}
+
+// Detener actualización periódica
+function stopRefresh() {
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
+}
+
+onMounted(async () => {
+  await loadStats();
+  loading.value = false;
+  startRefresh();
+});
+
+onUnmounted(() => {
+  stopRefresh();
 });
 
 function getRankColor(score: number): string {
