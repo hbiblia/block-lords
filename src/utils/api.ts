@@ -378,6 +378,25 @@ export async function installCoolingFromInventory(playerId: string, coolingId: s
   return data;
 }
 
+// === RIG INVENTORY ===
+
+// Obtener rigs en inventario del jugador
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerRigInventory(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_rig_inventory', {
+    p_player_id: playerId,
+  });
+}
+
+// Instalar rig desde inventario
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function installRigFromInventory(playerId: string, rigId: string): Promise<any> {
+  return rpcWithRetry('install_rig_from_inventory', {
+    p_player_id: playerId,
+    p_rig_id: rigId,
+  }, { critical: true });
+}
+
 // Instalar cooling en un rig específico
 export async function installCoolingToRig(playerId: string, rigId: string, coolingId: string) {
   const { data, error } = await supabase.rpc('install_cooling_to_rig', {

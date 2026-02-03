@@ -654,3 +654,19 @@ DROP POLICY IF EXISTS "Ver propios depositos" ON ron_deposits;
 CREATE POLICY "Ver propios depositos"
   ON ron_deposits FOR SELECT
   USING (auth.uid() = player_id);
+
+-- =====================================================
+-- POLÍTICAS PARA PLAYER_RIG_INVENTORY (Rigs en inventario)
+-- =====================================================
+
+ALTER TABLE player_rig_inventory ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "player_rig_inventory_select" ON player_rig_inventory;
+CREATE POLICY "player_rig_inventory_select"
+  ON player_rig_inventory FOR SELECT
+  USING (player_id = auth.uid());
+
+DROP POLICY IF EXISTS "player_rig_inventory_all_auth" ON player_rig_inventory;
+CREATE POLICY "player_rig_inventory_all_auth"
+  ON player_rig_inventory FOR ALL
+  USING (player_id = auth.uid());

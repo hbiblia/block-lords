@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRealtimeStore } from '@/stores/realtime';
 
@@ -8,6 +9,15 @@ const realtimeStore = useRealtimeStore();
 function handleRefresh() {
   window.location.reload();
 }
+
+// Auto-reload when modal appears - always reload, even if connection comes back
+watch(() => realtimeStore.showDisconnectedModal, (showModal) => {
+  if (showModal) {
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
+  }
+});
 </script>
 
 <template>
@@ -35,8 +45,14 @@ function handleRefresh() {
         </h2>
 
         <!-- Message -->
-        <p class="text-text-muted mb-6">
+        <p class="text-text-muted mb-4">
           {{ t('connection.description') }}
+        </p>
+
+        <!-- Auto-reload notice -->
+        <p class="text-sm text-accent-primary mb-6 flex items-center justify-center gap-2">
+          <span class="animate-spin w-4 h-4 border-2 border-accent-primary border-t-transparent rounded-full"></span>
+          Recargando automáticamente...
         </p>
 
         <!-- Actions -->

@@ -496,11 +496,8 @@ onUnmounted(() => {
     <!-- Active Boosts Bar -->
     <div v-if="activeBoosts.length > 0" class="mb-4">
       <div class="flex flex-wrap gap-2">
-        <div
-          v-for="boost in activeBoosts"
-          :key="boost.id"
-          class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30"
-        >
+        <div v-for="boost in activeBoosts" :key="boost.id"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30">
           <span>{{ getBoostIcon(boost.boost_type) }}</span>
           <span class="text-sm font-medium text-purple-400">{{ getBoostName(boost.boost_id) }}</span>
           <span class="text-xs text-text-muted">{{ formatTimeRemaining(boost.seconds_remaining) }}</span>
@@ -510,7 +507,8 @@ onUnmounted(() => {
 
     <!-- Primera carga - solo si no hay datos en cache -->
     <div v-if="loading && !dataLoaded" class="text-center py-20 text-text-muted">
-      <div class="w-12 h-12 mx-auto rounded-xl bg-gradient-primary flex items-center justify-center text-2xl animate-pulse mb-4">
+      <div
+        class="w-12 h-12 mx-auto rounded-xl bg-gradient-primary flex items-center justify-center text-2xl animate-pulse mb-4">
         ⛏️
       </div>
       {{ t('mining.loadingStation') }}
@@ -520,27 +518,22 @@ onUnmounted(() => {
     <div v-else class="space-y-6">
       <!-- Mining Status Panel -->
       <div class="card relative overflow-hidden">
-        <div
-          v-if="totalHashrate > 0"
-          class="absolute inset-0 bg-gradient-to-r from-accent-primary/5 via-accent-secondary/5 to-accent-primary/5 animate-pulse"
-        ></div>
+        <div v-if="totalHashrate > 0"
+          class="absolute inset-0 bg-gradient-to-r from-accent-primary/5 via-accent-secondary/5 to-accent-primary/5 animate-pulse">
+        </div>
 
         <div class="relative z-10">
           <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-3">
-              <div
-                class="w-14 h-14 rounded-xl flex items-center justify-center text-3xl"
-                :class="totalHashrate > 0 ? 'bg-gradient-primary animate-pulse' : 'bg-bg-tertiary'"
-              >
+              <div class="w-14 h-14 rounded-xl flex items-center justify-center text-3xl"
+                :class="totalHashrate > 0 ? 'bg-gradient-primary animate-pulse' : 'bg-bg-tertiary'">
                 ⛏️
               </div>
               <div>
                 <div class="flex items-center gap-2">
                   <h2 class="text-lg font-semibold">{{ t('mining.miningCenter') }}</h2>
-                  <span
-                    v-if="isPremium"
-                    class="px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1"
-                  >
+                  <span v-if="isPremium"
+                    class="px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1">
                     <span>👑</span>
                     <span>Premium</span>
                   </span>
@@ -552,16 +545,14 @@ onUnmounted(() => {
             </div>
 
             <div class="text-right">
-              <div class="text-3xl font-bold font-mono" :class="effectiveHashrate > 0 ? 'gradient-text' : 'text-text-muted'">
+              <div class="text-3xl font-bold font-mono"
+                :class="effectiveHashrate > 0 ? 'gradient-text' : 'text-text-muted'">
                 {{ Math.round(effectiveHashrate).toLocaleString() }}
               </div>
               <div class="text-xs text-text-muted flex items-center justify-end gap-1">
                 <span>{{ t('mining.effectiveHashrate') }}</span>
-                <span
-                  v-if="effectiveHashrate < totalHashrate"
-                  class="text-status-danger"
-                  :title="`Base: ${totalHashrate.toLocaleString()} H/s - Reducido por temperatura/condición`"
-                >
+                <span v-if="effectiveHashrate < totalHashrate" class="text-status-danger"
+                  :title="`Base: ${totalHashrate.toLocaleString()} H/s - Reducido por temperatura/condición`">
                   (↓{{ Math.round(((totalHashrate - effectiveHashrate) / totalHashrate) * 100) }}%)
                 </span>
               </div>
@@ -575,16 +566,12 @@ onUnmounted(() => {
               <span class="font-mono text-accent-primary">{{ hashesCalculated.toFixed(0) }} hashes</span>
             </div>
             <div class="h-4 bg-bg-tertiary rounded-full overflow-hidden relative">
-              <div
-                class="h-full rounded-full transition-all duration-100"
+              <div class="h-full rounded-full transition-all duration-100"
                 :class="showBlockFound ? 'bg-status-success' : 'bg-gradient-to-r from-accent-primary to-accent-secondary'"
-                :style="{ width: `${miningProgress}%` }"
-              ></div>
-              <div
-                v-if="totalHashrate > 0"
+                :style="{ width: `${miningProgress}%` }"></div>
+              <div v-if="totalHashrate > 0"
                 class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                style="animation: shimmer 2s linear infinite;"
-              ></div>
+                style="animation: shimmer 2s linear infinite;"></div>
             </div>
           </div>
 
@@ -592,7 +579,8 @@ onUnmounted(() => {
           <div class="grid grid-cols-3 gap-3">
             <div class="bg-bg-secondary rounded-xl p-3 text-center relative">
               <div class="absolute top-1 right-1.5 text-[10px] text-text-muted/50">🌐</div>
-              <div class="text-lg font-bold text-accent-tertiary">{{ networkStats.difficulty?.toLocaleString() ?? 0 }}</div>
+              <div class="text-lg font-bold text-accent-tertiary">{{ networkStats.difficulty?.toLocaleString() ?? 0 }}
+              </div>
               <div class="text-[10px] text-text-muted">{{ t('mining.difficulty') }}</div>
             </div>
             <div class="bg-bg-secondary rounded-xl p-3 text-center relative">
@@ -609,10 +597,8 @@ onUnmounted(() => {
         </div>
 
         <!-- Block Found Celebration -->
-        <div
-          v-if="showBlockFound"
-          class="absolute inset-0 bg-status-success/20 flex items-center justify-center z-20 animate-fade-in"
-        >
+        <div v-if="showBlockFound"
+          class="absolute inset-0 bg-status-success/20 flex items-center justify-center z-20 animate-fade-in">
           <div class="text-center">
             <div class="text-6xl mb-4 animate-bounce">🎉</div>
             <div class="text-2xl font-bold text-status-success">{{ t('mining.blockMined') }}</div>
@@ -629,7 +615,9 @@ onUnmounted(() => {
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <div class="bg-bg-secondary rounded-xl p-3 text-center">
             <div class="text-lg font-bold font-mono">
-              <span v-if="activeRigsCount > 0" :class="effectiveHashrate < totalHashrate ? 'text-status-warning' : ''">{{ Math.round(effectiveHashrate).toLocaleString() }}</span>
+              <span v-if="activeRigsCount > 0"
+                :class="effectiveHashrate < totalHashrate ? 'text-status-warning' : ''">{{
+                  Math.round(effectiveHashrate).toLocaleString() }}</span>
               <span v-else class="text-text-muted">--</span>
             </div>
             <div class="text-[10px] text-text-muted">{{ t('mining.hashrate') }}</div>
@@ -638,42 +626,36 @@ onUnmounted(() => {
             <div class="text-lg font-bold font-mono">{{ activeRigsCount }} / {{ rigs.length }}</div>
             <div class="text-[10px] text-text-muted">{{ t('mining.activeRigsLabel') }}</div>
           </div>
-          <div
-            v-tooltip="t('mining.tooltips.probPerBlock')"
-            class="bg-bg-secondary rounded-xl p-3 text-center cursor-help"
-          >
-            <div class="text-lg font-bold font-mono" :class="activeRigsCount > 0 ? 'text-status-warning' : 'text-text-muted'">
+          <div v-tooltip="t('mining.tooltips.probPerBlock')"
+            class="bg-bg-secondary rounded-xl p-3 text-center cursor-help">
+            <div class="text-lg font-bold font-mono"
+              :class="activeRigsCount > 0 ? 'text-status-warning' : 'text-text-muted'">
               {{ activeRigsCount > 0 ? miningChance.toFixed(2) + '%' : '--' }}
             </div>
             <div class="text-[10px] text-text-muted">{{ t('mining.probPerBlock') }}</div>
           </div>
           <!-- Mining Estimate Stats -->
-          <div
-            v-tooltip="t('mining.tooltips.nextBlock')"
-            class="rounded-xl p-3 text-center cursor-help"
-            :class="activeRigsCount > 0 && isEstimateMining ? 'bg-accent-primary/10 border border-accent-primary/30' : 'bg-bg-secondary'"
-          >
-            <div class="text-lg font-bold font-mono" :class="activeRigsCount > 0 && estimatedTimeText ? 'text-accent-primary' : 'text-text-muted'">
+          <div v-tooltip="t('mining.tooltips.nextBlock')" class="rounded-xl p-3 text-center cursor-help"
+            :class="activeRigsCount > 0 && isEstimateMining ? 'bg-accent-primary/10 border border-accent-primary/30' : 'bg-bg-secondary'">
+            <div class="text-lg font-bold font-mono"
+              :class="activeRigsCount > 0 && estimatedTimeText ? 'text-accent-primary' : 'text-text-muted'">
               {{ activeRigsCount > 0 && estimatedTimeText ? estimatedTimeText : '--' }}
             </div>
             <div class="text-[10px] text-text-muted flex items-center justify-center gap-1">
               <span>⏱️</span> {{ t('mining.nextBlock') }}
             </div>
           </div>
-          <div
-            v-tooltip="t('mining.tooltips.estimateRange')"
-            class="bg-bg-secondary rounded-xl p-3 text-center cursor-help"
-          >
+          <div v-tooltip="t('mining.tooltips.estimateRange')"
+            class="bg-bg-secondary rounded-xl p-3 text-center cursor-help">
             <div class="text-lg font-bold font-mono text-text-muted">
               {{ activeRigsCount > 0 && timeRangeText ? timeRangeText : '--' }}
             </div>
             <div class="text-[10px] text-text-muted">{{ t('mining.estimateRange') }}</div>
           </div>
-          <div
-            v-tooltip="t('mining.tooltips.blocksPerDay')"
-            class="bg-bg-secondary rounded-xl p-3 text-center cursor-help"
-          >
-            <div class="text-lg font-bold font-mono" :class="activeRigsCount > 0 && blocksPerDayText ? 'text-status-success' : 'text-text-muted'">
+          <div v-tooltip="t('mining.tooltips.blocksPerDay')"
+            class="bg-bg-secondary rounded-xl p-3 text-center cursor-help">
+            <div class="text-lg font-bold font-mono"
+              :class="activeRigsCount > 0 && blocksPerDayText ? 'text-status-success' : 'text-text-muted'">
               {{ activeRigsCount > 0 && blocksPerDayText ? blocksPerDayText : '--' }}
             </div>
             <div class="text-[10px] text-text-muted">{{ t('mining.blocksPerDay') }}</div>
@@ -686,11 +668,8 @@ onUnmounted(() => {
         <div class="lg:col-span-2 space-y-4">
           <h2 class="text-lg font-semibold flex items-center gap-2">
             <span>🖥️</span> {{ t('mining.yourRigs') }}
-            <span
-              v-if="slotInfo"
-              class="text-sm font-normal px-2 py-0.5 rounded-full"
-              :class="slotInfo.available_slots === 0 ? 'bg-status-warning/20 text-status-warning' : 'bg-accent-primary/20 text-accent-primary'"
-            >
+            <span v-if="slotInfo" class="text-sm font-normal px-2 py-0.5 rounded-full"
+              :class="slotInfo.available_slots === 0 ? 'bg-status-warning/20 text-status-warning' : 'bg-accent-primary/20 text-accent-primary'">
               {{ slotInfo.used_slots }}/{{ slotInfo.current_slots }}
             </span>
           </h2>
@@ -704,16 +683,14 @@ onUnmounted(() => {
           </div>
 
           <div v-else class="grid sm:grid-cols-2 gap-4">
-            <div
-              v-for="playerRig in rigs"
-              :key="playerRig.id"
+            <div v-for="playerRig in rigs" :key="playerRig.id"
               class="bg-bg-secondary/80 rounded-xl border p-4 relative overflow-hidden"
-              :class="playerRig.condition <= 0 ? 'border-status-danger/70' : playerRig.condition < 30 ? 'border-status-warning/50' : 'border-border/30'"
-            >
+              :class="playerRig.condition <= 0 ? 'border-status-danger/70' : playerRig.condition < 30 ? 'border-status-warning/50' : 'border-border/30'">
               <!-- Mining indicator dot -->
               <div v-if="playerRig.is_active" class="absolute top-3 right-3">
                 <span class="relative flex h-2.5 w-2.5">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-success opacity-75"></span>
+                  <span
+                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-success opacity-75"></span>
                   <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-status-success"></span>
                 </span>
               </div>
@@ -727,14 +704,19 @@ onUnmounted(() => {
                 </div>
                 <div class="flex items-center gap-2">
                   <!-- Upgrade levels indicator -->
-                  <div v-if="(playerRig.hashrate_level ?? 1) > 1 || (playerRig.efficiency_level ?? 1) > 1 || (playerRig.thermal_level ?? 1) > 1"
-                       v-tooltip="t('mining.tooltips.upgrades') + ` - ⚡${playerRig.hashrate_level ?? 1} 💡${playerRig.efficiency_level ?? 1} ❄️${playerRig.thermal_level ?? 1}`"
-                       class="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-purple-500/20 rounded cursor-help">
-                    <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400">⚡{{ playerRig.hashrate_level }}</span>
-                    <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">💡{{ playerRig.efficiency_level }}</span>
-                    <span v-if="(playerRig.thermal_level ?? 1) > 1" class="text-cyan-400">❄️{{ playerRig.thermal_level }}</span>
+                  <div
+                    v-if="(playerRig.hashrate_level ?? 1) > 1 || (playerRig.efficiency_level ?? 1) > 1 || (playerRig.thermal_level ?? 1) > 1"
+                    v-tooltip="t('mining.tooltips.upgrades') + ` - ⚡${playerRig.hashrate_level ?? 1} 💡${playerRig.efficiency_level ?? 1} ❄️${playerRig.thermal_level ?? 1}`"
+                    class="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-purple-500/20 rounded cursor-help">
+                    <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400">⚡{{
+                      playerRig.hashrate_level }}</span>
+                    <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">💡{{
+                      playerRig.efficiency_level }}</span>
+                    <span v-if="(playerRig.thermal_level ?? 1) > 1" class="text-cyan-400">❄️{{ playerRig.thermal_level
+                      }}</span>
                   </div>
-                  <span v-tooltip="t('mining.tooltips.tier')" class="text-[11px] text-text-muted uppercase px-2 py-0.5 bg-bg-tertiary/50 rounded cursor-help">
+                  <span v-tooltip="t('mining.tooltips.tier')"
+                    class="text-[11px] text-text-muted uppercase px-2 py-0.5 bg-bg-tertiary/50 rounded cursor-help">
                     {{ playerRig.rig.tier }}
                   </span>
                 </div>
@@ -742,27 +724,23 @@ onUnmounted(() => {
 
               <!-- Hashrate -->
               <div v-tooltip="t('mining.tooltips.hashrate')" class="flex items-baseline gap-1.5 mb-3 cursor-help">
-                <span
-                  class="text-xl font-bold font-mono"
-                  :class="playerRig.is_active
-                    ? (miningStore.getRigHashrateBoostPercent(playerRig) > 0
-                      ? 'text-status-success'
-                      : miningStore.getRigPenaltyPercent(playerRig) > 0
-                        ? 'text-status-warning'
-                        : 'text-white')
-                    : 'text-text-muted'"
-                  :key="uptimeKey"
-                >
-                  {{ playerRig.is_active ? Math.round(miningStore.getRigEffectiveHashrate(playerRig)).toLocaleString() : '0' }}
+                <span class="text-xl font-bold font-mono" :class="playerRig.is_active
+                  ? (miningStore.getRigHashrateBoostPercent(playerRig) > 0
+                    ? 'text-status-success'
+                    : miningStore.getRigPenaltyPercent(playerRig) > 0
+                      ? 'text-status-warning'
+                      : 'text-white')
+                  : 'text-text-muted'" :key="uptimeKey">
+                  {{ playerRig.is_active ? Math.round(miningStore.getRigEffectiveHashrate(playerRig)).toLocaleString() :
+                  '0' }}
                 </span>
                 <span class="text-sm text-text-muted">
                   / {{ getUpgradedHashrate(playerRig).toLocaleString() }} H/s
-                  <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400 text-xs">(+{{ getHashrateBonus(playerRig) }}%)</span>
+                  <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400 text-xs">(+{{
+                    getHashrateBonus(playerRig) }}%)</span>
                 </span>
-                <span
-                  v-if="playerRig.is_active && miningStore.getRigHashrateBoostPercent(playerRig) > 0"
-                  class="text-xs text-status-success font-medium"
-                >
+                <span v-if="playerRig.is_active && miningStore.getRigHashrateBoostPercent(playerRig) > 0"
+                  class="text-xs text-status-success font-medium">
                   (+{{ miningStore.getRigHashrateBoostPercent(playerRig) }}% ⚡)
                 </span>
               </div>
@@ -770,28 +748,36 @@ onUnmounted(() => {
               <!-- Stats row -->
               <div class="flex items-center gap-4 text-xs text-text-muted mb-3">
                 <span v-tooltip="t('mining.tooltips.energy')" class="flex items-center gap-1 cursor-help">
-                  <span class="text-status-warning">⚡</span>{{ (getUpgradedPower(playerRig) + getRigCoolingEnergy(playerRig.id)).toFixed(0) }}/t
-                  <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">(-{{ getEfficiencyBonus(playerRig) }}%)</span>
-                  <span v-if="miningStore.getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger">(+{{ miningStore.getPowerPenaltyPercent(playerRig) }}%)</span>
+                  <span class="text-status-warning">⚡</span>{{ (getUpgradedPower(playerRig) +
+                    getRigCoolingEnergy(playerRig.id)).toFixed(0) }}/t
+                  <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">(-{{
+                    getEfficiencyBonus(playerRig) }}%)</span>
+                  <span v-if="miningStore.getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger">(+{{
+                    miningStore.getPowerPenaltyPercent(playerRig) }}%)</span>
                 </span>
                 <span v-tooltip="t('mining.tooltips.internet')" class="flex items-center gap-1 cursor-help">
                   <span class="text-accent-tertiary">📡</span>{{ playerRig.rig.internet_consumption }}/t
                 </span>
-                <span v-if="rigCooling[playerRig.id]?.length > 0 || getThermalBonus(playerRig) > 0" v-tooltip="t('mining.tooltips.cooling')" class="flex items-center gap-1 cursor-help">
+                <span v-if="rigCooling[playerRig.id]?.length > 0 || getThermalBonus(playerRig) > 0"
+                  v-tooltip="t('mining.tooltips.cooling')" class="flex items-center gap-1 cursor-help">
                   <span :class="isAnyCoolingDegraded(playerRig.id) ? 'text-status-warning' : 'text-cyan-400'">❄️</span>
                   <span :class="isAnyCoolingDegraded(playerRig.id) ? 'text-status-warning' : 'text-cyan-400'">
                     -{{ (getRigTotalCoolingPower(playerRig.id) + getThermalBonus(playerRig)).toFixed(0) }}°
                   </span>
-                  <span v-if="getThermalBonus(playerRig) > 0" class="text-cyan-300 text-[10px]">(⬆{{ getThermalBonus(playerRig) }}°)</span>
+                  <span v-if="getThermalBonus(playerRig) > 0" class="text-cyan-300 text-[10px]">(⬆{{
+                    getThermalBonus(playerRig) }}°)</span>
                   <span v-if="isAnyCoolingDegraded(playerRig.id)" class="text-status-warning text-[10px]">
                     ⚠️
                   </span>
                 </span>
-                <span v-if="rigBoosts[playerRig.id]?.length > 0" v-tooltip="t('mining.tooltips.boosts') + ': ' + rigBoosts[playerRig.id].map((b: any) => b.name).join(', ')" class="flex items-center gap-1 cursor-help">
+                <span v-if="rigBoosts[playerRig.id]?.length > 0"
+                  v-tooltip="t('mining.tooltips.boosts') + ': ' + rigBoosts[playerRig.id].map((b: any) => b.name).join(', ')"
+                  class="flex items-center gap-1 cursor-help">
                   <span class="text-purple-400">🚀</span>
                   <span class="text-purple-400">{{ rigBoosts[playerRig.id].length }}</span>
                 </span>
-                <span v-if="playerRig.is_active && playerRig.activated_at" v-tooltip="t('mining.tooltips.uptime')" class="flex items-center gap-1 ml-auto cursor-help" :key="uptimeKey">
+                <span v-if="playerRig.is_active && playerRig.activated_at" v-tooltip="t('mining.tooltips.uptime')"
+                  class="flex items-center gap-1 ml-auto cursor-help" :key="uptimeKey">
                   ⏱️ {{ formatUptime(playerRig.activated_at) }}
                 </span>
               </div>
@@ -802,11 +788,9 @@ onUnmounted(() => {
                 <div v-tooltip="t('mining.tooltips.temperature')" class="flex items-center gap-2 cursor-help">
                   <span class="text-xs text-text-muted w-6">🌡️</span>
                   <div class="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
-                    <div
-                      class="h-full rounded-full transition-all"
+                    <div class="h-full rounded-full transition-all"
                       :class="getTempBarColor(playerRig.temperature ?? 25)"
-                      :style="{ width: `${playerRig.temperature ?? 25}%` }"
-                    ></div>
+                      :style="{ width: `${playerRig.temperature ?? 25}%` }"></div>
                   </div>
                   <span class="text-xs w-14 text-right" :class="getTempColor(playerRig.temperature ?? 25)">
                     {{ (playerRig.temperature ?? 25).toFixed(0) }}°C
@@ -816,13 +800,12 @@ onUnmounted(() => {
                 <div v-tooltip="t('mining.tooltips.condition')" class="flex items-center gap-2 cursor-help">
                   <span class="text-xs text-text-muted w-6">🔧</span>
                   <div class="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
-                    <div
-                      class="h-full rounded-full"
+                    <div class="h-full rounded-full"
                       :class="playerRig.condition > 50 ? 'bg-status-success' : playerRig.condition > 20 ? 'bg-status-warning' : 'bg-status-danger'"
-                      :style="{ width: `${playerRig.condition}%` }"
-                    ></div>
+                      :style="{ width: `${playerRig.condition}%` }"></div>
                   </div>
-                  <span class="text-xs w-14 text-right" :class="playerRig.condition < 30 ? 'text-status-danger' : 'text-text-muted'">
+                  <span class="text-xs w-14 text-right"
+                    :class="playerRig.condition < 30 ? 'text-status-danger' : 'text-text-muted'">
                     {{ playerRig.condition }}%
                   </span>
                 </div>
@@ -830,35 +813,27 @@ onUnmounted(() => {
 
               <!-- Action buttons -->
               <div class="flex gap-2">
-                <button
-                  @click="handleToggleRig(playerRig.id)"
-                  :disabled="playerRig.condition <= 0"
-                  class="flex-1 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
-                  :class="playerRig.condition <= 0
+                <button @click="handleToggleRig(playerRig.id)" :disabled="playerRig.condition <= 0"
+                  class="flex-1 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50" :class="playerRig.condition <= 0
                     ? 'bg-status-danger/10 text-status-danger cursor-not-allowed'
                     : playerRig.is_active
                       ? 'bg-status-danger/10 text-status-danger hover:bg-status-danger/20'
-                      : 'bg-status-success/10 text-status-success hover:bg-status-success/20'"
-                >
-                  {{ playerRig.condition <= 0 ? '🔧 ' + t('mining.repairInInventory') : (playerRig.is_active ? '⏹ ' + t('mining.stop') : '▶ ' + t('mining.start')) }}
-                </button>
-                <button
-                  @click="openRigManage(playerRig)"
-                  class="px-3 py-2 rounded-lg text-sm font-medium transition-all bg-bg-tertiary hover:bg-bg-tertiary/80 text-text-muted hover:text-white"
-                  :title="t('mining.manage')"
-                >
-                  ⚙️
-                </button>
+                      : 'bg-status-success/10 text-status-success hover:bg-status-success/20'">
+                  {{ playerRig.condition <= 0 ? '🔧 ' + t('mining.repairInInventory') : (playerRig.is_active ? '⏹ ' +
+                    t('mining.stop') : '▶ ' + t('mining.start')) }} </button>
+                    <button @click="openRigManage(playerRig)"
+                      class="px-3 py-2 rounded-lg text-sm font-medium transition-all bg-bg-tertiary hover:bg-bg-tertiary/80 text-text-muted hover:text-white"
+                      :title="t('mining.manage')">
+                      ⚙️
+                    </button>
               </div>
             </div>
 
             <!-- Empty Available Slots -->
-            <div
-              v-for="n in (slotInfo?.available_slots ?? 0)"
-              :key="'empty-slot-' + n"
-              class="bg-bg-secondary/50 rounded-xl border border-dashed border-border/50 p-4 flex flex-col items-center justify-center min-h-[200px]"
-            >
-              <div class="w-12 h-12 rounded-lg bg-bg-tertiary/50 flex items-center justify-center text-2xl mb-3 opacity-50">
+            <div v-for="n in (slotInfo?.available_slots ?? 0)" :key="'empty-slot-' + n"
+              class="bg-bg-secondary/50 rounded-xl border border-dashed border-border/50 p-4 flex flex-col items-center justify-center min-h-[200px]">
+              <div
+                class="w-12 h-12 rounded-lg bg-bg-tertiary/50 flex items-center justify-center text-2xl mb-3 opacity-50">
                 🖥️
               </div>
               <div class="text-text-muted font-medium">{{ t('slots.available', 'Disponible') }}</div>
@@ -866,10 +841,8 @@ onUnmounted(() => {
             </div>
 
             <!-- Slot Purchase Card -->
-            <div
-              v-if="slotInfo?.next_upgrade"
-              class="bg-bg-secondary/80 rounded-xl border border-dashed border-accent-primary/50 p-4 flex flex-col justify-between min-h-[200px]"
-            >
+            <div v-if="slotInfo?.next_upgrade"
+              class="bg-bg-secondary/80 rounded-xl border border-dashed border-accent-primary/50 p-4 flex flex-col justify-between min-h-[200px]">
               <div>
                 <div class="flex items-center gap-2 mb-3">
                   <div class="w-10 h-10 rounded-lg bg-accent-primary/20 flex items-center justify-center text-xl">
@@ -890,14 +863,10 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <button
-                @click="openSlotPurchaseConfirm"
-                :disabled="!canAffordSlot()"
-                class="w-full py-2.5 rounded-lg text-sm font-semibold transition-all"
-                :class="canAffordSlot()
+              <button @click="openSlotPurchaseConfirm" :disabled="!canAffordSlot()"
+                class="w-full py-2.5 rounded-lg text-sm font-semibold transition-all" :class="canAffordSlot()
                   ? 'bg-gradient-primary hover:opacity-90'
-                  : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-              >
+                  : 'bg-bg-tertiary text-text-muted cursor-not-allowed'">
                 <span v-if="!canAffordSlot()">
                   {{ t('slots.insufficientFunds', 'Fondos insuficientes') }}
                 </span>
@@ -908,12 +877,11 @@ onUnmounted(() => {
             </div>
 
             <!-- Max slots reached card -->
-            <div
-              v-else-if="slotInfo && !slotInfo.next_upgrade"
-              class="bg-status-success/10 rounded-xl border border-status-success/30 p-4 flex flex-col items-center justify-center min-h-[200px]"
-            >
+            <div v-else-if="slotInfo && !slotInfo.next_upgrade"
+              class="bg-status-success/10 rounded-xl border border-status-success/30 p-4 flex flex-col items-center justify-center min-h-[200px]">
               <div class="text-4xl mb-2">🏆</div>
-              <div class="text-status-success font-semibold text-center">{{ t('slots.maxReached', '¡Máximo alcanzado!') }}</div>
+              <div class="text-status-success font-semibold text-center">{{ t('slots.maxReached', '¡Máximo alcanzado!')
+                }}</div>
               <div class="text-sm text-text-muted">{{ slotInfo.max_slots }} slots</div>
             </div>
           </div>
@@ -932,33 +900,33 @@ onUnmounted(() => {
             </div>
 
             <div v-else class="space-y-1.5">
-              <div
-                v-for="(block, index) in recentBlocks"
-                :key="block.id"
-                class="px-2.5 py-2 rounded-lg"
-                :class="[
-                  block.miner?.id === authStore.player?.id
-                    ? 'bg-status-success/10 border border-status-success/20'
-                    : block.is_premium
-                      ? 'bg-amber-500/10 border border-amber-500/20'
-                      : 'bg-bg-secondary/50'
-                ]"
-              >
+              <div v-for="(block, index) in recentBlocks" :key="block.id" class="px-2.5 py-2 rounded-lg" :class="[
+                block.miner?.id === authStore.player?.id
+                  ? 'bg-status-success/10 border border-status-success/20'
+                  : block.is_premium
+                    ? 'bg-amber-500/10 border border-amber-500/20'
+                    : 'bg-bg-secondary/50'
+              ]">
                 <!-- Row 1: Height + Time + Premium -->
                 <div class="flex items-center justify-between mb-1">
                   <div class="flex items-center gap-1.5">
                     <span v-if="index === 0" class="text-xs">🆕</span>
                     <span v-if="block.is_premium" class="text-xs" title="Premium">👑</span>
-                    <span class="font-mono text-sm font-medium" :class="block.miner?.id === authStore.player?.id ? 'text-status-success' : block.is_premium ? 'text-amber-400' : 'text-accent-primary'">#{{ block.height }}</span>
+                    <span class="font-mono text-sm font-medium"
+                      :class="block.miner?.id === authStore.player?.id ? 'text-status-success' : block.is_premium ? 'text-amber-400' : 'text-accent-primary'">#{{
+                      block.height }}</span>
                   </div>
-                  <span class="text-[10px] text-text-muted" :key="uptimeKey">{{ formatTimeAgo(block.created_at) }}</span>
+                  <span class="text-[10px] text-text-muted" :key="uptimeKey">{{ formatTimeAgo(block.created_at)
+                    }}</span>
                 </div>
                 <!-- Row 2: Miner + Reward -->
                 <div class="flex items-center justify-between text-xs">
                   <span class="text-text-muted truncate max-w-[100px]">
-                    {{ block.miner?.id === authStore.player?.id ? '⭐ ' + t('mining.you') : block.miner?.username ?? t('mining.unknown') }}
+                    {{ block.miner?.id === authStore.player?.id ? '⭐ ' + t('mining.you') : block.miner?.username ??
+                      t('mining.unknown') }}
                   </span>
-                  <span class="font-mono" :class="block.is_premium ? 'text-amber-400' : 'text-status-warning'">+{{ (block.reward ?? getBlockReward(block.height)).toFixed(0) }} ₿</span>
+                  <span class="font-mono" :class="block.is_premium ? 'text-amber-400' : 'text-status-warning'">+{{
+                    (block.reward ?? getBlockReward(block.height)).toFixed(0) }} ₿</span>
                 </div>
               </div>
             </div>
@@ -968,11 +936,11 @@ onUnmounted(() => {
           <div class="card p-3 text-center">
             <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
             <div class="flex justify-center">
-              <ins class="adsbygoogle"
-                style="display:block; max-width:300px; width:100%; height:250px;"
-                data-ad-format="rectangle"
-                data-ad-client="ca-pub-7500429866047477"
-                data-ad-slot="7767935377"></ins>
+              <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7500429866047477"
+                data-ad-slot="6463255272" data-ad-format="auto" data-full-width-responsive="true"></ins>
+              <script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
             </div>
           </div>
         </div>
@@ -980,21 +948,14 @@ onUnmounted(() => {
     </div>
 
     <!-- Rig Enhance Modal -->
-    <RigEnhanceModal
-      :show="showRigManage"
-      :rig="selectedRigForManage"
-      @close="closeRigManage"
-      @updated="handleRigUpdated"
-    />
+    <RigEnhanceModal :show="showRigManage" :rig="selectedRigForManage" @close="closeRigManage"
+      @updated="handleRigUpdated" />
 
     <!-- Slot Purchase Confirmation Modal -->
     <Teleport to="body">
       <Transition name="modal">
-        <div
-          v-if="showConfirmSlotPurchase && slotInfo?.next_upgrade"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-          @click.self="showConfirmSlotPurchase = false"
-        >
+        <div v-if="showConfirmSlotPurchase && slotInfo?.next_upgrade"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="showConfirmSlotPurchase = false">
           <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
           <div class="relative bg-bg-primary border border-border rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <h3 class="text-lg font-bold mb-4 text-center">{{ t('slots.confirmPurchase', 'Confirmar compra') }}</h3>
@@ -1016,18 +977,12 @@ onUnmounted(() => {
             </p>
 
             <div class="flex gap-3">
-              <button
-                @click="showConfirmSlotPurchase = false"
-                :disabled="buyingSlot"
-                class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
-              >
+              <button @click="showConfirmSlotPurchase = false" :disabled="buyingSlot"
+                class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
                 {{ t('common.cancel', 'Cancelar') }}
               </button>
-              <button
-                @click="confirmBuySlot"
-                :disabled="buyingSlot"
-                class="flex-1 py-2.5 rounded-lg font-semibold bg-gradient-primary hover:opacity-90 transition-opacity"
-              >
+              <button @click="confirmBuySlot" :disabled="buyingSlot"
+                class="flex-1 py-2.5 rounded-lg font-semibold bg-gradient-primary hover:opacity-90 transition-opacity">
                 <span v-if="buyingSlot" class="flex items-center justify-center gap-2">
                   <span class="animate-spin">⏳</span>
                 </span>
@@ -1042,11 +997,8 @@ onUnmounted(() => {
     <!-- Stop Rig Confirmation Modal -->
     <Teleport to="body">
       <Transition name="modal">
-        <div
-          v-if="showConfirmStopRig && rigToStop"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-          @click.self="cancelStopRig"
-        >
+        <div v-if="showConfirmStopRig && rigToStop" class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          @click.self="cancelStopRig">
           <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
           <div class="relative bg-bg-primary border border-border rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <h3 class="text-lg font-bold mb-4 text-center">{{ t('mining.confirmStop', '¿Detener rig?') }}</h3>
@@ -1054,7 +1006,8 @@ onUnmounted(() => {
             <div class="bg-bg-secondary rounded-xl p-4 mb-4">
               <div class="text-center mb-3">
                 <div class="text-3xl mb-2">⏹️</div>
-                <div class="font-semibold" :class="getTierColor(rigToStop.rig.tier)">{{ getRigName(rigToStop.rig.id) }}</div>
+                <div class="font-semibold" :class="getTierColor(rigToStop.rig.tier)">{{ getRigName(rigToStop.rig.id) }}
+                </div>
               </div>
               <div class="flex justify-center gap-4 text-sm text-text-muted">
                 <span>⚡ {{ rigToStop.rig.hashrate.toLocaleString() }} H/s</span>
@@ -1072,18 +1025,12 @@ onUnmounted(() => {
             </p>
 
             <div class="flex gap-3">
-              <button
-                @click="cancelStopRig"
-                :disabled="stoppingRig"
-                class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
-              >
+              <button @click="cancelStopRig" :disabled="stoppingRig"
+                class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
                 {{ t('common.cancel', 'Cancelar') }}
               </button>
-              <button
-                @click="confirmStopRig"
-                :disabled="stoppingRig"
-                class="flex-1 py-2.5 rounded-lg font-semibold bg-status-danger/20 text-status-danger hover:bg-status-danger/30 transition-colors"
-              >
+              <button @click="confirmStopRig" :disabled="stoppingRig"
+                class="flex-1 py-2.5 rounded-lg font-semibold bg-status-danger/20 text-status-danger hover:bg-status-danger/30 transition-colors">
                 <span v-if="stoppingRig" class="flex items-center justify-center gap-2">
                   <span class="animate-spin">⏳</span>
                 </span>
@@ -1099,8 +1046,13 @@ onUnmounted(() => {
 
 <style scoped>
 @keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .modal-enter-active,

@@ -42,8 +42,8 @@ ALTER TABLE cooling_items ADD COLUMN IF NOT EXISTS energy_cost NUMERIC DEFAULT 0
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
 
 -- Agregar columnas de capacidad máxima de recursos
-ALTER TABLE players ADD COLUMN IF NOT EXISTS max_energy NUMERIC DEFAULT 100;
-ALTER TABLE players ADD COLUMN IF NOT EXISTS max_internet NUMERIC DEFAULT 100;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS max_energy NUMERIC DEFAULT 300;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS max_internet NUMERIC DEFAULT 300;
 
 -- Agregar columnas para degradación de rigs
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS max_condition NUMERIC DEFAULT 100;
@@ -208,7 +208,7 @@ BEGIN
     RAISE EXCEPTION 'Energía insuficiente';
   END IF;
   UPDATE players SET energy = GREATEST(0, energy - p_amount) WHERE id = p_from_player;
-  UPDATE players SET energy = LEAST(100, energy + p_amount) WHERE id = p_to_player;
+  UPDATE players SET energy = LEAST(max_energy, energy + p_amount) WHERE id = p_to_player;
 END;
 $$;
 
@@ -227,7 +227,7 @@ BEGIN
     RAISE EXCEPTION 'Internet insuficiente';
   END IF;
   UPDATE players SET internet = GREATEST(0, internet - p_amount) WHERE id = p_from_player;
-  UPDATE players SET internet = LEAST(100, internet + p_amount) WHERE id = p_to_player;
+  UPDATE players SET internet = LEAST(max_internet, internet + p_amount) WHERE id = p_to_player;
 END;
 $$;
 
@@ -310,8 +310,8 @@ BEGIN
       v_internet_regen := FLOOR(v_minutes_offline / 15.0);
 
       -- Calcular cap de 50%
-      v_max_energy_cap := COALESCE(v_player.max_energy, 100) * 0.5;
-      v_max_internet_cap := COALESCE(v_player.max_internet, 100) * 0.5;
+      v_max_energy_cap := COALESCE(v_player.max_energy, 300) * 0.5;
+      v_max_internet_cap := COALESCE(v_player.max_internet, 300) * 0.5;
 
       -- Aplicar regeneración con cap
       v_new_energy := LEAST(v_max_energy_cap, v_player.energy + v_energy_regen);
@@ -401,7 +401,7 @@ BEGIN
 
   -- Crear jugador
   INSERT INTO players (id, email, username, gamecoin_balance, crypto_balance, energy, internet, reputation_score, region)
-  VALUES (p_user_id, p_email, p_username, 1000, 0, 100, 100, 50, 'global')
+  VALUES (p_user_id, p_email, p_username, 1000, 0, 300, 300, 50, 'global')
   RETURNING * INTO v_player;
 
   -- Dar rig inicial
@@ -748,6 +748,7 @@ END;
 $$;
 
 -- Comprar rig (soporta gamecoin, crypto, ron)
+-- Comprar rig (va al inventario, permite duplicados)
 CREATE OR REPLACE FUNCTION buy_rig(p_player_id UUID, p_rig_id TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -756,8 +757,6 @@ AS $$
 DECLARE
   v_player players%ROWTYPE;
   v_rig rigs%ROWTYPE;
-  v_existing_count INT;
-  v_total_rigs INT;
 BEGIN
   -- Verificar jugador
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
@@ -776,13 +775,100 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Este rig no está a la venta');
   END IF;
 
-  -- Verificar si ya lo tiene
-  SELECT COUNT(*) INTO v_existing_count
-  FROM player_rigs
+  -- SIN RESTRICCIÓN DE DUPLICADOS - puede comprar múltiples del mismo tipo
+
+  -- Manejar según la moneda del rig
+  IF v_rig.currency = 'gamecoin' THEN
+    IF v_player.gamecoin_balance < v_rig.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+    END IF;
+
+    UPDATE players
+    SET gamecoin_balance = gamecoin_balance - v_rig.base_price
+    WHERE id = p_player_id;
+
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'rig_purchase', -v_rig.base_price, 'gamecoin',
+            'Compra de rig: ' || v_rig.name);
+
+  ELSIF v_rig.currency = 'crypto' THEN
+    IF v_player.crypto_balance < v_rig.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'Crypto insuficiente');
+    END IF;
+
+    UPDATE players
+    SET crypto_balance = crypto_balance - v_rig.base_price
+    WHERE id = p_player_id;
+
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'rig_purchase', -v_rig.base_price, 'crypto',
+            'Compra de rig: ' || v_rig.name);
+
+  ELSIF v_rig.currency = 'ron' THEN
+    IF COALESCE(v_player.ron_balance, 0) < v_rig.base_price THEN
+      RETURN json_build_object(
+        'success', false,
+        'error', 'RON insuficiente',
+        'required', v_rig.base_price,
+        'current', COALESCE(v_player.ron_balance, 0)
+      );
+    END IF;
+
+    UPDATE players
+    SET ron_balance = ron_balance - v_rig.base_price
+    WHERE id = p_player_id;
+
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'rig_purchase', -v_rig.base_price, 'ron',
+            'Compra de rig: ' || v_rig.name);
+  END IF;
+
+  -- AGREGAR AL INVENTARIO (no instalar directamente)
+  INSERT INTO player_rig_inventory (player_id, rig_id, quantity)
+  VALUES (p_player_id, p_rig_id, 1)
+  ON CONFLICT (player_id, rig_id)
+  DO UPDATE SET quantity = player_rig_inventory.quantity + 1;
+
+  RETURN json_build_object(
+    'success', true,
+    'rig', row_to_json(v_rig),
+    'message', 'Rig agregado al inventario'
+  );
+END;
+$$;
+
+-- Instalar rig desde inventario
+CREATE OR REPLACE FUNCTION install_rig_from_inventory(p_player_id UUID, p_rig_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_rig rigs%ROWTYPE;
+  v_inventory player_rig_inventory%ROWTYPE;
+  v_total_rigs INT;
+  v_new_rig_id UUID;
+BEGIN
+  -- Verificar jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Verificar que tiene el rig en inventario
+  SELECT * INTO v_inventory
+  FROM player_rig_inventory
   WHERE player_id = p_player_id AND rig_id = p_rig_id;
 
-  IF v_existing_count > 0 THEN
-    RETURN json_build_object('success', false, 'error', 'Ya tienes este rig');
+  IF v_inventory IS NULL OR v_inventory.quantity <= 0 THEN
+    RETURN json_build_object('success', false, 'error', 'No tienes este rig en el inventario');
+  END IF;
+
+  -- Verificar rig info
+  SELECT * INTO v_rig FROM rigs WHERE id = p_rig_id;
+  IF v_rig IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
   END IF;
 
   -- Verificar slots disponibles
@@ -799,63 +885,67 @@ BEGIN
     );
   END IF;
 
-  -- Manejar según la moneda del rig
-  IF v_rig.currency = 'gamecoin' THEN
-    -- Verificar balance de GameCoin
-    IF v_player.gamecoin_balance < v_rig.base_price THEN
-      RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
-    END IF;
-
-    -- Descontar GameCoin
-    UPDATE players
-    SET gamecoin_balance = gamecoin_balance - v_rig.base_price
-    WHERE id = p_player_id;
-
-    -- Registrar transacción
-    INSERT INTO transactions (player_id, type, amount, currency, description)
-    VALUES (p_player_id, 'rig_purchase', -v_rig.base_price, 'gamecoin',
-            'Compra de rig: ' || v_rig.name);
-
-  ELSIF v_rig.currency = 'crypto' THEN
-    -- Verificar balance de Crypto
-    IF v_player.crypto_balance < v_rig.base_price THEN
-      RETURN json_build_object('success', false, 'error', 'Crypto insuficiente');
-    END IF;
-
-    -- Descontar Crypto
-    UPDATE players
-    SET crypto_balance = crypto_balance - v_rig.base_price
-    WHERE id = p_player_id;
-
-    -- Registrar transacción
-    INSERT INTO transactions (player_id, type, amount, currency, description)
-    VALUES (p_player_id, 'rig_purchase', -v_rig.base_price, 'crypto',
-            'Compra de rig: ' || v_rig.name);
-
-  ELSIF v_rig.currency = 'ron' THEN
-    -- RON requiere pago externo via blockchain
-    -- Retornar info para que el frontend procese el pago
-    RETURN json_build_object(
-      'success', false,
-      'requires_ron_payment', true,
-      'ron_amount', v_rig.base_price,
-      'rig', row_to_json(v_rig),
-      'slots_used', v_total_rigs,
-      'slots_total', v_player.rig_slots
-    );
+  -- Descontar del inventario
+  IF v_inventory.quantity = 1 THEN
+    DELETE FROM player_rig_inventory
+    WHERE player_id = p_player_id AND rig_id = p_rig_id;
   ELSE
-    RETURN json_build_object('success', false, 'error', 'Moneda no soportada');
+    UPDATE player_rig_inventory
+    SET quantity = quantity - 1
+    WHERE player_id = p_player_id AND rig_id = p_rig_id;
   END IF;
 
-  -- Dar el rig al jugador
-  INSERT INTO player_rigs (player_id, rig_id, condition, is_active, temperature)
-  VALUES (p_player_id, p_rig_id, 100, false, 0);
+  -- Crear el rig instalado
+  INSERT INTO player_rigs (
+    player_id,
+    rig_id,
+    condition,
+    max_condition,
+    is_active,
+    times_repaired
+  )
+  VALUES (
+    p_player_id,
+    p_rig_id,
+    100,
+    100,
+    false,
+    0
+  )
+  RETURNING id INTO v_new_rig_id;
 
   RETURN json_build_object(
     'success', true,
+    'rig_instance_id', v_new_rig_id,
     'rig', row_to_json(v_rig),
-    'slots_used', v_total_rigs + 1,
-    'slots_total', v_player.rig_slots
+    'message', 'Rig instalado correctamente'
+  );
+END;
+$$;
+
+-- Obtener rigs en inventario del jugador
+CREATE OR REPLACE FUNCTION get_player_rig_inventory(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(
+      json_build_object(
+        'rig_id', pri.rig_id,
+        'quantity', pri.quantity,
+        'name', r.name,
+        'description', r.description,
+        'hashrate', r.hashrate,
+        'power_consumption', r.power_consumption,
+        'internet_consumption', r.internet_consumption,
+        'tier', r.tier
+      )
+    ), '[]'::json)
+    FROM player_rig_inventory pri
+    JOIN rigs r ON r.id = pri.rig_id
+    WHERE pri.player_id = p_player_id
   );
 END;
 $$;
@@ -2092,10 +2182,10 @@ BEGIN
       UPDATE players SET crypto_balance = crypto_balance + p_quantity WHERE id = v_buyer_id;
     WHEN 'energy' THEN
       UPDATE players SET energy = GREATEST(0, energy - p_quantity) WHERE id = v_seller_id;
-      UPDATE players SET energy = LEAST(100, energy + p_quantity) WHERE id = v_buyer_id;
+      UPDATE players SET energy = LEAST(max_energy, energy + p_quantity) WHERE id = v_buyer_id;
     WHEN 'internet' THEN
       UPDATE players SET internet = GREATEST(0, internet - p_quantity) WHERE id = v_seller_id;
-      UPDATE players SET internet = LEAST(100, internet + p_quantity) WHERE id = v_buyer_id;
+      UPDATE players SET internet = LEAST(max_internet, internet + p_quantity) WHERE id = v_buyer_id;
     ELSE NULL;
   END CASE;
 
@@ -2353,7 +2443,6 @@ AS $$
 DECLARE
   v_player players%ROWTYPE;
   v_cooling cooling_items%ROWTYPE;
-  v_existing_installed INT;
 BEGIN
   -- Verificar jugador
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
@@ -2365,15 +2454,6 @@ BEGIN
   SELECT * INTO v_cooling FROM cooling_items WHERE id = p_cooling_id;
   IF v_cooling IS NULL THEN
     RETURN json_build_object('success', false, 'error', 'Item de refrigeración no encontrado');
-  END IF;
-
-  -- Verificar si ya lo tiene instalado
-  SELECT COUNT(*) INTO v_existing_installed
-  FROM player_cooling
-  WHERE player_id = p_player_id AND cooling_item_id = p_cooling_id;
-
-  IF v_existing_installed > 0 THEN
-    RETURN json_build_object('success', false, 'error', 'Ya tienes este item instalado');
   END IF;
 
   -- Verificar balance
@@ -3550,13 +3630,13 @@ DECLARE
   v_minutes_since_last INTEGER;
   v_new_minutes INTEGER;
   v_player players%ROWTYPE;
-  v_free_max INTEGER := 100;
+  v_free_max INTEGER := 300;
   v_premium_expired BOOLEAN := false;
 BEGIN
   -- Verificar si el premium acaba de expirar
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF v_player.premium_until IS NOT NULL AND v_player.premium_until <= NOW() THEN
-    -- Premium expiró: llenar energía e internet al máximo free (100) y limpiar premium_until
+    -- Premium expiró: llenar energía e internet al máximo free (300) y limpiar premium_until
     UPDATE players SET
       energy = v_free_max,
       internet = v_free_max,
@@ -4306,8 +4386,8 @@ BEGIN
   UPDATE players SET
     gamecoin_balance = 1000,
     crypto_balance = 0,
-    energy = 100,
-    internet = 100,
+    energy = 300,
+    internet = 300,
     reputation_score = 50,
     rig_slots = 1,
     blocks_mined = 0,
@@ -4629,7 +4709,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION get_premium_resource_bonus()
 RETURNS INTEGER LANGUAGE plpgsql AS $$
-BEGIN RETURN 400; END;  -- 100 base + 400 bonus = 500 max para premium
+BEGIN RETURN 700; END;  -- 300 base + 700 bonus = 1000 max para premium
 $$;
 
 CREATE OR REPLACE FUNCTION get_effective_max_energy(p_player_id UUID)
@@ -4638,7 +4718,7 @@ DECLARE v_base_max INTEGER; v_bonus INTEGER := 0;
 BEGIN
   SELECT max_energy INTO v_base_max FROM players WHERE id = p_player_id;
   IF is_player_premium(p_player_id) THEN v_bonus := get_premium_resource_bonus(); END IF;
-  RETURN COALESCE(v_base_max, 100) + v_bonus;
+  RETURN COALESCE(v_base_max, 300) + v_bonus;
 END;
 $$;
 
@@ -4648,7 +4728,7 @@ DECLARE v_base_max INTEGER; v_bonus INTEGER := 0;
 BEGIN
   SELECT max_internet INTO v_base_max FROM players WHERE id = p_player_id;
   IF is_player_premium(p_player_id) THEN v_bonus := get_premium_resource_bonus(); END IF;
-  RETURN COALESCE(v_base_max, 100) + v_bonus;
+  RETURN COALESCE(v_base_max, 300) + v_bonus;
 END;
 $$;
 
@@ -4762,7 +4842,7 @@ $$;
 CREATE OR REPLACE FUNCTION purchase_premium(p_player_id UUID)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_player players%ROWTYPE; v_price DECIMAL := 5; v_new_expires TIMESTAMPTZ; v_subscription_id UUID;
-  v_premium_max INTEGER := 500;  -- Max recursos para premium
+  v_premium_max INTEGER := 1000;  -- Max recursos para premium
 BEGIN
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF v_player.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
@@ -4773,7 +4853,7 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Balance insuficiente', 'required', v_price, 'current', COALESCE(v_player.ron_balance, 0));
   END IF;
   v_new_expires := NOW() + INTERVAL '30 days';
-  -- Al activar premium: llenar energía e internet al máximo premium (500)
+  -- Al activar premium: llenar energía e internet al máximo premium (1000)
   UPDATE players SET
     ron_balance = ron_balance - v_price,
     premium_until = v_new_expires,
@@ -4796,7 +4876,7 @@ BEGIN
   v_is_premium := COALESCE(v_player.premium_until > NOW(), false);
   v_days_remaining := CASE WHEN v_is_premium THEN EXTRACT(DAY FROM (v_player.premium_until - NOW()))::INTEGER ELSE 0 END;
   RETURN json_build_object('success', true, 'is_premium', v_is_premium, 'expires_at', v_player.premium_until,
-    'days_remaining', v_days_remaining, 'price', 5, 'benefits', json_build_object('block_bonus', '+50%', 'withdrawal_fee', '10%', 'resource_bonus', '+500'));
+    'days_remaining', v_days_remaining, 'price', 5, 'benefits', json_build_object('block_bonus', '+50%', 'withdrawal_fee', '10%', 'resource_bonus', '+700'));
 END;
 $$;
 
@@ -4946,14 +5026,14 @@ RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_player players%ROWTYPE; v_hours_offline NUMERIC; v_regen_rate NUMERIC := 5;
   v_energy_regen NUMERIC := 0; v_internet_regen NUMERIC := 0; v_new_energy NUMERIC; v_new_internet NUMERIC;
   v_max_energy_cap NUMERIC; v_max_internet_cap NUMERIC; v_effective_max_energy NUMERIC; v_effective_max_internet NUMERIC;
-  v_premium_expired BOOLEAN := false; v_free_max INTEGER := 100;
+  v_premium_expired BOOLEAN := false; v_free_max INTEGER := 300;
 BEGIN
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF v_player IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
 
   -- Verificar si el premium expiró mientras estaba offline
   IF v_player.premium_until IS NOT NULL AND v_player.premium_until <= NOW() THEN
-    -- Premium expiró: llenar energía e internet al máximo free (100) y limpiar premium_until
+    -- Premium expiró: llenar energía e internet al máximo free (300) y limpiar premium_until
     UPDATE players SET energy = v_free_max, internet = v_free_max, premium_until = NULL, last_seen = NOW()
     WHERE id = p_player_id;
     v_premium_expired := true;
@@ -5018,7 +5098,7 @@ BEGIN
   DELETE FROM streak_claims WHERE player_id = p_player_id;
   DELETE FROM market_orders WHERE player_id = p_player_id;
   DELETE FROM transactions WHERE player_id = p_player_id;
-  UPDATE players SET gamecoin_balance = 1000, crypto_balance = 0, energy = 100, internet = 100, reputation_score = 50, rig_slots = 1, blocks_mined = 0, updated_at = NOW() WHERE id = p_player_id;
+  UPDATE players SET gamecoin_balance = 1000, crypto_balance = 0, energy = 300, internet = 300, reputation_score = 50, rig_slots = 1, blocks_mined = 0, updated_at = NOW() WHERE id = p_player_id;
   INSERT INTO player_rigs (player_id, rig_id, condition, is_active) VALUES (p_player_id, 'basic_miner', 100, false);
   INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (p_player_id, 'account_reset', 1000, 'gamecoin', 'Cuenta reiniciada');
   RETURN json_build_object('success', true, 'message', 'Cuenta reiniciada');

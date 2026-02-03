@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
-import { getPlayerInventory, redeemPrepaidCard, getPlayerBoosts } from '@/utils/api';
+import { useInventoryStore } from '@/stores/inventory';
+import { redeemPrepaidCard } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 
 const authStore = useAuthStore();
+const inventoryStore = useInventoryStore();
 
 const props = defineProps<{
   show: boolean;
@@ -18,11 +20,14 @@ const emit = defineEmits<{
   used: [];
 }>();
 
+const using = ref(false);
+
 // Bloquear scroll del body cuando el modal está abierto
 watch(() => props.show, (isOpen) => {
   if (isOpen) {
     document.body.style.overflow = 'hidden';
-    loadInventory();
+    // Fetch inventory (will use cache if available)
+    inventoryStore.fetchInventory();
   } else {
     document.body.style.overflow = '';
   }
@@ -37,18 +42,17 @@ function handleClose() {
   emit('close');
 }
 
-const loading = ref(false);
-const using = ref(false);
-
 // Confirmation dialog state
 const showConfirm = ref(false);
 const confirmAction = ref<{
-  type: 'redeem';
+  type: 'redeem' | 'install_rig';
   data: {
     cardCode?: string;
     cardName?: string;
     cardType?: 'energy' | 'internet';
     cardAmount?: number;
+    rigId?: string;
+    rigName?: string;
   };
 } | null>(null);
 
@@ -63,79 +67,7 @@ function closeProcessingModal() {
   processingError.value = '';
 }
 
-interface CoolingItem {
-  inventory_id: string;
-  quantity: number;
-  purchased_at: string;
-  id: string;
-  name: string;
-  description: string;
-  cooling_power: number;
-  energy_cost: number;
-  base_price: number;
-  tier: string;
-}
-
-interface CardItem {
-  id: string;
-  code: string;
-  is_redeemed: boolean;
-  purchased_at: string;
-  card_id: string;
-  name: string;
-  description: string;
-  card_type: 'energy' | 'internet';
-  amount: number;
-  tier: string;
-}
-
-interface BoostItem {
-  id: string;
-  quantity: number;
-  purchased_at: string;
-  boost_id: string;
-  name: string;
-  description: string;
-  boost_type: string;
-  effect_value: number;
-  secondary_value: number;
-  duration_minutes: number;
-  tier: string;
-}
-
-const coolingItems = ref<CoolingItem[]>([]);
-const cardItems = ref<CardItem[]>([]);
-const boostItems = ref<BoostItem[]>([]);
-const activeBoosts = ref<Array<{
-  id: string;
-  boost_id: string;
-  boost_type: string;
-  name: string;
-  expires_at: string;
-  seconds_remaining: number;
-}>>([]);
-
-async function loadInventory() {
-  if (!authStore.player) return;
-  loading.value = true;
-
-  try {
-    const data = await getPlayerInventory(authStore.player.id);
-    coolingItems.value = data.cooling || [];
-    cardItems.value = data.cards || [];
-
-    // Load boosts
-    const boostData = await getPlayerBoosts(authStore.player.id);
-    boostItems.value = boostData.inventory || [];
-    activeBoosts.value = boostData.active || [];
-  } catch (e) {
-    console.error('Error loading inventory:', e);
-  } finally {
-    loading.value = false;
-  }
-}
-
-function requestRedeemCard(card: CardItem) {
+function requestRedeemCard(card: { code: string; card_id: string; card_type: 'energy' | 'internet'; amount: number }) {
   confirmAction.value = {
     type: 'redeem',
     data: {
@@ -148,6 +80,37 @@ function requestRedeemCard(card: CardItem) {
   showConfirm.value = true;
 }
 
+function requestInstallRig(rig: { rig_id: string; name: string }) {
+  confirmAction.value = {
+    type: 'install_rig',
+    data: {
+      rigId: rig.rig_id,
+      rigName: rig.name,
+    },
+  };
+  showConfirm.value = true;
+}
+
+async function handleInstallRig(rigId: string) {
+  if (!authStore.player || using.value) return;
+  using.value = true;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
+
+  const result = await inventoryStore.installRig(rigId);
+
+  if (result.success) {
+    processingStatus.value = 'success';
+    emit('used');
+  } else {
+    processingStatus.value = 'error';
+    processingError.value = result.error || t('inventory.processing.errorInstallRig', 'Error instalando rig');
+  }
+
+  using.value = false;
+}
+
 async function handleRedeemCard(code: string) {
   if (!authStore.player || using.value) return;
   using.value = true;
@@ -158,7 +121,7 @@ async function handleRedeemCard(code: string) {
   try {
     const result = await redeemPrepaidCard(authStore.player.id, code);
     if (result.success) {
-      await loadInventory();
+      await inventoryStore.refresh();
       await authStore.fetchPlayer();
       processingStatus.value = 'success';
       playSound('success');
@@ -178,7 +141,6 @@ async function handleRedeemCard(code: string) {
   }
 }
 
-
 async function confirmUse() {
   if (!confirmAction.value) return;
 
@@ -187,6 +149,8 @@ async function confirmUse() {
 
   if (type === 'redeem' && data.cardCode) {
     await handleRedeemCard(data.cardCode);
+  } else if (type === 'install_rig' && data.rigId) {
+    await handleInstallRig(data.rigId);
   }
 
   confirmAction.value = null;
@@ -229,20 +193,18 @@ function getTierBorder(tier: string) {
 
 // Translation helpers for inventory items - fallback to DB name
 function getCoolingName(id: string, fallbackName?: string): string {
-  // Skip translation for UUIDs - use fallback directly
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   if (isUUID) {
     if (fallbackName) return fallbackName;
-    const item = coolingItems.value.find(c => c.id === id);
+    const item = inventoryStore.coolingItems.find(c => c.id === id);
     return item?.name ?? id;
   }
 
   const key = `market.items.cooling.${id}.name`;
   const translated = t(key);
   if (translated !== key) return translated;
-  // Fallback to provided name or item name from data
   if (fallbackName) return fallbackName;
-  const item = coolingItems.value.find(c => c.id === id);
+  const item = inventoryStore.coolingItems.find(c => c.id === id);
   return item?.name ?? id;
 }
 
@@ -256,6 +218,20 @@ function getBoostName(id: string): string {
   const key = `market.items.boosts.${id}.name`;
   const translated = t(key);
   return translated !== key ? translated : id;
+}
+
+function getRigName(id: string, fallbackName?: string): string {
+  const key = `market.items.rigs.${id}.name`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  if (fallbackName) return fallbackName;
+  return id;
+}
+
+function formatNumber(num: number): string {
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  return num.toString();
 }
 
 function getBoostIcon(boostType: string): string {
@@ -277,7 +253,7 @@ function getBoostTypeDescription(boostType: string): string {
   return translated !== key ? translated : '';
 }
 
-function formatBoostEffect(boost: BoostItem): string {
+function formatBoostEffect(boost: { boost_type: string; effect_value: number; secondary_value: number }): string {
   const sign = boost.boost_type === 'energy_saver' || boost.boost_type === 'bandwidth_optimizer' ||
                boost.boost_type === 'coolant_injection' || boost.boost_type === 'durability_shield' ? '-' : '+';
   let effect = `${sign}${boost.effect_value}%`;
@@ -304,12 +280,6 @@ function formatTimeRemaining(seconds: number): string {
   }
   return `${mins}m`;
 }
-
-onMounted(() => {
-  if (props.show) {
-    loadInventory();
-  }
-});
 </script>
 
 <template>
@@ -344,140 +314,223 @@ onMounted(() => {
 
         <!-- Content -->
         <div class="flex-1 overflow-y-auto p-4 space-y-6">
-          <!-- Loading -->
-          <div v-if="loading" class="text-center py-16">
+          <!-- Loading (only on first load) -->
+          <div v-if="inventoryStore.loading && !inventoryStore.loaded" class="text-center py-16">
             <div class="w-8 h-8 mx-auto mb-4 border-2 border-accent-primary border-t-transparent rounded-full animate-spin"></div>
             <p class="text-text-muted text-sm">{{ t('inventory.loading') }}</p>
           </div>
 
-          <!-- Empty State -->
-          <div v-else-if="coolingItems.length === 0 && cardItems.length === 0 && boostItems.length === 0" class="text-center py-16">
-            <div class="text-5xl mb-4 opacity-50">🎒</div>
-            <p class="text-text-muted">{{ t('inventory.empty', 'Tu inventario esta vacio') }}</p>
-            <p class="text-text-muted/70 text-sm mt-1">{{ t('inventory.emptyHint', 'Compra items en el mercado') }}</p>
-          </div>
+          <template v-else>
+            <!-- Empty state -->
+            <div v-if="inventoryStore.totalItems === 0" class="text-center py-16">
+              <div class="text-5xl mb-4 opacity-50">🎒</div>
+              <p class="text-text-muted">{{ t('inventory.empty', 'Tu inventario está vacío') }}</p>
+              <p class="text-text-muted/70 text-sm mt-1">{{ t('inventory.emptyHint', 'Compra items en el mercado') }}</p>
+            </div>
 
-          <!-- Unified Grid - All items together -->
-          <div v-else class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-            <!-- Prepaid Cards -->
-            <div
-              v-for="card in cardItems"
-              :key="card.id"
-              class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
-              :class="card.card_type === 'energy'
-                ? 'bg-amber-500/10 border-amber-500/30'
-                : 'bg-cyan-500/10 border-cyan-500/30'"
-            >
-              <div class="flex items-start justify-between mb-2 sm:mb-3">
-                <div class="min-w-0 flex-1">
-                  <h4 class="font-medium text-xs sm:text-sm truncate" :class="card.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">{{ getCardName(card.card_id) }}</h4>
-                  <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ card.tier }}</p>
+            <template v-else>
+              <!-- Active Boosts Bar -->
+              <div v-if="inventoryStore.activeBoosts.length > 0" class="mb-4">
+                <h3 class="text-xs sm:text-sm font-medium text-text-muted mb-1.5 sm:mb-2">{{ t('inventory.boosts.active') }}</h3>
+                <div class="flex flex-wrap gap-1.5 sm:gap-2">
+                  <div
+                    v-for="boost in inventoryStore.activeBoosts"
+                    :key="boost.id"
+                    class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30"
+                  >
+                    <span class="text-xs sm:text-sm font-medium text-purple-400">{{ getBoostName(boost.boost_id) }}</span>
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ formatTimeRemaining(boost.seconds_remaining) }}</span>
+                  </div>
                 </div>
-                <span class="text-lg sm:text-2xl ml-1">{{ card.card_type === 'energy' ? '⚡' : '📡' }}</span>
               </div>
 
-              <div class="flex items-center justify-between mb-2 sm:mb-3">
-                <span class="text-[10px] sm:text-xs text-text-muted font-mono truncate">{{ card.code }}</span>
-                <span class="font-mono font-bold text-sm sm:text-lg ml-1" :class="card.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">
-                  +{{ card.amount }}%
-                </span>
-              </div>
+              <!-- Rigs Section -->
+              <div v-if="inventoryStore.rigItems.length > 0">
+                <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
+                  <span>⛏️</span>
+                  {{ t('inventory.tabs.rigs', 'Rigs') }}
+                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-accent-primary/30 text-accent-primary">
+                    {{ inventoryStore.rigItems.reduce((sum, r) => sum + r.quantity, 0) }}
+                  </span>
+                </h3>
+                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                  <div
+                    v-for="rig in inventoryStore.rigItems"
+                    :key="rig.rig_id"
+                    class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
+                    :class="[getTierBorder(rig.tier), getTierBg(rig.tier)]"
+                  >
+                    <div class="flex items-start justify-between mb-2 sm:mb-3">
+                      <div class="min-w-0 flex-1">
+                        <h4 class="font-medium text-xs sm:text-sm truncate" :class="getTierColor(rig.tier)">{{ getRigName(rig.rig_id, rig.name) }}</h4>
+                        <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ rig.tier }}</p>
+                      </div>
+                      <span class="text-lg sm:text-2xl ml-1">⛏️</span>
+                    </div>
 
-              <div class="mt-auto">
-                <button
-                  @click="requestRedeemCard(card)"
-                  :disabled="using"
-                  class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
-                  :class="card.card_type === 'energy'
-                    ? 'bg-amber-500 text-white hover:bg-amber-400'
-                    : 'bg-cyan-500 text-white hover:bg-cyan-400'"
-                >
-                  {{ using ? '...' : t('inventory.cards.recharge') }}
-                </button>
-              </div>
-            </div>
+                    <div class="flex items-center justify-between mb-1 sm:mb-2">
+                      <span class="text-[10px] sm:text-xs text-text-muted">Hashrate</span>
+                      <span class="font-mono font-bold text-sm sm:text-lg text-accent-primary">{{ formatNumber(rig.hashrate) }} H/s</span>
+                    </div>
 
-            <!-- Cooling Items -->
-            <div
-              v-for="item in coolingItems"
-              :key="item.inventory_id"
-              class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
-              :class="[getTierBorder(item.tier), getTierBg(item.tier)]"
-            >
-              <div class="flex items-start justify-between mb-2 sm:mb-3">
-                <div class="min-w-0 flex-1">
-                  <h4 class="font-medium text-xs sm:text-sm truncate" :class="getTierColor(item.tier)">{{ getCoolingName(item.id) }}</h4>
-                  <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ item.tier }}</p>
+                    <div class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
+                      <span>⚡{{ rig.power_consumption }}/t</span>
+                      <span>•</span>
+                      <span>📡{{ rig.internet_consumption }}/t</span>
+                      <span class="ml-auto font-medium">x{{ rig.quantity }}</span>
+                    </div>
+
+                    <div class="mt-auto">
+                      <button
+                        @click="requestInstallRig(rig)"
+                        :disabled="using || inventoryStore.installing"
+                        class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50 bg-accent-primary text-white hover:bg-accent-primary/80"
+                      >
+                        {{ inventoryStore.installing ? '...' : t('inventory.rigs.install', 'Instalar') }}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <span class="text-lg sm:text-2xl ml-1">❄️</span>
               </div>
 
-              <div class="flex items-center justify-between mb-1 sm:mb-2">
-                <span class="text-[10px] sm:text-xs text-text-muted">{{ t('inventory.cooling.power', 'Potencia') }}</span>
-                <span class="font-mono font-bold text-sm sm:text-lg text-cyan-400">-{{ item.cooling_power }}°</span>
-              </div>
+              <!-- Prepaid Cards Section -->
+              <div v-if="inventoryStore.cardItems.length > 0">
+                <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
+                  <span>💳</span>
+                  {{ t('inventory.tabs.cards', 'Tarjetas') }}
+                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-amber-500/30 text-amber-400">
+                    {{ inventoryStore.cardItems.length }}
+                  </span>
+                </h3>
+                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                  <div
+                    v-for="card in inventoryStore.cardItems"
+                    :key="card.id"
+                    class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
+                    :class="card.card_type === 'energy'
+                      ? 'bg-amber-500/10 border-amber-500/30'
+                      : 'bg-cyan-500/10 border-cyan-500/30'"
+                  >
+                    <div class="flex items-start justify-between mb-2 sm:mb-3">
+                      <div class="min-w-0 flex-1">
+                        <h4 class="font-medium text-xs sm:text-sm truncate" :class="card.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">{{ getCardName(card.card_id) }}</h4>
+                        <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ card.tier }}</p>
+                      </div>
+                      <span class="text-lg sm:text-2xl ml-1">{{ card.card_type === 'energy' ? '⚡' : '📡' }}</span>
+                    </div>
 
-              <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
-                <span>⚡ +{{ item.energy_cost }}/t</span>
-                <span class="font-medium">x{{ item.quantity }}</span>
-              </div>
+                    <div class="flex items-center justify-between mb-2 sm:mb-3">
+                      <span class="text-[10px] sm:text-xs text-text-muted font-mono truncate">{{ card.code }}</span>
+                      <span class="font-mono font-bold text-sm sm:text-lg ml-1" :class="card.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">
+                        +{{ card.amount }}%
+                      </span>
+                    </div>
 
-              <div class="mt-auto">
-                <p class="text-[10px] sm:text-xs text-text-muted/70 italic text-center py-1 sm:py-2">
-                  {{ t('inventory.cooling.installHint', 'Instalar desde gestion de rig') }}
-                </p>
-              </div>
-            </div>
-
-            <!-- Boost Items -->
-            <div
-              v-for="boost in boostItems"
-              :key="boost.id"
-              class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full bg-purple-500/10 border-purple-500/30"
-            >
-              <div class="flex items-start justify-between mb-1 sm:mb-2">
-                <div class="min-w-0 flex-1">
-                  <h4 class="font-medium text-xs sm:text-sm text-purple-400 truncate">{{ getBoostName(boost.boost_id) }}</h4>
-                  <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ boost.tier }}</p>
+                    <div class="mt-auto">
+                      <button
+                        @click="requestRedeemCard(card)"
+                        :disabled="using"
+                        class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
+                        :class="card.card_type === 'energy'
+                          ? 'bg-amber-500 text-white hover:bg-amber-400'
+                          : 'bg-cyan-500 text-white hover:bg-cyan-400'"
+                      >
+                        {{ using ? '...' : t('inventory.cards.recharge') }}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <span class="text-lg sm:text-2xl ml-1">{{ getBoostIcon(boost.boost_type) }}</span>
               </div>
 
-              <!-- Boost type description (hidden on mobile) -->
-              <p class="hidden sm:block text-xs text-text-muted mb-2">{{ getBoostTypeDescription(boost.boost_type) }}</p>
+              <!-- Cooling Section -->
+              <div v-if="inventoryStore.coolingItems.length > 0">
+                <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
+                  <span>❄️</span>
+                  {{ t('inventory.tabs.cooling', 'Enfriamiento') }}
+                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-cyan-500/30 text-cyan-400">
+                    {{ inventoryStore.coolingItems.length }}
+                  </span>
+                </h3>
+                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                  <div
+                    v-for="item in inventoryStore.coolingItems"
+                    :key="item.inventory_id"
+                    class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
+                    :class="[getTierBorder(item.tier), getTierBg(item.tier)]"
+                  >
+                    <div class="flex items-start justify-between mb-2 sm:mb-3">
+                      <div class="min-w-0 flex-1">
+                        <h4 class="font-medium text-xs sm:text-sm truncate" :class="getTierColor(item.tier)">{{ getCoolingName(item.id) }}</h4>
+                        <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ item.tier }}</p>
+                      </div>
+                      <span class="text-lg sm:text-2xl ml-1">❄️</span>
+                    </div>
 
-              <div class="flex items-center justify-between mb-0.5 sm:mb-1">
-                <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
-                <span class="font-mono font-bold text-xs sm:text-sm text-purple-400">{{ formatBoostEffect(boost) }}</span>
+                    <div class="flex items-center justify-between mb-1 sm:mb-2">
+                      <span class="text-[10px] sm:text-xs text-text-muted">{{ t('inventory.cooling.power', 'Potencia') }}</span>
+                      <span class="font-mono font-bold text-sm sm:text-lg text-cyan-400">-{{ item.cooling_power }}°</span>
+                    </div>
+
+                    <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
+                      <span>⚡ +{{ item.energy_cost }}/t</span>
+                      <span class="font-medium">x{{ item.quantity }}</span>
+                    </div>
+
+                    <div class="mt-auto">
+                      <p class="text-[10px] sm:text-xs text-text-muted/70 italic text-center py-1 sm:py-2">
+                        {{ t('inventory.cooling.installHint', 'Instalar desde gestion de rig') }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
-                <span>{{ formatDuration(boost.duration_minutes) }}</span>
-                <span class="font-medium">x{{ boost.quantity }}</span>
-              </div>
+              <!-- Boosts Section -->
+              <div v-if="inventoryStore.boostItems.length > 0">
+                <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
+                  <span>🚀</span>
+                  Boosts
+                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-purple-500/30 text-purple-400">
+                    {{ inventoryStore.boostItems.length }}
+                  </span>
+                </h3>
+                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                  <div
+                    v-for="boost in inventoryStore.boostItems"
+                    :key="boost.id"
+                    class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full bg-purple-500/10 border-purple-500/30"
+                  >
+                    <div class="flex items-start justify-between mb-1 sm:mb-2">
+                      <div class="min-w-0 flex-1">
+                        <h4 class="font-medium text-xs sm:text-sm text-purple-400 truncate">{{ getBoostName(boost.boost_id) }}</h4>
+                        <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ boost.tier }}</p>
+                      </div>
+                      <span class="text-lg sm:text-2xl ml-1">{{ getBoostIcon(boost.boost_type) }}</span>
+                    </div>
 
-              <div class="mt-auto">
-                <p class="text-[10px] sm:text-xs text-text-muted/70 italic text-center py-1 sm:py-2">
-                  {{ t('inventory.boosts.installHint', 'Instalar desde gestion de rig') }}
-                </p>
-              </div>
-            </div>
-          </div>
+                    <!-- Boost type description (hidden on mobile) -->
+                    <p class="hidden sm:block text-xs text-text-muted mb-2">{{ getBoostTypeDescription(boost.boost_type) }}</p>
 
-          <!-- Active Boosts Bar -->
-          <div v-if="activeBoosts.length > 0" class="mt-3 sm:mt-4">
-            <h3 class="text-xs sm:text-sm font-medium text-text-muted mb-1.5 sm:mb-2">{{ t('inventory.boosts.active') }}</h3>
-            <div class="flex flex-wrap gap-1.5 sm:gap-2">
-              <div
-                v-for="boost in activeBoosts"
-                :key="boost.id"
-                class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30"
-              >
-                <span class="text-xs sm:text-sm font-medium text-purple-400">{{ getBoostName(boost.boost_id) }}</span>
-                <span class="text-[10px] sm:text-xs text-text-muted">{{ formatTimeRemaining(boost.seconds_remaining) }}</span>
+                    <div class="flex items-center justify-between mb-0.5 sm:mb-1">
+                      <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
+                      <span class="font-mono font-bold text-xs sm:text-sm text-purple-400">{{ formatBoostEffect(boost) }}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
+                      <span>{{ formatDuration(boost.duration_minutes) }}</span>
+                      <span class="font-medium">x{{ boost.quantity }}</span>
+                    </div>
+
+                    <div class="mt-auto">
+                      <p class="text-[10px] sm:text-xs text-text-muted/70 italic text-center py-1 sm:py-2">
+                        {{ t('inventory.boosts.installHint', 'Instalar desde gestion de rig') }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            </template>
+          </template>
         </div>
       </div>
 
@@ -509,7 +562,26 @@ onMounted(() => {
             </div>
           </template>
 
-<div class="flex gap-3">
+          <!-- Rig Install Confirmation -->
+          <template v-else-if="confirmAction.type === 'install_rig'">
+            <div class="text-center mb-4">
+              <div class="text-4xl mb-3">⛏️</div>
+              <h3 class="text-lg font-bold mb-1">{{ t('inventory.confirm.installRig', 'Instalar Rig') }}</h3>
+              <p class="text-text-muted text-sm">{{ t('inventory.confirm.areYouSure') }}</p>
+            </div>
+
+            <div class="bg-bg-primary rounded-lg p-4 mb-4">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Rig</span>
+                <span class="font-medium text-white">{{ confirmAction.data.rigName }}</span>
+              </div>
+              <p class="text-xs text-text-muted/70 mt-2">
+                {{ t('inventory.confirm.installRigNote', 'El rig se instalará en un slot disponible y comenzará a minar.') }}
+              </p>
+            </div>
+          </template>
+
+          <div class="flex gap-3">
             <button
               @click="cancelUse"
               class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"

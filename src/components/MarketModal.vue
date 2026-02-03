@@ -671,9 +671,12 @@ watch(() => props.show, (newVal) => {
                   </div>
 
                   <!-- Show owned quantity if any -->
-                  <div v-if="getRigOwned(rig.id) > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
-                    <span class="px-1.5 sm:px-2 py-0.5 rounded bg-status-success/20 text-status-success">
-                      {{ getRigOwned(rig.id) }} {{ t('market.rigs.owned', 'Adquirido') }}
+                  <div v-if="getRigOwned(rig.id).total > 0" class="flex items-center flex-wrap gap-1 text-[10px] sm:text-xs mb-1 sm:mb-2">
+                    <span v-if="getRigOwned(rig.id).installed > 0" class="px-1.5 sm:px-2 py-0.5 rounded bg-status-success/20 text-status-success">
+                      {{ getRigOwned(rig.id).installed }} {{ t('market.rigs.installed', 'Instalado') }}
+                    </span>
+                    <span v-if="getRigOwned(rig.id).inventory > 0" class="px-1.5 sm:px-2 py-0.5 rounded bg-accent-primary/20 text-accent-primary">
+                      {{ getRigOwned(rig.id).inventory }} {{ t('market.cooling.inventory') }}
                     </span>
                   </div>
 

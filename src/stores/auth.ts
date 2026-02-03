@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { supabase } from '@/utils/supabase';
 import { createPlayerProfile, getPlayerProfile, applyPassiveRegeneration, applyReferralCode } from '@/utils/api';
 import { useNotificationsStore } from './notifications';
+import { useInventoryStore } from './inventory';
 import type { User, Session } from '@supabase/supabase-js';
 
 
@@ -292,6 +293,10 @@ export const useAuthStore = defineStore('auth', () => {
       needsUsername.value = false;
       hasAppliedRegeneration.value = false; // Reset para próxima sesión
       loading.value = false;
+
+      // Clear inventory cache
+      const inventoryStore = useInventoryStore();
+      inventoryStore.clear();
     }
   }
 

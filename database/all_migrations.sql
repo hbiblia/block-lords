@@ -18,10 +18,10 @@ CREATE TABLE IF NOT EXISTS players (
   username TEXT UNIQUE NOT NULL CHECK (length(username) >= 3 AND length(username) <= 20),
   gamecoin_balance DECIMAL(18, 4) DEFAULT 1000 NOT NULL CHECK (gamecoin_balance >= 0),
   crypto_balance DECIMAL(18, 8) DEFAULT 0 NOT NULL CHECK (crypto_balance >= 0),
-  energy DECIMAL(5, 2) DEFAULT 100 NOT NULL,
-  internet DECIMAL(5, 2) DEFAULT 100 NOT NULL,
-  max_energy INTEGER DEFAULT 100,
-  max_internet INTEGER DEFAULT 100,
+  energy DECIMAL(5, 2) DEFAULT 300 NOT NULL,
+  internet DECIMAL(5, 2) DEFAULT 300 NOT NULL,
+  max_energy INTEGER DEFAULT 300,
+  max_internet INTEGER DEFAULT 300,
   reputation_score DECIMAL(5, 2) DEFAULT 50 NOT NULL CHECK (reputation_score >= 0 AND reputation_score <= 100),
   region TEXT DEFAULT 'global',
   ron_wallet TEXT DEFAULT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS players (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Constraints de energia/internet (premium puede tener hasta 600)
+-- Constraints de energia/internet (premium puede tener hasta 1000)
 ALTER TABLE players DROP CONSTRAINT IF EXISTS players_energy_check;
 ALTER TABLE players DROP CONSTRAINT IF EXISTS players_internet_check;
 ALTER TABLE players ADD CONSTRAINT players_energy_check CHECK (energy >= 0 AND energy <= 1000);
@@ -623,6 +623,21 @@ ALTER TABLE players ADD COLUMN IF NOT EXISTS referral_count INTEGER DEFAULT 0;
 
 -- Índice para búsqueda rápida de códigos
 CREATE INDEX IF NOT EXISTS idx_players_referral_code ON players(referral_code);
+
+-- =====================================================
+-- 14. RIG INVENTORY (compras van al inventario primero)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS player_rig_inventory (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  rig_id TEXT NOT NULL REFERENCES rigs(id),
+  quantity INT NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(player_id, rig_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_rig_inventory_player ON player_rig_inventory(player_id);
 
 -- =====================================================
 -- NOTA: Las funciones están en all_functions.sql

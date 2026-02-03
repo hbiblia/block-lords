@@ -305,15 +305,15 @@ function getSelectedBlock() {
                   Reclamando...
                 </span>
                 <span v-else class="flex items-center gap-2">
-                  ⚡ Reclamar Todo ({{ pendingStore.totalRonCost.toFixed(2) }} RON)
+                  ⚡ Reclamar Todo ({{ pendingStore.totalRonCost.toFixed(3) }} RON)
                 </span>
               </button>
               <div class="text-center mt-2 text-xs">
                 <span v-if="canAffordRonClaim" class="text-text-muted">
-                  Tu balance: {{ ronBalance.toFixed(2) }} RON • {{ pendingStore.RON_COST_PER_BLOCK }} RON/bloque
+                  Tu balance: {{ ronBalance.toFixed(3) }} RON • {{ pendingStore.RON_COST_PER_BLOCK }} RON/bloque
                 </span>
                 <span v-else class="text-status-error">
-                  RON insuficiente (necesitas {{ pendingStore.totalRonCost.toFixed(2) }} RON, tienes {{ ronBalance.toFixed(2) }})
+                  RON insuficiente (necesitas {{ pendingStore.totalRonCost.toFixed(3) }} RON, tienes {{ ronBalance.toFixed(3) }})
                 </span>
               </div>
             </div>

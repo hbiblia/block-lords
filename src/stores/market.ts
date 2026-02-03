@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { supabase } from '@/utils/supabase';
 import { useAuthStore } from './auth';
+import { useInventoryStore } from './inventory';
 import { playSound } from '@/utils/sounds';
 
 // Types
@@ -53,6 +54,11 @@ interface BoostItem {
 }
 
 interface CoolingQuantity {
+  installed: number;
+  inventory: number;
+}
+
+interface RigQuantity {
   installed: number;
   inventory: number;
 }
@@ -141,7 +147,7 @@ export const useMarketStore = defineStore('market', () => {
   const cryptoPackages = ref<CryptoPackage[]>(cached?.cryptoPackages ?? DEFAULT_CRYPTO_PACKAGES);
 
   // Player quantities
-  const rigQuantities = ref<Record<string, number>>({});
+  const rigQuantities = ref<Record<string, RigQuantity>>({});
   const coolingQuantities = ref<Record<string, CoolingQuantity>>({});
   const cardQuantities = ref<Record<string, number>>({});
   const boostQuantities = ref<Record<string, number>>({});
@@ -185,8 +191,9 @@ export const useMarketStore = defineStore('market', () => {
   const loading = computed(() => loadingCatalogs.value || loadingQuantities.value);
 
   // Getters
-  function getRigOwned(id: string): number {
-    return rigQuantities.value[id] || 0;
+  function getRigOwned(id: string): { installed: number; inventory: number; total: number } {
+    const q = rigQuantities.value[id] || { installed: 0, inventory: 0 };
+    return { ...q, total: q.installed + q.inventory };
   }
 
   function getCoolingOwned(id: string): { installed: number; inventory: number; total: number } {
@@ -250,18 +257,28 @@ export const useMarketStore = defineStore('market', () => {
     const playerId = authStore.player.id;
 
     try {
-      const [playerRigsRes, playerCoolingRes, inventoryCoolingRes, inventoryCardsRes, inventoryBoostsRes] = await Promise.all([
+      const [playerRigsRes, rigInventoryRes, playerCoolingRes, inventoryCoolingRes, inventoryCardsRes, inventoryBoostsRes] = await Promise.all([
         supabase.from('player_rigs').select('rig_id').eq('player_id', playerId),
+        supabase.from('player_rig_inventory').select('rig_id, quantity').eq('player_id', playerId),
         supabase.from('player_cooling').select('cooling_item_id').eq('player_id', playerId),
         supabase.from('player_inventory').select('item_id, quantity').eq('player_id', playerId).eq('item_type', 'cooling'),
         supabase.from('player_cards').select('card_id').eq('player_id', playerId).eq('is_redeemed', false),
         supabase.from('player_boosts').select('boost_id, quantity').eq('player_id', playerId),
       ]);
 
-      // Build rig quantities map
-      const rigQty: Record<string, number> = {};
+      // Build rig quantities map (installed + inventory)
+      const rigQty: Record<string, RigQuantity> = {};
       for (const r of playerRigsRes.data ?? []) {
-        rigQty[r.rig_id] = (rigQty[r.rig_id] || 0) + 1;
+        if (!rigQty[r.rig_id]) {
+          rigQty[r.rig_id] = { installed: 0, inventory: 0 };
+        }
+        rigQty[r.rig_id].installed++;
+      }
+      for (const r of rigInventoryRes.data ?? []) {
+        if (!rigQty[r.rig_id]) {
+          rigQty[r.rig_id] = { installed: 0, inventory: 0 };
+        }
+        rigQty[r.rig_id].inventory += r.quantity || 1;
       }
       rigQuantities.value = rigQty;
 
@@ -335,6 +352,9 @@ export const useMarketStore = defineStore('market', () => {
       if (data?.success) {
         await loadPlayerQuantities();
         await authStore.fetchPlayer();
+        // Refresh inventory to show new rig
+        const inventoryStore = useInventoryStore();
+        inventoryStore.refresh();
         playSound('purchase');
         return { success: true };
       }
@@ -409,6 +429,9 @@ export const useMarketStore = defineStore('market', () => {
       if (data?.success) {
         await loadPlayerQuantities();
         await authStore.fetchPlayer();
+        // Refresh inventory
+        const inventoryStore = useInventoryStore();
+        inventoryStore.refresh();
         playSound('purchase');
         return { success: true };
       }
@@ -440,6 +463,9 @@ export const useMarketStore = defineStore('market', () => {
       if (data?.success) {
         await loadPlayerQuantities();
         await authStore.fetchPlayer();
+        // Refresh inventory
+        const inventoryStore = useInventoryStore();
+        inventoryStore.refresh();
         playSound('purchase');
         return { success: true };
       }
@@ -471,6 +497,9 @@ export const useMarketStore = defineStore('market', () => {
       if (data?.success) {
         await loadPlayerQuantities();
         await authStore.fetchPlayer();
+        // Refresh inventory
+        const inventoryStore = useInventoryStore();
+        inventoryStore.refresh();
         playSound('purchase');
         return { success: true };
       }

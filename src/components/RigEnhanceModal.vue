@@ -191,11 +191,18 @@ watch(
   { deep: true }
 );
 
-// Load data when modal opens
+// Track if data has been loaded for install/upgrade tabs
+const dataLoaded = ref(false);
+
+// Load data when modal opens - only for install tab, repair tab doesn't need DB data
 watch(() => props.show, async (isOpen) => {
   if (isOpen && props.rig) {
     document.body.style.overflow = 'hidden';
-    await loadData();
+    dataLoaded.value = false;
+    // Only load data if starting on install or upgrade tab
+    if (activeTab.value === 'install' || activeTab.value === 'upgrade') {
+      await loadData();
+    }
     startBoostTimer();
   } else {
     document.body.style.overflow = '';
@@ -203,8 +210,15 @@ watch(() => props.show, async (isOpen) => {
   }
 });
 
+// Lazy load data when switching to install or upgrade tabs
+watch(() => activeTab.value, async (tab) => {
+  if (props.show && props.rig && !dataLoaded.value && (tab === 'install' || tab === 'upgrade')) {
+    await loadData();
+  }
+});
+
 async function loadData() {
-  if (!authStore.player || !props.rig) return;
+  if (!authStore.player || !props.rig || dataLoaded.value) return;
   loading.value = true;
 
   try {
@@ -221,6 +235,7 @@ async function loadData() {
     boostItems.value = playerBoosts?.inventory || [];
     installedBoosts.value = rigBoosts || [];
     rigUpgrades.value = upgrades?.success ? upgrades : null;
+    dataLoaded.value = true;
   } catch (e) {
     console.error('Error loading rig data:', e);
   } finally {
@@ -231,6 +246,14 @@ async function loadData() {
 // Computed: max condition (decreases with repairs)
 const maxCondition = computed(() => props.rig?.max_condition ?? 100);
 const timesRepaired = computed(() => props.rig?.times_repaired ?? 0);
+// Max repairs allowed per rig
+const maxRepairs = 3;
+// Repair bonus: how much % will be added to current condition
+// SQL repairs to current max_condition value
+const repairBonus = computed(() => {
+  if (!props.rig) return 0;
+  return Math.max(0, maxCondition.value - props.rig.condition);
+});
 const canRepair = computed(() => {
   if (!props.rig) return false;
   return props.rig.condition < maxCondition.value && maxCondition.value > 10 && !props.rig.is_active;
@@ -459,13 +482,30 @@ async function confirmUse() {
     if (result?.success) {
       processingStatus.value = 'success';
       playSound('success');
+
+      const rigName = props.rig.rig?.name || 'Rig';
+
+      // Handle delete separately - close modal immediately
+      if (type === 'delete') {
+        toastStore.success(`${rigName} eliminado`);
+        await authStore.fetchPlayer();
+        await miningStore.reloadRigs();
+        emit('updated');
+        setTimeout(() => {
+          closeProcessingModal();
+          emit('close');
+        }, 1000);
+        return;
+      }
+
+      // For non-delete actions, reload data
+      dataLoaded.value = false; // Reset to force reload
       await loadData();
       await authStore.fetchPlayer();
       await miningStore.reloadRigs();
       emit('updated');
 
       // Show toast notification based on action type
-      const rigName = props.rig.rig?.name || 'Rig';
       if (type === 'install' && data.coolingName) {
         toastStore.boostInstalled(data.coolingName, rigName);
       } else if (type === 'boost' && data.boostName) {
@@ -480,14 +520,6 @@ async function confirmUse() {
         toastStore.success(`${data.coolingName} destruido`);
       } else if (type === 'destroy_boost' && data.boostName) {
         toastStore.success(`${data.boostName} destruido`);
-      }
-
-      // Close modal after delete
-      if (type === 'delete') {
-        setTimeout(() => {
-          closeProcessingModal();
-          emit('close');
-        }, 1500);
       }
     } else {
       processingStatus.value = 'error';
@@ -869,8 +901,8 @@ function closeProcessingModal() {
                     <span class="font-mono" :class="rig.condition < 30 ? 'text-status-danger' : ''">{{ rig.condition }}%</span>
                   </div>
                   <div class="flex justify-between">
-                    <span class="text-text-muted">{{ t('rigManage.repairTo') }}</span>
-                    <span class="font-mono text-status-success">{{ Math.max(0, maxCondition - 5) }}%</span>
+                    <span class="text-text-muted">{{ t('rigManage.repairBonus', 'Reparación') }}</span>
+                    <span class="font-mono text-status-success">+{{ repairBonus }}%</span>
                   </div>
                   <div class="flex justify-between">
                     <span class="text-text-muted">{{ t('rigManage.cost') }}</span>
@@ -878,7 +910,7 @@ function closeProcessingModal() {
                   </div>
                   <div class="flex justify-between">
                     <span class="text-text-muted">{{ t('rigManage.timesRepaired') }}</span>
-                    <span class="font-mono">{{ timesRepaired }}</span>
+                    <span class="font-mono">{{ timesRepaired }}/{{ maxRepairs }}</span>
                   </div>
                 </div>
 
@@ -1088,8 +1120,8 @@ function closeProcessingModal() {
                 <span class="font-bold text-status-warning">{{ repairCost }} GC</span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-text-muted text-sm">{{ t('rigManage.repairTo') }}</span>
-                <span class="font-bold text-status-success">{{ Math.max(0, maxCondition - 5) }}%</span>
+                <span class="text-text-muted text-sm">{{ t('rigManage.repairBonus', 'Reparación') }}</span>
+                <span class="font-bold text-status-success">+{{ repairBonus }}%</span>
               </div>
             </template>
             <template v-else-if="confirmAction.type === 'upgrade'">
