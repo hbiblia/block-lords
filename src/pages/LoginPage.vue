@@ -13,8 +13,16 @@ async function handleGoogleLogin() {
   error.value = '';
   loading.value = true;
 
+  // Preservar código de referido antes de limpiar
+  const pendingRefCode = localStorage.getItem('pendingReferralCode');
+
   // Limpiar localStorage al iniciar sesión para evitar datos obsoletos de sesiones anteriores
   localStorage.clear();
+
+  // Restaurar código de referido si existía
+  if (pendingRefCode) {
+    localStorage.setItem('pendingReferralCode', pendingRefCode);
+  }
 
   try {
     const success = await authStore.loginWithGoogle();
