@@ -20,7 +20,14 @@ export const useRealtimeStore = defineStore('realtime', () => {
   let blurHandler: (() => void) | null = null;
 
   const isConnected = computed(() => connected.value);
-  const showDisconnectedModal = computed(() => wasConnected.value && !connected.value && !reconnecting.value);
+  // Mostrar modal si: estábamos conectados, ya no lo estamos, y han pasado varios intentos de reconexión
+  // O si la reconexión falló completamente
+  const showDisconnectedModal = computed(() => {
+    if (!wasConnected.value) return false;
+    if (connected.value) return false;
+    // Mostrar después de 3 intentos fallidos O si ya no está reconectando (falló todo)
+    return reconnectAttempts.value >= 3 || !reconnecting.value;
+  });
 
   // Heartbeat para detectar conexiones zombie
   function startHeartbeat() {
