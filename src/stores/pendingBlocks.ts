@@ -68,15 +68,24 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
     claiming.value = true;
     error.value = null;
 
+    // Save original state for rollback
+    const originalBlocks = [...pendingBlocks.value];
+
     try {
       const result = await claimBlock(authStore.player.id, pendingId);
 
       if (result.success) {
-        // Remover de la lista local
+        // Remove from local list AFTER successful API call
         pendingBlocks.value = pendingBlocks.value.filter(b => b.id !== pendingId);
 
-        // Actualizar balance del jugador
-        await authStore.fetchPlayer();
+        // Update player balance - if this fails, block is still claimed on server
+        try {
+          await authStore.fetchPlayer();
+        } catch (e) {
+          console.warn('Error updating player after claim, will retry:', e);
+          // Schedule a retry in background
+          setTimeout(() => authStore.fetchPlayer().catch(() => {}), 2000);
+        }
 
         // Toast de éxito
         const toastStore = useToastStore();
@@ -88,7 +97,9 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
         return null;
       }
     } catch (e) {
-      error.value = 'Error de conexión';
+      // Rollback on network error
+      pendingBlocks.value = originalBlocks;
+      error.value = 'Error de conexión. Intenta de nuevo.';
       console.error('Error claiming block:', e);
       return null;
     } finally {
@@ -106,15 +117,24 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
     claiming.value = true;
     error.value = null;
 
+    // Save original state for rollback
+    const originalBlocks = [...pendingBlocks.value];
+
     try {
       const result = await claimAllBlocks(authStore.player.id);
 
       if (result.success) {
-        // Limpiar lista local
+        // Clear local list AFTER successful API call
         pendingBlocks.value = [];
 
-        // Actualizar balance del jugador
-        await authStore.fetchPlayer();
+        // Update player balance - if this fails, blocks are still claimed on server
+        try {
+          await authStore.fetchPlayer();
+        } catch (e) {
+          console.warn('Error updating player after claim all, will retry:', e);
+          // Schedule a retry in background
+          setTimeout(() => authStore.fetchPlayer().catch(() => {}), 2000);
+        }
 
         // Toast de éxito
         const toastStore = useToastStore();
@@ -129,7 +149,9 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
         return null;
       }
     } catch (e) {
-      error.value = 'Error de conexión';
+      // Rollback on network error
+      pendingBlocks.value = originalBlocks;
+      error.value = 'Error de conexión. Intenta de nuevo.';
       console.error('Error claiming all blocks:', e);
       return null;
     } finally {
@@ -147,8 +169,16 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
   }
 
   // Llamado cuando se mina un nuevo bloque (desde realtime)
+  // Incluye deduplicación para evitar duplicados de eventos realtime
   function addPendingBlock(block: PendingBlock) {
-    pendingBlocks.value.unshift(block);
+    // Check for duplicate by id or block_id
+    const exists = pendingBlocks.value.some(
+      b => b.id === block.id || b.block_id === block.block_id
+    );
+
+    if (!exists) {
+      pendingBlocks.value.unshift(block);
+    }
   }
 
   return {

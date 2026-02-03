@@ -521,15 +521,21 @@ export const useMiningStore = defineStore('mining', () => {
     const isPremiumBlock = isOwnBlock && authStore.isPremium;
     const reward = isPremiumBlock ? baseReward * 1.5 : baseReward;
 
-    // Add block to recent list
+    // Add block to recent list (with deduplication)
     // Note: For other users' blocks, is_premium will be undefined until data is refreshed from server
-    recentBlocks.value.unshift({
-      ...block,
-      miner: winner,
-      reward: isOwnBlock ? reward : undefined, // Only set reward for own blocks where we know premium status
-      is_premium: isOwnBlock ? isPremiumBlock : undefined,
-    });
-    recentBlocks.value = recentBlocks.value.slice(0, 5);
+    const alreadyExists = recentBlocks.value.some(
+      b => b.id === block.id || b.height === block.height
+    );
+
+    if (!alreadyExists) {
+      recentBlocks.value.unshift({
+        ...block,
+        miner: winner,
+        reward: isOwnBlock ? reward : undefined, // Only set reward for own blocks where we know premium status
+        is_premium: isOwnBlock ? isPremiumBlock : undefined,
+      });
+      recentBlocks.value = recentBlocks.value.slice(0, 5);
+    }
 
     // Update latestBlock in networkStats
     networkStats.value = {

@@ -1,40 +1,99 @@
 import { supabase } from './supabase';
+import { withRetry, isRetryableError } from './retry';
 
 // =====================================================
 // WRAPPER FUNCTIONS PARA SUPABASE RPC
 // =====================================================
 
+/**
+ * Helper para llamadas RPC con retry automático
+ * Reintenta en errores de red/timeout, no en errores de lógica de negocio
+ */
+async function rpcWithRetry<T>(
+  fnName: string,
+  params: Record<string, unknown> = {},
+  options: { maxRetries?: number; critical?: boolean } = {}
+): Promise<T> {
+  const { maxRetries = 3, critical = false } = options;
+
+  const executeRpc = async () => {
+    const { data, error } = await supabase.rpc(fnName, params);
+    if (error) throw error;
+    return data as T;
+  };
+
+  // For critical operations, always retry
+  // For non-critical, only retry on network errors
+  if (critical) {
+    return withRetry(executeRpc, {
+      maxRetries,
+      onRetry: (attempt, error) => {
+        console.warn(`[API] Retry ${attempt}/${maxRetries} for ${fnName}:`, error);
+      },
+    });
+  }
+
+  // Standard call with retry only for retryable errors
+  return withRetry(executeRpc, {
+    maxRetries,
+    isRetryable: (error) => {
+      // Don't retry business logic errors (insufficient funds, etc.)
+      const errorObj = error as Record<string, unknown>;
+      const message = String(errorObj?.message || '').toLowerCase();
+
+      // These are NOT retryable (business logic errors)
+      const nonRetryablePatterns = [
+        'insufficient',
+        'insuficiente',
+        'not found',
+        'no encontrado',
+        'already',
+        'ya existe',
+        'invalid',
+        'invalido',
+        'unauthorized',
+        'permission',
+      ];
+
+      if (nonRetryablePatterns.some(p => message.includes(p))) {
+        return false;
+      }
+
+      return isRetryableError(error);
+    },
+    onRetry: (attempt, error) => {
+      console.warn(`[API] Retry ${attempt}/${maxRetries} for ${fnName}:`, error);
+    },
+  });
+}
+
 // === AUTH ===
 
-export async function createPlayerProfile(userId: string, email: string, username: string) {
-  const { data, error } = await supabase.rpc('create_player_profile', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function createPlayerProfile(userId: string, email: string, username: string): Promise<any> {
+  return rpcWithRetry('create_player_profile', {
     p_user_id: userId,
     p_email: email,
     p_username: username,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 // === PLAYER ===
 
-export async function getPlayerProfile(playerId: string) {
-  const { data, error } = await supabase.rpc('get_player_profile', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerProfile(playerId: string): Promise<any> {
+  // Critical: player data is essential for the app
+  return rpcWithRetry('get_player_profile', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
-export async function getPlayerRigs(playerId: string) {
-  const { data, error } = await supabase.rpc('get_player_rigs', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerRigs(playerId: string): Promise<any> {
+  // Critical: rig data is essential for mining
+  return rpcWithRetry('get_player_rigs', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
 export async function toggleRig(playerId: string, rigId: string) {
@@ -79,36 +138,26 @@ export async function getPlayerTransactions(playerId: string, limit = 50) {
 
 // === MINING ===
 
-export async function getNetworkStats() {
-  const { data, error } = await supabase.rpc('get_network_stats');
-
-  if (error) throw error;
-  return data;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getNetworkStats(): Promise<any> {
+  return rpcWithRetry('get_network_stats', {}, { critical: true });
 }
 
-export async function getHomeStats() {
-  const { data, error } = await supabase.rpc('get_home_stats');
-
-  if (error) throw error;
-  return data;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getHomeStats(): Promise<any> {
+  return rpcWithRetry('get_home_stats');
 }
 
-export async function getRecentBlocks(limit = 20) {
-  const { data, error } = await supabase.rpc('get_recent_blocks', {
-    p_limit: limit,
-  });
-
-  if (error) throw error;
-  return data;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getRecentBlocks(limit = 20): Promise<any> {
+  return rpcWithRetry('get_recent_blocks', { p_limit: limit });
 }
 
-export async function getPlayerMiningStats(playerId: string) {
-  const { data, error } = await supabase.rpc('get_player_mining_stats', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerMiningStats(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_mining_stats', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
 // === MINING ESTIMATE ===
@@ -312,13 +361,11 @@ export async function redeemPrepaidCard(playerId: string, code: string) {
 
 // === INVENTORY (INVENTARIO) ===
 
-export async function getPlayerInventory(playerId: string) {
-  const { data, error } = await supabase.rpc('get_player_inventory', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerInventory(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_inventory', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
 export async function installCoolingFromInventory(playerId: string, coolingId: string) {
@@ -447,43 +494,37 @@ export async function applyPassiveRegeneration(playerId: string) {
 
 // === STREAK (RACHA DIARIA) ===
 
-export async function getStreakStatus(playerId: string) {
-  const { data, error } = await supabase.rpc('get_streak_status', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getStreakStatus(playerId: string): Promise<any> {
+  return rpcWithRetry('get_streak_status', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
-export async function claimDailyStreak(playerId: string) {
-  const { data, error } = await supabase.rpc('claim_daily_streak', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function claimDailyStreak(playerId: string): Promise<any> {
+  // Critical: claiming streak affects rewards
+  return rpcWithRetry('claim_daily_streak', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true, maxRetries: 5 });
 }
 
 // === MISIONES DIARIAS ===
 
-export async function getDailyMissions(playerId: string) {
-  const { data, error } = await supabase.rpc('get_daily_missions', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getDailyMissions(playerId: string): Promise<any> {
+  return rpcWithRetry('get_daily_missions', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
-export async function claimMissionReward(playerId: string, missionUuid: string) {
-  const { data, error } = await supabase.rpc('claim_mission_reward', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function claimMissionReward(playerId: string, missionUuid: string): Promise<any> {
+  // Critical: claiming rewards is a financial operation
+  return rpcWithRetry('claim_mission_reward', {
     p_player_id: playerId,
     p_mission_uuid: missionUuid,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true, maxRetries: 5 });
 }
 
 export async function recordOnlineHeartbeat(playerId: string) {
@@ -638,41 +679,36 @@ export async function getActiveAnnouncements() {
 
 // === PENDING BLOCKS (CLAIM SYSTEM) ===
 
-export async function getPendingBlocks(playerId: string) {
-  const { data, error } = await supabase.rpc('get_pending_blocks', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPendingBlocks(playerId: string): Promise<any> {
+  // Critical: losing pending blocks means losing rewards
+  return rpcWithRetry('get_pending_blocks', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
-export async function getPendingBlocksCount(playerId: string) {
-  const { data, error } = await supabase.rpc('get_pending_blocks_count', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPendingBlocksCount(playerId: string): Promise<any> {
+  return rpcWithRetry('get_pending_blocks_count', {
     p_player_id: playerId,
   });
-
-  if (error) throw error;
-  return data;
 }
 
-export async function claimBlock(playerId: string, pendingId: string) {
-  const { data, error } = await supabase.rpc('claim_block', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function claimBlock(playerId: string, pendingId: string): Promise<any> {
+  // Critical: claiming blocks is a financial operation
+  return rpcWithRetry('claim_block', {
     p_player_id: playerId,
     p_pending_id: pendingId,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true, maxRetries: 5 });
 }
 
-export async function claimAllBlocks(playerId: string) {
-  const { data, error } = await supabase.rpc('claim_all_blocks', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function claimAllBlocks(playerId: string): Promise<any> {
+  // Critical: claiming blocks is a financial operation
+  return rpcWithRetry('claim_all_blocks', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true, maxRetries: 5 });
 }
 
 // === RON WITHDRAWALS ===
