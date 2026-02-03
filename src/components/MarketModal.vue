@@ -149,7 +149,7 @@ const balance = computed(() => authStore.player?.gamecoin_balance ?? 0);
 const cryptoBalance = computed(() => authStore.player?.crypto_balance ?? 0);
 const ronBalance = computed(() => authStore.player?.ron_balance ?? 0);
 
-function getRigOwned(id: string): number {
+function getRigOwned(id: string): { installed: number; inventory: number; total: number } {
   return marketStore.getRigOwned(id);
 }
 
