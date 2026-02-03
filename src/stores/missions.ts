@@ -104,7 +104,9 @@ export const useMissionsStore = defineStore('missions', () => {
           await fetchMissions(true);
         }
       }
-    } catch (e) {
+    } catch (e: any) {
+      // Ignorar AbortError (el navegador cancela requests al cambiar de pestaña)
+      if (e?.message?.includes('AbortError') || e?.name === 'AbortError') return;
       console.warn('Error sending heartbeat:', e);
     }
   }

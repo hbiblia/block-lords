@@ -85,6 +85,8 @@ export function useMiningEstimate(playerId: string, autoRefreshMs: number = 6000
         error.value = estimate.value.error || 'Error desconocido';
       }
     } catch (e: any) {
+      // Ignorar AbortError (el navegador cancela requests al cambiar de pestaña)
+      if (e?.message?.includes('AbortError') || e?.name === 'AbortError') return;
       console.error('Error fetching mining estimate:', e);
       error.value = e.message || 'Error al obtener estimación';
     } finally {
