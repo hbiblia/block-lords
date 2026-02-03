@@ -41,7 +41,7 @@ interface BoostItemType {
   secondary_value: number;
   duration_minutes: number;
   base_price: number;
-  currency: 'gamecoin' | 'crypto';
+  currency: 'gamecoin' | 'crypto' | 'ron';
   tier: string;
 }
 
@@ -270,6 +270,8 @@ function formatDuration(minutes: number): string {
 function canAffordBoost(boost: BoostItemType): boolean {
   if (boost.currency === 'crypto') {
     return cryptoBalance.value >= boost.base_price;
+  } else if (boost.currency === 'ron') {
+    return ronBalance.value >= boost.base_price;
   }
   return balance.value >= boost.base_price;
 }
@@ -867,11 +869,13 @@ watch(() => props.show, (newVal) => {
                       @click="requestBuyBoost(boost)"
                       class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
                       :class="canAffordBoost(boost)
-                        ? 'bg-purple-500 text-white hover:bg-purple-400'
+                        ? boost.currency === 'ron'
+                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-400 hover:to-purple-400'
+                          : 'bg-purple-500 text-white hover:bg-purple-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="purchaseDisabled || !canAffordBoost(boost)"
                     >
-                      {{ buying ? '...' : `${formatNumber(boost.base_price)} ${boost.currency === 'crypto' ? '💎' : '🪙'}` }}
+                      {{ buying ? '...' : boost.currency === 'ron' ? `${formatNumber(boost.base_price, 2)} RON` : `${formatNumber(boost.base_price)} ${boost.currency === 'crypto' ? '💎' : '🪙'}` }}
                     </button>
                   </div>
                 </div>

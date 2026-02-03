@@ -421,6 +421,10 @@ export default {
         autonomous_1h: { name: 'Auto-Pilot Module', description: 'Keeps rig mining for 1 hour while offline' },
         autonomous_4h: { name: 'Night Shift Protocol', description: 'Keeps rig mining for 4 hours while offline' },
         autonomous_12h: { name: 'Full Automation System', description: 'Keeps rig mining for 12 hours while offline' },
+        // Autonomous Mining (RON)
+        autonomous_day: { name: 'Auto-Pilot Day', description: 'Keeps rig mining for 1 day while offline' },
+        autonomous_week: { name: 'Night Shift Week', description: 'Keeps rig mining for 1 week while offline' },
+        autonomous_month: { name: 'Full Automation Month', description: 'Keeps rig mining for 1 month while offline' },
       },
       crypto_packages: {
         crypto_starter: { name: 'Starter Pack', description: 'Perfect to start your adventure.' },

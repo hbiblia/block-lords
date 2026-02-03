@@ -47,7 +47,7 @@ interface BoostItem {
   secondary_value: number;
   duration_minutes: number;
   base_price: number;
-  currency: 'gamecoin' | 'crypto';
+  currency: 'gamecoin' | 'crypto' | 'ron';
   tier: string;
 }
 

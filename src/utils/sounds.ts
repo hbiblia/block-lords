@@ -3,6 +3,9 @@
 // Sistema minimalista de sonidos del juego
 // =====================================================
 
+// Importar el audio como asset de Vite (debe estar al inicio)
+import computerFanLoop from '@/assets/ComputerFanLoop.mp3';
+
 export type SoundType =
   | 'click'
   | 'success'
@@ -202,8 +205,172 @@ class SoundManager {
   }
 }
 
+// =====================================================
+// RIG LOOP SOUND MANAGER
+// Maneja el sonido continuo de los rigs minando
+// =====================================================
+
+class RigSoundManager {
+  private audioElement: HTMLAudioElement | null = null;
+  private fadeInterval: number | null = null;
+  private targetVolume: number = 0;
+  private isPlaying: boolean = false;
+  private enabled: boolean = true;
+  private baseVolume: number = 0.3; // Volumen base del loop
+
+  constructor() {
+    this.loadSettings();
+  }
+
+  private loadSettings(): void {
+    try {
+      const saved = localStorage.getItem('blockLords_soundSettings');
+      if (saved) {
+        const settings = JSON.parse(saved);
+        this.enabled = settings.enabled ?? true;
+        this.baseVolume = settings.rigLoopVolume ?? 0.3;
+      }
+    } catch {
+      // Use defaults
+    }
+  }
+
+  private saveSettings(): void {
+    try {
+      const current = localStorage.getItem('blockLords_soundSettings');
+      const settings = current ? JSON.parse(current) : {};
+      settings.rigLoopVolume = this.baseVolume;
+      localStorage.setItem('blockLords_soundSettings', JSON.stringify(settings));
+    } catch {
+      // Ignore storage errors
+    }
+  }
+
+  private createAudioElement(): HTMLAudioElement {
+    if (!this.audioElement) {
+      this.audioElement = new Audio(computerFanLoop);
+      this.audioElement.loop = true;
+      this.audioElement.volume = 0;
+      // Preload the audio
+      this.audioElement.load();
+    }
+    return this.audioElement;
+  }
+
+  // Inicia el sonido con fade in
+  public start(activeRigsCount: number = 1): void {
+    if (!this.enabled || activeRigsCount <= 0) return;
+
+    const audio = this.createAudioElement();
+
+    // Calcular volumen basado en cantidad de rigs (más rigs = más fuerte, con límite)
+    // 1 rig = baseVolume, cada rig extra añade 15% hasta máx 2x
+    const volumeMultiplier = Math.min(2, 1 + (activeRigsCount - 1) * 0.15);
+    this.targetVolume = this.baseVolume * volumeMultiplier;
+
+    if (!this.isPlaying) {
+      audio.volume = 0;
+      audio.play().catch(err => {
+        console.warn('Could not play rig sound:', err);
+      });
+      this.isPlaying = true;
+    }
+
+    // Fade in
+    this.fadeToVolume(this.targetVolume, 500);
+  }
+
+  // Detiene el sonido con fade out
+  public stop(): void {
+    if (!this.isPlaying || !this.audioElement) return;
+
+    // Fade out y luego pausar
+    this.fadeToVolume(0, 300, () => {
+      if (this.audioElement) {
+        this.audioElement.pause();
+        this.audioElement.currentTime = 0;
+      }
+      this.isPlaying = false;
+    });
+  }
+
+  // Actualiza el volumen basado en rigs activos (sin reiniciar)
+  public updateVolume(activeRigsCount: number): void {
+    if (!this.isPlaying || activeRigsCount <= 0) {
+      if (activeRigsCount <= 0) this.stop();
+      return;
+    }
+
+    const volumeMultiplier = Math.min(2, 1 + (activeRigsCount - 1) * 0.15);
+    this.targetVolume = this.baseVolume * volumeMultiplier;
+    this.fadeToVolume(this.targetVolume, 200);
+  }
+
+  private fadeToVolume(target: number, duration: number, onComplete?: () => void): void {
+    if (this.fadeInterval) {
+      clearInterval(this.fadeInterval);
+    }
+
+    if (!this.audioElement) {
+      onComplete?.();
+      return;
+    }
+
+    const startVolume = this.audioElement.volume;
+    const volumeDiff = target - startVolume;
+    const steps = Math.max(1, duration / 16); // ~60fps
+    const volumeStep = volumeDiff / steps;
+    let currentStep = 0;
+
+    this.fadeInterval = window.setInterval(() => {
+      currentStep++;
+      if (this.audioElement) {
+        this.audioElement.volume = Math.max(0, Math.min(1, startVolume + volumeStep * currentStep));
+      }
+
+      if (currentStep >= steps) {
+        if (this.fadeInterval) clearInterval(this.fadeInterval);
+        this.fadeInterval = null;
+        if (this.audioElement) {
+          this.audioElement.volume = Math.max(0, Math.min(1, target));
+        }
+        onComplete?.();
+      }
+    }, 16);
+  }
+
+  public setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    if (!enabled && this.isPlaying) {
+      this.stop();
+    }
+  }
+
+  public isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  public setBaseVolume(volume: number): void {
+    this.baseVolume = Math.max(0, Math.min(1, volume));
+    this.saveSettings();
+    // Actualizar volumen actual si está sonando
+    if (this.isPlaying && this.audioElement) {
+      this.audioElement.volume = this.baseVolume;
+    }
+  }
+
+  public getBaseVolume(): number {
+    return this.baseVolume;
+  }
+
+  public getIsPlaying(): boolean {
+    return this.isPlaying;
+  }
+}
+
 // Singleton
 export const soundManager = new SoundManager();
+export const rigSoundManager = new RigSoundManager();
 
 // Helper para usar en componentes
 export function playSound(sound: SoundType): void {

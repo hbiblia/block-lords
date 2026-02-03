@@ -3611,9 +3611,10 @@ $$;
 -- Temporary power-ups for mining performance
 -- =====================================================
 
--- Update CHECK constraint to include new boost types (for existing tables)
+-- Update CHECK constraints for existing tables
 DO $$
 BEGIN
+  -- Update boost_type constraint
   IF EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE table_name = 'boost_items' AND constraint_type = 'CHECK'
@@ -3623,6 +3624,10 @@ BEGIN
       'hashrate', 'energy_saver', 'bandwidth_optimizer', 'lucky_charm',
       'overclock', 'coolant_injection', 'durability_shield', 'autonomous_mining'
     ));
+
+    -- Update currency constraint to include 'ron'
+    ALTER TABLE boost_items DROP CONSTRAINT IF EXISTS boost_items_currency_check;
+    ALTER TABLE boost_items ADD CONSTRAINT boost_items_currency_check CHECK (currency IN ('gamecoin', 'crypto', 'ron'));
   END IF;
 END $$;
 
@@ -3645,7 +3650,7 @@ CREATE TABLE IF NOT EXISTS boost_items (
   secondary_value NUMERIC DEFAULT 0,      -- Secondary effect for overclock
   duration_minutes INTEGER NOT NULL,       -- Duration in minutes
   base_price DECIMAL(10, 2) NOT NULL CHECK (base_price >= 0),
-  currency TEXT NOT NULL DEFAULT 'gamecoin' CHECK (currency IN ('gamecoin', 'crypto')),
+  currency TEXT NOT NULL DEFAULT 'gamecoin' CHECK (currency IN ('gamecoin', 'crypto', 'ron')),
   tier TEXT NOT NULL CHECK (tier IN ('basic', 'standard', 'advanced', 'elite')),
   is_stackable BOOLEAN DEFAULT false,
   max_stack INTEGER DEFAULT 1,
@@ -3678,50 +3683,56 @@ CREATE TABLE IF NOT EXISTS active_boosts (
 CREATE INDEX IF NOT EXISTS idx_active_boosts_player ON active_boosts(player_id);
 CREATE INDEX IF NOT EXISTS idx_active_boosts_expires ON active_boosts(expires_at);
 
--- Seed data para boost items (all crypto, prices 1000+)
--- Durations: basic=5min, standard=10min, elite=20min (per-rig boosts)
+-- Seed data para boost items
+-- Durations: basic=15min, standard=30min, elite=60min (per-rig boosts)
+-- Autonomous Mining: pagado en RON (dinero real)
 -- Uses ON CONFLICT DO UPDATE to safely update existing items without foreign key issues
 
+-- Eliminar IDs antiguos de autonomous mining (limpiar referencias primero)
+DELETE FROM rig_boosts WHERE boost_item_id IN ('autonomous_1h', 'autonomous_4h', 'autonomous_12h', 'autonomous_24h', 'autonomous_72h');
+DELETE FROM player_boosts WHERE boost_id IN ('autonomous_1h', 'autonomous_4h', 'autonomous_12h', 'autonomous_24h', 'autonomous_72h');
+DELETE FROM boost_items WHERE id IN ('autonomous_1h', 'autonomous_4h', 'autonomous_12h', 'autonomous_24h', 'autonomous_72h');
+
 INSERT INTO boost_items (id, name, description, boost_type, effect_value, secondary_value, duration_minutes, base_price, currency, tier, is_stackable, max_stack) VALUES
--- Hashrate Boosters
-('hashrate_small', 'Minor Hash Boost', '+10% hashrate for 5 minutes', 'hashrate', 10, 0, 5, 1200, 'crypto', 'basic', false, 1),
-('hashrate_medium', 'Hash Boost', '+25% hashrate for 10 minutes', 'hashrate', 25, 0, 10, 3000, 'crypto', 'standard', false, 1),
-('hashrate_large', 'Mega Hash Boost', '+50% hashrate for 20 minutes', 'hashrate', 50, 0, 20, 6500, 'crypto', 'elite', false, 1),
+-- Hashrate Boosters (crypto)
+('hashrate_small', 'Minor Hash Boost', '+15% hashrate for 1 hour', 'hashrate', 15, 0, 60, 500, 'crypto', 'basic', false, 1),
+('hashrate_medium', 'Hash Boost', '+30% hashrate for 12 hours', 'hashrate', 30, 0, 720, 1500, 'crypto', 'standard', false, 1),
+('hashrate_large', 'Mega Hash Boost', '+50% hashrate for 24 hours', 'hashrate', 50, 0, 1440, 4000, 'crypto', 'elite', false, 1),
 
--- Energy Savers
-('energy_saver_small', 'Power Saver', '-15% energy consumption for 5 minutes', 'energy_saver', 15, 0, 5, 1000, 'crypto', 'basic', false, 1),
-('energy_saver_medium', 'Eco Mode', '-25% energy consumption for 10 minutes', 'energy_saver', 25, 0, 10, 2500, 'crypto', 'standard', false, 1),
-('energy_saver_large', 'Green Mining', '-40% energy consumption for 20 minutes', 'energy_saver', 40, 0, 20, 5500, 'crypto', 'elite', false, 1),
+-- Energy Savers (crypto)
+('energy_saver_small', 'Power Saver', '-20% energy consumption for 1 hour', 'energy_saver', 20, 0, 60, 400, 'crypto', 'basic', false, 1),
+('energy_saver_medium', 'Eco Mode', '-35% energy consumption for 12 hours', 'energy_saver', 35, 0, 720, 1200, 'crypto', 'standard', false, 1),
+('energy_saver_large', 'Green Mining', '-50% energy consumption for 24 hours', 'energy_saver', 50, 0, 1440, 3500, 'crypto', 'elite', false, 1),
 
--- Bandwidth Optimizers
-('bandwidth_small', 'Data Optimizer', '-15% internet consumption for 5 minutes', 'bandwidth_optimizer', 15, 0, 5, 1000, 'crypto', 'basic', false, 1),
-('bandwidth_medium', 'Network Boost', '-25% internet consumption for 10 minutes', 'bandwidth_optimizer', 25, 0, 10, 2500, 'crypto', 'standard', false, 1),
-('bandwidth_large', 'Fiber Mode', '-40% internet consumption for 20 minutes', 'bandwidth_optimizer', 40, 0, 20, 5500, 'crypto', 'elite', false, 1),
+-- Bandwidth Optimizers (crypto)
+('bandwidth_small', 'Data Optimizer', '-20% internet consumption for 1 hour', 'bandwidth_optimizer', 20, 0, 60, 400, 'crypto', 'basic', false, 1),
+('bandwidth_medium', 'Network Boost', '-35% internet consumption for 12 hours', 'bandwidth_optimizer', 35, 0, 720, 1200, 'crypto', 'standard', false, 1),
+('bandwidth_large', 'Fiber Mode', '-50% internet consumption for 24 hours', 'bandwidth_optimizer', 50, 0, 1440, 3500, 'crypto', 'elite', false, 1),
 
--- Lucky Charms (more expensive - affects block probability)
-('lucky_small', 'Lucky Coin', '+5% block probability for 5 minutes', 'lucky_charm', 5, 0, 5, 2000, 'crypto', 'basic', false, 1),
-('lucky_medium', 'Fortune Token', '+10% block probability for 10 minutes', 'lucky_charm', 10, 0, 10, 5000, 'crypto', 'standard', false, 1),
-('lucky_large', 'Jackpot Charm', '+20% block probability for 20 minutes', 'lucky_charm', 20, 0, 20, 12000, 'crypto', 'elite', false, 1),
+-- Lucky Charms (crypto - more expensive, affects block probability)
+('lucky_small', 'Lucky Coin', '+8% block probability for 1 hour', 'lucky_charm', 8, 0, 60, 800, 'crypto', 'basic', false, 1),
+('lucky_medium', 'Fortune Token', '+15% block probability for 12 hours', 'lucky_charm', 15, 0, 720, 2500, 'crypto', 'standard', false, 1),
+('lucky_large', 'Jackpot Charm', '+25% block probability for 24 hours', 'lucky_charm', 25, 0, 1440, 7000, 'crypto', 'elite', false, 1),
 
--- Overclock Mode (hashrate boost + energy penalty)
-('overclock_small', 'Overclock Lite', '+25% hashrate, +15% energy for 5 minutes', 'overclock', 25, 15, 5, 1500, 'crypto', 'basic', false, 1),
-('overclock_medium', 'Overclock Pro', '+40% hashrate, +25% energy for 10 minutes', 'overclock', 40, 25, 10, 3500, 'crypto', 'standard', false, 1),
-('overclock_large', 'Overclock Max', '+60% hashrate, +35% energy for 20 minutes', 'overclock', 60, 35, 20, 7500, 'crypto', 'elite', false, 1),
+-- Overclock Mode (crypto - hashrate boost + energy penalty)
+('overclock_small', 'Overclock Lite', '+30% hashrate, +15% energy for 1 hour', 'overclock', 30, 15, 60, 600, 'crypto', 'basic', false, 1),
+('overclock_medium', 'Overclock Pro', '+50% hashrate, +25% energy for 12 hours', 'overclock', 50, 25, 720, 1800, 'crypto', 'standard', false, 1),
+('overclock_large', 'Overclock Max', '+75% hashrate, +35% energy for 24 hours', 'overclock', 75, 35, 1440, 5000, 'crypto', 'elite', false, 1),
 
--- Coolant Injection
-('coolant_small', 'Cooling Gel', '-20% temperature gain for 5 minutes', 'coolant_injection', 20, 0, 5, 1200, 'crypto', 'basic', false, 1),
-('coolant_medium', 'Cryo Fluid', '-35% temperature gain for 10 minutes', 'coolant_injection', 35, 0, 10, 3000, 'crypto', 'standard', false, 1),
-('coolant_large', 'Liquid Nitrogen', '-50% temperature gain for 20 minutes', 'coolant_injection', 50, 0, 20, 6500, 'crypto', 'elite', false, 1),
+-- Coolant Injection (crypto)
+('coolant_small', 'Cooling Gel', '-25% temperature gain for 1 hour', 'coolant_injection', 25, 0, 60, 500, 'crypto', 'basic', false, 1),
+('coolant_medium', 'Cryo Fluid', '-40% temperature gain for 12 hours', 'coolant_injection', 40, 0, 720, 1500, 'crypto', 'standard', false, 1),
+('coolant_large', 'Liquid Nitrogen', '-60% temperature gain for 24 hours', 'coolant_injection', 60, 0, 1440, 4000, 'crypto', 'elite', false, 1),
 
--- Durability Shield
-('durability_small', 'Wear Guard', '-20% condition deterioration for 5 minutes', 'durability_shield', 20, 0, 5, 1200, 'crypto', 'basic', false, 1),
-('durability_medium', 'Shield Coat', '-35% condition deterioration for 10 minutes', 'durability_shield', 35, 0, 10, 3000, 'crypto', 'standard', false, 1),
-('durability_large', 'Diamond Shell', '-50% condition deterioration for 20 minutes', 'durability_shield', 50, 0, 20, 6500, 'crypto', 'elite', false, 1),
+-- Durability Shield (crypto)
+('durability_small', 'Wear Guard', '-25% condition deterioration for 1 hour', 'durability_shield', 25, 0, 60, 500, 'crypto', 'basic', false, 1),
+('durability_medium', 'Shield Coat', '-40% condition deterioration for 12 hours', 'durability_shield', 40, 0, 720, 1500, 'crypto', 'standard', false, 1),
+('durability_large', 'Diamond Shell', '-60% condition deterioration for 24 hours', 'durability_shield', 60, 0, 1440, 4000, 'crypto', 'elite', false, 1),
 
--- Autonomous Mining (keeps rig mining when offline - long durations, high prices)
-('autonomous_1h', 'Auto-Pilot Module', 'Keeps rig mining for 1 hour while offline', 'autonomous_mining', 100, 0, 60, 15000, 'crypto', 'standard', false, 1),
-('autonomous_4h', 'Night Shift Protocol', 'Keeps rig mining for 4 hours while offline', 'autonomous_mining', 100, 0, 240, 50000, 'crypto', 'advanced', false, 1),
-('autonomous_12h', 'Full Automation System', 'Keeps rig mining for 12 hours while offline', 'autonomous_mining', 100, 0, 720, 120000, 'crypto', 'elite', false, 1)
+-- Autonomous Mining (RON - keeps rig mining when offline)
+('autonomous_day', 'Auto-Pilot Module', 'Keeps rig mining for 1 day while offline', 'autonomous_mining', 100, 0, 1440, 0.5, 'ron', 'standard', false, 1),
+('autonomous_week', 'Night Shift Protocol', 'Keeps rig mining for 1 week while offline', 'autonomous_mining', 100, 0, 10080, 1, 'ron', 'advanced', false, 1),
+('autonomous_month', 'Full Automation System', 'Keeps rig mining for 1 month while offline', 'autonomous_mining', 100, 0, 43200, 5, 'ron', 'elite', false, 1)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
@@ -3818,7 +3829,15 @@ BEGIN
   END IF;
 
   -- Verificar balance según moneda
-  IF v_boost.currency = 'crypto' THEN
+  IF v_boost.currency = 'ron' THEN
+    IF COALESCE(v_player.ron_balance, 0) < v_boost.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'Insufficient RON', 'required', v_boost.base_price, 'current', COALESCE(v_player.ron_balance, 0));
+    END IF;
+
+    UPDATE players
+    SET ron_balance = ron_balance - v_boost.base_price
+    WHERE id = p_player_id;
+  ELSIF v_boost.currency = 'crypto' THEN
     IF v_player.crypto_balance < v_boost.base_price THEN
       RETURN json_build_object('success', false, 'error', 'Insufficient Crypto');
     END IF;

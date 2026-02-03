@@ -421,6 +421,10 @@ export default {
         autonomous_1h: { name: 'Modulo Auto-Piloto', description: 'Mantiene el rig minando 1 hora sin conexion' },
         autonomous_4h: { name: 'Protocolo Nocturno', description: 'Mantiene el rig minando 4 horas sin conexion' },
         autonomous_12h: { name: 'Sistema Automatizacion Total', description: 'Mantiene el rig minando 12 horas sin conexion' },
+        // Autonomous Mining (RON)
+        autonomous_day: { name: 'Auto-Piloto Dia', description: 'Mantiene el rig minando 1 dia sin conexion' },
+        autonomous_week: { name: 'Protocolo Semanal', description: 'Mantiene el rig minando 1 semana sin conexion' },
+        autonomous_month: { name: 'Automatizacion Mensual', description: 'Mantiene el rig minando 1 mes sin conexion' },
       },
       crypto_packages: {
         crypto_starter: { name: 'Pack Inicial', description: 'Perfecto para empezar tu aventura.' },

@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
 import { buyRigSlot } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
+import { useRigSound } from '@/composables/useSound';
 import { useWakeLock } from '@/composables/useWakeLock';
 import { useMiningEstimate } from '@/composables/useMiningEstimate';
 import RigEnhanceModal from '@/components/RigEnhanceModal.vue';
 
 // Wake Lock to keep screen on while mining
 const { requestWakeLock, releaseWakeLock } = useWakeLock();
+
+// Rig sound loop (fan sound while mining)
+const { updateRigSound, stopRigSound } = useRigSound();
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -71,6 +75,23 @@ const isPremium = computed(() => {
   if (!premiumUntil) return false;
   return new Date(premiumUntil) > new Date();
 });
+
+// Watch active rigs to control fan sound
+watch(activeRigsCount, (newCount) => {
+  updateRigSound(newCount);
+});
+
+// Iniciar sonido de rigs en la primera interacción del usuario (si hay rigs activos)
+// Esto es necesario porque el navegador bloquea audio sin interacción
+const initRigSoundOnInteraction = () => {
+  if (activeRigsCount.value > 0) {
+    updateRigSound(activeRigsCount.value);
+  }
+  document.removeEventListener('click', initRigSoundOnInteraction);
+  document.removeEventListener('keydown', initRigSoundOnInteraction);
+};
+document.addEventListener('click', initRigSoundOnInteraction, { once: true });
+document.addEventListener('keydown', initRigSoundOnInteraction, { once: true });
 
 // Slot functions
 function openSlotPurchaseConfirm() {
@@ -446,8 +467,13 @@ onMounted(() => {
 onUnmounted(() => {
   stopMiningSimulation();
   stopUptimeTimer();
+  stopRigSound();
   miningStore.unsubscribeFromRealtime();
   releaseWakeLock();
+
+  // Limpiar listeners de inicialización de sonido (si aún no se ejecutaron)
+  document.removeEventListener('click', initRigSoundOnInteraction);
+  document.removeEventListener('keydown', initRigSoundOnInteraction);
 
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
 });
