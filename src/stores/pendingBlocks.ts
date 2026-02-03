@@ -9,6 +9,7 @@ export interface PendingBlock {
   block_id: string;
   block_height: number;
   reward: number;
+  is_premium: boolean;
   created_at: string;
 }
 

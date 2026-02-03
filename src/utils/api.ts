@@ -711,6 +711,13 @@ export async function claimAllBlocks(playerId: string): Promise<any> {
   }, { critical: true, maxRetries: 5 });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerPityStats(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_pity_stats', {
+    p_player_id: playerId,
+  });
+}
+
 // === RON WITHDRAWALS ===
 
 export async function requestRonWithdrawal(playerId: string) {

@@ -1868,6 +1868,7 @@ DECLARE
   v_block_mined BOOLEAN := false;
   v_block_height INT;
   v_difficulty_result JSON;
+  v_pity_result JSON;
   v_inactive_marked INT := 0;
   v_rigs_shutdown INT := 0;
 BEGIN
@@ -1909,6 +1910,9 @@ BEGIN
   -- Intentar minar bloque
   SELECT * INTO v_block_mined, v_block_height FROM process_mining_tick();
 
+  -- Procesar bonus de tiempo de minado (Pity Timer)
+  v_pity_result := process_mining_time_bonus();
+
   RETURN json_build_object(
     'success', true,
     'resourcesProcessed', v_resources_processed,
@@ -1917,6 +1921,7 @@ BEGIN
     'difficultyAdjusted', (v_difficulty_result->>'adjusted')::BOOLEAN,
     'playersMarkedOffline', v_inactive_marked,
     'rigsShutdown', v_rigs_shutdown,
+    'pityBlocksCreated', (v_pity_result->>'pityBlocksCreated')::INT,
     'timestamp', NOW()
   );
 END;
@@ -4659,13 +4664,23 @@ DROP FUNCTION IF EXISTS claim_all_blocks(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION get_pending_blocks(p_player_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_max_height INT;
 BEGIN
+  -- Get current max block height for pity blocks display
+  SELECT COALESCE(MAX(height), 1) INTO v_max_height FROM blocks;
+
   RETURN (
     SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
     FROM (
-      SELECT pb.id, pb.block_id, b.height as block_height, pb.reward, pb.is_premium, pb.created_at
+      SELECT pb.id,
+             -- Pity blocks: generate fake block_id from pending id
+             COALESCE(pb.block_id, pb.id) as block_id,
+             -- Pity blocks: use realistic height near current max
+             COALESCE(b.height, v_max_height) as block_height,
+             pb.reward, pb.is_premium, pb.created_at
       FROM pending_blocks pb
-      JOIN blocks b ON b.id = pb.block_id
+      LEFT JOIN blocks b ON b.id = pb.block_id
       WHERE pb.player_id = p_player_id AND pb.claimed = false
       ORDER BY pb.created_at DESC
     ) t
@@ -4675,7 +4690,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION claim_block(p_player_id UUID, p_pending_id UUID)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_pending pending_blocks%ROWTYPE;
+DECLARE v_pending pending_blocks%ROWTYPE; v_description TEXT; v_height INT;
 BEGIN
   IF p_player_id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Player ID requerido'); END IF;
   SELECT * INTO v_pending FROM pending_blocks WHERE id = p_pending_id AND player_id = p_player_id AND claimed = false;
@@ -4683,9 +4698,16 @@ BEGIN
   UPDATE pending_blocks SET claimed = true, claimed_at = NOW() WHERE id = p_pending_id;
   UPDATE players SET crypto_balance = crypto_balance + v_pending.reward,
     total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_pending.reward WHERE id = p_player_id;
+  -- Get block height (real or simulated for pity)
+  IF COALESCE(v_pending.is_pity, false) THEN
+    SELECT COALESCE(MAX(height), 1) INTO v_height FROM blocks;
+  ELSE
+    SELECT height INTO v_height FROM blocks WHERE id = v_pending.block_id;
+  END IF;
+  v_description := 'Bloque reclamado #' || v_height;
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'block_claim', v_pending.reward, 'crypto', 'Bloque reclamado #' || (SELECT height FROM blocks WHERE id = v_pending.block_id));
-  RETURN json_build_object('success', true, 'reward', v_pending.reward, 'block_id', v_pending.block_id);
+  VALUES (p_player_id, 'block_claim', v_pending.reward, 'crypto', v_description);
+  RETURN json_build_object('success', true, 'reward', v_pending.reward, 'block_id', COALESCE(v_pending.block_id, v_pending.id));
 END;
 $$;
 
@@ -5796,6 +5818,210 @@ GRANT EXECUTE ON FUNCTION remove_cooling_from_rig TO authenticated;
 GRANT EXECUTE ON FUNCTION remove_boost_from_rig TO authenticated;
 GRANT EXECUTE ON FUNCTION remove_all_cooling_from_rig TO authenticated;
 GRANT EXECUTE ON FUNCTION remove_all_boosts_from_rig TO authenticated;
+
+-- =====================================================
+-- PITY TIMER SYSTEM - Mining Time Bonus
+-- =====================================================
+-- Garantiza mínimo de RON por mes para usuarios que minan 24/7:
+-- - Free users: 100 RON/mes
+-- - Premium users: 500 RON/mes
+-- =====================================================
+
+-- Procesar bonus de tiempo de minado (llamado cada tick desde game_tick)
+-- El pity reward es proporcional al hashrate efectivo del jugador
+-- IMPORTANTE: El reward es en CRYPTO (₿), siempre menor al bloque normal
+DROP FUNCTION IF EXISTS process_mining_time_bonus() CASCADE;
+CREATE OR REPLACE FUNCTION process_mining_time_bonus()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rig RECORD;
+  v_player_hashrates RECORD;
+  v_bonus_rate DECIMAL;
+  -- Threshold bajo para dar ~20 bloques/día con 1000 hashrate (24/7)
+  -- Cálculo: 1000 hash × 0.000002315 × 1440 min = 3.33/día
+  -- 3.33 / 0.1667 = 20 bloques/día
+  v_pity_threshold DECIMAL := 0.1667;
+  v_pity_blocks_created INT := 0;
+  v_total_bonus_distributed DECIMAL := 0;
+  v_is_premium BOOLEAN;
+  v_effective_hashrate DECIMAL;
+  v_pity_reward DECIMAL;
+  v_current_block_reward DECIMAL;
+  v_current_height INT;
+  v_hashrate_ratio DECIMAL;
+  v_max_pity_percent DECIMAL := 0.5;  -- Máximo 50% del bloque normal
+  -- Rate por hashrate por tick para acumulación
+  -- Más hashrate = acumula más rápido
+  v_free_rate_per_hash DECIMAL := 0.000002315;
+  v_premium_rate_per_hash DECIMAL := 0.000011574;
+BEGIN
+  -- Obtener el reward actual de un bloque normal
+  SELECT COALESCE(MAX(height), 0) INTO v_current_height FROM blocks;
+  v_current_block_reward := calculate_block_reward(v_current_height + 1);
+  -- Calcular hashrate efectivo por jugador (suma de todos sus rigs activos)
+  FOR v_player_hashrates IN
+    WITH player_effective_hashrates AS (
+      SELECT
+        p.id as player_id,
+        p.premium_until,
+        SUM(
+          r.hashrate *
+          GREATEST(0.1, pr.condition / 100.0) *  -- Condition penalty
+          CASE
+            WHEN p.reputation_score >= 80 THEN 1 + (p.reputation_score - 80) * 0.01
+            WHEN p.reputation_score < 50 THEN 0.5 + (p.reputation_score / 100.0)
+            ELSE 1.0
+          END *  -- Reputation multiplier
+          CASE
+            WHEN pr.temperature > 50 THEN GREATEST(0.3, 1 - ((pr.temperature - 50) * 0.014))
+            ELSE 1.0
+          END *  -- Temperature penalty
+          COALESCE((get_active_boost_multipliers(p.id)->>'hashrate')::NUMERIC, 1.0)  -- Boost multiplier
+        ) as total_effective_hashrate
+      FROM players p
+      JOIN player_rigs pr ON pr.player_id = p.id
+      JOIN rigs r ON r.id = pr.rig_id
+      WHERE pr.is_active = true
+        AND p.energy > 0
+        AND p.internet > 0
+        AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
+      GROUP BY p.id, p.premium_until
+    )
+    SELECT * FROM player_effective_hashrates WHERE total_effective_hashrate > 0
+  LOOP
+    -- Determinar si es premium
+    v_is_premium := v_player_hashrates.premium_until IS NOT NULL AND v_player_hashrates.premium_until > NOW();
+    v_effective_hashrate := v_player_hashrates.total_effective_hashrate;
+
+    -- Calcular rate basado en hashrate
+    -- Más hashrate = más rápido acumula pity
+    IF v_is_premium THEN
+      v_bonus_rate := v_effective_hashrate * v_premium_rate_per_hash;
+    ELSE
+      v_bonus_rate := v_effective_hashrate * v_free_rate_per_hash;
+    END IF;
+
+    -- Acumular bonus
+    UPDATE players
+    SET mining_bonus_accumulated = COALESCE(mining_bonus_accumulated, 0) + v_bonus_rate
+    WHERE id = v_player_hashrates.player_id;
+
+    v_total_bonus_distributed := v_total_bonus_distributed + v_bonus_rate;
+
+    -- Verificar si alcanzó el threshold para pity block
+    IF (SELECT mining_bonus_accumulated FROM players WHERE id = v_player_hashrates.player_id) >= v_pity_threshold THEN
+      -- Calcular reward proporcional al hashrate, siempre menor al bloque normal
+      -- Fórmula: block_reward * min(max_percent, hashrate/10000)
+      -- Ejemplo con block_reward=100:
+      --   500 hashrate  → 100 * min(0.5, 0.05)  = 5 ₿
+      --   1000 hashrate → 100 * min(0.5, 0.1)   = 10 ₿
+      --   2500 hashrate → 100 * min(0.5, 0.25)  = 25 ₿
+      --   5000 hashrate → 100 * min(0.5, 0.5)   = 50 ₿ (max)
+      --   10000 hashrate→ 100 * min(0.5, 1.0)   = 50 ₿ (capped)
+      v_hashrate_ratio := LEAST(v_max_pity_percent, v_effective_hashrate / 10000.0);
+      v_pity_reward := GREATEST(1.0, v_current_block_reward * v_hashrate_ratio);
+
+      -- Premium bonus (+50% al pity reward también)
+      IF v_is_premium THEN
+        v_pity_reward := v_pity_reward * 1.5;
+      END IF;
+
+      -- Crear pity block con reward basado en hashrate
+      INSERT INTO pending_blocks (
+        block_id,
+        player_id,
+        reward,
+        is_premium,
+        is_pity,
+        created_at
+      ) VALUES (
+        NULL,
+        v_player_hashrates.player_id,
+        v_pity_reward,
+        v_is_premium,
+        TRUE,
+        NOW()
+      );
+
+      -- Restar el threshold del acumulador
+      UPDATE players
+      SET mining_bonus_accumulated = mining_bonus_accumulated - v_pity_threshold
+      WHERE id = v_player_hashrates.player_id;
+
+      v_pity_blocks_created := v_pity_blocks_created + 1;
+    END IF;
+  END LOOP;
+
+  RETURN json_build_object(
+    'success', true,
+    'pityBlocksCreated', v_pity_blocks_created,
+    'totalBonusDistributed', ROUND(v_total_bonus_distributed, 6)
+  );
+END;
+$$;
+
+-- Obtener estadísticas de pity timer de un jugador
+DROP FUNCTION IF EXISTS get_player_pity_stats(UUID) CASCADE;
+CREATE OR REPLACE FUNCTION get_player_pity_stats(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_accumulated DECIMAL;
+  v_pending_pity_count INT;
+  v_total_pity_claimed DECIMAL;
+  v_is_premium BOOLEAN;
+  v_rate_per_hour DECIMAL;
+  v_hours_to_next DECIMAL;
+BEGIN
+  -- Obtener datos del jugador
+  SELECT
+    COALESCE(mining_bonus_accumulated, 0),
+    premium_until IS NOT NULL AND premium_until > NOW()
+  INTO v_accumulated, v_is_premium
+  FROM players WHERE id = p_player_id;
+
+  -- Calcular rate por hora
+  IF v_is_premium THEN
+    v_rate_per_hour := 0.011574 * 60;  -- ~0.694 RON/hora
+  ELSE
+    v_rate_per_hour := 0.002315 * 60;  -- ~0.139 RON/hora
+  END IF;
+
+  -- Calcular horas hasta próximo pity block
+  v_hours_to_next := (5.0 - v_accumulated) / v_rate_per_hour;
+  IF v_hours_to_next < 0 THEN v_hours_to_next := 0; END IF;
+
+  -- Contar pity blocks pendientes
+  SELECT COUNT(*) INTO v_pending_pity_count
+  FROM pending_blocks
+  WHERE player_id = p_player_id AND is_pity = true AND claimed = false;
+
+  -- Total RON reclamado de pity blocks
+  SELECT COALESCE(SUM(reward), 0) INTO v_total_pity_claimed
+  FROM pending_blocks
+  WHERE player_id = p_player_id AND is_pity = true AND claimed = true;
+
+  RETURN json_build_object(
+    'success', true,
+    'accumulated', ROUND(v_accumulated, 4),
+    'threshold', 5.0,
+    'progressPercent', ROUND((v_accumulated / 5.0) * 100, 1),
+    'hoursToNextPityBlock', ROUND(v_hours_to_next, 1),
+    'pendingPityBlocks', v_pending_pity_count,
+    'totalPityClaimed', ROUND(v_total_pity_claimed, 2),
+    'isPremium', v_is_premium,
+    'ratePerHour', ROUND(v_rate_per_hour, 4),
+    'guaranteedPerMonth', CASE WHEN v_is_premium THEN 500 ELSE 100 END
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_player_pity_stats TO authenticated;
 
 -- =====================================================
 -- GRANTS PARA FUNCIONES

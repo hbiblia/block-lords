@@ -112,15 +112,27 @@ ALTER TABLE blocks ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS pending_blocks (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  block_id UUID NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
+  block_id UUID REFERENCES blocks(id) ON DELETE CASCADE,  -- Nullable for pity blocks
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   reward DECIMAL(18, 8) NOT NULL,
   claimed BOOLEAN DEFAULT FALSE,
   claimed_at TIMESTAMPTZ,
   is_premium BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(block_id)
+  is_pity BOOLEAN DEFAULT false,  -- TRUE for pity timer blocks (no real block_id)
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Pity Timer System: column for accumulating mining time bonus
+ALTER TABLE players ADD COLUMN IF NOT EXISTS mining_bonus_accumulated DECIMAL(18, 8) DEFAULT 0;
+
+-- Pity blocks column (for existing databases)
+ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS is_pity BOOLEAN DEFAULT false;
+
+-- Make block_id nullable for pity blocks (for existing databases)
+ALTER TABLE pending_blocks ALTER COLUMN block_id DROP NOT NULL;
+
+-- Index for pity blocks queries
+CREATE INDEX IF NOT EXISTS idx_pending_blocks_is_pity ON pending_blocks(is_pity) WHERE is_pity = true;
 
 CREATE TABLE IF NOT EXISTS market_orders (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
