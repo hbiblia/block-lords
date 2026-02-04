@@ -26,10 +26,12 @@ const expiresDate = computed(() => {
 });
 
 async function loadStatus() {
-  if (!authStore.player?.id) return;
+  if (!authStore.player?.id) {
+    loading.value = false;
+    return;
+  }
 
   try {
-    loading.value = true;
     premiumStatus.value = await getPremiumStatus(authStore.player.id);
   } catch (e) {
     console.error('Error loading premium status:', e);

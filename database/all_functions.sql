@@ -593,6 +593,10 @@ BEGIN
     WHERE id = p_rig_id
     RETURNING * INTO v_rig;
 
+    -- Actualizar misiones de encender rig
+    PERFORM update_mission_progress(p_player_id, 'tutorial_mine', 1);
+    PERFORM update_mission_progress(p_player_id, 'start_rig', 1);
+
     RETURN json_build_object(
       'success', true,
       'isActive', true,
@@ -703,6 +707,9 @@ BEGIN
   INSERT INTO transactions (player_id, type, amount, currency, description)
   VALUES (p_player_id, 'rig_repair', -v_repair_cost, 'gamecoin',
           'Reparación #' || (v_times_repaired + 1) || ' de ' || v_rig.rig_name || ' (' || v_target_condition || '%)');
+
+  -- Actualizar misión de reparar rig
+  PERFORM update_mission_progress(p_player_id, 'repair_rig', 1);
 
   RETURN json_build_object(
     'success', true,
@@ -844,6 +851,9 @@ BEGIN
   ON CONFLICT (player_id, rig_id)
   DO UPDATE SET quantity = player_rig_inventory.quantity + 1;
 
+  -- Actualizar misiones de comprar rig
+  PERFORM update_mission_progress(p_player_id, 'buy_rig', 1);
+
   RETURN json_build_object(
     'success', true,
     'rig', row_to_json(v_rig),
@@ -928,6 +938,9 @@ BEGIN
     0
   )
   RETURNING id INTO v_new_rig_id;
+
+  -- Actualizar misión de cantidad de rigs (v_total_rigs + 1 porque acabamos de agregar uno)
+  PERFORM update_mission_progress(p_player_id, 'own_rigs', 1);
 
   RETURN json_build_object(
     'success', true,
@@ -1642,6 +1655,26 @@ BEGIN
       END IF;
     END LOOP;
 
+    -- Actualizar misiones de tiempo activo con rigs
+    DECLARE
+      v_active_rig_count INT;
+    BEGIN
+      SELECT COUNT(*) INTO v_active_rig_count
+      FROM player_rigs WHERE player_id = v_player.id AND is_active = true;
+
+      IF v_active_rig_count > 0 THEN
+        -- rig_active_time: 1 minuto por cada tick con al menos 1 rig activo
+        PERFORM update_mission_progress(v_player.id, 'rig_active_time', 1);
+
+        -- multi_rig: si tiene 2+ rigs activos simultáneamente
+        IF v_active_rig_count >= 2 THEN
+          PERFORM update_mission_progress(v_player.id, 'multi_rig', 1);
+          -- multi_rig_time: minutos con múltiples rigs activos
+          PERFORM update_mission_progress(v_player.id, 'multi_rig_time', 1);
+        END IF;
+      END IF;
+    END;
+
     -- Calcular nuevo nivel de energía e internet
     -- Ambos bajan proporcionalmente a su consumo real (mismo multiplicador)
     -- Los multiplicadores de boost ya fueron aplicados por rig en el loop anterior
@@ -1884,6 +1917,8 @@ BEGIN
 
     -- Actualizar progreso de misiones de minado
     PERFORM update_mission_progress(v_winner_player_id, 'mine_blocks', 1);
+    PERFORM update_mission_progress(v_winner_player_id, 'first_block', 1);
+    PERFORM update_mission_progress(v_winner_player_id, 'total_blocks', 1);
 
     RETURN QUERY SELECT true, v_block.height;
   END;
@@ -2285,6 +2320,12 @@ BEGIN
 
   PERFORM update_reputation(v_buyer_id, 0.05, 'successful_trade');
   PERFORM update_reputation(v_seller_id, 0.05, 'successful_trade');
+
+  -- Actualizar misiones de trading
+  PERFORM update_mission_progress(v_buyer_id, 'market_trade', 1);
+  PERFORM update_mission_progress(v_seller_id, 'market_trade', 1);
+  PERFORM update_mission_progress(v_buyer_id, 'first_trade', 1);
+  PERFORM update_mission_progress(v_seller_id, 'first_trade', 1);
 END;
 $$;
 
@@ -3447,6 +3488,10 @@ BEGIN
     VALUES (p_player_id, 'streak_reward', v_crypto_reward, 'crypto',
             'Bonus crypto racha día ' || v_new_streak);
   END IF;
+
+  -- Actualizar misiones de racha de login
+  PERFORM update_mission_progress(p_player_id, 'login_streak', 1);
+  PERFORM update_mission_progress(p_player_id, 'daily_login', 1);
 
   RETURN json_build_object(
     'success', true,
@@ -4889,6 +4934,9 @@ BEGIN
   v_description := 'Bloque reclamado #' || v_height;
   INSERT INTO transactions (player_id, type, amount, currency, description)
   VALUES (p_player_id, 'block_claim', v_pending.reward, 'crypto', v_description);
+  -- Actualizar misiones de ganar crypto
+  PERFORM update_mission_progress(p_player_id, 'earn_crypto', v_pending.reward);
+  PERFORM update_mission_progress(p_player_id, 'total_crypto', v_pending.reward);
   RETURN json_build_object('success', true, 'reward', v_pending.reward, 'block_id', COALESCE(v_pending.block_id, v_pending.id));
 END;
 $$;
@@ -4907,6 +4955,9 @@ BEGIN
     total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_total_reward WHERE id = p_player_id;
   INSERT INTO transactions (player_id, type, amount, currency, description)
   VALUES (p_player_id, 'block_claim_all', v_total_reward, 'crypto', 'Reclamados ' || v_count || ' bloques');
+  -- Actualizar misiones de ganar crypto
+  PERFORM update_mission_progress(p_player_id, 'earn_crypto', v_total_reward);
+  PERFORM update_mission_progress(p_player_id, 'total_crypto', v_total_reward);
   RETURN json_build_object('success', true, 'total_reward', v_total_reward, 'blocks_claimed', v_count);
 END;
 $$;
@@ -4963,6 +5014,8 @@ BEGIN
   INSERT INTO premium_subscriptions (player_id, expires_at, amount_paid) VALUES (p_player_id, v_new_expires, v_price) RETURNING id INTO v_subscription_id;
   INSERT INTO transactions (player_id, type, amount, currency, description)
   VALUES (p_player_id, 'premium_purchase', -v_price, 'ron', 'Suscripcion Premium (30 dias)');
+  -- Actualizar misión de primer premium
+  PERFORM update_mission_progress(p_player_id, 'first_premium', 1);
   RETURN json_build_object('success', true, 'subscription_id', v_subscription_id, 'expires_at', v_new_expires, 'price', v_price, 'energy', v_premium_max, 'internet', v_premium_max);
 END;
 $$;
@@ -5231,6 +5284,9 @@ BEGIN
   CASE p_upgrade_type WHEN 'hashrate' THEN UPDATE player_rigs SET hashrate_level = v_next_level, last_modified_at = NOW() WHERE id = p_player_rig_id;
     WHEN 'efficiency' THEN UPDATE player_rigs SET efficiency_level = v_next_level, last_modified_at = NOW() WHERE id = p_player_rig_id;
     WHEN 'thermal' THEN UPDATE player_rigs SET thermal_level = v_next_level, last_modified_at = NOW() WHERE id = p_player_rig_id; END CASE;
+  -- Actualizar misiones de upgrade
+  PERFORM update_mission_progress(p_player_id, 'upgrade_rig', 1);
+  PERFORM update_mission_progress(p_player_id, 'first_upgrade', 1);
   RETURN jsonb_build_object('success', true, 'upgrade_type', p_upgrade_type, 'new_level', v_next_level, 'crypto_spent', v_upgrade_cost.crypto_cost);
 END;
 $$;

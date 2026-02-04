@@ -45,10 +45,12 @@ const canApplyCode = computed(() => {
 });
 
 async function loadReferralInfo() {
-  if (!authStore.player?.id) return;
+  if (!authStore.player?.id) {
+    loading.value = false;
+    return;
+  }
 
   try {
-    loading.value = true;
     referralInfo.value = await getReferralInfo(authStore.player.id);
   } catch (e) {
     console.error('Error loading referral info:', e);
