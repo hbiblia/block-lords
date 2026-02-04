@@ -267,9 +267,6 @@ const repairParams = computed(() => {
   }
 });
 
-// New max condition after this repair
-const newMaxCondition = computed(() => repairParams.value.newMax);
-
 // Repair bonus: actual condition that will be restored
 const repairBonus = computed(() => {
   if (!props.rig) return 0;
@@ -1251,22 +1248,22 @@ function closeProcessingModal() {
                 <span class="font-bold text-purple-400">{{ confirmAction.data.boostDuration }} min</span>
               </div>
             </template>
-            <template v-else-if="confirmAction.type === 'repair'">
+            <template v-else-if="confirmAction.type === 'repair' && nextRepairInfo">
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.cost') }}</span>
-                <span class="font-bold text-status-warning">{{ repairCost }} {{ repairCurrencySymbol }}</span>
+                <span class="font-bold text-status-warning">{{ nextRepairInfo.maxCost }} {{ repairCurrencySymbol }}</span>
               </div>
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">{{ t('rigManage.targetCondition', 'Condicion objetivo') }}</span>
-                <span class="font-bold text-status-success">{{ newMaxCondition }}%</span>
+                <span class="text-text-muted text-sm">{{ t('rigManage.newMax', 'Nuevo max') }}</span>
+                <span class="font-bold text-status-success">{{ nextRepairInfo.newMax }}%</span>
               </div>
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">{{ t('rigManage.conditionRestored', 'Condicion restaurada') }}</span>
-                <span class="font-bold text-status-success">+{{ repairBonus }}%</span>
+                <span class="text-text-muted text-sm">{{ t('rigManage.bonus', 'Bonus') }}</span>
+                <span class="font-bold text-status-success">+{{ nextRepairInfo.bonus }}%</span>
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-text-muted text-sm">{{ t('rigManage.repairNumber', 'Reparacion') }}</span>
-                <span class="font-bold">{{ timesRepaired + 1 }}/{{ MAX_REPAIRS }}</span>
+                <span class="font-bold">{{ nextRepairInfo.number }}/{{ MAX_REPAIRS }}</span>
               </div>
             </template>
             <template v-else-if="confirmAction.type === 'upgrade'">
