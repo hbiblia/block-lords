@@ -93,7 +93,20 @@ export const useInventoryStore = defineStore('inventory', () => {
 
   async function fetchInventory(force = false) {
     const authStore = useAuthStore();
-    if (!authStore.player?.id) return;
+
+    // Wait for player to be available (max 5 seconds)
+    if (!authStore.player?.id) {
+      loading.value = true;
+      for (let i = 0; i < 50; i++) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (authStore.player?.id) break;
+      }
+      if (!authStore.player?.id) {
+        console.error('Inventory: No player available after waiting');
+        loading.value = false;
+        return;
+      }
+    }
 
     // Use cache if available and not forcing refresh
     if (!force && hasCachedData.value) {
@@ -103,14 +116,26 @@ export const useInventoryStore = defineStore('inventory', () => {
     loading.value = true;
 
     try {
+      const playerId = authStore.player.id;
+
+      // Fetch all data in parallel with individual error handling
       const [inventoryData, boostData, rigData] = await Promise.all([
-        getPlayerInventory(authStore.player.id),
-        getPlayerBoosts(authStore.player.id),
-        getPlayerRigInventory(authStore.player.id),
+        getPlayerInventory(playerId).catch(e => {
+          console.error('Error fetching inventory:', e);
+          return { cards: [], cooling: [] };
+        }),
+        getPlayerBoosts(playerId).catch(e => {
+          console.error('Error fetching boosts:', e);
+          return { inventory: [], active: [] };
+        }),
+        getPlayerRigInventory(playerId).catch(e => {
+          console.error('Error fetching rig inventory:', e);
+          return [];
+        }),
       ]);
 
-      cardItems.value = inventoryData.cards || [];
-      coolingItems.value = inventoryData.cooling || [];
+      cardItems.value = inventoryData?.cards || [];
+      coolingItems.value = inventoryData?.cooling || [];
       boostItems.value = boostData?.inventory || [];
       activeBoosts.value = boostData?.active || [];
       rigItems.value = rigData || [];

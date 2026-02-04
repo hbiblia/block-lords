@@ -126,14 +126,12 @@ export async function deleteRig(playerId: string, rigId: string) {
   return data;
 }
 
-export async function getPlayerTransactions(playerId: string, limit = 50) {
-  const { data, error } = await supabase.rpc('get_player_transactions', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerTransactions(playerId: string, limit = 50): Promise<any> {
+  return rpcWithRetry('get_player_transactions', {
     p_player_id: playerId,
     p_limit: limit,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 // === MINING ===
@@ -189,12 +187,9 @@ export interface MiningEstimate {
 }
 
 export async function getMiningEstimate(playerId: string): Promise<MiningEstimate> {
-  const { data, error } = await supabase.rpc('get_mining_estimate', {
+  return rpcWithRetry('get_mining_estimate', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data as MiningEstimate;
+  }) as Promise<MiningEstimate>;
 }
 
 // Procesar tick de minería (normalmente llamado por cron/scheduler)
@@ -207,13 +202,11 @@ export async function processMiningTick() {
 
 // === MARKET ===
 
-export async function getOrderBook(itemType: string) {
-  const { data, error } = await supabase.rpc('get_order_book', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getOrderBook(itemType: string): Promise<any> {
+  return rpcWithRetry('get_order_book', {
     p_item_type: itemType,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 export async function createMarketOrder(
@@ -247,68 +240,54 @@ export async function cancelMarketOrder(playerId: string, orderId: string) {
   return data;
 }
 
-export async function getPlayerOrders(playerId: string) {
-  const { data, error } = await supabase.rpc('get_player_orders', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerOrders(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_orders', {
     p_player_id: playerId,
   });
-
-  if (error) throw error;
-  return data;
 }
 
-export async function getPlayerTrades(playerId: string, limit = 50) {
-  const { data, error } = await supabase.rpc('get_player_trades', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerTrades(playerId: string, limit = 50): Promise<any> {
+  return rpcWithRetry('get_player_trades', {
     p_player_id: playerId,
     p_limit: limit,
   });
-
-  if (error) throw error;
-  return data;
 }
 
-export async function getMarketStats() {
-  const { data, error } = await supabase.rpc('get_market_stats');
-
-  if (error) throw error;
-  return data;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getMarketStats(): Promise<any> {
+  return rpcWithRetry('get_market_stats');
 }
 
 // === LEADERBOARD ===
 
-export async function getReputationLeaderboard(limit = 100) {
-  const { data, error } = await supabase.rpc('get_reputation_leaderboard', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getReputationLeaderboard(limit = 100): Promise<any> {
+  return rpcWithRetry('get_reputation_leaderboard', {
     p_limit: limit,
   });
-
-  if (error) throw error;
-  return data;
 }
 
-export async function getMiningLeaderboard(limit = 100) {
-  const { data, error } = await supabase.rpc('get_mining_leaderboard', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getMiningLeaderboard(limit = 100): Promise<any> {
+  return rpcWithRetry('get_mining_leaderboard', {
     p_limit: limit,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 // === COOLING (REFRIGERACIÓN) ===
 
-export async function getCoolingItems() {
-  const { data, error } = await supabase.rpc('get_cooling_items');
-
-  if (error) throw error;
-  return data;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getCoolingItems(): Promise<any> {
+  return rpcWithRetry('get_cooling_items');
 }
 
-export async function getPlayerCooling(playerId: string) {
-  const { data, error } = await supabase.rpc('get_player_cooling', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerCooling(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_cooling', {
     p_player_id: playerId,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 export async function installCooling(playerId: string, coolingId: string) {
@@ -323,20 +302,16 @@ export async function installCooling(playerId: string, coolingId: string) {
 
 // === PREPAID CARDS (TARJETAS PREPAGO) ===
 
-export async function getPrepaidCards() {
-  const { data, error } = await supabase.rpc('get_prepaid_cards');
-
-  if (error) throw error;
-  return data;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPrepaidCards(): Promise<any> {
+  return rpcWithRetry('get_prepaid_cards');
 }
 
-export async function getPlayerCards(playerId: string) {
-  const { data, error } = await supabase.rpc('get_player_cards', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerCards(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_cards', {
     p_player_id: playerId,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 export async function buyPrepaidCard(playerId: string, cardId: string) {
@@ -410,13 +385,11 @@ export async function installCoolingToRig(playerId: string, rigId: string, cooli
 }
 
 // Obtener cooling instalado en un rig
-export async function getRigCooling(rigId: string) {
-  const { data, error } = await supabase.rpc('get_rig_cooling', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getRigCooling(rigId: string): Promise<any> {
+  return rpcWithRetry('get_rig_cooling', {
     p_rig_id: rigId,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 // Comprar cooling (va al inventario)
@@ -444,21 +417,17 @@ export async function buyRig(playerId: string, rigId: string) {
 // === RIG SLOTS ===
 
 // Obtener información de slots del jugador
-export async function getPlayerSlotInfo(playerId: string) {
-  const { data, error } = await supabase.rpc('get_player_slot_info', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerSlotInfo(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_slot_info', {
     p_player_id: playerId,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 // Obtener lista de upgrades de slots disponibles
-export async function getRigSlotUpgrades() {
-  const { data, error } = await supabase.rpc('get_rig_slot_upgrades');
-
-  if (error) throw error;
-  return data;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getRigSlotUpgrades(): Promise<any> {
+  return rpcWithRetry('get_rig_slot_upgrades');
 }
 
 // Comprar un slot adicional
@@ -493,11 +462,9 @@ export async function exchangeCryptoToRon(playerId: string, cryptoAmount: number
   return data;
 }
 
-export async function getExchangeRates() {
-  const { data, error } = await supabase.rpc('get_exchange_rates');
-
-  if (error) throw error;
-  return data;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getExchangeRates(): Promise<any> {
+  return rpcWithRetry('get_exchange_rates');
 }
 
 // === ENGAGEMENT (REGENERACIÓN PASIVA) ===
@@ -568,20 +535,16 @@ export async function updateMissionProgress(playerId: string, missionType: strin
 
 // === BOOSTS ===
 
-export async function getBoostItems() {
-  const { data, error } = await supabase.rpc('get_boost_items');
-
-  if (error) throw error;
-  return data;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getBoostItems(): Promise<any> {
+  return rpcWithRetry('get_boost_items');
 }
 
-export async function getPlayerBoosts(playerId: string) {
-  const { data, error } = await supabase.rpc('get_player_boosts', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerBoosts(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_boosts', {
     p_player_id: playerId,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 export async function buyBoost(playerId: string, boostId: string) {
@@ -635,13 +598,11 @@ export async function installBoostToRig(playerId: string, rigId: string, boostId
 }
 
 // Obtener boosts instalados en un rig
-export async function getRigBoosts(rigId: string) {
-  const { data, error } = await supabase.rpc('get_rig_boosts', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getRigBoosts(rigId: string): Promise<any> {
+  return rpcWithRetry('get_rig_boosts', {
     p_rig_id: rigId,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 // === RIG UPGRADES ===
@@ -657,13 +618,11 @@ export async function upgradeRig(playerId: string, playerRigId: string, upgradeT
   return data;
 }
 
-export async function getRigUpgrades(playerRigId: string) {
-  const { data, error } = await supabase.rpc('get_rig_upgrades', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getRigUpgrades(playerRigId: string): Promise<any> {
+  return rpcWithRetry('get_rig_upgrades', {
     p_player_rig_id: playerRigId,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 // === PROFILE ===
@@ -689,11 +648,9 @@ export async function resetPlayerAccount(playerId: string) {
 
 // === ANNOUNCEMENTS ===
 
-export async function getActiveAnnouncements() {
-  const { data, error } = await supabase.rpc('get_active_announcements');
-
-  if (error) throw error;
-  return data;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getActiveAnnouncements(): Promise<any> {
+  return rpcWithRetry('get_active_announcements');
 }
 
 // === PENDING BLOCKS (CLAIM SYSTEM) ===
@@ -756,14 +713,12 @@ export async function requestRonWithdrawal(playerId: string) {
   return data;
 }
 
-export async function getWithdrawalHistory(playerId: string, limit: number = 10) {
-  const { data, error } = await supabase.rpc('get_withdrawal_history', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getWithdrawalHistory(playerId: string, limit: number = 10): Promise<any> {
+  return rpcWithRetry('get_withdrawal_history', {
     p_player_id: playerId,
     p_limit: limit,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 // === RON DEPOSITS ===
@@ -779,14 +734,12 @@ export async function depositRon(playerId: string, amount: number, txHash: strin
   return data;
 }
 
-export async function getRonDepositHistory(playerId: string, limit: number = 10) {
-  const { data, error } = await supabase.rpc('get_ron_deposit_history', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getRonDepositHistory(playerId: string, limit: number = 10): Promise<any> {
+  return rpcWithRetry('get_ron_deposit_history', {
     p_player_id: playerId,
     p_limit: limit,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 // === ADMIN: RON WITHDRAWALS ===
@@ -878,12 +831,9 @@ export interface PurchasePremiumResult {
 
 // Obtener estado premium del jugador actual
 export async function getPremiumStatus(playerId: string): Promise<PremiumStatus> {
-  const { data, error } = await supabase.rpc('get_premium_status', {
+  return rpcWithRetry('get_premium_status', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data as PremiumStatus;
+  }) as Promise<PremiumStatus>;
 }
 
 // Comprar suscripción premium
@@ -897,14 +847,12 @@ export async function purchasePremium(playerId: string): Promise<PurchasePremium
 }
 
 // Obtener historial de suscripciones premium
-export async function getPremiumHistory(playerId: string, limit: number = 10) {
-  const { data, error } = await supabase.rpc('get_premium_history', {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPremiumHistory(playerId: string, limit: number = 10): Promise<any> {
+  return rpcWithRetry('get_premium_history', {
     p_player_id: playerId,
     p_limit: limit,
   });
-
-  if (error) throw error;
-  return data;
 }
 
 // === REFERRAL SYSTEM ===
@@ -928,12 +876,9 @@ export interface ApplyReferralResult {
 
 // Obtener información de referidos del jugador
 export async function getReferralInfo(playerId: string): Promise<ReferralInfo> {
-  const { data, error } = await supabase.rpc('get_referral_info', {
+  return rpcWithRetry('get_referral_info', {
     p_player_id: playerId,
-  });
-
-  if (error) throw error;
-  return data as ReferralInfo;
+  }) as Promise<ReferralInfo>;
 }
 
 // Aplicar código de referido
@@ -1008,14 +953,11 @@ export async function getReferralList(
   limit: number = 50,
   offset: number = 0
 ): Promise<ReferralListResponse> {
-  const { data, error } = await supabase.rpc('get_referral_list', {
+  return rpcWithRetry('get_referral_list', {
     p_player_id: playerId,
     p_limit: limit,
     p_offset: offset,
-  });
-
-  if (error) throw error;
-  return data as ReferralListResponse;
+  }) as Promise<ReferralListResponse>;
 }
 
 // === RONIN WALLET PAYMENTS ===
