@@ -495,11 +495,14 @@ CREATE TABLE IF NOT EXISTS upgrade_costs (
 
 INSERT INTO upgrade_costs (level, crypto_cost, hashrate_bonus, efficiency_bonus, thermal_bonus)
 VALUES
-  (2, 100, 10, 5, 2),
-  (3, 300, 20, 10, 4),
-  (4, 700, 35, 15, 6),
-  (5, 1500, 50, 20, 8)
-ON CONFLICT (level) DO NOTHING;
+  (2, 100, 15, 10, 5),
+  (3, 300, 35, 20, 10),
+  (4, 700, 60, 35, 15),
+  (5, 1500, 100, 50, 20)
+ON CONFLICT (level) DO UPDATE SET
+  hashrate_bonus = EXCLUDED.hashrate_bonus,
+  efficiency_bonus = EXCLUDED.efficiency_bonus,
+  thermal_bonus = EXCLUDED.thermal_bonus;
 
 -- =====================================================
 -- 10. RON WITHDRAWALS

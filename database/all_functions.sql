@@ -643,12 +643,12 @@ DECLARE
   v_rig RECORD;
   v_player players%ROWTYPE;
   v_repair_cost NUMERIC;
+  v_price_in_gc NUMERIC;
   v_times_repaired INTEGER;
   v_repair_bonus NUMERIC;
   v_new_max_condition NUMERIC;
   v_new_condition NUMERIC;
   v_condition_restored NUMERIC;
-  v_currency TEXT;
 BEGIN
   SELECT pr.*, r.base_price as base_repair_cost, r.name as rig_name, r.currency as rig_currency
   INTO v_rig
@@ -661,7 +661,6 @@ BEGIN
   END IF;
 
   v_times_repaired := COALESCE(v_rig.times_repaired, 0);
-  v_currency := COALESCE(v_rig.rig_currency, 'gamecoin');
 
   -- Verificar límite de reparaciones (máximo 3)
   IF v_times_repaired >= 3 THEN
@@ -712,39 +711,28 @@ BEGIN
     );
   END IF;
 
-  -- Calcular costo basado en la condición restaurada (30% del precio del rig)
+  -- Convertir precio del rig a GameCoin según su moneda
+  -- Tasas: 1 Crypto = 50 GC, 1 RON = 5,000,000 GC
+  CASE COALESCE(v_rig.rig_currency, 'gamecoin')
+    WHEN 'crypto' THEN
+      v_price_in_gc := v_rig.base_repair_cost * 50;
+    WHEN 'ron' THEN
+      v_price_in_gc := v_rig.base_repair_cost * 5000000;
+    ELSE
+      v_price_in_gc := v_rig.base_repair_cost;
+  END CASE;
+
+  -- Calcular costo basado en la condición restaurada (30% del precio en GC)
   -- Descuento del 70% para que no sea tan caro
-  v_repair_cost := (v_condition_restored / 100.0) * v_rig.base_repair_cost * 0.30;
+  v_repair_cost := (v_condition_restored / 100.0) * v_price_in_gc * 0.30;
 
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
 
-  -- Verificar y cobrar según la moneda del rig
-  IF v_currency = 'gamecoin' THEN
-    IF v_player.gamecoin_balance < v_repair_cost THEN
-      RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_repair_cost, 'currency', v_currency);
-    END IF;
-    UPDATE players SET gamecoin_balance = gamecoin_balance - v_repair_cost WHERE id = p_player_id;
-
-  ELSIF v_currency = 'crypto' THEN
-    IF v_player.crypto_balance < v_repair_cost THEN
-      RETURN json_build_object('success', false, 'error', 'Crypto insuficiente', 'cost', v_repair_cost, 'currency', v_currency);
-    END IF;
-    UPDATE players SET crypto_balance = crypto_balance - v_repair_cost WHERE id = p_player_id;
-
-  ELSIF v_currency = 'ron' THEN
-    IF COALESCE(v_player.ron_balance, 0) < v_repair_cost THEN
-      RETURN json_build_object('success', false, 'error', 'RON insuficiente', 'cost', v_repair_cost, 'currency', v_currency);
-    END IF;
-    UPDATE players SET ron_balance = ron_balance - v_repair_cost WHERE id = p_player_id;
-
-  ELSE
-    -- Fallback a gamecoin
-    IF v_player.gamecoin_balance < v_repair_cost THEN
-      RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_repair_cost, 'currency', 'gamecoin');
-    END IF;
-    UPDATE players SET gamecoin_balance = gamecoin_balance - v_repair_cost WHERE id = p_player_id;
-    v_currency := 'gamecoin';
+  -- Siempre cobrar en GameCoin
+  IF v_player.gamecoin_balance < v_repair_cost THEN
+    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_repair_cost);
   END IF;
+  UPDATE players SET gamecoin_balance = gamecoin_balance - v_repair_cost WHERE id = p_player_id;
 
   -- Aplicar reparación al rig
   UPDATE player_rigs
@@ -755,7 +743,7 @@ BEGIN
   WHERE id = p_rig_id;
 
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'rig_repair', -v_repair_cost, v_currency,
+  VALUES (p_player_id, 'rig_repair', -v_repair_cost, 'gamecoin',
           'Reparación #' || (v_times_repaired + 1) || ' de ' || v_rig.rig_name || ' (+' || v_condition_restored || '%)');
 
   -- Actualizar misión de reparar rig
@@ -764,7 +752,6 @@ BEGIN
   RETURN json_build_object(
     'success', true,
     'cost', v_repair_cost,
-    'currency', v_currency,
     'new_condition', v_new_condition,
     'new_max_condition', v_new_max_condition,
     'times_repaired', v_times_repaired + 1,
@@ -1526,6 +1513,9 @@ DECLARE
   v_internet_mult NUMERIC;
   v_temp_mult NUMERIC;
   v_durability_mult NUMERIC;
+  -- Upgrade bonuses
+  v_efficiency_bonus NUMERIC;
+  v_thermal_bonus NUMERIC;
 BEGIN
   -- Procesar jugadores que están ONLINE o tienen rigs con autonomous mining boost
   FOR v_player IN
@@ -1546,11 +1536,22 @@ BEGIN
 
     -- Procesar cada rig activo individualmente
     FOR v_rig IN
-      SELECT pr.id, pr.temperature, pr.condition, r.power_consumption, r.internet_consumption, r.hashrate
+      SELECT pr.id, pr.temperature, pr.condition, r.power_consumption, r.internet_consumption, r.hashrate,
+             COALESCE(pr.efficiency_level, 1) as efficiency_level,
+             COALESCE(pr.thermal_level, 1) as thermal_level
       FROM player_rigs pr
       JOIN rigs r ON r.id = pr.rig_id
       WHERE pr.player_id = v_player.id AND pr.is_active = true
     LOOP
+      -- Obtener bonus de eficiencia del nivel de upgrade
+      SELECT COALESCE(efficiency_bonus, 0) INTO v_efficiency_bonus
+      FROM upgrade_costs WHERE level = v_rig.efficiency_level;
+      IF v_efficiency_bonus IS NULL THEN v_efficiency_bonus := 0; END IF;
+
+      -- Obtener bonus térmico del nivel de upgrade
+      SELECT COALESCE(thermal_bonus, 0) INTO v_thermal_bonus
+      FROM upgrade_costs WHERE level = v_rig.thermal_level;
+      IF v_thermal_bonus IS NULL THEN v_thermal_bonus := 0; END IF;
       -- Obtener multiplicadores de boosts específicos de ESTE rig
       v_boosts := get_rig_boost_multipliers(v_rig.id);
       v_energy_mult := COALESCE((v_boosts->>'energy')::NUMERIC, 1.0);
@@ -1582,28 +1583,34 @@ BEGIN
       -- Base + penalización por temperatura + consumo de refrigeración
       -- Temperatura > 40°C aumenta consumo hasta 50% extra a 100°C
       -- Aplicar multiplicador de boost de energy_saver (por rig)
+      -- Aplicar bonus de eficiencia del upgrade (reduce consumo)
       v_total_power := v_total_power +
         ((v_rig.power_consumption * (1 + GREATEST(0, (v_rig.temperature - 40)) * 0.0083)) +
-        v_rig_cooling_energy) * v_energy_mult;
+        v_rig_cooling_energy) * v_energy_mult * (1 - v_efficiency_bonus / 100.0);
 
       -- Aplicar multiplicador de boost de bandwidth_optimizer (por rig)
-      v_total_internet := v_total_internet + (v_rig.internet_consumption * v_internet_mult);
+      -- Aplicar bonus de eficiencia del upgrade (reduce consumo)
+      v_total_internet := v_total_internet + (v_rig.internet_consumption * v_internet_mult * (1 - v_efficiency_bonus / 100.0));
 
       -- Calcular aumento de temperatura basado en consumo de energía
       -- Calentamiento más notorio para que el jugador note el efecto
       -- Sin cooling: temperatura sube rápidamente
       -- Con cooling apropiado: temperatura se estabiliza
       -- Aplicar multiplicador de boost de coolant_injection
+      -- Aplicar bonus térmico del upgrade (reduce generación de calor)
       IF v_rig_cooling_power <= 0 THEN
         -- Sin cooling: calentamiento significativo (max 15°C por tick)
         -- Minero Básico (2.5): +2.5°C/tick → peligro en ~4 min
         -- ASIC S19 (18): +15°C/tick → peligro en ~40s
         -- Quantum (55): +15°C/tick (cap) → peligro en ~40s
         v_temp_increase := LEAST(v_rig.power_consumption * 1.0, 15) * v_temp_mult;
+        -- Reducción directa por upgrade térmico (en °C)
+        v_temp_increase := GREATEST(0, v_temp_increase - v_thermal_bonus);
       ELSE
         -- Con cooling: calentamiento reducido por poder de refrigeración
         v_temp_increase := v_rig.power_consumption * 0.8;
-        v_temp_increase := GREATEST(0, v_temp_increase - v_rig_cooling_power) * v_temp_mult;
+        -- Reducción adicional por upgrade térmico (en °C)
+        v_temp_increase := GREATEST(0, v_temp_increase - v_rig_cooling_power - v_thermal_bonus) * v_temp_mult;
       END IF;
 
       -- Calcular nueva temperatura
@@ -1840,7 +1847,8 @@ BEGIN
   -- Incluye jugadores online O rigs con autonomous mining boost
   -- Excluye jugadores en cooldown (>5 bloques en <2 minutos)
   FOR v_rig IN
-    SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score
+    SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score,
+           COALESCE(pr.hashrate_level, 1) as hashrate_level
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
@@ -1852,6 +1860,16 @@ BEGIN
     v_boosts := get_rig_boost_multipliers(v_rig.rig_id);
     v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
     v_luck_mult := COALESCE((v_boosts->>'luck')::NUMERIC, 1.0);
+
+    -- Aplicar bonus de hashrate del upgrade (de la tabla upgrade_costs)
+    DECLARE
+      v_upgrade_hashrate_bonus NUMERIC := 0;
+    BEGIN
+      SELECT COALESCE(hashrate_bonus, 0) INTO v_upgrade_hashrate_bonus
+      FROM upgrade_costs WHERE level = v_rig.hashrate_level;
+      IF v_upgrade_hashrate_bonus IS NULL THEN v_upgrade_hashrate_bonus := 0; END IF;
+      v_hashrate_mult := v_hashrate_mult * (1 + v_upgrade_hashrate_bonus / 100.0);
+    END;
 
     -- Acumular luck multiplier para probabilidad de bloque
     IF v_luck_mult > 1.0 THEN
@@ -1921,7 +1939,8 @@ BEGIN
   v_current_player_id := NULL;
 
   FOR v_rig IN
-    SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score
+    SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score,
+           COALESCE(pr.hashrate_level, 1) as hashrate_level
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
@@ -1932,6 +1951,16 @@ BEGIN
     -- Obtener multiplicador de hashrate del boost POR RIG
     v_boosts := get_rig_boost_multipliers(v_rig.rig_id);
     v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
+
+    -- Aplicar bonus de hashrate del upgrade (de la tabla upgrade_costs)
+    DECLARE
+      v_upgrade_hashrate_bonus NUMERIC := 0;
+    BEGIN
+      SELECT COALESCE(hashrate_bonus, 0) INTO v_upgrade_hashrate_bonus
+      FROM upgrade_costs WHERE level = v_rig.hashrate_level;
+      IF v_upgrade_hashrate_bonus IS NULL THEN v_upgrade_hashrate_bonus := 0; END IF;
+      v_hashrate_mult := v_hashrate_mult * (1 + v_upgrade_hashrate_bonus / 100.0);
+    END;
 
     IF v_rig.reputation_score >= 80 THEN
       v_rep_multiplier := 1 + (v_rig.reputation_score - 80) * 0.01;
@@ -5809,8 +5838,15 @@ BEGIN
       v_condition_penalty := 0.3 + (v_rig.condition / 80.0) * 0.7;
     END IF;
 
-    -- Bonus por nivel de hashrate upgrade (10% por nivel extra)
-    v_hashrate_mult := v_hashrate_mult * (1 + (COALESCE(v_rig.hashrate_level, 1) - 1) * 0.10);
+    -- Bonus por nivel de hashrate upgrade (usar valor de la tabla upgrade_costs)
+    DECLARE
+      v_hashrate_bonus NUMERIC := 0;
+    BEGIN
+      SELECT COALESCE(hashrate_bonus, 0) INTO v_hashrate_bonus
+      FROM upgrade_costs WHERE level = v_rig.hashrate_level;
+      IF v_hashrate_bonus IS NULL THEN v_hashrate_bonus := 0; END IF;
+      v_hashrate_mult := v_hashrate_mult * (1 + v_hashrate_bonus / 100.0);
+    END;
 
     -- Hashrate efectivo de este rig
     v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty * v_hashrate_mult;
@@ -6503,6 +6539,80 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION claim_all_blocks_with_ron TO authenticated;
+
+-- =====================================================
+-- GET RIG UPGRADES
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION get_rig_upgrades(p_player_rig_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rig RECORD;
+  v_max_level INTEGER;
+  v_hashrate_current RECORD;
+  v_hashrate_next RECORD;
+  v_efficiency_current RECORD;
+  v_efficiency_next RECORD;
+  v_thermal_current RECORD;
+  v_thermal_next RECORD;
+BEGIN
+  -- Obtener información del rig
+  SELECT pr.hashrate_level, pr.efficiency_level, pr.thermal_level, r.max_upgrade_level
+  INTO v_rig
+  FROM player_rigs pr
+  JOIN rigs r ON r.id = pr.rig_id
+  WHERE pr.id = p_player_rig_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Rig no encontrado');
+  END IF;
+
+  v_max_level := COALESCE(v_rig.max_upgrade_level, 5);
+
+  -- Obtener bonus actual y siguiente para hashrate
+  SELECT hashrate_bonus, crypto_cost INTO v_hashrate_current FROM upgrade_costs WHERE level = COALESCE(v_rig.hashrate_level, 1);
+  SELECT hashrate_bonus, crypto_cost INTO v_hashrate_next FROM upgrade_costs WHERE level = COALESCE(v_rig.hashrate_level, 1) + 1;
+
+  -- Obtener bonus actual y siguiente para efficiency
+  SELECT efficiency_bonus, crypto_cost INTO v_efficiency_current FROM upgrade_costs WHERE level = COALESCE(v_rig.efficiency_level, 1);
+  SELECT efficiency_bonus, crypto_cost INTO v_efficiency_next FROM upgrade_costs WHERE level = COALESCE(v_rig.efficiency_level, 1) + 1;
+
+  -- Obtener bonus actual y siguiente para thermal
+  SELECT thermal_bonus, crypto_cost INTO v_thermal_current FROM upgrade_costs WHERE level = COALESCE(v_rig.thermal_level, 1);
+  SELECT thermal_bonus, crypto_cost INTO v_thermal_next FROM upgrade_costs WHERE level = COALESCE(v_rig.thermal_level, 1) + 1;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'max_level', v_max_level,
+    'hashrate', jsonb_build_object(
+      'current_level', COALESCE(v_rig.hashrate_level, 1),
+      'current_bonus', COALESCE(v_hashrate_current.hashrate_bonus, 0),
+      'can_upgrade', COALESCE(v_rig.hashrate_level, 1) < v_max_level,
+      'next_cost', COALESCE(v_hashrate_next.crypto_cost, 0),
+      'next_bonus', COALESCE(v_hashrate_next.hashrate_bonus, 0)
+    ),
+    'efficiency', jsonb_build_object(
+      'current_level', COALESCE(v_rig.efficiency_level, 1),
+      'current_bonus', COALESCE(v_efficiency_current.efficiency_bonus, 0),
+      'can_upgrade', COALESCE(v_rig.efficiency_level, 1) < v_max_level,
+      'next_cost', COALESCE(v_efficiency_next.crypto_cost, 0),
+      'next_bonus', COALESCE(v_efficiency_next.efficiency_bonus, 0)
+    ),
+    'thermal', jsonb_build_object(
+      'current_level', COALESCE(v_rig.thermal_level, 1),
+      'current_bonus', COALESCE(v_thermal_current.thermal_bonus, 0),
+      'can_upgrade', COALESCE(v_rig.thermal_level, 1) < v_max_level,
+      'next_cost', COALESCE(v_thermal_next.crypto_cost, 0),
+      'next_bonus', COALESCE(v_thermal_next.thermal_bonus, 0)
+    )
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_rig_upgrades TO authenticated;
 
 -- =====================================================
 -- GRANTS PARA FUNCIONES

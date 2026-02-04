@@ -249,50 +249,116 @@ async function loadData() {
   }
 }
 
-// Computed: repair system - max 3 repairs, always to 100%
+// Computed: repair system - max 3 repairs with degradation
+// 1st repair: +90%, max 90%
+// 2nd repair: +70%, max 70%
+// 3rd repair: +50%, max 50%
 const MAX_REPAIRS = 3;
 const timesRepaired = computed(() => props.rig?.times_repaired ?? 0);
 const canStillRepair = computed(() => timesRepaired.value < MAX_REPAIRS);
 
-// Repair bonus: how much condition will be restored (always to 100%)
+// Get repair parameters based on times_repaired
+const repairParams = computed(() => {
+  switch (timesRepaired.value) {
+    case 0: return { bonus: 90, newMax: 90 };
+    case 1: return { bonus: 70, newMax: 70 };
+    case 2: return { bonus: 50, newMax: 50 };
+    default: return { bonus: 0, newMax: props.rig?.max_condition ?? 100 };
+  }
+});
+
+// New max condition after this repair
+const newMaxCondition = computed(() => repairParams.value.newMax);
+
+// Repair bonus: actual condition that will be restored
 const repairBonus = computed(() => {
   if (!props.rig) return 0;
-  return Math.max(0, 100 - props.rig.condition);
+  const currentCondition = props.rig.condition;
+  const { bonus, newMax } = repairParams.value;
+  // new_condition = min(current + bonus, newMax)
+  const newCondition = Math.min(currentCondition + bonus, newMax);
+  // condition_restored = new_condition - current
+  return Math.max(0, newCondition - currentCondition);
 });
 
-// Can repair: condition below 100%, rig is off, and repairs remaining
+// Can repair: condition below max, rig is off, and repairs remaining
 const canRepair = computed(() => {
   if (!props.rig) return false;
-  return props.rig.condition < 100 && !props.rig.is_active && canStillRepair.value;
+  const currentMax = props.rig.max_condition ?? 100;
+  return props.rig.condition < currentMax && !props.rig.is_active && canStillRepair.value;
 });
 
-// Cost based on how much will be restored (30% of base_price with 70% discount)
+// Cost based on how much will be restored (30% of base_price converted to GC)
 const repairCost = computed(() => {
   if (!props.rig) return 0;
   const basePrice = props.rig.rig.base_price ?? 0;
+  const currency = props.rig.rig.currency ?? 'gamecoin';
+
+  // Convert price to GameCoin based on currency
+  // Rates: 1 Crypto = 50 GC, 1 RON = 5,000,000 GC
+  let priceInGC: number;
+  switch (currency) {
+    case 'crypto':
+      priceInGC = basePrice * 50;
+      break;
+    case 'ron':
+      priceInGC = basePrice * 5000000;
+      break;
+    default:
+      priceInGC = basePrice;
+  }
+
   const percentToRepair = repairBonus.value / 100;
-  // 30% of base price (70% discount)
-  return Math.ceil(basePrice * percentToRepair * 0.30);
+  // 30% of price in GC (70% discount)
+  return Math.ceil(priceInGC * percentToRepair * 0.30);
 });
 
-// Currency for repair (same as rig purchase currency)
-const repairCurrency = computed(() => props.rig?.rig.currency ?? 'gamecoin');
-const repairCurrencySymbol = computed(() => {
-  switch (repairCurrency.value) {
-    case 'crypto': return 'CR';
-    case 'ron': return 'RON';
-    default: return 'GC';
+// Repairs are always paid in GameCoin
+const repairCurrencySymbol = 'GC';
+
+// Next repair info (the repair that will be done next)
+const nextRepairInfo = computed(() => {
+  if (timesRepaired.value >= MAX_REPAIRS) return null;
+  if (!props.rig) return null;
+
+  // Repair parameters based on how many repairs have been done
+  let bonus: number;
+  let newMax: number;
+  switch (timesRepaired.value) {
+    case 0: bonus = 90; newMax = 90; break; // First repair
+    case 1: bonus = 70; newMax = 70; break; // Second repair
+    case 2: bonus = 50; newMax = 50; break; // Third repair
+    default: return null;
   }
+
+  const basePrice = props.rig.rig.base_price ?? 0;
+  const currency = props.rig.rig.currency ?? 'gamecoin';
+
+  let priceInGC: number;
+  switch (currency) {
+    case 'crypto':
+      priceInGC = basePrice * 50;
+      break;
+    case 'ron':
+      priceInGC = basePrice * 5000000;
+      break;
+    default:
+      priceInGC = basePrice;
+  }
+
+  const maxCost = Math.ceil(priceInGC * (bonus / 100) * 0.30);
+
+  return {
+    number: timesRepaired.value + 1,
+    bonus,
+    newMax,
+    maxCost,
+  };
 });
 
 const canAffordRepair = computed(() => {
   if (!authStore.player) return false;
-  const cost = repairCost.value;
-  switch (repairCurrency.value) {
-    case 'crypto': return (authStore.player.crypto_balance ?? 0) >= cost;
-    case 'ron': return (authStore.player.ron_balance ?? 0) >= cost;
-    default: return (authStore.player.gamecoin_balance ?? 0) >= cost;
-  }
+  return (authStore.player.gamecoin_balance ?? 0) >= repairCost.value;
 });
 
 // Total cooling power installed (considering durability)
@@ -640,7 +706,7 @@ function closeProcessingModal() {
       ></div>
 
       <!-- Modal -->
-      <div class="relative w-full max-w-lg h-[600px] flex flex-col bg-bg-secondary border border-border rounded-xl overflow-hidden">
+      <div class="relative w-full max-w-lg h-[610px] flex flex-col bg-bg-secondary border border-border rounded-xl overflow-hidden">
         <!-- Header -->
         <div class="flex items-center justify-between p-4 border-b border-border">
           <div>
@@ -968,47 +1034,43 @@ function closeProcessingModal() {
 
             <!-- Repair Tab -->
             <div v-show="activeTab === 'repair'" class="space-y-4">
-              <!-- Repair Section -->
-              <div class="p-4 rounded-lg border border-border bg-bg-primary/50">
-                <h4 class="font-medium mb-3 flex items-center gap-2">
-                  <span>🔧</span> {{ t('rigManage.repairRig') }}
-                </h4>
+              <!-- Next Repair Section -->
+              <div v-if="nextRepairInfo" class="p-4 rounded-lg border border-border bg-bg-primary/50">
+                <div class="flex items-center justify-between mb-3">
+                  <h4 class="font-medium flex items-center gap-2">
+                    <span>🔧</span> {{ t('rigManage.nextRepair', 'Siguiente reparación') }}
+                  </h4>
+                  <span class="text-xs text-text-muted">{{ nextRepairInfo.number }}/{{ MAX_REPAIRS }}</span>
+                </div>
 
-                <div class="space-y-2 text-sm mb-4">
-                  <div class="flex justify-between">
-                    <span class="text-text-muted">{{ t('rigManage.currentCondition') }}</span>
-                    <span class="font-mono" :class="rig.condition < 30 ? 'text-status-danger' : ''">{{ rig.condition }}%</span>
+                <div class="grid grid-cols-3 gap-2 text-xs text-center mb-4">
+                  <div class="bg-bg-tertiary rounded-lg p-2">
+                    <div class="text-text-muted">{{ t('rigManage.bonus', 'Bonus') }}</div>
+                    <div class="font-mono font-bold text-status-success">+{{ nextRepairInfo.bonus }}%</div>
                   </div>
-                  <div class="flex justify-between">
-                    <span class="text-text-muted">{{ t('rigManage.repairBonus', 'Reparación') }}</span>
-                    <span class="font-mono text-status-success">+{{ repairBonus }}%</span>
+                  <div class="bg-bg-tertiary rounded-lg p-2">
+                    <div class="text-text-muted">{{ t('rigManage.newMax', 'Nuevo max') }}</div>
+                    <div class="font-mono font-bold text-white">{{ nextRepairInfo.newMax }}%</div>
                   </div>
-                  <div class="flex justify-between">
-                    <span class="text-text-muted">{{ t('rigManage.cost') }}</span>
-                    <span class="font-mono text-status-warning">{{ repairCost }} {{ repairCurrencySymbol }}</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-text-muted">{{ t('rigManage.timesRepaired') }}</span>
-                    <span class="font-mono" :class="timesRepaired >= MAX_REPAIRS ? 'text-status-danger' : ''">{{ timesRepaired }}/{{ MAX_REPAIRS }}</span>
+                  <div class="bg-bg-tertiary rounded-lg p-2">
+                    <div class="text-text-muted">{{ t('rigManage.cost') }}</div>
+                    <div class="font-mono font-bold text-status-warning">{{ nextRepairInfo.maxCost }} GC</div>
                   </div>
                 </div>
 
                 <button
-                  v-if="canRepair"
                   @click="requestRepair"
-                  :disabled="!canAffordRepair || processing"
+                  :disabled="!canRepair || !canAffordRepair || processing"
                   class="w-full py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-warning text-white hover:bg-status-warning/80"
                 >
-                  {{ !canAffordRepair ? t('rigManage.insufficientFunds') : t('rigManage.repair') + ' → 100%' }}
+                  {{ !canAffordRepair ? t('rigManage.insufficientFunds') : rig.is_active ? t('rigManage.stopToRepair') : t('rigManage.repair') }}
                 </button>
-                <p v-else-if="rig.is_active" class="text-sm text-text-muted text-center">
-                  {{ t('rigManage.stopToRepair') }}
-                </p>
-                <p v-else-if="!canStillRepair" class="text-sm text-status-danger text-center">
+              </div>
+
+              <!-- No more repairs available -->
+              <div v-else class="p-4 rounded-lg border border-status-danger/30 bg-status-danger/5 text-center">
+                <p class="text-sm text-status-danger">
                   {{ t('rigManage.maxRepairsReached', 'Máximo de reparaciones alcanzado') }}
-                </p>
-                <p v-else-if="rig.condition >= 100" class="text-sm text-status-success text-center">
-                  {{ t('rigManage.alreadyFullCondition', 'El rig ya está al 100%') }}
                 </p>
               </div>
 
@@ -1196,7 +1258,7 @@ function closeProcessingModal() {
               </div>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.targetCondition', 'Condicion objetivo') }}</span>
-                <span class="font-bold text-status-success">100%</span>
+                <span class="font-bold text-status-success">{{ newMaxCondition }}%</span>
               </div>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.conditionRestored', 'Condicion restaurada') }}</span>
