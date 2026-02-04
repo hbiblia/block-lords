@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getReferralInfo, applyReferralCode, updateReferralCode, getReferralList, type ReferralInfo, type ReferralListResponse } from '@/utils/api';
@@ -12,6 +12,7 @@ const authStore = useAuthStore();
 const loading = ref(true);
 const applying = ref(false);
 const referralInfo = ref<ReferralInfo | null>(null);
+const hasLoaded = ref(false);
 const inputCode = ref('');
 const error = ref('');
 const success = ref('');
@@ -50,14 +51,26 @@ async function loadReferralInfo() {
     return;
   }
 
+  // Prevent duplicate loads
+  if (hasLoaded.value) return;
+
   try {
     referralInfo.value = await getReferralInfo(authStore.player.id);
+    hasLoaded.value = true;
   } catch (e) {
     console.error('Error loading referral info:', e);
   } finally {
     loading.value = false;
   }
 }
+
+// Watch for player to become available (handles race condition on mount)
+watch(() => authStore.player?.id, (newId) => {
+  if (newId && !hasLoaded.value) {
+    loading.value = true;
+    loadReferralInfo();
+  }
+});
 
 async function loadReferralList(reset = false) {
   if (!authStore.player?.id) return;

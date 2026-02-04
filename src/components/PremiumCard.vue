@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getPremiumStatus, purchasePremium, type PremiumStatus } from '@/utils/api';
@@ -13,6 +13,7 @@ const purchasing = ref(false);
 const premiumStatus = ref<PremiumStatus | null>(null);
 const error = ref('');
 const showConfirm = ref(false);
+const hasLoaded = ref(false);
 
 const isPremium = computed(() => premiumStatus.value?.is_premium ?? false);
 const daysRemaining = computed(() => premiumStatus.value?.days_remaining ?? 0);
@@ -31,14 +32,26 @@ async function loadStatus() {
     return;
   }
 
+  // Prevent duplicate loads
+  if (hasLoaded.value) return;
+
   try {
     premiumStatus.value = await getPremiumStatus(authStore.player.id);
+    hasLoaded.value = true;
   } catch (e) {
     console.error('Error loading premium status:', e);
   } finally {
     loading.value = false;
   }
 }
+
+// Watch for player to become available (handles race condition on mount)
+watch(() => authStore.player?.id, (newId) => {
+  if (newId && !hasLoaded.value) {
+    loading.value = true;
+    loadStatus();
+  }
+});
 
 function requestPurchase() {
   playSound('click');

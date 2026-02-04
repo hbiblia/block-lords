@@ -17,6 +17,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 
 const loading = ref(true);
+const hasLoaded = ref(false);
 const transactions = ref<any[]>([]);
 
 // Wallet editing
@@ -77,6 +78,9 @@ const canWithdraw = computed(() =>
 async function loadData() {
   try {
     if (player.value?.id) {
+      // Prevent duplicate loads
+      if (hasLoaded.value) return;
+
       const [txData, withdrawals, premium] = await Promise.all([
         getPlayerTransactions(player.value.id, 20),
         getWithdrawalHistory(player.value.id, 5),
@@ -85,6 +89,7 @@ async function loadData() {
       transactions.value = txData || [];
       withdrawalHistory.value = withdrawals || [];
       premiumStatus.value = premium;
+      hasLoaded.value = true;
     }
   } catch (e) {
     console.error('Error loading profile:', e);
@@ -92,6 +97,14 @@ async function loadData() {
     loading.value = false;
   }
 }
+
+// Watch for player to become available (handles race condition on mount)
+watch(() => player.value?.id, (newId) => {
+  if (newId && !hasLoaded.value) {
+    loading.value = true;
+    loadData();
+  }
+});
 
 function startEditWallet() {
   walletInput.value = player.value?.ron_wallet || '';
