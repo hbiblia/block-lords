@@ -641,8 +641,7 @@ DECLARE
   v_player players%ROWTYPE;
   v_repair_cost NUMERIC;
   v_times_repaired INTEGER;
-  v_target_condition NUMERIC;
-  v_max_repairs INTEGER := 3;
+  v_condition_to_restore NUMERIC;
 BEGIN
   SELECT pr.*, r.repair_cost as base_repair_cost, r.name as rig_name
   INTO v_rig
@@ -656,38 +655,20 @@ BEGIN
 
   v_times_repaired := COALESCE(v_rig.times_repaired, 0);
 
-  -- Verificar si ya alcanzó el máximo de reparaciones
-  IF v_times_repaired >= v_max_repairs THEN
+  -- Verificar si ya está al 100%
+  IF v_rig.condition >= 100 THEN
     RETURN json_build_object(
       'success', false,
-      'error', 'Este rig ya alcanzó el máximo de reparaciones (3). Debes eliminarlo.',
-      'times_repaired', v_times_repaired
+      'error', 'El rig ya está al 100% de condición',
+      'current_condition', v_rig.condition
     );
   END IF;
 
-  -- Determinar a qué porcentaje se restaura según número de reparación
-  -- Reparación 1 (times_repaired pasará de 0 a 1) -> 90%
-  -- Reparación 2 (times_repaired pasará de 1 a 2) -> 70%
-  -- Reparación 3 (times_repaired pasará de 2 a 3) -> 50%
-  v_target_condition := CASE v_times_repaired
-    WHEN 0 THEN 90
-    WHEN 1 THEN 70
-    WHEN 2 THEN 50
-    ELSE 50
-  END;
+  -- Calcular cuánta condición hay que restaurar (siempre hasta 100%)
+  v_condition_to_restore := 100 - v_rig.condition;
 
-  -- Verificar si ya está en o por encima de la condición objetivo
-  IF v_rig.condition >= v_target_condition THEN
-    RETURN json_build_object(
-      'success', false,
-      'error', 'El rig debe estar por debajo del ' || v_target_condition || '% para reparar',
-      'current_condition', v_rig.condition,
-      'repair_target', v_target_condition
-    );
-  END IF;
-
-  -- Calcular costo basado en la diferencia hasta el objetivo
-  v_repair_cost := ((v_target_condition - v_rig.condition) / 100.0) * v_rig.base_repair_cost;
+  -- Calcular costo basado en la diferencia hasta 100%
+  v_repair_cost := (v_condition_to_restore / 100.0) * v_rig.base_repair_cost;
 
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
 
@@ -695,18 +676,18 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_repair_cost);
   END IF;
 
-  -- Aplicar reparación
+  -- Aplicar reparación (siempre a 100%)
   UPDATE players SET gamecoin_balance = gamecoin_balance - v_repair_cost WHERE id = p_player_id;
   UPDATE player_rigs
-  SET condition = v_target_condition,
-      max_condition = v_target_condition,
+  SET condition = 100,
+      max_condition = 100,
       times_repaired = v_times_repaired + 1,
       last_modified_at = NOW()
   WHERE id = p_rig_id;
 
   INSERT INTO transactions (player_id, type, amount, currency, description)
   VALUES (p_player_id, 'rig_repair', -v_repair_cost, 'gamecoin',
-          'Reparación #' || (v_times_repaired + 1) || ' de ' || v_rig.rig_name || ' (' || v_target_condition || '%)');
+          'Reparación #' || (v_times_repaired + 1) || ' de ' || v_rig.rig_name || ' (100%)');
 
   -- Actualizar misión de reparar rig
   PERFORM update_mission_progress(p_player_id, 'repair_rig', 1);
@@ -714,15 +695,10 @@ BEGIN
   RETURN json_build_object(
     'success', true,
     'cost', v_repair_cost,
-    'new_condition', v_target_condition,
-    'new_max_condition', v_target_condition,
+    'new_condition', 100,
+    'new_max_condition', 100,
     'times_repaired', v_times_repaired + 1,
-    'repairs_remaining', v_max_repairs - (v_times_repaired + 1),
-    'warning', CASE
-      WHEN v_times_repaired + 1 = 3 THEN 'Esta fue la última reparación posible. El rig deberá ser eliminado cuando falle.'
-      WHEN v_times_repaired + 1 = 2 THEN 'Solo queda 1 reparación disponible.'
-      ELSE NULL
-    END
+    'condition_restored', v_condition_to_restore
   );
 END;
 $$;
@@ -1942,6 +1918,7 @@ ALTER TABLE network_stats ADD COLUMN IF NOT EXISTS last_adjustment_block INTEGER
 -- AJUSTE DE DIFICULTAD ESTILO BITCOIN
 -- Objetivo: 1 bloque cada 10 minutos
 -- Ajusta cada 10 bloques basándose en tiempo real vs esperado
+-- TAMBIÉN ajusta si pasa 1 hora sin recalcular (evita dificultad estancada)
 -- =====================================================
 CREATE OR REPLACE FUNCTION adjust_difficulty()
 RETURNS JSON
@@ -1952,12 +1929,15 @@ DECLARE
   v_current_difficulty NUMERIC;
   v_current_hashrate NUMERIC;
   v_last_adjustment_block INTEGER;
+  v_last_adjustment_time TIMESTAMPTZ;
   v_latest_block_height INTEGER;
   v_adjustment_period INTEGER := 10;        -- Ajustar cada 10 bloques
   v_target_block_time INTEGER := 600;       -- 10 minutos en segundos
   v_max_change NUMERIC := 0.25;             -- ±25% máximo por ajuste
   v_min_difficulty NUMERIC := 100;          -- Dificultad mínima
   v_max_difficulty NUMERIC := 1000000;      -- Dificultad máxima
+  v_time_since_adjustment NUMERIC;          -- Tiempo desde último ajuste
+  v_time_based_adjustment BOOLEAN := FALSE; -- Flag para ajuste por tiempo
   v_time_expected NUMERIC;
   v_time_actual NUMERIC;
   v_first_block_time TIMESTAMPTZ;
@@ -1967,8 +1947,8 @@ DECLARE
   v_blocks_in_period INTEGER;
 BEGIN
   -- Obtener estado actual de la red
-  SELECT difficulty, hashrate, COALESCE(last_adjustment_block, 0)
-  INTO v_current_difficulty, v_current_hashrate, v_last_adjustment_block
+  SELECT difficulty, hashrate, COALESCE(last_adjustment_block, 0), last_difficulty_adjustment
+  INTO v_current_difficulty, v_current_hashrate, v_last_adjustment_block, v_last_adjustment_time
   FROM network_stats WHERE id = 'current';
 
   -- Valor por defecto si no existe
@@ -1991,36 +1971,71 @@ BEGIN
   -- Calcular cuántos bloques han pasado desde el último ajuste
   v_blocks_in_period := v_latest_block_height - v_last_adjustment_block;
 
-  -- Solo ajustar cada N bloques
+  -- Calcular tiempo desde último ajuste (en segundos)
+  IF v_last_adjustment_time IS NOT NULL THEN
+    v_time_since_adjustment := EXTRACT(EPOCH FROM (NOW() - v_last_adjustment_time));
+  ELSE
+    v_time_since_adjustment := 0;
+  END IF;
+
+  -- Verificar si debemos hacer ajuste por tiempo (1 hora = 3600 segundos sin ajuste)
+  -- Esto evita que la dificultad quede estancada cuando no hay suficiente actividad de minería
   IF v_blocks_in_period < v_adjustment_period THEN
-    RETURN json_build_object(
-      'adjusted', false,
-      'reason', 'Waiting for more blocks',
-      'blocks_since_adjustment', v_blocks_in_period,
-      'blocks_needed', v_adjustment_period,
-      'blocks_remaining', v_adjustment_period - v_blocks_in_period,
-      'current_difficulty', v_current_difficulty,
-      'current_block_height', v_latest_block_height
-    );
+    -- Si pasó más de 1 hora sin ajuste, hacer ajuste basado en tiempo
+    IF v_time_since_adjustment >= 3600 THEN
+      v_time_based_adjustment := TRUE;
+      -- Continuar con el ajuste basado en tiempo
+    ELSE
+      RETURN json_build_object(
+        'adjusted', false,
+        'reason', 'Waiting for more blocks',
+        'blocks_since_adjustment', v_blocks_in_period,
+        'blocks_needed', v_adjustment_period,
+        'blocks_remaining', v_adjustment_period - v_blocks_in_period,
+        'current_difficulty', v_current_difficulty,
+        'current_block_height', v_latest_block_height,
+        'time_since_last_adjustment_minutes', ROUND(v_time_since_adjustment / 60),
+        'next_time_adjustment_minutes', ROUND((3600 - v_time_since_adjustment) / 60)
+      );
+    END IF;
   END IF;
 
-  -- Obtener timestamp del primer bloque del período de ajuste
-  SELECT created_at INTO v_first_block_time
-  FROM blocks WHERE height = v_last_adjustment_block + 1;
+  -- Lógica diferente si es ajuste por tiempo vs por bloques
+  IF v_time_based_adjustment THEN
+    -- AJUSTE BASADO EN TIEMPO: Pasó 1+ hora sin suficientes bloques
+    -- Usamos el tiempo real transcurrido desde el último ajuste
+    v_time_actual := v_time_since_adjustment;
 
-  -- Obtener timestamp del último bloque (el más reciente)
-  SELECT created_at INTO v_last_block_time
-  FROM blocks WHERE height = v_latest_block_height;
+    -- Esperábamos minar v_blocks_in_period bloques en ese tiempo
+    -- Pero el tiempo real para esos bloques fue v_time_actual
+    -- Lo que esperábamos era v_blocks_in_period * v_target_block_time segundos
+    IF v_blocks_in_period > 0 THEN
+      v_time_expected := v_blocks_in_period * v_target_block_time;
+    ELSE
+      -- Si no hubo bloques, esperábamos al menos 1 en v_target_block_time
+      -- Pero pasó mucho más tiempo, así que reducir dificultad al máximo
+      v_time_expected := v_target_block_time;
+    END IF;
+  ELSE
+    -- AJUSTE NORMAL: Por cantidad de bloques
+    -- Obtener timestamp del primer bloque del período de ajuste
+    SELECT created_at INTO v_first_block_time
+    FROM blocks WHERE height = v_last_adjustment_block + 1;
 
-  -- Si es el primer período (no hay bloque anterior), usar el primer bloque existente
-  IF v_first_block_time IS NULL THEN
-    SELECT MIN(created_at) INTO v_first_block_time FROM blocks;
+    -- Obtener timestamp del último bloque (el más reciente)
+    SELECT created_at INTO v_last_block_time
+    FROM blocks WHERE height = v_latest_block_height;
+
+    -- Si es el primer período (no hay bloque anterior), usar el primer bloque existente
+    IF v_first_block_time IS NULL THEN
+      SELECT MIN(created_at) INTO v_first_block_time FROM blocks;
+    END IF;
+
+    -- Calcular tiempo real transcurrido vs tiempo esperado
+    -- Para 10 bloques, esperamos 9 intervalos de 10 minutos = 90 minutos = 5400 segundos
+    v_time_actual := EXTRACT(EPOCH FROM (v_last_block_time - v_first_block_time));
+    v_time_expected := (v_adjustment_period - 1) * v_target_block_time;
   END IF;
-
-  -- Calcular tiempo real transcurrido vs tiempo esperado
-  -- Para 10 bloques, esperamos 9 intervalos de 10 minutos = 90 minutos = 5400 segundos
-  v_time_actual := EXTRACT(EPOCH FROM (v_last_block_time - v_first_block_time));
-  v_time_expected := (v_adjustment_period - 1) * v_target_block_time;
 
   -- Evitar división por cero (si todos los bloques tienen el mismo timestamp)
   IF v_time_actual <= 0 THEN
@@ -2052,18 +2067,20 @@ BEGIN
   -- Retornar información detallada del ajuste
   RETURN json_build_object(
     'adjusted', true,
+    'adjustment_type', CASE WHEN v_time_based_adjustment THEN 'time_based' ELSE 'block_based' END,
     'period_blocks', v_adjustment_period,
     'target_block_time_seconds', v_target_block_time,
     'time_expected_seconds', v_time_expected,
     'time_actual_seconds', ROUND(v_time_actual),
-    'avg_block_time_seconds', ROUND(v_time_actual / GREATEST(1, v_adjustment_period - 1)),
+    'avg_block_time_seconds', ROUND(v_time_actual / GREATEST(1, CASE WHEN v_time_based_adjustment THEN v_blocks_in_period ELSE v_adjustment_period - 1 END, 1)),
     'target_vs_actual', CONCAT(ROUND(v_time_expected/60), 'min vs ', ROUND(v_time_actual/60), 'min'),
     'old_difficulty', v_current_difficulty,
     'new_difficulty', v_new_difficulty,
     'change_percent', ROUND((v_adjustment_ratio - 1) * 100, 2),
     'blocks_analyzed', v_blocks_in_period,
     'adjustment_block', v_latest_block_height,
-    'network_hashrate', v_current_hashrate
+    'network_hashrate', v_current_hashrate,
+    'time_based_trigger', v_time_based_adjustment
   );
 END;
 $$;

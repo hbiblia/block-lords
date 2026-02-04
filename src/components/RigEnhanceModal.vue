@@ -243,44 +243,22 @@ async function loadData() {
   }
 }
 
-// Computed: repair system - 3 repairs max with fixed targets
+// Computed: repair system - unlimited repairs, always to 100%
 const timesRepaired = computed(() => props.rig?.times_repaired ?? 0);
-const maxRepairs = 3;
 
-// Current max condition based on repairs already done: 100% -> 90% -> 70% -> 50%
-const maxCondition = computed(() => {
-  const repairs = timesRepaired.value;
-  if (repairs === 0) return 100;
-  if (repairs === 1) return 90;
-  if (repairs === 2) return 70;
-  if (repairs === 3) return 50;
-  return 50;
-});
-
-// Target condition for NEXT repair: 90% -> 70% -> 50%
-const repairTargetCondition = computed(() => {
-  const repairs = timesRepaired.value;
-  if (repairs === 0) return 90;
-  if (repairs === 1) return 70;
-  if (repairs === 2) return 50;
-  return 0; // No more repairs available
-});
-
-// Repair bonus: difference between target and current condition
+// Repair bonus: how much condition will be restored (always to 100%)
 const repairBonus = computed(() => {
-  if (!props.rig || timesRepaired.value >= maxRepairs) return 0;
-  return Math.max(0, repairTargetCondition.value - props.rig.condition);
+  if (!props.rig) return 0;
+  return Math.max(0, 100 - props.rig.condition);
 });
 
-// Can repair: not at max repairs, condition below target, rig is off
+// Can repair: condition below 100% and rig is off
 const canRepair = computed(() => {
   if (!props.rig) return false;
-  return timesRepaired.value < maxRepairs &&
-         props.rig.condition < repairTargetCondition.value &&
-         !props.rig.is_active;
+  return props.rig.condition < 100 && !props.rig.is_active;
 });
 
-// Cost based on how much will be restored
+// Cost based on how much will be restored (to 100%)
 const repairCost = computed(() => {
   if (!props.rig) return 0;
   const baseCost = props.rig.rig.repair_cost ?? 0;
@@ -658,8 +636,8 @@ function closeProcessingModal() {
             </div>
             <div v-tooltip="t('rigManage.tooltips.maxCondition')" class="cursor-help">
               <div class="text-text-muted text-xs mb-1">{{ t('rigManage.maxCond') }}</div>
-              <div class="font-mono font-bold" :class="maxCondition <= 50 ? 'text-status-warning' : 'text-white'">
-                {{ maxCondition }}%
+              <div class="font-mono font-bold text-white">
+                {{ rig?.max_condition ?? 100 }}%
               </div>
             </div>
           </div>
@@ -938,16 +916,9 @@ function closeProcessingModal() {
                   </div>
                   <div class="flex justify-between">
                     <span class="text-text-muted">{{ t('rigManage.timesRepaired') }}</span>
-                    <span class="font-mono">{{ timesRepaired }}/{{ maxRepairs }}</span>
+                    <span class="font-mono">{{ timesRepaired }}</span>
                   </div>
                 </div>
-
-                <p v-if="timesRepaired >= maxRepairs" class="text-xs text-status-danger mb-3">
-                  {{ t('rigManage.maxRepairsReached', 'Este rig ya alcanzó el máximo de 3 reparaciones.') }}
-                </p>
-                <p v-else-if="timesRepaired === 2" class="text-xs text-status-warning mb-3">
-                  {{ t('rigManage.lastRepairWarning', 'Esta será la última reparación disponible.') }}
-                </p>
 
                 <button
                   v-if="canRepair"
@@ -955,16 +926,13 @@ function closeProcessingModal() {
                   :disabled="!canAffordRepair || processing"
                   class="w-full py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-warning text-white hover:bg-status-warning/80"
                 >
-                  {{ !canAffordRepair ? t('rigManage.insufficientFunds') : t('rigManage.repair') + ' → ' + repairTargetCondition + '%' }}
+                  {{ !canAffordRepair ? t('rigManage.insufficientFunds') : t('rigManage.repair') + ' → 100%' }}
                 </button>
                 <p v-else-if="rig.is_active" class="text-sm text-text-muted text-center">
                   {{ t('rigManage.stopToRepair') }}
                 </p>
-                <p v-else-if="timesRepaired >= maxRepairs" class="text-sm text-status-danger text-center">
-                  {{ t('rigManage.noMoreRepairs', 'No se puede reparar más. Debes eliminar el rig.') }}
-                </p>
-                <p v-else-if="rig.condition >= repairTargetCondition" class="text-sm text-status-success text-center">
-                  {{ t('rigManage.conditionAboveTarget', 'La condición debe estar por debajo de') }} {{ repairTargetCondition }}%
+                <p v-else-if="rig.condition >= 100" class="text-sm text-status-success text-center">
+                  {{ t('rigManage.alreadyFullCondition', 'El rig ya está al 100%') }}
                 </p>
               </div>
 
@@ -1152,11 +1120,11 @@ function closeProcessingModal() {
               </div>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.targetCondition', 'Condición objetivo') }}</span>
-                <span class="font-bold text-status-success">{{ repairTargetCondition }}%</span>
+                <span class="font-bold text-status-success">100%</span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-text-muted text-sm">{{ t('rigManage.repairNumber', 'Reparación #') }}</span>
-                <span class="font-bold text-white">{{ timesRepaired + 1 }}/{{ maxRepairs }}</span>
+                <span class="text-text-muted text-sm">{{ t('rigManage.conditionRestored', 'Condición restaurada') }}</span>
+                <span class="font-bold text-status-success">+{{ repairBonus }}%</span>
               </div>
             </template>
             <template v-else-if="confirmAction.type === 'upgrade'">
