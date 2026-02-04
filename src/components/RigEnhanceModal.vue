@@ -243,8 +243,11 @@ async function loadData() {
   }
 }
 
-// Computed: repair system - unlimited repairs, always to 100%
+// Computed: repair system - max 3 repairs, always to 100%
+const MAX_REPAIRS = 3;
 const timesRepaired = computed(() => props.rig?.times_repaired ?? 0);
+const repairsRemaining = computed(() => Math.max(0, MAX_REPAIRS - timesRepaired.value));
+const canStillRepair = computed(() => timesRepaired.value < MAX_REPAIRS);
 
 // Repair bonus: how much condition will be restored (always to 100%)
 const repairBonus = computed(() => {
@@ -252,10 +255,10 @@ const repairBonus = computed(() => {
   return Math.max(0, 100 - props.rig.condition);
 });
 
-// Can repair: condition below 100% and rig is off
+// Can repair: condition below 100%, rig is off, and repairs remaining
 const canRepair = computed(() => {
   if (!props.rig) return false;
-  return props.rig.condition < 100 && !props.rig.is_active;
+  return props.rig.condition < 100 && !props.rig.is_active && canStillRepair.value;
 });
 
 // Cost based on how much will be restored (to 100%)
@@ -518,6 +521,9 @@ async function confirmUse() {
         toastStore.boostInstalled(data.boostName, rigName);
       } else if (type === 'repair') {
         toastStore.success(`${rigName} reparado`);
+        // Solo cerrar el modal de procesamiento, mantener el modal principal abierto
+        closeProcessingModal();
+        return;
       } else if (type === 'upgrade' && data.upgradeType) {
         const upgradeName = data.upgradeType === 'hashrate' ? 'Hashrate' :
           data.upgradeType === 'efficiency' ? 'Eficiencia' : 'Térmica';
@@ -916,7 +922,7 @@ function closeProcessingModal() {
                   </div>
                   <div class="flex justify-between">
                     <span class="text-text-muted">{{ t('rigManage.timesRepaired') }}</span>
-                    <span class="font-mono">{{ timesRepaired }}</span>
+                    <span class="font-mono" :class="timesRepaired >= MAX_REPAIRS ? 'text-status-danger' : ''">{{ timesRepaired }}/{{ MAX_REPAIRS }}</span>
                   </div>
                 </div>
 
@@ -930,6 +936,9 @@ function closeProcessingModal() {
                 </button>
                 <p v-else-if="rig.is_active" class="text-sm text-text-muted text-center">
                   {{ t('rigManage.stopToRepair') }}
+                </p>
+                <p v-else-if="!canStillRepair" class="text-sm text-status-danger text-center">
+                  {{ t('rigManage.maxRepairsReached', 'Máximo de reparaciones alcanzado') }}
                 </p>
                 <p v-else-if="rig.condition >= 100" class="text-sm text-status-success text-center">
                   {{ t('rigManage.alreadyFullCondition', 'El rig ya está al 100%') }}
@@ -1122,9 +1131,13 @@ function closeProcessingModal() {
                 <span class="text-text-muted text-sm">{{ t('rigManage.targetCondition', 'Condición objetivo') }}</span>
                 <span class="font-bold text-status-success">100%</span>
               </div>
-              <div class="flex items-center justify-between">
+              <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.conditionRestored', 'Condición restaurada') }}</span>
                 <span class="font-bold text-status-success">+{{ repairBonus }}%</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-text-muted text-sm">{{ t('rigManage.repairNumber', 'Reparación') }}</span>
+                <span class="font-bold">{{ timesRepaired + 1 }}/{{ MAX_REPAIRS }}</span>
               </div>
             </template>
             <template v-else-if="confirmAction.type === 'upgrade'">

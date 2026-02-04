@@ -18,6 +18,7 @@ const authStore = useAuthStore();
 
 const loading = ref(true);
 const hasLoaded = ref(false);
+const isLoadingInProgress = ref(false);
 const transactions = ref<any[]>([]);
 
 // Wallet editing
@@ -75,12 +76,21 @@ const canWithdraw = computed(() =>
   ronBalance.value > 0 && player.value?.ron_wallet && !pendingWithdrawal.value
 );
 
-async function loadData() {
+async function loadData(force = false) {
+  // Prevent duplicate/concurrent loads (unless forced)
+  if (isLoadingInProgress.value) {
+    return;
+  }
+
+  if (hasLoaded.value && !force) {
+    loading.value = false;
+    return;
+  }
+
+  isLoadingInProgress.value = true;
+
   try {
     if (player.value?.id) {
-      // Prevent duplicate loads
-      if (hasLoaded.value) return;
-
       const [txData, withdrawals, premium] = await Promise.all([
         getPlayerTransactions(player.value.id, 20),
         getWithdrawalHistory(player.value.id, 5),
@@ -92,9 +102,10 @@ async function loadData() {
       hasLoaded.value = true;
     }
   } catch (e) {
-    console.error('Error loading profile:', e);
+    console.error('[ProfilePage] Error loading profile:', e);
   } finally {
     loading.value = false;
+    isLoadingInProgress.value = false;
   }
 }
 
@@ -104,7 +115,7 @@ watch(() => player.value?.id, (newId) => {
     loading.value = true;
     loadData();
   }
-});
+}, { immediate: true });
 
 function startEditWallet() {
   walletInput.value = player.value?.ron_wallet || '';
@@ -319,7 +330,7 @@ async function confirmWithdraw() {
       // Actualizar datos del jugador y historial
       await Promise.all([
         authStore.fetchPlayer(),
-        loadData(),
+        loadData(true),
       ]);
     } else {
       withdrawError.value = result.error || t('profile.withdraw.error');
@@ -357,7 +368,7 @@ watch([showResetConfirm, showWithdrawModal, showReloadModal], ([reset, withdraw,
   document.body.style.overflow = (reset || withdraw || reload) ? 'hidden' : '';
 });
 
-onMounted(loadData);
+// loadData is called by the watcher with immediate: true
 
 onUnmounted(() => {
   // Ensure scroll is restored when component unmounts

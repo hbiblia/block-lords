@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getPremiumStatus, purchasePremium, type PremiumStatus } from '@/utils/api';
@@ -14,6 +14,7 @@ const premiumStatus = ref<PremiumStatus | null>(null);
 const error = ref('');
 const showConfirm = ref(false);
 const hasLoaded = ref(false);
+const isLoadingInProgress = ref(false);
 
 const isPremium = computed(() => premiumStatus.value?.is_premium ?? false);
 const daysRemaining = computed(() => premiumStatus.value?.days_remaining ?? 0);
@@ -26,22 +27,32 @@ const expiresDate = computed(() => {
   return new Date(premiumStatus.value.expires_at).toLocaleDateString();
 });
 
-async function loadStatus() {
+async function loadStatus(force = false) {
+  // Prevent concurrent loads
+  if (isLoadingInProgress.value) {
+    return;
+  }
+
+  if (hasLoaded.value && !force) {
+    loading.value = false;
+    return;
+  }
+
   if (!authStore.player?.id) {
     loading.value = false;
     return;
   }
 
-  // Prevent duplicate loads
-  if (hasLoaded.value) return;
+  isLoadingInProgress.value = true;
 
   try {
     premiumStatus.value = await getPremiumStatus(authStore.player.id);
     hasLoaded.value = true;
   } catch (e) {
-    console.error('Error loading premium status:', e);
+    console.error('[PremiumCard] Error loading premium status:', e);
   } finally {
     loading.value = false;
+    isLoadingInProgress.value = false;
   }
 }
 
@@ -51,7 +62,7 @@ watch(() => authStore.player?.id, (newId) => {
     loading.value = true;
     loadStatus();
   }
-});
+}, { immediate: true });
 
 function requestPurchase() {
   playSound('click');
@@ -76,7 +87,7 @@ async function confirmPurchase() {
     if (result.success) {
       playSound('success');
       await authStore.refreshPlayer();
-      await loadStatus();
+      await loadStatus(true);
     } else {
       error.value = result.error || t('premium.error');
       playSound('error');
@@ -90,9 +101,7 @@ async function confirmPurchase() {
   }
 }
 
-onMounted(() => {
-  loadStatus();
-});
+// loadStatus is called by the watcher with immediate: true
 </script>
 
 <template>
@@ -175,7 +184,7 @@ onMounted(() => {
           </div>
           <div>
             <p class="font-medium">{{ t('premium.benefits.resourceBonus') }}</p>
-            <p class="text-xs text-text-muted">+500 max energy & internet</p>
+            <p class="text-xs text-text-muted">+1000 max energy & internet</p>
           </div>
         </div>
       </div>

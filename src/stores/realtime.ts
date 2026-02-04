@@ -63,7 +63,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
     visibilityHandler = () => {
       if (document.visibilityState === 'visible') {
-        console.log('Página visible, verificando conexión...');
         // Si estábamos conectados pero ya no lo estamos, reconectar
         if (wasConnected.value && !connected.value) {
           manualReconnect();
@@ -76,7 +75,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
             }
           });
           if (needsReconnect) {
-            console.log('Canales en mal estado, reconectando...');
             manualReconnect();
           }
         }
@@ -91,7 +89,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
     if (onlineHandler) return;
 
     onlineHandler = () => {
-      console.log('Conexión de red restaurada');
       if (wasConnected.value && !connected.value) {
         // Esperar un momento para que la red se estabilice
         setTimeout(() => {
@@ -101,7 +98,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
     };
 
     offlineHandler = () => {
-      console.log('Conexión de red perdida');
       connected.value = false;
     };
 
@@ -114,7 +110,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
     if (focusHandler) return;
 
     focusHandler = () => {
-      console.log('Ventana recuperó el foco, verificando conexión...');
       // Verificar inmediatamente el estado de los canales
       if (wasConnected.value) {
         let needsReconnect = false;
@@ -132,7 +127,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
         }
 
         if (needsReconnect) {
-          console.log('Reconectando después de recuperar foco...');
           manualReconnect();
         }
       }
@@ -140,8 +134,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
     blurHandler = () => {
       // Cuando la ventana pierde foco, el navegador puede throttle la conexión
-      // Solo logueamos para debug, no desconectamos activamente
-      console.log('Ventana perdió el foco');
+      // No desconectamos activamente
     };
 
     window.addEventListener('focus', focusHandler);

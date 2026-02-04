@@ -12,13 +12,11 @@ if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
 export function useWakeLock() {
   async function requestWakeLock() {
     if (!isSupported.value) {
-      console.log('Wake Lock API not supported');
       return false;
     }
 
     // Can only request Wake Lock when page is visible
     if (document.visibilityState !== 'visible') {
-      console.log('Wake Lock deferred - page not visible');
       return false;
     }
 
@@ -29,13 +27,10 @@ export function useWakeLock() {
       // Listen for release event
       wakeLock.value.addEventListener('release', () => {
         isActive.value = false;
-        console.log('Wake Lock released');
       });
 
-      console.log('Wake Lock acquired');
       return true;
     } catch (err) {
-      console.error('Failed to acquire Wake Lock:', err);
       isActive.value = false;
       return false;
     }
@@ -47,8 +42,8 @@ export function useWakeLock() {
         await wakeLock.value.release();
         wakeLock.value = null;
         isActive.value = false;
-      } catch (err) {
-        console.error('Failed to release Wake Lock:', err);
+      } catch {
+        // Silent fail
       }
     }
   }

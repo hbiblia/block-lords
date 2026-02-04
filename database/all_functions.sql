@@ -655,6 +655,15 @@ BEGIN
 
   v_times_repaired := COALESCE(v_rig.times_repaired, 0);
 
+  -- Verificar límite de reparaciones (máximo 3)
+  IF v_times_repaired >= 3 THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'Máximo de reparaciones alcanzado (3/3)',
+      'times_repaired', v_times_repaired
+    );
+  END IF;
+
   -- Verificar si ya está al 100%
   IF v_rig.condition >= 100 THEN
     RETURN json_build_object(
@@ -1917,7 +1926,7 @@ ALTER TABLE network_stats ADD COLUMN IF NOT EXISTS last_adjustment_block INTEGER
 -- =====================================================
 -- AJUSTE DE DIFICULTAD ESTILO BITCOIN
 -- Objetivo: 1 bloque cada 10 minutos
--- Ajusta cada 10 bloques basándose en tiempo real vs esperado
+-- Ajusta cada 1000 bloques basándose en tiempo real vs esperado
 -- TAMBIÉN ajusta si pasa 1 hora sin recalcular (evita dificultad estancada)
 -- =====================================================
 CREATE OR REPLACE FUNCTION adjust_difficulty()
@@ -1931,7 +1940,7 @@ DECLARE
   v_last_adjustment_block INTEGER;
   v_last_adjustment_time TIMESTAMPTZ;
   v_latest_block_height INTEGER;
-  v_adjustment_period INTEGER := 10;        -- Ajustar cada 10 bloques
+  v_adjustment_period INTEGER := 1000;      -- Ajustar cada 1000 bloques
   v_target_block_time INTEGER := 600;       -- 10 minutos en segundos
   v_max_change NUMERIC := 0.25;             -- ±25% máximo por ajuste
   v_min_difficulty NUMERIC := 100;          -- Dificultad mínima

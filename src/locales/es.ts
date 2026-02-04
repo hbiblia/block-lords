@@ -264,6 +264,7 @@ export default {
       description: 'Compra nuevos rigs para aumentar tu poder de mineria...',
       allOwned: '¡Ya tienes todos los rigs disponibles!',
       owned: 'Adquirido',
+      installed: 'instalado',
       energyTick: 'Energia/tick',
       internetTick: 'Internet/tick',
       repair: 'Reparacion',
@@ -1025,6 +1026,10 @@ export default {
       event_weekend_warrior: { name: 'Guerrero de Fin de Semana', desc: 'Mina 50 bloques durante el evento.' },
       event_double_xp: { name: 'Doble o Nada', desc: 'Gana 50,000 crypto durante el evento 2x.' },
       event_community: { name: 'Meta Comunitaria', desc: 'Contribuye al objetivo global de la comunidad.' },
+      // Misiones adicionales
+      repair_2_rigs: { name: 'Doble Reparacion', desc: 'Repara 2 rigs hoy.' },
+      use_cooling_2: { name: 'Enfriar', desc: 'Instala refrigeracion en 2 rigs.' },
+      online_60_min: { name: 'Una Hora', desc: 'Permanece online 60 minutos.' },
     },
   },
 
@@ -1094,7 +1099,7 @@ export default {
       title: 'Beneficios',
       blockBonus: '+50% Crypto por bloque',
       withdrawalFee: 'Solo 10% comision de retiro',
-      resourceBonus: '+500 Max energia e internet',
+      resourceBonus: '+1000 Max energia e internet',
     },
     subscribe: 'Suscribirse',
     extend: 'Extender',

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getReferralInfo, applyReferralCode, updateReferralCode, getReferralList, type ReferralInfo, type ReferralListResponse } from '@/utils/api';
@@ -13,6 +13,7 @@ const loading = ref(true);
 const applying = ref(false);
 const referralInfo = ref<ReferralInfo | null>(null);
 const hasLoaded = ref(false);
+const isLoadingInProgress = ref(false);
 const inputCode = ref('');
 const error = ref('');
 const success = ref('');
@@ -45,22 +46,32 @@ const canApplyCode = computed(() => {
   return !referralInfo.value?.referredBy && inputCode.value.trim().length >= 6;
 });
 
-async function loadReferralInfo() {
+async function loadReferralInfo(force = false) {
+  // Prevent concurrent loads
+  if (isLoadingInProgress.value) {
+    return;
+  }
+
+  if (hasLoaded.value && !force) {
+    loading.value = false;
+    return;
+  }
+
   if (!authStore.player?.id) {
     loading.value = false;
     return;
   }
 
-  // Prevent duplicate loads
-  if (hasLoaded.value) return;
+  isLoadingInProgress.value = true;
 
   try {
     referralInfo.value = await getReferralInfo(authStore.player.id);
     hasLoaded.value = true;
   } catch (e) {
-    console.error('Error loading referral info:', e);
+    console.error('[ReferralSection] Error loading referral info:', e);
   } finally {
     loading.value = false;
+    isLoadingInProgress.value = false;
   }
 }
 
@@ -70,7 +81,7 @@ watch(() => authStore.player?.id, (newId) => {
     loading.value = true;
     loadReferralInfo();
   }
-});
+}, { immediate: true });
 
 async function loadReferralList(reset = false) {
   if (!authStore.player?.id) return;
@@ -142,7 +153,7 @@ async function handleApplyCode() {
       });
       inputCode.value = '';
       await authStore.refreshPlayer();
-      await loadReferralInfo();
+      await loadReferralInfo(true);
     } else {
       playSound('error');
       const errorKey = `referral.errors.${result.error}`;
@@ -260,7 +271,7 @@ async function confirmChangeCode() {
       editingCode.value = false;
       newCodeInput.value = '';
       await authStore.refreshPlayer();
-      await loadReferralInfo();
+      await loadReferralInfo(true);
     } else {
       playSound('error');
       const errorKey = `referral.edit.errors.${result.error}`;
@@ -275,9 +286,7 @@ async function confirmChangeCode() {
   }
 }
 
-onMounted(() => {
-  loadReferralInfo();
-});
+// loadReferralInfo is called by the watcher with immediate: true
 </script>
 
 <template>
