@@ -737,6 +737,7 @@ export default {
     repair: 'Reparar',
     stopToRepair: 'Apaga el rig para reparar.',
     atMaxCondition: 'El rig esta en su condicion maxima.',
+    alreadyFullCondition: 'El rig ya esta al 100% de condicion.',
     tooDegrade: 'El rig esta muy degradado para reparar. Considera eliminarlo.',
     insufficientFunds: 'Fondos insuficientes',
     deleteRig: 'Eliminar Rig',
@@ -800,6 +801,16 @@ export default {
     reconnect: 'Reconectar',
     reloadPage: 'Recargar Pagina',
     persistsNotice: 'Si el problema persiste, verifica tu conexion a internet.',
+    serverSlow: 'Servidor lento',
+    sessionExpired: 'Sesión expirada',
+    error: {
+      title: 'Error de Conexion',
+      message: 'No se pudo conectar con el servidor. Verifica tu conexion a internet e intenta de nuevo.',
+      details: 'Detalles tecnicos',
+      retry: 'Reintentar',
+      retrying: 'Conectando...',
+      suggestions: 'Si el problema persiste, intenta recargar la pagina o vuelve mas tarde.',
+    },
   },
 
   notifications: {
@@ -1250,6 +1261,20 @@ export default {
       crypto_premium: { name: 'Pack Premium', desc: 'Para mineros serios. ¡50% extra!' },
       crypto_elite: { name: 'Pack Elite', desc: 'Domina el juego. Bonus masivo.' },
       crypto_whale: { name: 'Pack Ballena', desc: '¡MAXIMO VALOR! +100% bonus.' },
+    },
+  },
+
+  minigame: {
+    start: 'Comenzar',
+    bugs: {
+      title: '¡Elimina los Bugs!',
+      instructions: 'Haz clic en los bugs antes de que desaparezcan para limpiar el sistema y reparar tu rig.',
+      goal: 'Elimina {count} bugs',
+      time: '{seconds} segundos',
+      win: '¡Sistema Limpio!',
+      lose: '¡Los bugs escaparon!',
+      result: 'Eliminaste {count} bugs',
+      repairing: 'Reparando rig...',
     },
   },
 };

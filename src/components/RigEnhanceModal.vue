@@ -7,6 +7,7 @@ import { useToastStore } from '@/stores/toast';
 import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling, getPlayerBoosts, installBoostToRig, getRigBoosts, getRigUpgrades, upgradeRig, removeCoolingFromRig, removeBoostFromRig } from '@/utils/api';
 import { formatCrypto } from '@/utils/format';
 import { playSound } from '@/utils/sounds';
+import RepairMinigame from '@/components/RepairMinigame.vue';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -149,6 +150,9 @@ const confirmAction = ref<{
 const showProcessingModal = ref(false);
 const processingStatus = ref<'processing' | 'success' | 'error'>('processing');
 const processingError = ref('');
+
+// Repair minigame
+const showMinigame = ref(false);
 
 // Timer for smooth countdown interpolation between server updates
 let boostTimer: number | null = null;
@@ -408,6 +412,57 @@ function requestRepair() {
   showConfirm.value = true;
 }
 
+async function handleMinigameComplete(success: boolean) {
+  showMinigame.value = false;
+
+  if (!success) {
+    // Player failed or cancelled - do nothing
+    return;
+  }
+
+  // Player won - proceed with repair
+  if (!authStore.player || !props.rig) return;
+
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
+
+  try {
+    const result = await repairRig(authStore.player.id, props.rig.id);
+
+    if (result?.success) {
+      processingStatus.value = 'success';
+      playSound('success');
+
+      const rigName = props.rig.rig?.name || 'Rig';
+      toastStore.success(`${rigName} reparado`);
+
+      // Reload data
+      dataLoaded.value = false;
+      await loadData();
+      await authStore.fetchPlayer();
+      await miningStore.reloadRigs();
+      emit('updated');
+
+      // Close processing modal
+      closeProcessingModal();
+    } else {
+      processingStatus.value = 'error';
+      processingError.value = result?.error || t('common.error');
+      playSound('error');
+    }
+  } catch (e) {
+    console.error('Error repairing rig:', e);
+    processingStatus.value = 'error';
+    processingError.value = t('common.error');
+    playSound('error');
+  }
+}
+
+function handleMinigameCancel() {
+  showMinigame.value = false;
+}
+
 function requestDelete() {
   confirmAction.value = {
     type: 'delete',
@@ -465,6 +520,14 @@ async function confirmUse() {
 
   const { type, data } = confirmAction.value;
   showConfirm.value = false;
+
+  // For repair, show minigame instead of processing modal
+  if (type === 'repair') {
+    showMinigame.value = true;
+    confirmAction.value = null;
+    return;
+  }
+
   showProcessingModal.value = true;
   processingStatus.value = 'processing';
   processingError.value = '';
@@ -476,8 +539,6 @@ async function confirmUse() {
       result = await installCoolingToRig(authStore.player.id, props.rig.id, data.coolingId);
     } else if (type === 'boost' && data.boostId) {
       result = await installBoostToRig(authStore.player.id, props.rig.id, data.boostId);
-    } else if (type === 'repair') {
-      result = await repairRig(authStore.player.id, props.rig.id);
     } else if (type === 'delete') {
       result = await deleteRig(authStore.player.id, props.rig.id);
     } else if (type === 'upgrade' && data.upgradeType) {
@@ -519,11 +580,6 @@ async function confirmUse() {
         toastStore.boostInstalled(data.coolingName, rigName);
       } else if (type === 'boost' && data.boostName) {
         toastStore.boostInstalled(data.boostName, rigName);
-      } else if (type === 'repair') {
-        toastStore.success(`${rigName} reparado`);
-        // Solo cerrar el modal de procesamiento, mantener el modal principal abierto
-        closeProcessingModal();
-        return;
       } else if (type === 'upgrade' && data.upgradeType) {
         const upgradeName = data.upgradeType === 'hashrate' ? 'Hashrate' :
           data.upgradeType === 'efficiency' ? 'Eficiencia' : 'Térmica';
@@ -1128,15 +1184,15 @@ function closeProcessingModal() {
                 <span class="font-bold text-status-warning">{{ repairCost }} GC</span>
               </div>
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">{{ t('rigManage.targetCondition', 'Condición objetivo') }}</span>
+                <span class="text-text-muted text-sm">{{ t('rigManage.targetCondition', 'Condicion objetivo') }}</span>
                 <span class="font-bold text-status-success">100%</span>
               </div>
               <div class="flex items-center justify-between mb-2">
-                <span class="text-text-muted text-sm">{{ t('rigManage.conditionRestored', 'Condición restaurada') }}</span>
+                <span class="text-text-muted text-sm">{{ t('rigManage.conditionRestored', 'Condicion restaurada') }}</span>
                 <span class="font-bold text-status-success">+{{ repairBonus }}%</span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-text-muted text-sm">{{ t('rigManage.repairNumber', 'Reparación') }}</span>
+                <span class="text-text-muted text-sm">{{ t('rigManage.repairNumber', 'Reparacion') }}</span>
                 <span class="font-bold">{{ timesRepaired + 1 }}/{{ MAX_REPAIRS }}</span>
               </div>
             </template>
@@ -1215,6 +1271,19 @@ function closeProcessingModal() {
               {{ (confirmAction.type === 'destroy_cooling' || confirmAction.type === 'destroy_boost') ? t('rigManage.destroy', 'Destruir') : t('common.confirm') }}
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Repair Minigame Overlay -->
+      <div
+        v-if="showMinigame"
+        class="absolute inset-0 flex items-center justify-center bg-black/70 z-20"
+      >
+        <div class="bg-bg-secondary rounded-xl p-6 max-w-md w-full mx-4 border border-border">
+          <RepairMinigame
+            @complete="handleMinigameComplete"
+            @cancel="handleMinigameCancel"
+          />
         </div>
       </div>
 

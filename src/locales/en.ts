@@ -737,6 +737,7 @@ export default {
     repair: 'Repair',
     stopToRepair: 'Turn off the rig to repair.',
     atMaxCondition: 'Rig is at max condition.',
+    alreadyFullCondition: 'Rig is already at 100% condition.',
     tooDegrade: 'Rig is too degraded to repair. Consider deleting it.',
     insufficientFunds: 'Insufficient funds',
     deleteRig: 'Delete Rig',
@@ -800,6 +801,16 @@ export default {
     reconnect: 'Reconnect',
     reloadPage: 'Reload Page',
     persistsNotice: 'If the problem persists, check your internet connection.',
+    serverSlow: 'Slow server',
+    sessionExpired: 'Session expired',
+    error: {
+      title: 'Connection Error',
+      message: 'Could not connect to the server. Please check your internet connection and try again.',
+      details: 'Technical details',
+      retry: 'Retry',
+      retrying: 'Connecting...',
+      suggestions: 'If the problem persists, try refreshing the page or check back later.',
+    },
   },
 
   notifications: {
@@ -1250,6 +1261,20 @@ export default {
       crypto_premium: { name: 'Premium Pack', desc: 'For serious miners. 50% extra!' },
       crypto_elite: { name: 'Elite Pack', desc: 'Dominate the game. Massive bonus.' },
       crypto_whale: { name: 'Whale Pack', desc: 'MAXIMUM VALUE! +100% bonus.' },
+    },
+  },
+
+  minigame: {
+    start: 'Start',
+    bugs: {
+      title: 'Eliminate Bugs!',
+      instructions: 'Click on the bugs before they disappear to clean the system and repair your rig.',
+      goal: 'Eliminate {count} bugs',
+      time: '{seconds} seconds',
+      win: 'System Cleaned!',
+      lose: 'Bugs escaped!',
+      result: 'You eliminated {count} bugs',
+      repairing: 'Repairing rig...',
     },
   },
 };

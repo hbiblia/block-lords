@@ -6,65 +6,179 @@ import { withRetry, isRetryableError } from './retry';
 // =====================================================
 
 /**
- * Helper para llamadas RPC con retry automático
+ * Estado de conexión global
+ */
+export const connectionState = {
+  isOnline: true,
+  lastError: null as string | null,
+  lastErrorTime: 0,
+  failureCount: 0,
+  listeners: new Set<(online: boolean, error?: string) => void>(),
+
+  setOnline(online: boolean, error?: string) {
+    const wasOnline = this.isOnline;
+    this.isOnline = online;
+    this.lastError = error || null;
+    this.lastErrorTime = Date.now();
+    if (!online) {
+      this.failureCount++;
+    } else {
+      this.failureCount = 0;
+    }
+    // Notificar listeners solo si cambió el estado
+    if (wasOnline !== online || error) {
+      this.listeners.forEach(fn => fn(online, error));
+    }
+  },
+
+  subscribe(fn: (online: boolean, error?: string) => void) {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  },
+};
+
+/**
+ * Timeout para promesas
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timeout: ${operation} tardó más de ${ms / 1000}s`));
+    }, ms);
+
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
+// Timeout por defecto: 15 segundos
+const DEFAULT_TIMEOUT = 15000;
+// Timeout para operaciones críticas: 30 segundos
+const CRITICAL_TIMEOUT = 30000;
+
+/**
+ * Helper para llamadas RPC con retry automático y timeout
  * Reintenta en errores de red/timeout, no en errores de lógica de negocio
  */
 async function rpcWithRetry<T>(
   fnName: string,
   params: Record<string, unknown> = {},
-  options: { maxRetries?: number; critical?: boolean } = {}
+  options: { maxRetries?: number; critical?: boolean; timeout?: number } = {}
 ): Promise<T> {
-  const { maxRetries = 3, critical = false } = options;
+  const { maxRetries = 3, critical = false, timeout } = options;
+  const timeoutMs = timeout ?? (critical ? CRITICAL_TIMEOUT : DEFAULT_TIMEOUT);
 
   const executeRpc = async () => {
-    const { data, error } = await supabase.rpc(fnName, params);
+    const rpcPromise = Promise.resolve(supabase.rpc(fnName, params));
+    const { data, error } = await withTimeout(rpcPromise, timeoutMs, fnName);
     if (error) throw error;
+    // Conexión exitosa
+    if (!connectionState.isOnline) {
+      connectionState.setOnline(true);
+    }
     return data as T;
   };
 
-  // For critical operations, always retry
-  // For non-critical, only retry on network errors
-  if (critical) {
-    return withRetry(executeRpc, {
+  try {
+    // For critical operations, always retry
+    // For non-critical, only retry on network errors
+    if (critical) {
+      return await withRetry(executeRpc, {
+        maxRetries,
+        onRetry: (attempt, error) => {
+          console.warn(`[API] Retry ${attempt}/${maxRetries} for ${fnName}:`, error);
+        },
+      });
+    }
+
+    // Standard call with retry only for retryable errors
+    return await withRetry(executeRpc, {
       maxRetries,
+      isRetryable: (error) => {
+        // Don't retry business logic errors (insufficient funds, etc.)
+        const errorObj = error as Record<string, unknown>;
+        const message = String(errorObj?.message || '').toLowerCase();
+
+        // These are NOT retryable (business logic errors)
+        const nonRetryablePatterns = [
+          'insufficient',
+          'insuficiente',
+          'not found',
+          'no encontrado',
+          'already',
+          'ya existe',
+          'invalid',
+          'invalido',
+          'unauthorized',
+          'permission',
+        ];
+
+        if (nonRetryablePatterns.some(p => message.includes(p))) {
+          return false;
+        }
+
+        return isRetryableError(error);
+      },
       onRetry: (attempt, error) => {
         console.warn(`[API] Retry ${attempt}/${maxRetries} for ${fnName}:`, error);
       },
     });
+  } catch (error) {
+    // Marcar conexión como fallida si es error de red/timeout
+    const errorObj = error as Record<string, unknown>;
+    const message = String(errorObj?.message || '').toLowerCase();
+    if (
+      message.includes('timeout') ||
+      message.includes('network') ||
+      message.includes('fetch') ||
+      message.includes('connection')
+    ) {
+      connectionState.setOnline(false, message);
+    }
+    throw error;
   }
+}
 
-  // Standard call with retry only for retryable errors
-  return withRetry(executeRpc, {
-    maxRetries,
-    isRetryable: (error) => {
-      // Don't retry business logic errors (insufficient funds, etc.)
-      const errorObj = error as Record<string, unknown>;
-      const message = String(errorObj?.message || '').toLowerCase();
+// === PING / HEALTH CHECK ===
 
-      // These are NOT retryable (business logic errors)
-      const nonRetryablePatterns = [
-        'insufficient',
-        'insuficiente',
-        'not found',
-        'no encontrado',
-        'already',
-        'ya existe',
-        'invalid',
-        'invalido',
-        'unauthorized',
-        'permission',
-      ];
+/**
+ * Ping the API to check if the server is responding
+ * Uses a lightweight query with short timeout
+ */
+export async function pingApi(): Promise<{ success: boolean; latency: number }> {
+  const startTime = Date.now();
+  try {
+    // Use a simple query with short timeout (5 seconds)
+    const queryPromise = Promise.resolve(supabase.from('players').select('id').limit(1).single());
+    const result = await withTimeout(queryPromise, 5000, 'ping');
 
-      if (nonRetryablePatterns.some(p => message.includes(p))) {
-        return false;
-      }
+    const latency = Date.now() - startTime;
 
-      return isRetryableError(error);
-    },
-    onRetry: (attempt, error) => {
-      console.warn(`[API] Retry ${attempt}/${maxRetries} for ${fnName}:`, error);
-    },
-  });
+    // PGRST116 = no rows returned, which is ok for ping
+    if (result.error && result.error.code !== 'PGRST116') {
+      connectionState.setOnline(false, result.error.message);
+      return { success: false, latency };
+    }
+
+    // Connection successful
+    if (!connectionState.isOnline) {
+      connectionState.setOnline(true);
+    }
+
+    return { success: true, latency };
+  } catch (error) {
+    const latency = Date.now() - startTime;
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    connectionState.setOnline(false, message);
+    return { success: false, latency };
+  }
 }
 
 // === AUTH ===
@@ -912,6 +1026,7 @@ export interface ReferralListItem {
   daysAgo: number;
   isActive: boolean;
   activeRigs: number;
+  totalRigs: number;
 }
 
 export interface ReferralListPagination {

@@ -1697,6 +1697,51 @@ BEGIN
 END;
 $$;
 
+-- =====================================================
+-- MINING COOLDOWN
+-- Si un jugador gana más de X bloques en menos de Y minutos,
+-- entra en cooldown
+-- Parámetros configurables:
+--   p_min_threshold: mínimo de bloques permitidos (default: 10)
+--   p_max_threshold: máximo de bloques permitidos (default: 20)
+--   p_time_window_minutes: ventana de tiempo en minutos (default: 2)
+-- El umbral es consistente por jugador (basado en hash del player_id)
+-- =====================================================
+CREATE OR REPLACE FUNCTION is_player_in_mining_cooldown(
+  p_player_id UUID,
+  p_min_threshold INTEGER DEFAULT 10,
+  p_max_threshold INTEGER DEFAULT 20,
+  p_time_window_minutes INTEGER DEFAULT 2
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_recent_blocks INTEGER;
+  v_time_window INTERVAL;
+  v_threshold INTEGER;
+  v_hash_value INTEGER;
+BEGIN
+  -- Calcular umbral consistente por jugador usando hash del UUID
+  -- Esto genera un número entre min y max que es siempre el mismo para cada jugador
+  v_hash_value := abs(('x' || substr(p_player_id::TEXT, 1, 8))::BIT(32)::INTEGER);
+  v_threshold := p_min_threshold + (v_hash_value % (p_max_threshold - p_min_threshold + 1));
+
+  -- Convertir minutos a intervalo
+  v_time_window := (p_time_window_minutes || ' minutes')::INTERVAL;
+
+  -- Contar bloques ganados por este jugador en la ventana de tiempo
+  SELECT COUNT(*) INTO v_recent_blocks
+  FROM blocks
+  WHERE miner_id = p_player_id
+    AND created_at >= NOW() - v_time_window;
+
+  -- Si ganó más de X bloques en la ventana, está en cooldown
+  RETURN v_recent_blocks > v_threshold;
+END;
+$$;
+
 -- Tick de minería (selección de ganador)
 CREATE OR REPLACE FUNCTION process_mining_tick()
 RETURNS TABLE(block_mined BOOLEAN, block_height INT)
@@ -1731,6 +1776,7 @@ BEGIN
 
   -- Calcular hashrate total con penalizaciones por temperatura y condición
   -- Incluye jugadores online O rigs con autonomous mining boost
+  -- Excluye jugadores en cooldown (>5 bloques en <2 minutos)
   FOR v_rig IN
     SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score
     FROM player_rigs pr
@@ -1738,18 +1784,17 @@ BEGIN
     JOIN players p ON p.id = pr.player_id
     WHERE pr.is_active = true AND p.energy > 0 AND p.internet > 0
       AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
+      AND NOT is_player_in_mining_cooldown(pr.player_id)
   LOOP
-    -- Obtener multiplicadores de boost (caché por jugador)
-    IF v_current_player_id IS DISTINCT FROM v_rig.player_id THEN
-      v_boosts := get_active_boost_multipliers(v_rig.player_id);
-      v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
-      v_luck_mult := COALESCE((v_boosts->>'luck')::NUMERIC, 1.0);
-      v_current_player_id := v_rig.player_id;
-      -- Acumular luck multiplier para probabilidad de bloque
-      IF v_luck_mult > 1.0 THEN
-        v_total_luck_mult := v_total_luck_mult + (v_luck_mult - 1.0);
-        v_luck_count := v_luck_count + 1;
-      END IF;
+    -- Obtener multiplicadores de boost POR RIG (no por jugador)
+    v_boosts := get_rig_boost_multipliers(v_rig.rig_id);
+    v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
+    v_luck_mult := COALESCE((v_boosts->>'luck')::NUMERIC, 1.0);
+
+    -- Acumular luck multiplier para probabilidad de bloque
+    IF v_luck_mult > 1.0 THEN
+      v_total_luck_mult := v_total_luck_mult + (v_luck_mult - 1.0);
+      v_luck_count := v_luck_count + 1;
     END IF;
 
     -- Multiplicador de reputación
@@ -1808,6 +1853,7 @@ BEGIN
 
   -- Seleccionar ganador (con mismas penalizaciones y boosts)
   -- Incluye jugadores online O rigs con autonomous mining boost
+  -- Excluye jugadores en cooldown (>5 bloques en <2 minutos)
   v_random_pick := random() * v_network_hashrate;
   v_hashrate_sum := 0;
   v_current_player_id := NULL;
@@ -1819,13 +1865,11 @@ BEGIN
     JOIN players p ON p.id = pr.player_id
     WHERE pr.is_active = true AND p.energy > 0 AND p.internet > 0
       AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
+      AND NOT is_player_in_mining_cooldown(pr.player_id)
   LOOP
-    -- Obtener multiplicador de hashrate del boost (caché por jugador)
-    IF v_current_player_id IS DISTINCT FROM v_rig.player_id THEN
-      v_boosts := get_active_boost_multipliers(v_rig.player_id);
-      v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
-      v_current_player_id := v_rig.player_id;
-    END IF;
+    -- Obtener multiplicador de hashrate del boost POR RIG
+    v_boosts := get_rig_boost_multipliers(v_rig.rig_id);
+    v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
 
     IF v_rig.reputation_score >= 80 THEN
       v_rep_multiplier := 1 + (v_rig.reputation_score - 80) * 0.01;
@@ -5852,8 +5896,9 @@ BEGIN
       EXTRACT(DAY FROM (NOW() - p.created_at))::INTEGER as "daysAgo",
       -- Verificar si está activo (conectado en últimas 24h)
       (p.last_seen > NOW() - INTERVAL '24 hours') as "isActive",
-      -- Contar rigs activos
-      (SELECT COUNT(*) FROM player_rigs pr WHERE pr.player_id = p.id AND pr.is_active = true) as "activeRigs"
+      -- Contar rigs activos y totales
+      (SELECT COUNT(*) FROM player_rigs pr WHERE pr.player_id = p.id AND pr.is_active = true) as "activeRigs",
+      (SELECT COUNT(*) FROM player_rigs pr WHERE pr.player_id = p.id) as "totalRigs"
     FROM players p
     WHERE p.referred_by = p_player_id
     ORDER BY p.created_at DESC
@@ -6153,7 +6198,7 @@ BEGIN
             WHEN pr.temperature > 50 THEN GREATEST(0.3, 1 - ((pr.temperature - 50) * 0.014))
             ELSE 1.0
           END *  -- Temperature penalty
-          COALESCE((get_active_boost_multipliers(p.id)->>'hashrate')::NUMERIC, 1.0)  -- Boost multiplier
+          COALESCE((get_rig_boost_multipliers(pr.id)->>'hashrate')::NUMERIC, 1.0)  -- Boost multiplier POR RIG
         ) as total_effective_hashrate
       FROM players p
       JOIN player_rigs pr ON pr.player_id = p.id

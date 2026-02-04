@@ -672,7 +672,7 @@ async function confirmChangeCode() {
                   <span class="text-text-muted">{{ t('referral.list.crypto') }}</span>
                 </div>
                 <div class="flex flex-col items-center bg-bg-secondary rounded p-1.5">
-                  <span class="text-accent-primary font-bold">{{ ref.activeRigs }}</span>
+                  <span class="text-accent-primary font-bold">{{ ref.activeRigs }}/{{ ref.totalRigs }}</span>
                   <span class="text-text-muted">{{ t('referral.list.rigs') }}</span>
                 </div>
               </div>

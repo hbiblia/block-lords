@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch, ref, provide, nextTick } from 'vue';
+import { onMounted, onUnmounted, watch, ref, provide, nextTick, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
@@ -127,6 +127,65 @@ onUnmounted(() => {
   window.removeEventListener('open-exchange', handleOpenExchangeEvent);
   window.removeEventListener('open-inventory', handleOpenInventoryEvent);
 });
+
+// Connection status computed properties
+const isFullyConnected = computed(() => realtimeStore.isConnected && authStore.isServerOnline && !authStore.sessionLost);
+const hasApiIssue = computed(() => !authStore.isServerOnline && !authStore.sessionLost);
+const hasRealtimeIssue = computed(() => !realtimeStore.isConnected);
+const hasSessionLost = computed(() => authStore.sessionLost);
+
+const connectionDotClass = computed(() => {
+  if (hasSessionLost.value) return 'bg-status-danger';
+  if (isFullyConnected.value) return 'bg-status-success animate-pulse';
+  if (hasApiIssue.value) return 'bg-status-warning animate-pulse';
+  return 'bg-status-danger';
+});
+
+const connectionBorderClass = computed(() => {
+  if (hasSessionLost.value) return 'border-status-danger/50';
+  if (isFullyConnected.value) return 'border-border/30';
+  if (hasApiIssue.value) return 'border-status-warning/50 animate-pulse';
+  return 'border-status-danger/50';
+});
+
+const connectionTextClass = computed(() => {
+  if (hasSessionLost.value) return 'text-status-danger';
+  if (isFullyConnected.value) return 'text-text-muted';
+  if (hasApiIssue.value) return 'text-status-warning';
+  return 'text-status-danger';
+});
+
+const connectionStatusText = computed(() => {
+  if (hasSessionLost.value) return t('connection.sessionExpired', 'Sesión expirada');
+  if (isFullyConnected.value) {
+    const latency = authStore.pingLatency;
+    if (latency !== null) {
+      return `${t('nav.connected')} · ${latency}ms`;
+    }
+    return t('nav.connected');
+  }
+  if (hasApiIssue.value) return t('connection.serverSlow', 'Servidor lento');
+  return t('nav.disconnected');
+});
+
+const isRetryingConnection = ref(false);
+
+async function handleConnectionClick() {
+  // Si hay problemas de conexión, intentar reconectar
+  if (!isFullyConnected.value && !isRetryingConnection.value) {
+    isRetryingConnection.value = true;
+    try {
+      if (hasApiIssue.value) {
+        await authStore.retryConnection();
+      }
+      if (hasRealtimeIssue.value) {
+        realtimeStore.connect();
+      }
+    } finally {
+      isRetryingConnection.value = false;
+    }
+  }
+}
 </script>
 
 <template>
@@ -194,15 +253,17 @@ onUnmounted(() => {
 
     <!-- Connection Status -->
     <div
-      v-if="authStore.isAuthenticated"
-      class="fixed bottom-[4.5rem] sm:bottom-20 left-2 sm:left-4 flex items-center gap-1.5 px-2 py-1 bg-bg-secondary/80 backdrop-blur-sm border border-border/30 rounded-full text-[10px] sm:text-xs shadow-lg"
+      v-if="authStore.isAuthenticated || authStore.sessionLost"
+      class="fixed bottom-[4.5rem] sm:bottom-20 left-2 sm:left-4 flex items-center gap-1.5 px-2 py-1 bg-bg-secondary/80 backdrop-blur-sm border rounded-full text-[10px] sm:text-xs shadow-lg cursor-pointer transition-all hover:bg-bg-secondary"
+      :class="connectionBorderClass"
+      @click="handleConnectionClick"
     >
       <span
         class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full"
-        :class="realtimeStore.isConnected ? 'bg-status-success animate-pulse' : 'bg-status-danger'"
+        :class="connectionDotClass"
       ></span>
-      <span class="text-text-muted">
-        {{ realtimeStore.isConnected ? t('nav.connected') : t('nav.disconnected') }}
+      <span :class="connectionTextClass">
+        {{ connectionStatusText }}
       </span>
     </div>
 

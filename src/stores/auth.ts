@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { supabase } from '@/utils/supabase';
-import { createPlayerProfile, getPlayerProfile, applyPassiveRegeneration, applyReferralCode } from '@/utils/api';
+import { createPlayerProfile, getPlayerProfile, applyPassiveRegeneration, applyReferralCode, connectionState, pingApi } from '@/utils/api';
 import { useNotificationsStore } from './notifications';
 import { useInventoryStore } from './inventory';
 import type { User, Session } from '@supabase/supabase-js';
+
+// Timeout para inicialización (10 segundos)
+const INIT_TIMEOUT = 10000;
 
 
 
@@ -42,8 +45,38 @@ export const useAuthStore = defineStore('auth', () => {
   const hasAppliedRegeneration = ref(false);
   // Intervalo para verificación periódica de sesión
   const sessionCheckInterval = ref<ReturnType<typeof setInterval> | null>(null);
-  // Intervalo de verificación: cada 2 minutos
-  const SESSION_CHECK_INTERVAL = 2 * 60 * 1000;
+  // Intervalo de verificación: cada 10 segundos
+  const SESSION_CHECK_INTERVAL = 10 * 1000;
+  // Intervalo para ping de API
+  const apiPingInterval = ref<ReturnType<typeof setInterval> | null>(null);
+  // Ping cada 30 segundos
+  const API_PING_INTERVAL = 30 * 1000;
+  // Estado de conexión con el servidor
+  const connectionError = ref<string | null>(null);
+  const isServerOnline = ref(true);
+  // Flag para indicar que la sesión se perdió (para mostrar indicador rojo)
+  const sessionLost = ref(false);
+  // Latencia del último ping (en ms)
+  const pingLatency = ref<number | null>(null);
+
+  // Suscribirse a cambios de estado de conexión
+  connectionState.subscribe(async (online, errorMsg) => {
+    isServerOnline.value = online;
+    connectionError.value = errorMsg || null;
+
+    // Si hay error de conexión, verificar si la sesión sigue siendo válida
+    if (!online && user.value) {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!currentSession) {
+          console.warn('[Auth] Session expired detected on connection error');
+          handleSessionLost();
+        }
+      } catch (e) {
+        console.warn('[Auth] Could not verify session on connection error:', e);
+      }
+    }
+  });
 
   const isAuthenticated = computed(() => !!user.value && !!session.value && !!player.value);
   const token = computed(() => session.value?.access_token ?? null);
@@ -68,17 +101,35 @@ export const useAuthStore = defineStore('auth', () => {
     if (isCheckingAuth.value) return;
     isCheckingAuth.value = true;
     loading.value = true;
+    connectionError.value = null;
 
     try {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      // Timeout para getSession
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout al verificar sesión')), INIT_TIMEOUT);
+      });
+
+      const { data: { session: currentSession } } = await Promise.race([sessionPromise, timeoutPromise]);
 
       if (currentSession) {
         session.value = currentSession;
         user.value = currentSession.user;
         await fetchPlayer();
+        // Reset sessionLost flag on successful auth
+        sessionLost.value = false;
       }
+      // Conexión exitosa
+      isServerOnline.value = true;
+      connectionError.value = null;
     } catch (e) {
       console.error('Error checking auth:', e);
+      const errorMsg = e instanceof Error ? e.message : 'Error de conexión';
+      connectionError.value = errorMsg;
+      // Solo marcar offline si es error de timeout/red
+      if (errorMsg.toLowerCase().includes('timeout') || errorMsg.toLowerCase().includes('network')) {
+        isServerOnline.value = false;
+      }
     } finally {
       loading.value = false;
       initialized.value = true;
@@ -86,15 +137,30 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // Esperar a que auth esté inicializado
+  // Esperar a que auth esté inicializado (con timeout)
   async function waitForInit() {
     if (initialized.value) return;
-    // Si ya está en proceso, esperar a que termine
+    // Si ya está en proceso, esperar a que termine (con timeout)
     if (isCheckingAuth.value) {
-      // Esperar hasta que initialized sea true
       return new Promise<void>((resolve) => {
+        let resolved = false;
+        const timeout = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            console.warn('[Auth] waitForInit timeout - forcing initialization');
+            initialized.value = true;
+            loading.value = false;
+            isCheckingAuth.value = false;
+            connectionError.value = 'Timeout al conectar con el servidor';
+            isServerOnline.value = false;
+            resolve();
+          }
+        }, INIT_TIMEOUT);
+
         const unwatch = watch(initialized, (val: boolean) => {
-          if (val) {
+          if (val && !resolved) {
+            resolved = true;
+            clearTimeout(timeout);
             unwatch();
             resolve();
           }
@@ -461,6 +527,9 @@ export const useAuthStore = defineStore('auth', () => {
     const notificationsStore = useNotificationsStore();
     notificationsStore.notifySessionExpired();
 
+    // Marcar que la sesión se perdió (para mostrar indicador rojo)
+    sessionLost.value = true;
+
     // Limpiar estado de autenticación
     user.value = null;
     player.value = null;
@@ -484,7 +553,8 @@ export const useAuthStore = defineStore('auth', () => {
       }
     }, SESSION_CHECK_INTERVAL);
 
-    console.log('Session check started (every 2 minutes)');
+    // Iniciar ping de API también
+    startApiPing();
   }
 
   // Detener verificación periódica de sesión
@@ -492,7 +562,76 @@ export const useAuthStore = defineStore('auth', () => {
     if (sessionCheckInterval.value) {
       clearInterval(sessionCheckInterval.value);
       sessionCheckInterval.value = null;
-      console.log('Session check stopped');
+    }
+    // También detener ping de API
+    stopApiPing();
+  }
+
+  // Iniciar ping periódico de API
+  function startApiPing() {
+    if (apiPingInterval.value) return;
+
+    // Ping inmediato
+    pingApi().then(({ success, latency }) => {
+      pingLatency.value = success ? latency : null;
+    });
+
+    // Configurar ping periódico
+    apiPingInterval.value = setInterval(async () => {
+      if (isAuthenticated.value) {
+        const { success, latency } = await pingApi();
+        pingLatency.value = success ? latency : null;
+      }
+    }, API_PING_INTERVAL);
+  }
+
+  // Detener ping periódico de API
+  function stopApiPing() {
+    if (apiPingInterval.value) {
+      clearInterval(apiPingInterval.value);
+      apiPingInterval.value = null;
+    }
+  }
+
+  // Función para reintentar conexión
+  async function retryConnection() {
+    connectionError.value = null;
+    isServerOnline.value = true;
+
+    // Primero verificar si la sesión sigue siendo válida
+    try {
+      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !currentSession) {
+        console.warn('[Auth] Session expired during retry');
+        handleSessionLost();
+        initialized.value = true;
+        return;
+      }
+
+      // Sesión válida, reintentar conexión
+      initialized.value = false;
+      await checkAuth();
+    } catch (e) {
+      console.error('[Auth] Error checking session during retry:', e);
+      // Si hay error al verificar sesión, intentar reconectar de todos modos
+      initialized.value = false;
+      await checkAuth();
+    }
+  }
+
+  // Verificar sesión cuando hay errores de conexión
+  async function checkSessionOnError() {
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession && user.value) {
+        console.warn('[Auth] Session lost detected on connection error');
+        handleSessionLost();
+        return false;
+      }
+      return true;
+    } catch {
+      return true; // En caso de error, asumir sesión válida
     }
   }
 
@@ -509,6 +648,11 @@ export const useAuthStore = defineStore('auth', () => {
     isPremium,
     effectiveMaxEnergy,
     effectiveMaxInternet,
+    // Estado de conexión
+    connectionError,
+    isServerOnline,
+    sessionLost,
+    pingLatency,
     checkAuth,
     waitForInit,
     fetchPlayer,
@@ -520,5 +664,7 @@ export const useAuthStore = defineStore('auth', () => {
     startSessionCheck,
     stopSessionCheck,
     verifyAndRefreshSession,
+    retryConnection,
+    checkSessionOnError,
   };
 });

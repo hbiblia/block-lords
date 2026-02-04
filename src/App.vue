@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { watch, onMounted } from 'vue';
+import { watch, onMounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
+import { useI18n } from 'vue-i18n';
 import MainLayout from '@/layouts/MainLayout.vue';
 
+const { t } = useI18n();
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
+const isRetrying = ref(false);
 
 // Inicializar auth al montar la app
 onMounted(async () => {
@@ -24,12 +27,22 @@ watch(
   },
   { immediate: true }
 );
+
+// Reintentar conexión
+async function handleRetry() {
+  isRetrying.value = true;
+  try {
+    await authStore.retryConnection();
+  } finally {
+    isRetrying.value = false;
+  }
+}
 </script>
 
 <template>
   <!-- Skeleton overlay mientras auth se inicializa -->
   <Transition name="slide-down">
-  <div v-if="!authStore.initialized" class="fixed inset-0 z-50 bg-bg-primary overflow-hidden">
+  <div v-if="!authStore.initialized && !authStore.connectionError" class="fixed inset-0 z-50 bg-bg-primary overflow-hidden">
     <!-- Skeleton NavBar -->
     <nav class="fixed left-0 right-0 top-0 z-50 glass border-b border-border/50">
       <div class="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -82,6 +95,51 @@ watch(
   </div>
   </Transition>
 
+  <!-- Error de conexión overlay -->
+  <Transition name="fade">
+  <div v-if="authStore.connectionError || !authStore.isServerOnline" class="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="card p-8 max-w-md w-full text-center border border-border/50 shadow-2xl">
+      <!-- Icono de error -->
+      <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-red-500/10 flex items-center justify-center">
+        <svg class="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      </div>
+
+      <!-- Título y mensaje -->
+      <h2 class="text-xl font-bold text-text-primary mb-2">{{ t('connection.error.title') }}</h2>
+      <p class="text-text-secondary mb-6">{{ t('connection.error.message') }}</p>
+
+      <!-- Detalles del error (colapsable) -->
+      <details v-if="authStore.connectionError" class="mb-6 text-left">
+        <summary class="text-sm text-text-muted cursor-pointer hover:text-text-secondary">
+          {{ t('connection.error.details') }}
+        </summary>
+        <pre class="mt-2 p-3 bg-bg-tertiary rounded-lg text-xs text-text-muted overflow-auto max-h-24">{{ authStore.connectionError }}</pre>
+      </details>
+
+      <!-- Botón de reintentar -->
+      <button
+        @click="handleRetry"
+        :disabled="isRetrying"
+        class="btn btn-primary w-full flex items-center justify-center gap-2"
+      >
+        <svg v-if="isRetrying" class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        {{ isRetrying ? t('connection.error.retrying') : t('connection.error.retry') }}
+      </button>
+
+      <!-- Sugerencias -->
+      <p class="text-xs text-text-muted mt-4">{{ t('connection.error.suggestions') }}</p>
+    </div>
+  </div>
+  </Transition>
+
   <!-- App siempre renderizado (skeleton lo cubre inicialmente) -->
   <MainLayout>
     <RouterView v-slot="{ Component }">
@@ -116,6 +174,17 @@ watch(
 
 .slide-down-leave-to {
   transform: translateY(100%);
+  opacity: 0;
+}
+
+/* Fade transition for connection error */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
 }
 </style>
