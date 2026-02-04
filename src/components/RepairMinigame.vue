@@ -6,7 +6,6 @@ const { t } = useI18n();
 
 const emit = defineEmits<{
   (e: 'complete', success: boolean): void;
-  (e: 'cancel'): void;
 }>();
 
 // Game configuration
@@ -131,12 +130,6 @@ function endGame(won: boolean) {
   }, 1500);
 }
 
-// Cancel game
-function cancelGame() {
-  endGame(false);
-  emit('cancel');
-}
-
 // Cleanup on unmount
 onUnmounted(() => {
   if (countdownTimer) clearInterval(countdownTimer);
@@ -176,14 +169,9 @@ function cellHasBug(cellIndex: number): number | null {
         </div>
       </div>
 
-      <div class="flex gap-3 justify-center">
-        <button @click="emit('cancel')" class="btn btn-ghost">
-          {{ t('common.cancel') }}
-        </button>
-        <button @click="startGame" class="btn btn-primary">
-          {{ t('minigame.start') }}
-        </button>
-      </div>
+      <button @click="startGame" class="btn btn-primary">
+        {{ t('minigame.start') }}
+      </button>
     </div>
 
     <!-- Game in progress -->
@@ -242,13 +230,6 @@ function cellHasBug(cellIndex: number): number | null {
             </div>
           </Transition>
         </div>
-      </div>
-
-      <!-- Cancel button -->
-      <div class="text-center">
-        <button @click="cancelGame" class="text-sm text-text-muted hover:text-text-secondary">
-          {{ t('common.cancel') }}
-        </button>
       </div>
     </div>
 

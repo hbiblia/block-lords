@@ -86,6 +86,22 @@ async function rpcWithRetry<T>(
     return data as T;
   };
 
+  // Helper para marcar conexión como lenta/offline en el primer retry
+  const markConnectionIssue = (error: unknown) => {
+    const errorObj = error as Record<string, unknown>;
+    const message = String(errorObj?.message || '').toLowerCase();
+    if (
+      message.includes('timeout') ||
+      message.includes('network') ||
+      message.includes('fetch') ||
+      message.includes('abort') ||
+      message.includes('connection')
+    ) {
+      // Marcar inmediatamente al primer error de conexión
+      connectionState.setOnline(false, message);
+    }
+  };
+
   try {
     // For critical operations, always retry
     // For non-critical, only retry on network errors
@@ -94,6 +110,8 @@ async function rpcWithRetry<T>(
         maxRetries,
         onRetry: (attempt, error) => {
           console.warn(`[API] Retry ${attempt}/${maxRetries} for ${fnName}:`, error);
+          // Marcar conexión como problemática inmediatamente
+          markConnectionIssue(error);
         },
       });
     }
@@ -128,6 +146,8 @@ async function rpcWithRetry<T>(
       },
       onRetry: (attempt, error) => {
         console.warn(`[API] Retry ${attempt}/${maxRetries} for ${fnName}:`, error);
+        // Marcar conexión como problemática inmediatamente
+        markConnectionIssue(error);
       },
     });
   } catch (error) {

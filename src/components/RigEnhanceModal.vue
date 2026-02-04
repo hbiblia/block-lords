@@ -422,15 +422,12 @@ async function handleMinigameComplete(success: boolean) {
   // Player won - proceed with repair
   if (!authStore.player || !props.rig) return;
 
-  showProcessingModal.value = true;
-  processingStatus.value = 'processing';
-  processingError.value = '';
+  processing.value = true;
 
   try {
     const result = await repairRig(authStore.player.id, props.rig.id);
 
     if (result?.success) {
-      processingStatus.value = 'success';
       playSound('success');
 
       const rigName = props.rig.rig?.name || 'Rig';
@@ -442,24 +439,17 @@ async function handleMinigameComplete(success: boolean) {
       await authStore.fetchPlayer();
       await miningStore.reloadRigs();
       emit('updated');
-
-      // Close processing modal
-      closeProcessingModal();
     } else {
-      processingStatus.value = 'error';
-      processingError.value = result?.error || t('common.error');
+      toastStore.error(result?.error || t('common.error'));
       playSound('error');
     }
   } catch (e) {
     console.error('Error repairing rig:', e);
-    processingStatus.value = 'error';
-    processingError.value = t('common.error');
+    toastStore.error(t('common.error'));
     playSound('error');
+  } finally {
+    processing.value = false;
   }
-}
-
-function handleMinigameCancel() {
-  showMinigame.value = false;
 }
 
 function requestDelete() {
@@ -1281,7 +1271,6 @@ function closeProcessingModal() {
         <div class="bg-bg-secondary rounded-xl p-6 max-w-md w-full mx-4 border border-border">
           <RepairMinigame
             @complete="handleMinigameComplete"
-            @cancel="handleMinigameCancel"
           />
         </div>
       </div>
