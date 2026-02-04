@@ -250,7 +250,6 @@ async function loadData() {
 // Computed: repair system - max 3 repairs, always to 100%
 const MAX_REPAIRS = 3;
 const timesRepaired = computed(() => props.rig?.times_repaired ?? 0);
-const repairsRemaining = computed(() => Math.max(0, MAX_REPAIRS - timesRepaired.value));
 const canStillRepair = computed(() => timesRepaired.value < MAX_REPAIRS);
 
 // Repair bonus: how much condition will be restored (always to 100%)

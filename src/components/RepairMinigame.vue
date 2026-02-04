@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
@@ -26,22 +26,13 @@ const bugsEliminated = ref(0);
 const activeBugs = ref<Map<number, { id: number; cell: number; timeout: number }>>(new Map());
 
 // Timers
-let gameTimer: number | null = null;
 let spawnTimer: number | null = null;
 let countdownTimer: number | null = null;
-
-// Bug types for variety
-const bugTypes = ['🐛', '🪲', '🐜', '🦗', '🕷️'];
 
 // Computed
 const progress = computed(() => (bugsEliminated.value / BUGS_TO_WIN) * 100);
 const timeProgress = computed(() => (timeRemaining.value / GAME_DURATION) * 100);
 const isWinning = computed(() => bugsEliminated.value >= BUGS_TO_WIN);
-
-// Get random bug emoji
-function getRandomBug(): string {
-  return bugTypes[Math.floor(Math.random() * bugTypes.length)];
-}
 
 // Get random empty cell
 function getRandomEmptyCell(): number | null {
@@ -154,16 +145,6 @@ onUnmounted(() => {
     window.clearTimeout(bug.timeout);
   });
 });
-
-// Get bug at cell
-function getBugAtCell(cellIndex: number): { id: number; emoji: string } | null {
-  for (const [id, bug] of activeBugs.value) {
-    if (bug.cell === cellIndex) {
-      return { id, emoji: getRandomBug() };
-    }
-  }
-  return null;
-}
 
 // Check if cell has bug
 function cellHasBug(cellIndex: number): number | null {
