@@ -6771,6 +6771,9 @@ DECLARE
   v_pending_withdrawals INTEGER;
   v_pending_withdrawals_amount NUMERIC;
   v_total_ron_deposited NUMERIC;
+  v_total_ron_spent NUMERIC;
+  v_total_ron_withdrawn NUMERIC;
+  v_total_ron_balance NUMERIC;
   v_premium_players INTEGER;
 BEGIN
   -- Network stats
@@ -6803,6 +6806,18 @@ BEGIN
   SELECT COALESCE(SUM(amount), 0) INTO v_total_ron_deposited
   FROM ron_deposits WHERE status = 'completed';
 
+  -- Total RON withdrawn (retiros completados)
+  SELECT COALESCE(SUM(net_amount), 0) INTO v_total_ron_withdrawn
+  FROM ron_withdrawals
+  WHERE status = 'completed';
+
+  -- Total RON balance (saldo actual de todos los usuarios)
+  SELECT COALESCE(SUM(ron_balance), 0) INTO v_total_ron_balance
+  FROM players;
+
+  -- Total RON spent = Depositado - Saldo actual - Retirado
+  v_total_ron_spent := GREATEST(0, v_total_ron_deposited - v_total_ron_balance - v_total_ron_withdrawn);
+
   RETURN json_build_object(
     'success', true,
     'network', json_build_object(
@@ -6828,7 +6843,11 @@ BEGIN
     'economy', json_build_object(
       'pendingWithdrawals', v_pending_withdrawals,
       'pendingWithdrawalsAmount', ROUND(v_pending_withdrawals_amount, 4),
-      'totalRonDeposited', ROUND(v_total_ron_deposited, 4)
+      'totalRonDeposited', ROUND(v_total_ron_deposited, 4),
+      'totalRonBalance', ROUND(v_total_ron_balance, 4),
+      'totalRonSpent', ROUND(v_total_ron_spent, 4),
+      'totalRonWithdrawn', ROUND(v_total_ron_withdrawn, 4),
+      'balance', ROUND(v_total_ron_deposited + v_total_ron_spent - v_total_ron_withdrawn, 4)
     ),
     'timestamp', NOW()
   );

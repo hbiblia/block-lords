@@ -61,6 +61,7 @@ const withdrawalFeePercent = computed(() => isPremium.value ? 10 : 25);
 // Admin / Game Status
 const gameStatus = ref<GameStatus | null>(null);
 const isAdmin = computed(() => authStore.player?.role === 'admin');
+const adminPanelExpanded = ref(true);
 
 const player = computed(() => authStore.player);
 
@@ -509,59 +510,254 @@ onUnmounted(() => {
       </div>
 
       <!-- Admin: Game Status -->
-      <div v-if="isAdmin && gameStatus" class="card p-5 border-purple-500/30 bg-purple-500/5">
-        <h3 class="font-bold mb-4 flex items-center gap-2 text-purple-400">
-          <span class="text-xl">🛡️</span>
-          Estado del Juego (Admin)
-        </h3>
-
-        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          <!-- Network -->
-          <div class="bg-bg-tertiary rounded-xl p-3">
-            <div class="text-xs text-text-muted mb-1">🌐 Red</div>
-            <div class="text-sm">
-              <div>Dificultad: <span class="font-bold text-accent-primary">{{ formatNumber(gameStatus.network.difficulty) }}</span></div>
-              <div>Hashrate: <span class="font-bold">{{ formatNumber(gameStatus.network.hashrate) }}</span></div>
-              <div>Mineros: <span class="font-bold text-status-success">{{ gameStatus.network.activeMiners }}</span></div>
+      <div v-if="isAdmin && gameStatus" class="card p-0 border-purple-500/40 bg-gradient-to-br from-purple-500/10 to-transparent overflow-hidden">
+        <!-- Header (clickable) -->
+        <div
+          class="px-5 py-4 bg-purple-500/5 cursor-pointer select-none transition-colors hover:bg-purple-500/10"
+          :class="{ 'border-b border-purple-500/20': adminPanelExpanded }"
+          @click="adminPanelExpanded = !adminPanelExpanded"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                <span class="text-xl">🛡️</span>
+              </div>
+              <div>
+                <h3 class="font-bold text-purple-400">Panel de Administrador</h3>
+                <p class="text-xs text-text-muted">Estado del servidor en tiempo real</p>
+              </div>
             </div>
-          </div>
-
-          <!-- Players -->
-          <div class="bg-bg-tertiary rounded-xl p-3">
-            <div class="text-xs text-text-muted mb-1">👥 Jugadores</div>
-            <div class="text-sm">
-              <div>Total: <span class="font-bold">{{ formatNumber(gameStatus.players.total) }}</span></div>
-              <div>Online: <span class="font-bold text-status-success">{{ gameStatus.players.online }}</span></div>
-              <div>Premium: <span class="font-bold text-status-warning">{{ gameStatus.players.premium }}</span></div>
-            </div>
-          </div>
-
-          <!-- Mining -->
-          <div class="bg-bg-tertiary rounded-xl p-3">
-            <div class="text-xs text-text-muted mb-1">⛏️ Minería</div>
-            <div class="text-sm">
-              <div>Bloques: <span class="font-bold">{{ formatNumber(gameStatus.mining.totalBlocks) }}</span></div>
-              <div>Hoy: <span class="font-bold text-accent-primary">{{ gameStatus.mining.blocksToday }}</span></div>
-              <div>Crypto: <span class="font-bold">{{ formatCrypto(gameStatus.mining.totalCryptoMined) }}</span></div>
-            </div>
-          </div>
-
-          <!-- Economy -->
-          <div class="bg-bg-tertiary rounded-xl p-3">
-            <div class="text-xs text-text-muted mb-1">💰 Economía</div>
-            <div class="text-sm">
-              <div>Retiros pend.: <span class="font-bold" :class="gameStatus.economy.pendingWithdrawals > 0 ? 'text-status-warning' : ''">{{ gameStatus.economy.pendingWithdrawals }}</span></div>
-              <div>Monto: <span class="font-bold">{{ formatRon(gameStatus.economy.pendingWithdrawalsAmount) }} RON</span></div>
-              <div>Depositado: <span class="font-bold text-status-success">{{ formatRon(gameStatus.economy.totalRonDeposited) }} RON</span></div>
+            <div class="flex items-center gap-3">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-status-success animate-pulse"></span>
+                <span class="text-xs text-status-success">Online</span>
+              </div>
+              <!-- Toggle button -->
+              <button class="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center transition-transform"
+                :class="{ 'rotate-180': !adminPanelExpanded }">
+                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
 
-        <div class="flex items-center gap-4 text-xs text-text-muted">
-          <div>Rigs: {{ gameStatus.rigs.active }}/{{ gameStatus.rigs.total }} activos</div>
-          <div>•</div>
-          <div>Actualizado: {{ new Date(gameStatus.timestamp).toLocaleTimeString() }}</div>
-        </div>
+        <!-- Collapsible Content -->
+        <Transition name="collapse">
+          <div v-show="adminPanelExpanded" class="p-5">
+            <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5 items-stretch">
+              <!-- Network -->
+              <div class="bg-bg-tertiary/50 rounded-xl border border-border/50 hover:border-accent-primary/30 transition-colors overflow-hidden flex flex-col h-full">
+                <div class="p-4 flex-1">
+                  <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                      <div class="w-8 h-8 rounded-lg bg-accent-primary/20 flex items-center justify-center text-sm">🌐</div>
+                      <span class="text-sm font-medium">Red</span>
+                    </div>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-accent-primary/20 text-accent-primary">Blockchain</span>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Dificultad</span>
+                      <span class="text-sm font-bold text-accent-primary">{{ formatNumber(gameStatus.network.difficulty) }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Hashrate global</span>
+                      <span class="text-sm font-bold">{{ formatNumber(gameStatus.network.hashrate) }} H/s</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Mineros activos</span>
+                      <span class="text-sm font-bold text-status-success">{{ gameStatus.network.activeMiners }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Hashrate promedio</span>
+                      <span class="text-sm font-bold">{{ gameStatus.network.activeMiners > 0 ? formatNumber(Math.round(gameStatus.network.hashrate / gameStatus.network.activeMiners)) : 0 }} H/s</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- Carga de red (siempre abajo) -->
+                <div class="px-4 py-2.5 border-t border-border/30 bg-bg-tertiary/30 mt-auto">
+                  <div class="flex justify-between text-xs mb-1 whitespace-nowrap">
+                    <span class="text-text-muted">Carga de red</span>
+                    <span class="text-accent-primary font-medium">{{ Math.min(100, Math.round((gameStatus.network.activeMiners / Math.max(1, gameStatus.players.total)) * 100)) }}%</span>
+                  </div>
+                  <div class="w-full h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+                    <div class="h-full bg-accent-primary rounded-full transition-all"
+                      :style="{ width: `${Math.min(100, (gameStatus.network.activeMiners / Math.max(1, gameStatus.players.total)) * 100)}%` }"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Players -->
+              <div class="bg-bg-tertiary/50 rounded-xl border border-border/50 hover:border-blue-500/30 transition-colors overflow-hidden flex flex-col h-full">
+                <div class="p-4 flex-1">
+                  <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                      <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-sm">👥</div>
+                      <span class="text-sm font-medium">Jugadores</span>
+                    </div>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">Usuarios</span>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Registrados</span>
+                      <span class="text-sm font-bold">{{ formatNumber(gameStatus.players.total) }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Conectados ahora</span>
+                      <span class="text-sm font-bold text-status-success flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-status-success animate-pulse"></span>
+                        {{ gameStatus.players.online }}
+                      </span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Suscriptores Premium</span>
+                      <span class="text-sm font-bold text-amber-400">⭐ {{ gameStatus.players.premium }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Tasa de actividad</span>
+                      <span class="text-sm font-bold text-blue-400">{{ gameStatus.players.total > 0 ? ((gameStatus.players.online / gameStatus.players.total) * 100).toFixed(1) : 0 }}%</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- Tasa conversion (siempre abajo) -->
+                <div class="px-4 py-2.5 border-t border-border/30 bg-bg-tertiary/30 mt-auto">
+                  <div class="flex justify-between text-xs mb-1 whitespace-nowrap">
+                    <span class="text-text-muted">Conversion Premium</span>
+                    <span class="text-amber-400 font-medium">{{ gameStatus.players.total > 0 ? ((gameStatus.players.premium / gameStatus.players.total) * 100).toFixed(1) : 0 }}%</span>
+                  </div>
+                  <div class="w-full h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+                    <div class="h-full bg-amber-400 rounded-full transition-all"
+                      :style="{ width: `${gameStatus.players.total > 0 ? Math.min(100, (gameStatus.players.premium / gameStatus.players.total) * 100) : 0}%` }"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Mining -->
+              <div class="bg-bg-tertiary/50 rounded-xl border border-border/50 hover:border-status-warning/30 transition-colors overflow-hidden flex flex-col h-full">
+                <div class="p-4 flex-1">
+                  <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                      <div class="w-8 h-8 rounded-lg bg-status-warning/20 flex items-center justify-center text-sm">⛏️</div>
+                      <span class="text-sm font-medium">Mineria</span>
+                    </div>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-status-warning/20 text-status-warning">Produccion</span>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Bloques totales</span>
+                      <span class="text-sm font-bold">{{ formatNumber(gameStatus.mining.totalBlocks) }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Minados hoy</span>
+                      <span class="text-sm font-bold text-status-success flex items-center gap-1">
+                        <span class="text-xs">📈</span>
+                        +{{ gameStatus.mining.blocksToday }}
+                      </span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Total crypto emitido</span>
+                      <span class="text-sm font-bold">💎 {{ formatCrypto(gameStatus.mining.totalCryptoMined) }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted">Crypto por bloque</span>
+                      <span class="text-sm font-bold text-status-warning">{{ gameStatus.mining.totalBlocks > 0 ? formatCrypto(gameStatus.mining.totalCryptoMined / gameStatus.mining.totalBlocks) : 0 }}</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- Promedio (siempre abajo) -->
+                <div class="px-4 py-2.5 border-t border-border/30 bg-bg-tertiary/30 mt-auto">
+                  <div class="flex justify-between text-xs mb-1 whitespace-nowrap">
+                    <span class="text-text-muted">Produccion diaria</span>
+                    <span class="text-status-warning font-medium">{{ gameStatus.mining.blocksToday }} bloques</span>
+                  </div>
+                  <div class="w-full h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+                    <div class="h-full bg-status-warning rounded-full transition-all"
+                      :style="{ width: `${Math.min(100, gameStatus.mining.blocksToday > 0 ? 50 + Math.min(50, gameStatus.mining.blocksToday / 10) : 0)}%` }"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Economy -->
+              <div class="bg-bg-tertiary/50 rounded-xl border border-border/50 hover:border-purple-500/30 transition-colors overflow-hidden flex flex-col h-full">
+                <!-- Contenido principal -->
+                <div class="p-4 flex-1">
+                  <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                      <div class="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-sm">💰</div>
+                      <span class="text-sm font-medium">Economia</span>
+                    </div>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400">Finanzas</span>
+                  </div>
+                  <div class="space-y-2">
+                    <!-- Ingresos -->
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted flex items-center gap-1.5">📥 Depositado</span>
+                      <span class="text-sm font-bold text-status-success">{{ formatRon(gameStatus.economy.totalRonDeposited) }} RON</span>
+                    </div>
+                    <!-- Saldo usuarios -->
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted flex items-center gap-1.5">👛 Saldo usuarios</span>
+                      <span class="text-sm font-bold text-purple-400">{{ formatRon(gameStatus.economy.totalRonBalance || 0) }} RON</span>
+                    </div>
+                    <!-- Egresos -->
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted flex items-center gap-1.5">📤 Gastado</span>
+                      <span class="text-sm font-bold text-status-danger">{{ formatRon(gameStatus.economy.totalRonSpent || 0) }} RON</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted flex items-center gap-1.5">💸 Retirado</span>
+                      <span class="text-sm font-bold text-purple-400">{{ formatRon(gameStatus.economy.totalRonWithdrawn || 0) }} RON</span>
+                    </div>
+                    <!-- Pendientes -->
+                    <div v-if="gameStatus.economy.pendingWithdrawals > 0" class="flex justify-between items-center">
+                      <span class="text-xs text-text-muted flex items-center gap-1.5">⏳ Pendientes</span>
+                      <span class="text-sm font-bold text-status-warning">{{ gameStatus.economy.pendingWithdrawals }} ({{ formatRon(gameStatus.economy.pendingWithdrawalsAmount) }} RON)</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- Balance (depositado + gastado - retirado) -->
+                <div class="px-4 py-2.5 border-t border-border/30 bg-bg-tertiary/30 mt-auto">
+                  <div class="flex justify-between text-xs mb-1 whitespace-nowrap">
+                    <span class="text-text-muted">Balance</span>
+                    <span class="font-medium text-status-success">
+                      {{ formatRon(gameStatus.economy.balance || 0) }} RON
+                    </span>
+                  </div>
+                  <div class="w-full h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+                    <div class="h-full bg-status-success rounded-full transition-all"
+                      :style="{ width: `${gameStatus.economy.totalRonDeposited > 0 ? Math.min(100, ((gameStatus.economy.balance || 0) / gameStatus.economy.totalRonDeposited) * 100) : 0}%` }"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer Stats -->
+            <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-border/30">
+              <div class="flex items-center gap-6">
+                <!-- Rigs -->
+                <div class="flex items-center gap-3">
+                  <div class="flex items-center gap-2 text-sm">
+                    <span class="text-text-muted">⚙️ Rigs:</span>
+                    <span class="font-medium">
+                      <span class="text-status-success">{{ gameStatus.rigs.active }}</span>
+                      <span class="text-text-muted">/{{ gameStatus.rigs.total }}</span>
+                    </span>
+                  </div>
+                  <div class="w-20 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+                    <div class="h-full bg-status-success rounded-full transition-all"
+                      :style="{ width: `${gameStatus.rigs.total > 0 ? (gameStatus.rigs.active / gameStatus.rigs.total) * 100 : 0}%` }"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-text-muted">
+                <span>🕐</span>
+                <span>Actualizado: {{ new Date(gameStatus.timestamp).toLocaleTimeString() }}</span>
+              </div>
+            </div>
+          </div>
+        </Transition>
       </div>
 
       <!-- Premium Subscription -->
@@ -976,5 +1172,26 @@ onUnmounted(() => {
 .modal-enter-from .relative,
 .modal-leave-to .relative {
   transform: scale(0.95);
+}
+
+/* Collapse animation */
+.collapse-enter-active,
+.collapse-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.collapse-enter-from,
+.collapse-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.collapse-enter-to,
+.collapse-leave-from {
+  opacity: 1;
+  max-height: 600px;
 }
 </style>

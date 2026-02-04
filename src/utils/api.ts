@@ -964,6 +964,10 @@ export interface GameStatus {
     pendingWithdrawals: number;
     pendingWithdrawalsAmount: number;
     totalRonDeposited: number;
+    totalRonBalance: number;
+    totalRonSpent: number;
+    totalRonWithdrawn: number;
+    balance: number;
   };
   timestamp: string;
 }
