@@ -671,16 +671,6 @@ BEGIN
     );
   END IF;
 
-  -- Verificar si ya está al máximo de condición posible
-  IF v_rig.condition >= COALESCE(v_rig.max_condition, 100) THEN
-    RETURN json_build_object(
-      'success', false,
-      'error', 'El rig ya está al máximo de condición posible',
-      'current_condition', v_rig.condition,
-      'max_condition', COALESCE(v_rig.max_condition, 100)
-    );
-  END IF;
-
   -- Determinar bonus de reparación según número de reparaciones
   -- 1ra: +90%, 2da: +70%, 3ra: +50%
   CASE v_times_repaired
@@ -698,18 +688,10 @@ BEGIN
       v_new_max_condition := v_rig.max_condition;
   END CASE;
 
-  -- Calcular nueva condición (condición actual + bonus, sin exceder max)
-  v_new_condition := LEAST(v_rig.condition + v_repair_bonus, v_new_max_condition);
+  -- Calcular nueva condición: condición actual + bonus, tope SIEMPRE en 100%
+  -- Ejemplo: condición 70% + bonus 70% = 140% -> tope en 100% = 100%
+  v_new_condition := LEAST(v_rig.condition + v_repair_bonus, 100);
   v_condition_restored := v_new_condition - v_rig.condition;
-
-  -- Si no hay nada que restaurar, error
-  IF v_condition_restored <= 0 THEN
-    RETURN json_build_object(
-      'success', false,
-      'error', 'No hay condición que restaurar',
-      'current_condition', v_rig.condition
-    );
-  END IF;
 
   -- Convertir precio del rig a GameCoin según su moneda
   -- Tasas: 1 Crypto = 50 GC, 1 RON = 5,000,000 GC
@@ -744,7 +726,8 @@ BEGIN
 
   INSERT INTO transactions (player_id, type, amount, currency, description)
   VALUES (p_player_id, 'rig_repair', -v_repair_cost, 'gamecoin',
-          'Reparación #' || (v_times_repaired + 1) || ' de ' || v_rig.rig_name || ' (+' || v_condition_restored || '%)');
+          'Reparación #' || (v_times_repaired + 1) || ' de ' || v_rig.rig_name ||
+          CASE WHEN v_condition_restored > 0 THEN ' (+' || v_condition_restored || '%)' ELSE ' (nuevo máx: ' || v_new_max_condition || '%)' END);
 
   -- Actualizar misión de reparar rig
   PERFORM update_mission_progress(p_player_id, 'repair_rig', 1);
@@ -752,6 +735,7 @@ BEGIN
   RETURN json_build_object(
     'success', true,
     'cost', v_repair_cost,
+    'old_condition', v_rig.condition,
     'new_condition', v_new_condition,
     'new_max_condition', v_new_max_condition,
     'times_repaired', v_times_repaired + 1,

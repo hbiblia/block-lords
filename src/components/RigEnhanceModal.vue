@@ -271,18 +271,24 @@ const repairParams = computed(() => {
 const repairBonus = computed(() => {
   if (!props.rig) return 0;
   const currentCondition = props.rig.condition;
-  const { bonus, newMax } = repairParams.value;
-  // new_condition = min(current + bonus, newMax)
-  const newCondition = Math.min(currentCondition + bonus, newMax);
+  const { bonus } = repairParams.value;
+  // new_condition = min(current + bonus, 100) - tope SIEMPRE en 100%
+  // Ejemplo: 70% + 70% = 140% -> tope en 100% = 100%
+  const newCondition = Math.min(currentCondition + bonus, 100);
   // condition_restored = new_condition - current
   return Math.max(0, newCondition - currentCondition);
 });
 
-// Can repair: condition below max, rig is off, and repairs remaining
+// Is rig at max condition? (100% es siempre el máximo)
+const isAtMaxCondition = computed(() => {
+  if (!props.rig) return true;
+  return props.rig.condition >= 100;
+});
+
+// Can repair: rig is off and repairs remaining
 const canRepair = computed(() => {
   if (!props.rig) return false;
-  const currentMax = props.rig.max_condition ?? 100;
-  return props.rig.condition < currentMax && !props.rig.is_active && canStillRepair.value;
+  return !props.rig.is_active && canStillRepair.value;
 });
 
 // Cost based on how much will be restored (30% of base_price converted to GC)
@@ -328,6 +334,16 @@ const nextRepairInfo = computed(() => {
     default: return null;
   }
 
+  // Calculate actual condition after repair
+  // El tope es SIEMPRE 100%
+  const currentCondition = props.rig.condition;
+  // Ejemplo: 70% + 70% = 140% -> tope en 100% = 100%
+  const newCondition = Math.min(currentCondition + bonus, 100);
+  const conditionRestored = newCondition - currentCondition;
+
+  // If repair would not improve condition (current >= 100), mark as not beneficial
+  const isBeneficial = conditionRestored > 0;
+
   const basePrice = props.rig.rig.base_price ?? 0;
   const currency = props.rig.rig.currency ?? 'gamecoin';
 
@@ -343,13 +359,17 @@ const nextRepairInfo = computed(() => {
       priceInGC = basePrice;
   }
 
-  const maxCost = Math.ceil(priceInGC * (bonus / 100) * 0.30);
+  // Cost is based on condition restored, not bonus
+  const maxCost = Math.ceil(priceInGC * (Math.max(0, conditionRestored) / 100) * 0.30);
 
   return {
     number: timesRepaired.value + 1,
     bonus,
     newMax,
     maxCost,
+    newCondition,
+    conditionRestored,
+    isBeneficial,
   };
 });
 
@@ -1057,10 +1077,10 @@ function closeProcessingModal() {
 
                 <button
                   @click="requestRepair"
-                  :disabled="!canRepair || !canAffordRepair || processing"
+                  :disabled="!canRepair || !canAffordRepair || processing || isAtMaxCondition"
                   class="w-full py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-warning text-white hover:bg-status-warning/80"
                 >
-                  {{ !canAffordRepair ? t('rigManage.insufficientFunds') : rig.is_active ? t('rigManage.stopToRepair') : t('rigManage.repair') }}
+                  {{ isAtMaxCondition ? t('rigManage.alreadyAtMax', 'Ya está al máximo') : !canAffordRepair ? t('rigManage.insufficientFunds') : rig.is_active ? t('rigManage.stopToRepair') : t('rigManage.repair') }}
                 </button>
               </div>
 
