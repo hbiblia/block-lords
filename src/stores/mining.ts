@@ -17,6 +17,8 @@ interface Rig {
   internet_consumption: number;
   tier: string;
   repair_cost: number;
+  base_price: number;
+  currency: 'gamecoin' | 'crypto' | 'ron';
   max_upgrade_level?: number;
 }
 

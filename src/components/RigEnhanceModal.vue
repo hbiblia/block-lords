@@ -29,6 +29,8 @@ interface RigData {
     internet_consumption: number;
     tier: string;
     repair_cost: number;
+    base_price: number;
+    currency: 'gamecoin' | 'crypto' | 'ron';
   };
 }
 
@@ -264,14 +266,34 @@ const canRepair = computed(() => {
   return props.rig.condition < 100 && !props.rig.is_active && canStillRepair.value;
 });
 
-// Cost based on how much will be restored (to 100%)
+// Cost based on how much will be restored (30% of base_price with 70% discount)
 const repairCost = computed(() => {
   if (!props.rig) return 0;
-  const baseCost = props.rig.rig.repair_cost ?? 0;
+  const basePrice = props.rig.rig.base_price ?? 0;
   const percentToRepair = repairBonus.value / 100;
-  return Math.ceil(baseCost * percentToRepair);
+  // 30% of base price (70% discount)
+  return Math.ceil(basePrice * percentToRepair * 0.30);
 });
-const canAffordRepair = computed(() => (authStore.player?.gamecoin_balance ?? 0) >= repairCost.value);
+
+// Currency for repair (same as rig purchase currency)
+const repairCurrency = computed(() => props.rig?.rig.currency ?? 'gamecoin');
+const repairCurrencySymbol = computed(() => {
+  switch (repairCurrency.value) {
+    case 'crypto': return 'CR';
+    case 'ron': return 'RON';
+    default: return 'GC';
+  }
+});
+
+const canAffordRepair = computed(() => {
+  if (!authStore.player) return false;
+  const cost = repairCost.value;
+  switch (repairCurrency.value) {
+    case 'crypto': return (authStore.player.crypto_balance ?? 0) >= cost;
+    case 'ron': return (authStore.player.ron_balance ?? 0) >= cost;
+    default: return (authStore.player.gamecoin_balance ?? 0) >= cost;
+  }
+});
 
 // Total cooling power installed (considering durability)
 const totalCoolingPower = computed(() => {
@@ -963,7 +985,7 @@ function closeProcessingModal() {
                   </div>
                   <div class="flex justify-between">
                     <span class="text-text-muted">{{ t('rigManage.cost') }}</span>
-                    <span class="font-mono text-status-warning">{{ repairCost }} GC</span>
+                    <span class="font-mono text-status-warning">{{ repairCost }} {{ repairCurrencySymbol }}</span>
                   </div>
                   <div class="flex justify-between">
                     <span class="text-text-muted">{{ t('rigManage.timesRepaired') }}</span>
@@ -1170,7 +1192,7 @@ function closeProcessingModal() {
             <template v-else-if="confirmAction.type === 'repair'">
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.cost') }}</span>
-                <span class="font-bold text-status-warning">{{ repairCost }} GC</span>
+                <span class="font-bold text-status-warning">{{ repairCost }} {{ repairCurrencySymbol }}</span>
               </div>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.targetCondition', 'Condicion objetivo') }}</span>

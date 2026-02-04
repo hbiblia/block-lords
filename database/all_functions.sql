@@ -496,6 +496,7 @@ BEGIN
                'hashrate', r.hashrate, 'power_consumption', r.power_consumption,
                'internet_consumption', r.internet_consumption,
                'tier', r.tier, 'repair_cost', r.repair_cost,
+               'base_price', r.base_price, 'currency', r.currency,
                'max_upgrade_level', COALESCE(r.max_upgrade_level, 3)
              ) as rig
       FROM player_rigs pr
@@ -629,8 +630,10 @@ END;
 $$;
 
 -- Reparar rig (con degradación permanente)
--- Cada reparación reduce max_condition en 30%
--- Cuando max_condition <= 10%, el rig ya no se puede reparar (máximo 3 reparaciones)
+-- Cada reparación restaura menos condición:
+--   1ra: +90% (max_condition = 90%)
+--   2da: +70% (max_condition = 70%)
+--   3ra: +50% (max_condition = 50%)
 CREATE OR REPLACE FUNCTION repair_rig(p_player_id UUID, p_rig_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -641,9 +644,13 @@ DECLARE
   v_player players%ROWTYPE;
   v_repair_cost NUMERIC;
   v_times_repaired INTEGER;
-  v_condition_to_restore NUMERIC;
+  v_repair_bonus NUMERIC;
+  v_new_max_condition NUMERIC;
+  v_new_condition NUMERIC;
+  v_condition_restored NUMERIC;
+  v_currency TEXT;
 BEGIN
-  SELECT pr.*, r.repair_cost as base_repair_cost, r.name as rig_name
+  SELECT pr.*, r.base_price as base_repair_cost, r.name as rig_name, r.currency as rig_currency
   INTO v_rig
   FROM player_rigs pr
   JOIN rigs r ON r.id = pr.rig_id
@@ -654,6 +661,7 @@ BEGIN
   END IF;
 
   v_times_repaired := COALESCE(v_rig.times_repaired, 0);
+  v_currency := COALESCE(v_rig.rig_currency, 'gamecoin');
 
   -- Verificar límite de reparaciones (máximo 3)
   IF v_times_repaired >= 3 THEN
@@ -664,39 +672,91 @@ BEGIN
     );
   END IF;
 
-  -- Verificar si ya está al 100%
-  IF v_rig.condition >= 100 THEN
+  -- Verificar si ya está al máximo de condición posible
+  IF v_rig.condition >= COALESCE(v_rig.max_condition, 100) THEN
     RETURN json_build_object(
       'success', false,
-      'error', 'El rig ya está al 100% de condición',
+      'error', 'El rig ya está al máximo de condición posible',
+      'current_condition', v_rig.condition,
+      'max_condition', COALESCE(v_rig.max_condition, 100)
+    );
+  END IF;
+
+  -- Determinar bonus de reparación según número de reparaciones
+  -- 1ra: +90%, 2da: +70%, 3ra: +50%
+  CASE v_times_repaired
+    WHEN 0 THEN
+      v_repair_bonus := 90;
+      v_new_max_condition := 90;
+    WHEN 1 THEN
+      v_repair_bonus := 70;
+      v_new_max_condition := 70;
+    WHEN 2 THEN
+      v_repair_bonus := 50;
+      v_new_max_condition := 50;
+    ELSE
+      v_repair_bonus := 0;
+      v_new_max_condition := v_rig.max_condition;
+  END CASE;
+
+  -- Calcular nueva condición (condición actual + bonus, sin exceder max)
+  v_new_condition := LEAST(v_rig.condition + v_repair_bonus, v_new_max_condition);
+  v_condition_restored := v_new_condition - v_rig.condition;
+
+  -- Si no hay nada que restaurar, error
+  IF v_condition_restored <= 0 THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'No hay condición que restaurar',
       'current_condition', v_rig.condition
     );
   END IF;
 
-  -- Calcular cuánta condición hay que restaurar (siempre hasta 100%)
-  v_condition_to_restore := 100 - v_rig.condition;
-
-  -- Calcular costo basado en la diferencia hasta 100%
-  v_repair_cost := (v_condition_to_restore / 100.0) * v_rig.base_repair_cost;
+  -- Calcular costo basado en la condición restaurada (30% del precio del rig)
+  -- Descuento del 70% para que no sea tan caro
+  v_repair_cost := (v_condition_restored / 100.0) * v_rig.base_repair_cost * 0.30;
 
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
 
-  IF v_player.gamecoin_balance < v_repair_cost THEN
-    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_repair_cost);
+  -- Verificar y cobrar según la moneda del rig
+  IF v_currency = 'gamecoin' THEN
+    IF v_player.gamecoin_balance < v_repair_cost THEN
+      RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_repair_cost, 'currency', v_currency);
+    END IF;
+    UPDATE players SET gamecoin_balance = gamecoin_balance - v_repair_cost WHERE id = p_player_id;
+
+  ELSIF v_currency = 'crypto' THEN
+    IF v_player.crypto_balance < v_repair_cost THEN
+      RETURN json_build_object('success', false, 'error', 'Crypto insuficiente', 'cost', v_repair_cost, 'currency', v_currency);
+    END IF;
+    UPDATE players SET crypto_balance = crypto_balance - v_repair_cost WHERE id = p_player_id;
+
+  ELSIF v_currency = 'ron' THEN
+    IF COALESCE(v_player.ron_balance, 0) < v_repair_cost THEN
+      RETURN json_build_object('success', false, 'error', 'RON insuficiente', 'cost', v_repair_cost, 'currency', v_currency);
+    END IF;
+    UPDATE players SET ron_balance = ron_balance - v_repair_cost WHERE id = p_player_id;
+
+  ELSE
+    -- Fallback a gamecoin
+    IF v_player.gamecoin_balance < v_repair_cost THEN
+      RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente', 'cost', v_repair_cost, 'currency', 'gamecoin');
+    END IF;
+    UPDATE players SET gamecoin_balance = gamecoin_balance - v_repair_cost WHERE id = p_player_id;
+    v_currency := 'gamecoin';
   END IF;
 
-  -- Aplicar reparación (siempre a 100%)
-  UPDATE players SET gamecoin_balance = gamecoin_balance - v_repair_cost WHERE id = p_player_id;
+  -- Aplicar reparación al rig
   UPDATE player_rigs
-  SET condition = 100,
-      max_condition = 100,
+  SET condition = v_new_condition,
+      max_condition = v_new_max_condition,
       times_repaired = v_times_repaired + 1,
       last_modified_at = NOW()
   WHERE id = p_rig_id;
 
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'rig_repair', -v_repair_cost, 'gamecoin',
-          'Reparación #' || (v_times_repaired + 1) || ' de ' || v_rig.rig_name || ' (100%)');
+  VALUES (p_player_id, 'rig_repair', -v_repair_cost, v_currency,
+          'Reparación #' || (v_times_repaired + 1) || ' de ' || v_rig.rig_name || ' (+' || v_condition_restored || '%)');
 
   -- Actualizar misión de reparar rig
   PERFORM update_mission_progress(p_player_id, 'repair_rig', 1);
@@ -704,10 +764,12 @@ BEGIN
   RETURN json_build_object(
     'success', true,
     'cost', v_repair_cost,
-    'new_condition', 100,
-    'new_max_condition', 100,
+    'currency', v_currency,
+    'new_condition', v_new_condition,
+    'new_max_condition', v_new_max_condition,
     'times_repaired', v_times_repaired + 1,
-    'condition_restored', v_condition_to_restore
+    'condition_restored', v_condition_restored,
+    'repair_bonus', v_repair_bonus
   );
 END;
 $$;
