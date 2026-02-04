@@ -3,7 +3,7 @@ import { ref, onUnmounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { updateRonWallet, resetPlayerAccount, getPlayerTransactions, requestRonWithdrawal, getWithdrawalHistory, getPremiumStatus, depositRon, type PremiumStatus } from '@/utils/api';
+import { updateRonWallet, resetPlayerAccount, getPlayerTransactions, requestRonWithdrawal, getWithdrawalHistory, getPremiumStatus, depositRon, getGameStatus, type PremiumStatus, type GameStatus } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { formatGamecoin, formatCrypto, formatNumber, formatRon } from '@/utils/format';
 import { useRoninWallet } from '@/composables/useRoninWallet';
@@ -58,6 +58,10 @@ const isPremium = computed(() => premiumStatus.value?.is_premium ?? false);
 const withdrawalFeeRate = computed(() => isPremium.value ? 0.10 : 0.25);
 const withdrawalFeePercent = computed(() => isPremium.value ? 10 : 25);
 
+// Admin / Game Status
+const gameStatus = ref<GameStatus | null>(null);
+const isAdmin = computed(() => authStore.player?.role === 'admin');
+
 const player = computed(() => authStore.player);
 
 const memberSince = computed(() => {
@@ -100,6 +104,11 @@ async function loadData(force = false) {
       withdrawalHistory.value = withdrawals || [];
       premiumStatus.value = premium;
       hasLoaded.value = true;
+
+      // Load game status only for admins
+      if (player.value?.role === 'admin') {
+        gameStatus.value = await getGameStatus();
+      }
     }
   } catch (e) {
     console.error('[ProfilePage] Error loading profile:', e);
@@ -496,6 +505,62 @@ onUnmounted(() => {
               'Configura wallet') }}
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Admin: Game Status -->
+      <div v-if="isAdmin && gameStatus" class="card p-5 border-purple-500/30 bg-purple-500/5">
+        <h3 class="font-bold mb-4 flex items-center gap-2 text-purple-400">
+          <span class="text-xl">🛡️</span>
+          Estado del Juego (Admin)
+        </h3>
+
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <!-- Network -->
+          <div class="bg-bg-tertiary rounded-xl p-3">
+            <div class="text-xs text-text-muted mb-1">🌐 Red</div>
+            <div class="text-sm">
+              <div>Dificultad: <span class="font-bold text-accent-primary">{{ formatNumber(gameStatus.network.difficulty) }}</span></div>
+              <div>Hashrate: <span class="font-bold">{{ formatNumber(gameStatus.network.hashrate) }}</span></div>
+              <div>Mineros: <span class="font-bold text-status-success">{{ gameStatus.network.activeMiners }}</span></div>
+            </div>
+          </div>
+
+          <!-- Players -->
+          <div class="bg-bg-tertiary rounded-xl p-3">
+            <div class="text-xs text-text-muted mb-1">👥 Jugadores</div>
+            <div class="text-sm">
+              <div>Total: <span class="font-bold">{{ formatNumber(gameStatus.players.total) }}</span></div>
+              <div>Online: <span class="font-bold text-status-success">{{ gameStatus.players.online }}</span></div>
+              <div>Premium: <span class="font-bold text-status-warning">{{ gameStatus.players.premium }}</span></div>
+            </div>
+          </div>
+
+          <!-- Mining -->
+          <div class="bg-bg-tertiary rounded-xl p-3">
+            <div class="text-xs text-text-muted mb-1">⛏️ Minería</div>
+            <div class="text-sm">
+              <div>Bloques: <span class="font-bold">{{ formatNumber(gameStatus.mining.totalBlocks) }}</span></div>
+              <div>Hoy: <span class="font-bold text-accent-primary">{{ gameStatus.mining.blocksToday }}</span></div>
+              <div>Crypto: <span class="font-bold">{{ formatCrypto(gameStatus.mining.totalCryptoMined) }}</span></div>
+            </div>
+          </div>
+
+          <!-- Economy -->
+          <div class="bg-bg-tertiary rounded-xl p-3">
+            <div class="text-xs text-text-muted mb-1">💰 Economía</div>
+            <div class="text-sm">
+              <div>Retiros pend.: <span class="font-bold" :class="gameStatus.economy.pendingWithdrawals > 0 ? 'text-status-warning' : ''">{{ gameStatus.economy.pendingWithdrawals }}</span></div>
+              <div>Monto: <span class="font-bold">{{ formatRon(gameStatus.economy.pendingWithdrawalsAmount) }} RON</span></div>
+              <div>Depositado: <span class="font-bold text-status-success">{{ formatRon(gameStatus.economy.totalRonDeposited) }} RON</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-4 text-xs text-text-muted">
+          <div>Rigs: {{ gameStatus.rigs.active }}/{{ gameStatus.rigs.total }} activos</div>
+          <div>•</div>
+          <div>Actualizado: {{ new Date(gameStatus.timestamp).toLocaleTimeString() }}</div>
         </div>
       </div>
 

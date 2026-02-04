@@ -937,6 +937,47 @@ export async function adminGetWithdrawalSystemStatus() {
   return data;
 }
 
+// Obtener estado del juego (para admins)
+export interface GameStatus {
+  success: boolean;
+  network: {
+    difficulty: number;
+    hashrate: number;
+    activeMiners: number;
+    lastUpdate: string;
+  };
+  players: {
+    total: number;
+    online: number;
+    premium: number;
+  };
+  rigs: {
+    total: number;
+    active: number;
+  };
+  mining: {
+    totalBlocks: number;
+    blocksToday: number;
+    totalCryptoMined: number;
+  };
+  economy: {
+    pendingWithdrawals: number;
+    pendingWithdrawalsAmount: number;
+    totalRonDeposited: number;
+  };
+  timestamp: string;
+}
+
+export async function getGameStatus(): Promise<GameStatus | null> {
+  const { data, error } = await supabase.rpc('get_game_status');
+
+  if (error) {
+    console.error('Error fetching game status:', error);
+    return null;
+  }
+  return data;
+}
+
 // === PREMIUM SUBSCRIPTIONS ===
 
 export interface PremiumStatus {

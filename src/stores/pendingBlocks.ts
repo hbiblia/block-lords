@@ -160,8 +160,8 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
     }
   }
 
-  // Claim all with RON payment (instant, 0.001 RON per block)
-  const RON_COST_PER_BLOCK = 0.001;
+  // Claim all with RON payment (instant, 0.0001 RON per block)
+  const RON_COST_PER_BLOCK = 0.0001;
 
   const totalRonCost = computed(() => count.value * RON_COST_PER_BLOCK);
 

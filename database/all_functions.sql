@@ -8,6 +8,9 @@
 -- Agregar columna blocks_mined si no existe
 ALTER TABLE players ADD COLUMN IF NOT EXISTS blocks_mined INTEGER DEFAULT 0;
 
+-- Agregar columna role para admin (default 'user')
+ALTER TABLE players ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
+
 -- Crear tabla de inventario si no existe
 CREATE TABLE IF NOT EXISTS player_inventory (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1693,7 +1696,7 @@ BEGIN
       END IF;
     END LOOP;
 
-    -- Actualizar misiones de tiempo activo con rigs
+    -- Actualizar misiones de tiempo activo con rigs y manejar streak
     DECLARE
       v_active_rig_count INT;
     BEGIN
@@ -1710,6 +1713,11 @@ BEGIN
           -- multi_rig_time: minutos con múltiples rigs activos
           PERFORM update_mission_progress(v_player.id, 'multi_rig_time', 1);
         END IF;
+      ELSE
+        -- Sin rigs activos: resetear streak de minería
+        UPDATE players
+        SET mining_streak_minutes = 0
+        WHERE id = v_player.id;
       END IF;
     END;
 
@@ -1732,6 +1740,12 @@ BEGIN
           deactivated_at = NOW(),
           activated_at = NULL
       WHERE player_id = v_player.id AND is_active = true;
+
+      -- Resetear streak de minería (dejó de minar)
+      UPDATE players
+      SET mining_streak_minutes = 0
+      WHERE id = v_player.id;
+
       INSERT INTO player_events (player_id, type, data)
       VALUES (v_player.id, 'rigs_shutdown', json_build_object(
         'reason', CASE WHEN v_new_energy = 0 THEN 'energy' ELSE 'internet' END
@@ -2011,10 +2025,12 @@ BEGIN
     VALUES (v_block.id, v_winner_player_id, v_reward, v_is_premium);
 
     -- Actualizar contador de bloques minados (para leaderboard)
-    -- Resetear pity accumulator (encontró bloque real, no necesita pity)
+    -- Resetear pity timer (encontró bloque real, no necesita pity)
+    -- Mantener el streak de minería (sigue minando activamente)
     UPDATE players
     SET blocks_mined = COALESCE(blocks_mined, 0) + 1,
-        mining_bonus_accumulated = 0
+        mining_bonus_accumulated = 0,
+        pity_minutes_accumulated = 0
     WHERE id = v_winner_player_id;
 
     PERFORM update_reputation(v_winner_player_id, 0.1, 'block_mined');
@@ -2062,7 +2078,7 @@ DECLARE
   v_adjustment_period INTEGER := 1000;      -- Ajustar cada 1000 bloques
   v_target_block_time INTEGER := 600;       -- 10 minutos en segundos
   v_max_change NUMERIC := 0.25;             -- ±25% máximo por ajuste
-  v_min_difficulty NUMERIC := 100;          -- Dificultad mínima
+  v_min_difficulty NUMERIC := 1000;         -- Dificultad mínima
   v_max_difficulty NUMERIC := 1000000;      -- Dificultad máxima
   v_time_since_adjustment NUMERIC;          -- Tiempo desde último ajuste
   v_time_based_adjustment BOOLEAN := FALSE; -- Flag para ajuste por tiempo
@@ -2255,6 +2271,24 @@ BEGIN
     ) AND is_active = true
     AND NOT rig_has_autonomous_boost(id);
     GET DIAGNOSTICS v_rigs_shutdown = ROW_COUNT;
+
+    -- Resetear streak de minería para jugadores que dejaron de minar
+    -- (solo los que no tienen autonomous mining)
+    IF v_rigs_shutdown > 0 THEN
+      UPDATE players
+      SET mining_streak_minutes = 0
+      WHERE id IN (
+        SELECT id FROM players
+        WHERE is_online = false
+          AND last_seen < NOW() - INTERVAL '5 minutes'
+          AND last_seen > NOW() - INTERVAL '6 minutes'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM player_rigs pr
+        WHERE pr.player_id = players.id
+          AND pr.is_active = true
+      );
+    END IF;
   END IF;
 
   -- Procesar decay de recursos (solo jugadores online)
@@ -6211,17 +6245,32 @@ GRANT EXECUTE ON FUNCTION remove_all_cooling_from_rig TO authenticated;
 GRANT EXECUTE ON FUNCTION remove_all_boosts_from_rig TO authenticated;
 
 -- =====================================================
--- PITY TIMER SYSTEM - Mining Time Bonus
+-- PITY TIMER SYSTEM V2 - Bad Luck Protection
 -- =====================================================
--- Garantiza mínimo de RON por mes para usuarios que minan 24/7:
--- - Free users: 100 RON/mes
--- - Premium users: 500 RON/mes
+-- Sistema mejorado que garantiza recompensas por tiempo minando:
+--
+-- CONCEPTO: Acumulas "minutos de mala suerte" mientras minas sin ganar.
+-- Al alcanzar el umbral, recibes un bloque de consolación.
+--
+-- CONFIGURACIÓN:
+--   - Umbral base: 60 minutos minando sin bloque = 1 pity block
+--   - Premium: Umbral reducido a 40 minutos
+--   - Máximo 10 pity blocks por día (anti-exploit)
+--   - Reward: 15-40% del bloque normal (según hashrate)
+--   - Bonus por streak de minería continua
+--
+-- GARANTÍAS MENSUALES (minando 24/7):
+--   - Free: ~720 pity blocks/mes (~36 crypto con block_reward=100)
+--   - Premium: ~1080 pity blocks/mes (~81 crypto con block_reward=100)
 -- =====================================================
 
--- Procesar bonus de tiempo de minado (llamado cada tick desde game_tick)
--- El pity reward es proporcional al hashrate efectivo del jugador
--- IMPORTANTE: El reward es en CRYPTO (₿), siempre menor al bloque normal
--- Los pity blocks ahora se registran como bloques reales en la blockchain
+-- Columnas adicionales para el sistema mejorado
+ALTER TABLE players ADD COLUMN IF NOT EXISTS pity_minutes_accumulated INTEGER DEFAULT 0;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS pity_blocks_today INTEGER DEFAULT 0;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS pity_last_reset_date DATE DEFAULT CURRENT_DATE;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS mining_streak_minutes INTEGER DEFAULT 0;
+
+-- Procesar pity timer (llamado cada tick desde game_tick)
 DROP FUNCTION IF EXISTS process_mining_time_bonus() CASCADE;
 CREATE OR REPLACE FUNCTION process_mining_time_bonus()
 RETURNS JSON
@@ -6229,58 +6278,61 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_rig RECORD;
-  v_player_hashrates RECORD;
-  v_bonus_rate DECIMAL;
-  -- Threshold para pity blocks
-  -- Cálculo: hashrate × rate × 1440 min / threshold = bloques/día
-  -- Free:    1000 × 0.00000926 × 1440 / 0.1667 = 80 bloques/día
-  -- Premium: 1000 × 0.00001736 × 1440 / 0.1667 = 150 bloques/día
-  v_pity_threshold DECIMAL := 0.1667;
+  v_player_data RECORD;
   v_pity_blocks_created INT := 0;
-  v_total_bonus_distributed DECIMAL := 0;
+  v_total_minutes_added INT := 0;
   v_is_premium BOOLEAN;
   v_effective_hashrate DECIMAL;
   v_pity_reward DECIMAL;
   v_current_block_reward DECIMAL;
   v_current_height INT;
-  v_hashrate_ratio DECIMAL;
-  v_max_pity_percent DECIMAL := 0.5;  -- Máximo 50% del bloque normal
-  -- Rate por hashrate por tick para acumulación
-  -- Más hashrate = acumula más rápido
-  v_free_rate_per_hash DECIMAL := 0.00000926;
-  v_premium_rate_per_hash DECIMAL := 0.00001736;
-  -- Para crear bloque real
+  v_hashrate_bonus DECIMAL;
+  v_streak_bonus DECIMAL;
   v_pity_block blocks%ROWTYPE;
   v_network_difficulty DECIMAL;
   v_network_hashrate DECIMAL;
+  -- Configuración del sistema
+  v_base_threshold_free INT := 60;      -- 60 minutos para free users
+  v_base_threshold_premium INT := 40;   -- 40 minutos para premium
+  v_max_pity_per_day INT := 10;         -- Máximo 10 pity blocks por día
+  v_min_reward_percent DECIMAL := 0.15; -- Mínimo 15% del bloque normal
+  v_max_reward_percent DECIMAL := 0.40; -- Máximo 40% del bloque normal
+  v_streak_bonus_threshold INT := 120;  -- 2 horas continuas = bonus
+  v_streak_bonus_percent DECIMAL := 0.10; -- +10% por streak
+  v_threshold INT;
+  v_today DATE := CURRENT_DATE;
 BEGIN
-  -- Obtener stats de la red para crear bloques
+  -- Obtener stats de la red
   SELECT difficulty, hashrate INTO v_network_difficulty, v_network_hashrate
   FROM network_stats WHERE id = 'current';
 
-  -- Obtener el reward actual de un bloque normal
+  -- Obtener reward actual del bloque
   SELECT COALESCE(MAX(height), 0) INTO v_current_height FROM blocks;
   v_current_block_reward := calculate_block_reward(v_current_height + 1);
-  -- Calcular hashrate efectivo por jugador (suma de todos sus rigs activos)
-  FOR v_player_hashrates IN
-    WITH player_effective_hashrates AS (
+
+  -- Procesar cada jugador que está minando activamente
+  FOR v_player_data IN
+    WITH active_miners AS (
       SELECT
         p.id as player_id,
         p.premium_until,
+        p.pity_minutes_accumulated,
+        p.pity_blocks_today,
+        p.pity_last_reset_date,
+        p.mining_streak_minutes,
         SUM(
           r.hashrate *
-          GREATEST(0.1, pr.condition / 100.0) *  -- Condition penalty
+          GREATEST(0.1, pr.condition / 100.0) *
           CASE
             WHEN p.reputation_score >= 80 THEN 1 + (p.reputation_score - 80) * 0.01
             WHEN p.reputation_score < 50 THEN 0.5 + (p.reputation_score / 100.0)
             ELSE 1.0
-          END *  -- Reputation multiplier
+          END *
           CASE
             WHEN pr.temperature > 50 THEN GREATEST(0.3, 1 - ((pr.temperature - 50) * 0.014))
             ELSE 1.0
-          END *  -- Temperature penalty
-          COALESCE((get_rig_boost_multipliers(pr.id)->>'hashrate')::NUMERIC, 1.0)  -- Boost multiplier POR RIG
+          END *
+          COALESCE((get_rig_boost_multipliers(pr.id)->>'hashrate')::NUMERIC, 1.0)
         ) as total_effective_hashrate
       FROM players p
       JOIN player_rigs pr ON pr.player_id = p.id
@@ -6289,57 +6341,80 @@ BEGIN
         AND p.energy > 0
         AND p.internet > 0
         AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
-      GROUP BY p.id, p.premium_until
+      GROUP BY p.id, p.premium_until, p.pity_minutes_accumulated,
+               p.pity_blocks_today, p.pity_last_reset_date, p.mining_streak_minutes
     )
-    SELECT * FROM player_effective_hashrates WHERE total_effective_hashrate > 0
+    SELECT * FROM active_miners WHERE total_effective_hashrate > 0
   LOOP
-    -- Determinar si es premium
-    v_is_premium := v_player_hashrates.premium_until IS NOT NULL AND v_player_hashrates.premium_until > NOW();
-    v_effective_hashrate := v_player_hashrates.total_effective_hashrate;
+    v_is_premium := v_player_data.premium_until IS NOT NULL AND v_player_data.premium_until > NOW();
+    v_effective_hashrate := v_player_data.total_effective_hashrate;
 
-    -- Calcular rate basado en hashrate
-    -- Más hashrate = más rápido acumula pity
-    IF v_is_premium THEN
-      v_bonus_rate := v_effective_hashrate * v_premium_rate_per_hash;
-    ELSE
-      v_bonus_rate := v_effective_hashrate * v_free_rate_per_hash;
+    -- Resetear contador diario si es un nuevo día
+    IF COALESCE(v_player_data.pity_last_reset_date, v_today - 1) < v_today THEN
+      UPDATE players
+      SET pity_blocks_today = 0,
+          pity_last_reset_date = v_today
+      WHERE id = v_player_data.player_id;
+      v_player_data.pity_blocks_today := 0;
     END IF;
 
-    -- Acumular bonus
+    -- Verificar límite diario
+    IF v_player_data.pity_blocks_today >= v_max_pity_per_day THEN
+      -- Solo incrementar streak, no dar más pity blocks hoy
+      UPDATE players
+      SET mining_streak_minutes = COALESCE(mining_streak_minutes, 0) + 1
+      WHERE id = v_player_data.player_id;
+      CONTINUE;
+    END IF;
+
+    -- Determinar threshold basado en premium
+    v_threshold := CASE WHEN v_is_premium THEN v_base_threshold_premium ELSE v_base_threshold_free END;
+
+    -- Incrementar minutos acumulados y streak
     UPDATE players
-    SET mining_bonus_accumulated = COALESCE(mining_bonus_accumulated, 0) + v_bonus_rate
-    WHERE id = v_player_hashrates.player_id;
+    SET pity_minutes_accumulated = COALESCE(pity_minutes_accumulated, 0) + 1,
+        mining_streak_minutes = COALESCE(mining_streak_minutes, 0) + 1
+    WHERE id = v_player_data.player_id;
 
-    v_total_bonus_distributed := v_total_bonus_distributed + v_bonus_rate;
+    v_total_minutes_added := v_total_minutes_added + 1;
 
-    -- Verificar si alcanzó el threshold para pity block
-    IF (SELECT mining_bonus_accumulated FROM players WHERE id = v_player_hashrates.player_id) >= v_pity_threshold THEN
-      -- Calcular reward proporcional al hashrate, siempre menor al bloque normal
-      -- Fórmula: block_reward * min(max_percent, hashrate/10000)
-      -- Ejemplo con block_reward=100:
-      --   500 hashrate  → 100 * min(0.5, 0.05)  = 5 ₿
-      --   1000 hashrate → 100 * min(0.5, 0.1)   = 10 ₿
-      --   2500 hashrate → 100 * min(0.5, 0.25)  = 25 ₿
-      --   5000 hashrate → 100 * min(0.5, 0.5)   = 50 ₿ (max)
-      --   10000 hashrate→ 100 * min(0.5, 1.0)   = 50 ₿ (capped)
-      v_hashrate_ratio := LEAST(v_max_pity_percent, v_effective_hashrate / 10000.0);
-      v_pity_reward := GREATEST(1.0, v_current_block_reward * v_hashrate_ratio);
+    -- Verificar si alcanzó el umbral para pity block
+    IF (v_player_data.pity_minutes_accumulated + 1) >= v_threshold THEN
 
-      -- Premium bonus (+50% al pity reward también)
+      -- Calcular bonus por hashrate (escala logarítmica para no favorecer demasiado a whales)
+      -- 100 hashrate = 15%, 1000 = 25%, 10000 = 35%, 50000+ = 40%
+      v_hashrate_bonus := v_min_reward_percent +
+        (v_max_reward_percent - v_min_reward_percent) *
+        LEAST(1.0, LOG(GREATEST(100, v_effective_hashrate)) / LOG(50000));
+
+      -- Bonus por streak de minería continua (+10% si lleva 2+ horas)
+      v_streak_bonus := CASE
+        WHEN COALESCE(v_player_data.mining_streak_minutes, 0) >= v_streak_bonus_threshold
+        THEN v_streak_bonus_percent
+        ELSE 0
+      END;
+
+      -- Calcular reward final
+      v_pity_reward := v_current_block_reward * (v_hashrate_bonus + v_streak_bonus);
+
+      -- Premium bonus (+50%)
       IF v_is_premium THEN
         v_pity_reward := v_pity_reward * 1.5;
       END IF;
 
-      -- Crear bloque real en la blockchain (igual que bloques normales)
+      -- Mínimo 1 crypto
+      v_pity_reward := GREATEST(1.0, v_pity_reward);
+
+      -- Crear bloque real en la blockchain
       v_pity_block := create_new_block(
-        v_player_hashrates.player_id,
+        v_player_data.player_id,
         COALESCE(v_network_difficulty, 1000),
         COALESCE(v_network_hashrate, 0),
         v_pity_reward,
         v_is_premium
       );
 
-      -- Crear entrada en pending_blocks vinculada al bloque real
+      -- Crear entrada en pending_blocks
       INSERT INTO pending_blocks (
         block_id,
         player_id,
@@ -6349,17 +6424,18 @@ BEGIN
         created_at
       ) VALUES (
         v_pity_block.id,
-        v_player_hashrates.player_id,
+        v_player_data.player_id,
         v_pity_reward,
         v_is_premium,
         TRUE,
         NOW()
       );
 
-      -- Restar el threshold del acumulador
+      -- Resetear acumulador y actualizar contador diario
       UPDATE players
-      SET mining_bonus_accumulated = mining_bonus_accumulated - v_pity_threshold
-      WHERE id = v_player_hashrates.player_id;
+      SET pity_minutes_accumulated = 0,
+          pity_blocks_today = COALESCE(pity_blocks_today, 0) + 1
+      WHERE id = v_player_data.player_id;
 
       v_pity_blocks_created := v_pity_blocks_created + 1;
     END IF;
@@ -6368,7 +6444,7 @@ BEGIN
   RETURN json_build_object(
     'success', true,
     'pityBlocksCreated', v_pity_blocks_created,
-    'totalBonusDistributed', ROUND(v_total_bonus_distributed, 6)
+    'totalMinutesAdded', v_total_minutes_added
   );
 END;
 $$;
@@ -6381,58 +6457,133 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_accumulated DECIMAL;
+  v_player RECORD;
   v_pending_pity_count INT;
   v_total_pity_claimed DECIMAL;
+  v_total_pity_count INT;
   v_is_premium BOOLEAN;
-  v_rate_per_hour DECIMAL;
-  v_hours_to_next DECIMAL;
+  v_threshold INT;
+  v_minutes_to_next INT;
+  v_effective_hashrate DECIMAL;
+  v_estimated_reward DECIMAL;
+  v_current_block_reward DECIMAL;
+  v_hashrate_bonus DECIMAL;
+  v_streak_bonus DECIMAL;
+  -- Config
+  v_base_threshold_free INT := 60;
+  v_base_threshold_premium INT := 40;
+  v_max_pity_per_day INT := 10;
+  v_min_reward_percent DECIMAL := 0.15;
+  v_max_reward_percent DECIMAL := 0.40;
+  v_streak_bonus_threshold INT := 120;
+  v_streak_bonus_percent DECIMAL := 0.10;
 BEGIN
   -- Obtener datos del jugador
   SELECT
-    COALESCE(mining_bonus_accumulated, 0),
-    premium_until IS NOT NULL AND premium_until > NOW()
-  INTO v_accumulated, v_is_premium
+    id,
+    COALESCE(pity_minutes_accumulated, 0) as pity_minutes,
+    COALESCE(pity_blocks_today, 0) as blocks_today,
+    COALESCE(mining_streak_minutes, 0) as streak_minutes,
+    premium_until IS NOT NULL AND premium_until > NOW() as is_premium
+  INTO v_player
   FROM players WHERE id = p_player_id;
 
-  -- Calcular rate por hora (basado en 1000 hashrate)
-  -- Free: 80 bloques/día, Premium: 150 bloques/día
-  IF v_is_premium THEN
-    v_rate_per_hour := 0.01736 * 60;  -- ~1.04/hora
-  ELSE
-    v_rate_per_hour := 0.00926 * 60;  -- ~0.56/hora
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
   END IF;
 
-  -- Calcular horas hasta próximo pity block
-  v_hours_to_next := (5.0 - v_accumulated) / v_rate_per_hour;
-  IF v_hours_to_next < 0 THEN v_hours_to_next := 0; END IF;
+  v_is_premium := v_player.is_premium;
+  v_threshold := CASE WHEN v_is_premium THEN v_base_threshold_premium ELSE v_base_threshold_free END;
+  v_minutes_to_next := GREATEST(0, v_threshold - v_player.pity_minutes);
+
+  -- Calcular hashrate efectivo actual
+  SELECT COALESCE(SUM(
+    r.hashrate *
+    GREATEST(0.1, pr.condition / 100.0) *
+    COALESCE((get_rig_boost_multipliers(pr.id)->>'hashrate')::NUMERIC, 1.0)
+  ), 0) INTO v_effective_hashrate
+  FROM player_rigs pr
+  JOIN rigs r ON r.id = pr.rig_id
+  WHERE pr.player_id = p_player_id AND pr.is_active = true;
+
+  -- Obtener reward actual del bloque
+  SELECT calculate_block_reward(COALESCE(MAX(height), 0) + 1) INTO v_current_block_reward FROM blocks;
+
+  -- Calcular reward estimado
+  v_hashrate_bonus := v_min_reward_percent +
+    (v_max_reward_percent - v_min_reward_percent) *
+    LEAST(1.0, LOG(GREATEST(100, v_effective_hashrate)) / LOG(50000));
+
+  v_streak_bonus := CASE
+    WHEN v_player.streak_minutes >= v_streak_bonus_threshold
+    THEN v_streak_bonus_percent
+    ELSE 0
+  END;
+
+  v_estimated_reward := v_current_block_reward * (v_hashrate_bonus + v_streak_bonus);
+  IF v_is_premium THEN
+    v_estimated_reward := v_estimated_reward * 1.5;
+  END IF;
+  v_estimated_reward := GREATEST(1.0, v_estimated_reward);
 
   -- Contar pity blocks pendientes
   SELECT COUNT(*) INTO v_pending_pity_count
   FROM pending_blocks
   WHERE player_id = p_player_id AND is_pity = true AND claimed = false;
 
-  -- Total RON reclamado de pity blocks
-  SELECT COALESCE(SUM(reward), 0) INTO v_total_pity_claimed
+  -- Total crypto de pity blocks reclamados
+  SELECT COALESCE(SUM(reward), 0), COUNT(*)
+  INTO v_total_pity_claimed, v_total_pity_count
   FROM pending_blocks
   WHERE player_id = p_player_id AND is_pity = true AND claimed = true;
 
   RETURN json_build_object(
     'success', true,
-    'accumulated', ROUND(v_accumulated, 4),
-    'threshold', 5.0,
-    'progressPercent', ROUND((v_accumulated / 5.0) * 100, 1),
-    'hoursToNextPityBlock', ROUND(v_hours_to_next, 1),
+    -- Progreso actual
+    'minutesAccumulated', v_player.pity_minutes,
+    'threshold', v_threshold,
+    'minutesToNext', v_minutes_to_next,
+    'progressPercent', ROUND((v_player.pity_minutes::DECIMAL / v_threshold) * 100, 1),
+    -- Límites diarios
+    'blocksToday', v_player.blocks_today,
+    'maxBlocksPerDay', v_max_pity_per_day,
+    'blocksRemaining', GREATEST(0, v_max_pity_per_day - v_player.blocks_today),
+    -- Streak de minería
+    'miningStreakMinutes', v_player.streak_minutes,
+    'hasStreakBonus', v_player.streak_minutes >= v_streak_bonus_threshold,
+    'streakBonusPercent', CASE WHEN v_player.streak_minutes >= v_streak_bonus_threshold THEN v_streak_bonus_percent * 100 ELSE 0 END,
+    -- Rewards
+    'estimatedReward', ROUND(v_estimated_reward, 2),
+    'currentBlockReward', v_current_block_reward,
+    'effectiveHashrate', ROUND(v_effective_hashrate, 2),
+    -- Stats históricos
     'pendingPityBlocks', v_pending_pity_count,
     'totalPityClaimed', ROUND(v_total_pity_claimed, 2),
+    'totalPityBlocksClaimed', v_total_pity_count,
+    -- Info
     'isPremium', v_is_premium,
-    'ratePerHour', ROUND(v_rate_per_hour, 4),
-    'guaranteedPerMonth', CASE WHEN v_is_premium THEN 4500 ELSE 2400 END
+    'guaranteedPerDay', v_max_pity_per_day,
+    'guaranteedPerMonth', v_max_pity_per_day * 30
   );
 END;
 $$;
 
+-- Resetear streak cuando el jugador deja de minar (llamado desde process_resource_decay cuando se apagan rigs)
+DROP FUNCTION IF EXISTS reset_mining_streak(UUID) CASCADE;
+CREATE OR REPLACE FUNCTION reset_mining_streak(p_player_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE players
+  SET mining_streak_minutes = 0
+  WHERE id = p_player_id;
+END;
+$$;
+
 GRANT EXECUTE ON FUNCTION get_player_pity_stats TO authenticated;
+GRANT EXECUTE ON FUNCTION reset_mining_streak TO authenticated;
 
 -- =====================================================
 -- CLAIM ALL BLOCKS WITH RON (Instant Claim)
@@ -6450,7 +6601,7 @@ DECLARE
   v_player players%ROWTYPE;
   v_pending_count INTEGER;
   v_total_reward DECIMAL := 0;
-  v_ron_cost_per_block DECIMAL := 0.001;
+  v_ron_cost_per_block DECIMAL := 0.0001;
   v_total_ron_cost DECIMAL;
   v_pending RECORD;
 BEGIN
@@ -6597,6 +6748,94 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_rig_upgrades TO authenticated;
+
+-- =====================================================
+-- ADMIN: GAME STATUS (Estado del juego para admins)
+-- =====================================================
+
+DROP FUNCTION IF EXISTS get_game_status() CASCADE;
+CREATE OR REPLACE FUNCTION get_game_status()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_network_stats RECORD;
+  v_total_players INTEGER;
+  v_online_players INTEGER;
+  v_total_rigs INTEGER;
+  v_active_rigs INTEGER;
+  v_total_blocks INTEGER;
+  v_blocks_today INTEGER;
+  v_total_crypto_mined NUMERIC;
+  v_pending_withdrawals INTEGER;
+  v_pending_withdrawals_amount NUMERIC;
+  v_total_ron_deposited NUMERIC;
+  v_premium_players INTEGER;
+BEGIN
+  -- Network stats
+  SELECT difficulty, hashrate, active_miners, updated_at
+  INTO v_network_stats
+  FROM network_stats WHERE id = 'current';
+
+  -- Player counts
+  SELECT COUNT(*) INTO v_total_players FROM players;
+  SELECT COUNT(*) INTO v_online_players FROM players WHERE is_online = true;
+  SELECT COUNT(*) INTO v_premium_players FROM players WHERE premium_until > NOW();
+
+  -- Rig counts
+  SELECT COUNT(*) INTO v_total_rigs FROM player_rigs;
+  SELECT COUNT(*) INTO v_active_rigs FROM player_rigs WHERE is_active = true;
+
+  -- Block stats
+  SELECT COUNT(*) INTO v_total_blocks FROM blocks;
+  SELECT COUNT(*) INTO v_blocks_today FROM blocks WHERE created_at > CURRENT_DATE;
+
+  -- Total crypto mined
+  SELECT COALESCE(SUM(total_crypto_earned), 0) INTO v_total_crypto_mined FROM players;
+
+  -- Pending withdrawals
+  SELECT COUNT(*), COALESCE(SUM(amount), 0)
+  INTO v_pending_withdrawals, v_pending_withdrawals_amount
+  FROM ron_withdrawals WHERE status IN ('pending', 'processing');
+
+  -- Total RON deposited
+  SELECT COALESCE(SUM(amount), 0) INTO v_total_ron_deposited
+  FROM ron_deposits WHERE status = 'completed';
+
+  RETURN json_build_object(
+    'success', true,
+    'network', json_build_object(
+      'difficulty', COALESCE(v_network_stats.difficulty, 1000),
+      'hashrate', COALESCE(v_network_stats.hashrate, 0),
+      'activeMiners', COALESCE(v_network_stats.active_miners, 0),
+      'lastUpdate', v_network_stats.updated_at
+    ),
+    'players', json_build_object(
+      'total', v_total_players,
+      'online', v_online_players,
+      'premium', v_premium_players
+    ),
+    'rigs', json_build_object(
+      'total', v_total_rigs,
+      'active', v_active_rigs
+    ),
+    'mining', json_build_object(
+      'totalBlocks', v_total_blocks,
+      'blocksToday', v_blocks_today,
+      'totalCryptoMined', ROUND(v_total_crypto_mined, 2)
+    ),
+    'economy', json_build_object(
+      'pendingWithdrawals', v_pending_withdrawals,
+      'pendingWithdrawalsAmount', ROUND(v_pending_withdrawals_amount, 4),
+      'totalRonDeposited', ROUND(v_total_ron_deposited, 4)
+    ),
+    'timestamp', NOW()
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_game_status TO authenticated;
 
 -- =====================================================
 -- GRANTS PARA FUNCIONES

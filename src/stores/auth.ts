@@ -30,6 +30,7 @@ interface Player {
   blocks_mined?: number;
   total_crypto_earned?: number;
   rig_slots?: number;
+  role?: string;
 }
 
 export const useAuthStore = defineStore('auth', () => {
