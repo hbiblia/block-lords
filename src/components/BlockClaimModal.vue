@@ -302,7 +302,7 @@ function initCaptchaAd() {
             </button>
 
             <!-- AdSense Banner -->
-            <div class="mt-4 bg-bg-secondary rounded-xl p-4 text-center">
+            <div class="mt-4 bg-bg-secondary rounded-xl p-4 text-center max-h-28 h-28">
               <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
               <ins class="adsbygoogle"
                 style="display:block"
@@ -429,7 +429,7 @@ function initCaptchaAd() {
             </div>
 
             <!-- AdSense Banner -->
-            <div class="mt-4 bg-bg-secondary rounded-xl p-4 text-center">
+            <div class="mt-4 bg-bg-secondary rounded-xl p-4 text-center max-h-28 h-28">
               <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
               <ins class="adsbygoogle"
                 style="display:block"
