@@ -790,10 +790,12 @@ export async function getActiveAnnouncements(): Promise<any> {
 // === PENDING BLOCKS (CLAIM SYSTEM) ===
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getPendingBlocks(playerId: string): Promise<any> {
+export async function getPendingBlocks(playerId: string, limit = 20, offset = 0): Promise<any> {
   // Critical: losing pending blocks means losing rewards
   return rpcWithRetry('get_pending_blocks', {
     p_player_id: playerId,
+    p_limit: limit,
+    p_offset: offset,
   }, { critical: true });
 }
 

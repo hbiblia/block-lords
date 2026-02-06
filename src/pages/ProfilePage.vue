@@ -857,10 +857,10 @@ onUnmounted(() => {
             <div class="text-right">
               <div class="font-medium text-sm" :class="tx.amount >= 0 ? 'text-status-success' : 'text-status-danger'">
                 {{ tx.amount >= 0 ? '+' : '' }}{{ tx.currency === 'crypto' ? formatCrypto(tx.amount) :
-                  formatGamecoin(tx.amount) }}
+                  tx.currency === 'ron' ? formatRon(tx.amount) : formatGamecoin(tx.amount) }}
               </div>
               <div class="text-xs text-text-muted">
-                {{ tx.currency === 'crypto' ? '💎' : '🪙' }}
+                {{ tx.currency === 'crypto' ? '💎' : tx.currency === 'ron' ? 'RON' : '🪙' }}
               </div>
             </div>
           </div>

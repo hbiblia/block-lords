@@ -85,9 +85,10 @@ function selectBlockForClaim(blockId: string) {
   selectedBlockId.value = blockId;
   captchaVerified.value = false;
 
-  // Renderizar captcha después de que el DOM se actualice
+  // Renderizar captcha y ad después de que el DOM se actualice
   nextTick(() => {
     renderCaptcha();
+    initCaptchaAd();
   });
 }
 
@@ -171,6 +172,29 @@ async function handleClaimAllWithRon() {
 function getSelectedBlock() {
   return pendingStore.pendingBlocks.find(b => b.id === selectedBlockId.value);
 }
+
+// Infinite scroll
+const scrollContainer = ref<HTMLElement | null>(null);
+
+function onScroll() {
+  const el = scrollContainer.value;
+  if (!el) return;
+  // Load more when within 100px of bottom
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
+    pendingStore.loadMore();
+  }
+}
+
+// Init ad in captcha screen
+function initCaptchaAd() {
+  nextTick(() => {
+    try {
+      ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+    } catch (e) {
+      // AdSense may not be available
+    }
+  });
+}
 </script>
 
 <template>
@@ -227,7 +251,7 @@ function getSelectedBlock() {
         </div>
 
         <!-- Content -->
-        <div class="p-4 overflow-y-auto max-h-[60vh]">
+        <div ref="scrollContainer" class="p-4 overflow-y-auto max-h-[60vh]" @scroll="onScroll">
           <!-- Empty State -->
           <div v-if="!pendingStore.loading && !pendingStore.hasPending" class="text-center py-12">
             <div class="text-5xl mb-4">✨</div>
@@ -276,6 +300,16 @@ function getSelectedBlock() {
             >
               {{ t('common.cancel') }}
             </button>
+
+            <!-- AdSense Banner -->
+            <div class="mt-4 bg-bg-secondary rounded-xl p-4 text-center">
+              <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
+              <ins class="adsbygoogle"
+                style="display:block"
+                data-ad-format="autorelaxed"
+                data-ad-client="ca-pub-7500429866047477"
+                data-ad-slot="7767935377"></ins>
+            </div>
           </div>
 
           <!-- Pending Blocks List -->
@@ -387,6 +421,11 @@ function getSelectedBlock() {
                   </button>
                 </div>
               </div>
+            </div>
+
+            <!-- Loading more spinner -->
+            <div v-if="pendingStore.loadingMore" class="flex justify-center py-4">
+              <span class="animate-spin w-5 h-5 border-2 border-accent-primary border-t-transparent rounded-full"></span>
             </div>
 
             <!-- AdSense Banner -->

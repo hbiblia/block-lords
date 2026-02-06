@@ -13,35 +13,80 @@ export interface PendingBlock {
   created_at: string;
 }
 
+const PAGE_SIZE = 20;
+
 export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
   const pendingBlocks = ref<PendingBlock[]>([]);
   const loading = ref(false);
+  const loadingMore = ref(false);
   const claiming = ref(false);
   const error = ref<string | null>(null);
   const showModal = ref(false);
 
-  const count = computed(() => pendingBlocks.value.length);
-  const totalReward = computed(() =>
-    pendingBlocks.value.reduce((sum, block) => sum + Number(block.reward), 0)
-  );
+  // Pagination state
+  const page = ref(0);
+  const hasMore = ref(false);
+  const totalCount = ref(0);
+  const serverTotalReward = ref(0);
+
+  const count = computed(() => totalCount.value);
+  const totalReward = computed(() => {
+    // Use server total if we haven't loaded all blocks
+    if (hasMore.value && serverTotalReward.value > 0) return serverTotalReward.value;
+    return pendingBlocks.value.reduce((sum, block) => sum + Number(block.reward), 0);
+  });
   const hasPending = computed(() => count.value > 0);
 
-  async function fetchPendingBlocks() {
+  async function fetchPendingBlocks(reset = true) {
     const authStore = useAuthStore();
     if (!authStore.player?.id) return;
 
-    loading.value = true;
+    if (reset) {
+      page.value = 0;
+      loading.value = true;
+    } else {
+      loadingMore.value = true;
+    }
     error.value = null;
 
     try {
-      const data = await getPendingBlocks(authStore.player.id);
-      pendingBlocks.value = data ?? [];
+      const offset = page.value * PAGE_SIZE;
+      const data = await getPendingBlocks(authStore.player.id, PAGE_SIZE, offset);
+
+      const blocks: PendingBlock[] = data?.blocks ?? [];
+      hasMore.value = data?.has_more ?? false;
+      totalCount.value = data?.total ?? 0;
+
+      if (reset) {
+        pendingBlocks.value = blocks;
+      } else {
+        // Append, deduplicating
+        const existingIds = new Set(pendingBlocks.value.map(b => b.id));
+        const newBlocks = blocks.filter(b => !existingIds.has(b.id));
+        pendingBlocks.value = [...pendingBlocks.value, ...newBlocks];
+      }
+
+      // Fetch server total reward if we have more pages
+      if (hasMore.value && reset) {
+        getPendingBlocksCount(authStore.player.id).then(countData => {
+          if (countData) {
+            serverTotalReward.value = countData.total_reward ?? 0;
+          }
+        }).catch(() => {});
+      }
     } catch (e) {
       error.value = 'Error al cargar bloques pendientes';
       console.error('Error fetching pending blocks:', e);
     } finally {
       loading.value = false;
+      loadingMore.value = false;
     }
+  }
+
+  async function loadMore() {
+    if (loadingMore.value || loading.value || !hasMore.value) return;
+    page.value++;
+    await fetchPendingBlocks(false);
   }
 
   async function fetchCount() {
@@ -51,7 +96,9 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
     try {
       const data = await getPendingBlocksCount(authStore.player.id);
       // Si tenemos datos, actualizar
-      if (data && data.count > 0 && pendingBlocks.value.length !== data.count) {
+      if (data && data.count > 0 && totalCount.value !== data.count) {
+        totalCount.value = data.count;
+        serverTotalReward.value = data.total_reward ?? 0;
         await fetchPendingBlocks();
       }
     } catch (e) {
@@ -71,6 +118,7 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
 
     // Save original state for rollback
     const originalBlocks = [...pendingBlocks.value];
+    const originalCount = totalCount.value;
 
     try {
       const result = await claimBlock(authStore.player.id, pendingId);
@@ -78,6 +126,7 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
       if (result.success) {
         // Remove from local list AFTER successful API call
         pendingBlocks.value = pendingBlocks.value.filter(b => b.id !== pendingId);
+        totalCount.value = Math.max(0, totalCount.value - 1);
 
         // Update player balance - if this fails, block is still claimed on server
         try {
@@ -100,6 +149,7 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
     } catch (e) {
       // Rollback on network error
       pendingBlocks.value = originalBlocks;
+      totalCount.value = originalCount;
       error.value = 'Error de conexión. Intenta de nuevo.';
       console.error('Error claiming block:', e);
       return null;
@@ -120,6 +170,7 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
 
     // Save original state for rollback
     const originalBlocks = [...pendingBlocks.value];
+    const originalCount = totalCount.value;
 
     try {
       const result = await claimAllBlocks(authStore.player.id);
@@ -127,6 +178,8 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
       if (result.success) {
         // Clear local list AFTER successful API call
         pendingBlocks.value = [];
+        totalCount.value = 0;
+        hasMore.value = false;
 
         // Update player balance - if this fails, blocks are still claimed on server
         try {
@@ -152,6 +205,7 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
     } catch (e) {
       // Rollback on network error
       pendingBlocks.value = originalBlocks;
+      totalCount.value = originalCount;
       error.value = 'Error de conexión. Intenta de nuevo.';
       console.error('Error claiming all blocks:', e);
       return null;
@@ -177,6 +231,7 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
 
     // Save original state for rollback
     const originalBlocks = [...pendingBlocks.value];
+    const originalCount = totalCount.value;
 
     try {
       const result = await claimAllBlocksWithRon(authStore.player.id);
@@ -184,6 +239,8 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
       if (result.success) {
         // Clear local list AFTER successful API call
         pendingBlocks.value = [];
+        totalCount.value = 0;
+        hasMore.value = false;
 
         // Update player balance - if this fails, blocks are still claimed on server
         try {
@@ -214,6 +271,7 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
     } catch (e) {
       // Rollback on network error
       pendingBlocks.value = originalBlocks;
+      totalCount.value = originalCount;
       error.value = 'Error de conexión. Intenta de nuevo.';
       console.error('Error claiming all blocks with RON:', e);
       return null;
@@ -241,12 +299,14 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
 
     if (!exists) {
       pendingBlocks.value.unshift(block);
+      totalCount.value++;
     }
   }
 
   return {
     pendingBlocks,
     loading,
+    loadingMore,
     claiming,
     error,
     showModal,
@@ -255,8 +315,10 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
     totalRonCost,
     RON_COST_PER_BLOCK,
     hasPending,
+    hasMore,
     fetchPendingBlocks,
     fetchCount,
+    loadMore,
     claim,
     claimAll,
     claimAllWithRon,

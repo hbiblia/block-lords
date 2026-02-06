@@ -88,14 +88,9 @@ export const useAuthStore = defineStore('auth', () => {
     return new Date(player.value.premium_until) > new Date();
   });
 
-  // Effective max energy/internet - read directly from database
-  const effectiveMaxEnergy = computed(() => {
-    return player.value?.max_energy ?? 300;
-  });
-
-  const effectiveMaxInternet = computed(() => {
-    return player.value?.max_internet ?? 300;
-  });
+  // Effective max energy/internet - DB is source of truth (purchase_premium sets to 1000)
+  const effectiveMaxEnergy = computed(() => player.value?.max_energy ?? 300);
+  const effectiveMaxInternet = computed(() => player.value?.max_internet ?? 300);
 
   async function checkAuth() {
     // Prevenir llamadas concurrentes

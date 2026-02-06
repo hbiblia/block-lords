@@ -5062,34 +5062,43 @@ $$;
 
 -- Drop old function signatures (necesario si cambia el tipo de retorno)
 DROP FUNCTION IF EXISTS get_pending_blocks(UUID) CASCADE;
+DROP FUNCTION IF EXISTS get_pending_blocks(UUID, INT, INT) CASCADE;
 DROP FUNCTION IF EXISTS claim_block(UUID) CASCADE;
 DROP FUNCTION IF EXISTS claim_block(UUID, UUID) CASCADE;
 DROP FUNCTION IF EXISTS claim_all_blocks() CASCADE;
 DROP FUNCTION IF EXISTS claim_all_blocks(UUID) CASCADE;
 
-CREATE OR REPLACE FUNCTION get_pending_blocks(p_player_id UUID)
+CREATE OR REPLACE FUNCTION get_pending_blocks(p_player_id UUID, p_limit INT DEFAULT 20, p_offset INT DEFAULT 0)
 RETURNS JSON
 LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
   v_max_height INT;
+  v_blocks JSON;
+  v_total INT;
 BEGIN
   -- Get current max block height for pity blocks display
   SELECT COALESCE(MAX(height), 1) INTO v_max_height FROM blocks;
 
-  RETURN (
-    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
-    FROM (
-      SELECT pb.id,
-             -- Pity blocks: generate fake block_id from pending id
-             COALESCE(pb.block_id, pb.id) as block_id,
-             -- Pity blocks: use realistic height near current max
-             COALESCE(b.height, v_max_height) as block_height,
-             pb.reward, pb.is_premium, pb.created_at
-      FROM pending_blocks pb
-      LEFT JOIN blocks b ON b.id = pb.block_id
-      WHERE pb.player_id = p_player_id AND pb.claimed = false
-      ORDER BY pb.created_at DESC
-    ) t
+  -- Total count for pagination
+  SELECT COUNT(*) INTO v_total FROM pending_blocks WHERE player_id = p_player_id AND claimed = false;
+
+  SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON) INTO v_blocks
+  FROM (
+    SELECT pb.id,
+           COALESCE(pb.block_id, pb.id) as block_id,
+           COALESCE(b.height, v_max_height) as block_height,
+           pb.reward, pb.is_premium, pb.created_at
+    FROM pending_blocks pb
+    LEFT JOIN blocks b ON b.id = pb.block_id
+    WHERE pb.player_id = p_player_id AND pb.claimed = false
+    ORDER BY pb.created_at DESC
+    LIMIT p_limit OFFSET p_offset
+  ) t;
+
+  RETURN json_build_object(
+    'blocks', v_blocks,
+    'total', v_total,
+    'has_more', (p_offset + p_limit) < v_total
   );
 END;
 $$;
@@ -5188,7 +5197,9 @@ BEGIN
     ron_balance = ron_balance - v_price,
     premium_until = v_new_expires,
     energy = v_premium_max,
-    internet = v_premium_max
+    internet = v_premium_max,
+    max_energy = v_premium_max,
+    max_internet = v_premium_max
   WHERE id = p_player_id;
   INSERT INTO premium_subscriptions (player_id, expires_at, amount_paid) VALUES (p_player_id, v_new_expires, v_price) RETURNING id INTO v_subscription_id;
   INSERT INTO transactions (player_id, type, amount, currency, description)
