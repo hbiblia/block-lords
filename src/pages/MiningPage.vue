@@ -1079,6 +1079,16 @@ onUnmounted(() => {
                       +{{ block.player_participation.reward.toFixed(3) }} ₿
                     </span>
                   </div>
+                  <!-- Top contributor -->
+                  <div v-if="block.top_contributor" class="flex items-center justify-between text-xs pt-0.5 border-t border-border/20">
+                    <span class="text-text-muted flex items-center gap-1">
+                      <span>🥇</span>
+                      <span>{{ block.top_contributor.username }}</span>
+                    </span>
+                    <span class="font-mono text-amber-400">
+                      {{ block.top_contributor.percentage.toFixed(1) }}%
+                    </span>
+                  </div>
                 </div>
 
                 <!-- Row 2: Si NO participaste -->
@@ -1091,6 +1101,16 @@ onUnmounted(() => {
                     <span class="text-text-muted">Total distribuido</span>
                     <span class="font-mono text-status-warning">
                       {{ (block.reward || 0).toFixed(1) }} ₿
+                    </span>
+                  </div>
+                  <!-- Top contributor -->
+                  <div v-if="block.top_contributor" class="flex items-center justify-between text-xs pt-0.5 border-t border-border/20">
+                    <span class="text-text-muted flex items-center gap-1">
+                      <span>🥇</span>
+                      <span>{{ block.top_contributor.username }}</span>
+                    </span>
+                    <span class="font-mono text-amber-400">
+                      {{ block.top_contributor.percentage.toFixed(1) }}%
                     </span>
                   </div>
                 </div>
