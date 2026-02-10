@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { supabase } from '@/utils/supabase';
-import { getPlayerRigs, getNetworkStats, getRecentBlocks, getRigCooling, getRigBoosts, getPlayerSlotInfo, getPlayerBoosts, toggleRig as apiToggleRig } from '@/utils/api';
+import { getPlayerRigs, getNetworkStats, getRecentBlocks, getRecentMiningBlocks, getRigCooling, getRigBoosts, getPlayerSlotInfo, getPlayerBoosts, toggleRig as apiToggleRig } from '@/utils/api';
 import { useAuthStore } from './auth';
 import { useNotificationsStore } from './notifications';
 import { useToastStore } from './toast';
@@ -46,14 +46,25 @@ interface NetworkStats {
 interface Block {
   id: string;
   height: number;
+  block_number?: number; // Para bloques del nuevo sistema
   created_at: string;
-  miner_id: string;
+  miner_id?: string; // Opcional para bloques del nuevo sistema
   miner?: {
     id: string;
     username: string;
   };
   reward?: number;
   is_premium?: boolean;
+  // Nuevo sistema de shares
+  total_shares?: number;
+  contributors_count?: number;
+  player_participation?: {
+    participated: boolean;
+    shares: number;
+    percentage: number;
+    reward: number;
+    is_premium: boolean;
+  };
 }
 
 // Calculate block reward based on height (mirrors database calculate_block_reward function)
@@ -324,7 +335,7 @@ export const useMiningStore = defineStore('mining', () => {
       const [rigsData, networkData, blocksData, slotData] = await Promise.all([
         getPlayerRigs(authStore.player.id),
         getNetworkStats(),
-        getRecentBlocks(5),
+        getRecentMiningBlocks(authStore.player.id, 10),
         getPlayerSlotInfo(authStore.player.id),
       ]);
 
@@ -850,6 +861,78 @@ export const useMiningStore = defineStore('mining', () => {
     return playerShares.value.estimated_reward;
   });
 
+  // Tracking para calcular rate de shares
+  const previousShares = ref(0);
+  const lastSharesUpdate = ref(Date.now());
+
+  // Rate de generación de shares (shares/minuto)
+  const sharesRate = computed(() => {
+    if (!playerShares.value?.has_shares || playerShares.value.shares === 0) return 0;
+
+    const currentShares = playerShares.value.shares;
+    const timeDiff = (Date.now() - lastSharesUpdate.value) / 1000 / 60; // en minutos
+
+    if (timeDiff === 0 || currentShares === previousShares.value) return 0;
+
+    const sharesDiff = currentShares - previousShares.value;
+    return Math.max(0, sharesDiff / timeDiff);
+  });
+
+  // Eficiencia vs esperado (basado en hashrate y dificultad)
+  const sharesEfficiency = computed(() => {
+    if (!currentMiningBlock.value?.active || effectiveHashrate.value === 0) return 0;
+
+    const difficulty = currentMiningBlock.value.difficulty;
+    // Expected rate: (hashrate / difficulty) * 60 segundos * (30 segundos tick / 60) = (hashrate / difficulty) * 30
+    // Pero como el tick es cada 30 segundos, la probabilidad por minuto es: (hashrate / difficulty) * 0.5 * 2 = (hashrate / difficulty)
+    const expectedRate = (effectiveHashrate.value / difficulty) * 0.5; // shares por tick de 30 seg
+    const expectedRatePerMinute = expectedRate * 2; // 2 ticks por minuto
+
+    if (expectedRatePerMinute === 0 || sharesRate.value === 0) return 100;
+
+    return Math.round((sharesRate.value / expectedRatePerMinute) * 100);
+  });
+
+  // Proyección de recompensa si mantienes el rate actual
+  const projectedReward = computed(() => {
+    if (!currentMiningBlock.value?.active || !playerShares.value?.has_shares || sharesRate.value === 0) {
+      return estimatedReward.value;
+    }
+
+    const timeRemainingMinutes = currentMiningBlock.value.time_remaining_seconds / 60;
+    const projectedAdditionalShares = sharesRate.value * timeRemainingMinutes;
+    const projectedTotalShares = playerShares.value.shares + projectedAdditionalShares;
+
+    // Asumiendo que el total de shares del bloque también crece
+    const currentBlockShares = currentMiningBlock.value.total_shares;
+    const otherMinersShares = currentBlockShares - playerShares.value.shares;
+    const projectedBlockTotal = projectedTotalShares + otherMinersShares;
+
+    if (projectedBlockTotal === 0) return estimatedReward.value;
+
+    const projectedPercentage = (projectedTotalShares / projectedBlockTotal) * 100;
+    const projectedRewardValue = currentMiningBlock.value.reward * (projectedPercentage / 100);
+
+    return projectedRewardValue;
+  });
+
+  // Alerta de tiempo (para cambiar colores del countdown)
+  const timeRemainingAlert = computed(() => {
+    if (!currentMiningBlock.value?.active) return 'normal';
+    const seconds = currentMiningBlock.value.time_remaining_seconds;
+    if (seconds <= 120) return 'critical'; // Últimos 2 minutos
+    if (seconds <= 300) return 'warning'; // Últimos 5 minutos
+    return 'normal';
+  });
+
+  // Watch para actualizar previousShares cuando cambian las shares
+  watch(() => playerShares.value?.shares, (newShares, oldShares) => {
+    if (newShares !== oldShares && oldShares !== undefined) {
+      previousShares.value = oldShares;
+      lastSharesUpdate.value = Date.now();
+    }
+  });
+
   // Suscripción a cambios en realtime
   function subscribeToMiningBlocks() {
     const authStore = useAuthStore();
@@ -931,6 +1014,10 @@ export const useMiningStore = defineStore('mining', () => {
     sharesProgress,
     playerSharePercentage,
     estimatedReward,
+    sharesRate,
+    sharesEfficiency,
+    projectedReward,
+    timeRemainingAlert,
     loadMiningBlockInfo,
     loadPlayerShares,
     subscribeToMiningBlocks,

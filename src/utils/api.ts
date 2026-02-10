@@ -285,6 +285,14 @@ export async function getRecentBlocks(limit = 20): Promise<any> {
   return rpcWithRetry('get_recent_blocks', { p_limit: limit });
 }
 
+// Obtener bloques recientes con info de shares (nuevo sistema)
+export async function getRecentMiningBlocks(playerId: string, limit = 10): Promise<any> {
+  return rpcWithRetry('get_recent_mining_blocks', {
+    p_player_id: playerId,
+    p_limit: limit
+  });
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getPlayerMiningStats(playerId: string): Promise<any> {
   return rpcWithRetry('get_player_mining_stats', {

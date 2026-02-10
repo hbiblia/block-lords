@@ -656,6 +656,7 @@ CREATE TABLE IF NOT EXISTS mining_blocks (
   total_shares NUMERIC DEFAULT 0,
   target_shares NUMERIC DEFAULT 100,
   reward NUMERIC NOT NULL,
+  block_type TEXT DEFAULT 'bronze' CHECK (block_type IN ('bronze', 'silver', 'gold')),  -- 🥉 Bronze: 1000, 🥈 Silver: 1500, 🥇 Gold: 2000
   status TEXT DEFAULT 'active',  -- 'active', 'closed', 'distributed'
   difficulty_at_start NUMERIC NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -671,6 +672,7 @@ CREATE TABLE IF NOT EXISTS player_shares (
   mining_block_id UUID NOT NULL REFERENCES mining_blocks(id) ON DELETE CASCADE,
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   shares_count NUMERIC DEFAULT 0,
+  fractional_accumulator NUMERIC DEFAULT 0,  -- ⚙️ Acumulador para suavizar generación en baja actividad
   last_share_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(mining_block_id, player_id)
@@ -678,6 +680,16 @@ CREATE TABLE IF NOT EXISTS player_shares (
 
 CREATE INDEX IF NOT EXISTS idx_player_shares_block ON player_shares(mining_block_id);
 CREATE INDEX IF NOT EXISTS idx_player_shares_player ON player_shares(player_id);
+
+-- ⚙️ Agregar columna de acumulador fraccional para suavizar generación
+ALTER TABLE player_shares ADD COLUMN IF NOT EXISTS fractional_accumulator NUMERIC DEFAULT 0;
+
+-- 🥇 Agregar tipo de bloque (Bronce, Plata, Oro) para recompensas variables
+ALTER TABLE mining_blocks ADD COLUMN IF NOT EXISTS block_type TEXT DEFAULT 'bronze';
+DO $$ BEGIN
+  ALTER TABLE mining_blocks ADD CONSTRAINT mining_blocks_block_type_check CHECK (block_type IN ('bronze', 'silver', 'gold'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Tabla de historial (opcional, para análisis)
 CREATE TABLE IF NOT EXISTS share_history (
@@ -705,6 +717,96 @@ ALTER TABLE blocks ADD COLUMN IF NOT EXISTS total_shares NUMERIC;
 ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS shares_contributed NUMERIC;
 ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS total_block_shares NUMERIC;
 ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS share_percentage NUMERIC;
+
+-- =====================================================
+-- GRANTS PARA FUNCIONES DEL SISTEMA DE SHARES
+-- =====================================================
+-- Nota: Ejecutar después de crear las funciones en all_functions.sql
+
+-- GRANT EXECUTE ON FUNCTION initialize_mining_block TO authenticated;
+-- GRANT EXECUTE ON FUNCTION generate_shares_tick TO authenticated;
+-- GRANT EXECUTE ON FUNCTION close_mining_block TO authenticated;
+-- GRANT EXECUTE ON FUNCTION adjust_share_difficulty TO authenticated;
+-- GRANT EXECUTE ON FUNCTION check_and_close_blocks TO authenticated;
+-- GRANT EXECUTE ON FUNCTION get_current_mining_block_info TO authenticated;
+-- GRANT EXECUTE ON FUNCTION get_player_shares_info TO authenticated;
+-- GRANT EXECUTE ON FUNCTION game_tick_share_system TO authenticated;
+
+-- =====================================================
+-- CONFIGURAR DIFICULTAD INICIAL
+-- =====================================================
+
+-- Calcular dificultad inicial basándose en hashrate promedio
+DO $$
+DECLARE
+  v_avg_hashrate NUMERIC;
+  v_initial_difficulty NUMERIC;
+BEGIN
+  -- Obtener hashrate promedio de los últimos registros
+  SELECT AVG(hashrate) INTO v_avg_hashrate FROM network_stats;
+
+  -- Si no hay datos, usar un valor por defecto
+  IF v_avg_hashrate IS NULL OR v_avg_hashrate = 0 THEN
+    v_avg_hashrate := 50000;  -- Valor por defecto
+  END IF;
+
+  -- Calcular dificultad: (hashrate_promedio * 30 minutos) / 100 shares objetivo
+  v_initial_difficulty := (v_avg_hashrate * 30) / 100;
+
+  -- Asegurar mínimo de 1000
+  v_initial_difficulty := GREATEST(1000, v_initial_difficulty);
+
+  -- Actualizar network_stats
+  UPDATE network_stats
+  SET difficulty = v_initial_difficulty,
+      target_shares_per_block = 100,
+      last_difficulty_adjustment = NOW()
+  WHERE id = 'current';
+
+  RAISE NOTICE 'Dificultad inicial configurada: %', v_initial_difficulty;
+END $$;
+
+-- =====================================================
+-- INICIALIZAR PRIMER BLOQUE
+-- =====================================================
+-- Nota: Ejecutar después de crear las funciones en all_functions.sql
+
+-- SELECT initialize_mining_block();
+
+-- =====================================================
+-- VERIFICACIÓN DEL DEPLOYMENT
+-- =====================================================
+-- Ejecutar para verificar que todo está correcto:
+--
+-- SELECT
+--   'Tablas creadas' as paso,
+--   EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'mining_blocks') as completado
+-- UNION ALL
+-- SELECT
+--   'Funciones creadas',
+--   EXISTS(SELECT 1 FROM pg_proc WHERE proname = 'game_tick_share_system')
+-- UNION ALL
+-- SELECT
+--   'Bloque inicial creado',
+--   EXISTS(SELECT 1 FROM mining_blocks WHERE status = 'active');
+
+-- =====================================================
+-- CONFIGURAR CRON JOB (PASO MANUAL)
+-- =====================================================
+-- Ejecutar en Supabase SQL Editor después del deployment:
+--
+-- 1. Desactivar cron antiguo:
+-- SELECT cron.unschedule('game_tick_job');
+--
+-- 2. Activar nuevo cron (cada 30 segundos):
+-- SELECT cron.schedule(
+--   'game_tick_share_system_job',
+--   '30 seconds',
+--   'SELECT game_tick_share_system()'
+-- );
+--
+-- 3. Verificar:
+-- SELECT * FROM cron.job;
 
 -- =====================================================
 -- NOTA: Las funciones están en all_functions.sql

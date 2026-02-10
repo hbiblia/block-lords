@@ -6882,6 +6882,8 @@ DECLARE
   v_reward NUMERIC;
   v_new_block_id UUID;
   v_target_close_at TIMESTAMPTZ;
+  v_block_type TEXT;
+  v_random NUMERIC;
 BEGIN
   -- Obtener configuración actual
   SELECT difficulty, target_shares_per_block
@@ -6894,8 +6896,22 @@ BEGIN
   -- Calcular número de bloque
   SELECT COALESCE(MAX(block_number), 0) + 1 INTO v_block_number FROM mining_blocks;
 
-  -- Calcular recompensa (con halving)
-  v_reward := calculate_block_reward(v_block_number);
+  -- 🎲 Generar tipo de bloque aleatorio con probabilidades
+  -- Bronze: 60% (0.0 - 0.6)
+  -- Silver: 30% (0.6 - 0.9)
+  -- Gold: 10% (0.9 - 1.0)
+  v_random := RANDOM();
+
+  IF v_random < 0.6 THEN
+    v_block_type := 'bronze';
+    v_reward := 1000;  -- 🥉 Bronze
+  ELSIF v_random < 0.9 THEN
+    v_block_type := 'silver';
+    v_reward := 1500;  -- 🥈 Silver
+  ELSE
+    v_block_type := 'gold';
+    v_reward := 2500;  -- 🥇 Gold (aumentado de 2000)
+  END IF;
 
   -- Calcular tiempo objetivo (30 minutos)
   v_target_close_at := NOW() + INTERVAL '30 minutes';
@@ -6907,6 +6923,7 @@ BEGIN
     target_close_at,
     target_shares,
     reward,
+    block_type,
     difficulty_at_start,
     status
   ) VALUES (
@@ -6915,6 +6932,7 @@ BEGIN
     v_target_close_at,
     v_target_shares,
     v_reward,
+    v_block_type,
     v_difficulty,
     'active'
   ) RETURNING id INTO v_new_block_id;
@@ -6954,6 +6972,12 @@ DECLARE
   v_fractional NUMERIC;
   v_random NUMERIC;
   v_upgrade_hashrate_bonus NUMERIC;
+  v_current_accumulator NUMERIC;  -- ⚙️ Acumulador actual del jugador
+  v_new_accumulator NUMERIC;      -- ⚙️ Nuevo acumulador después de generación
+  v_player_current_shares NUMERIC;  -- ⚖️ Shares actuales del jugador
+  v_block_total_shares NUMERIC;     -- ⚖️ Total de shares del bloque
+  v_player_percentage NUMERIC;      -- ⚖️ Porcentaje actual del jugador
+  v_cap_multiplier NUMERIC := 1.0;  -- ⚖️ Multiplicador de cap (rendimientos decrecientes)
 BEGIN
   -- Obtener bloque de minería actual
   SELECT current_mining_block_id, difficulty
@@ -7010,12 +7034,9 @@ BEGIN
       v_temp_penalty := GREATEST(0.3, v_temp_penalty);
     END IF;
 
-    -- Penalización por condición
-    IF v_rig.condition >= 80 THEN
-      v_condition_penalty := 1.0;
-    ELSE
-      v_condition_penalty := 0.3 + (v_rig.condition / 80.0) * 0.7;
-    END IF;
+    -- Penalización por condición (lineal: solo 100 = máximo)
+    -- 100 condition = 100% hashrate, 50 condition = 50% hashrate, etc.
+    v_condition_penalty := GREATEST(0.3, v_rig.condition / 100.0);
 
     -- Calcular hashrate efectivo
     v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier *
@@ -7025,28 +7046,68 @@ BEGIN
     -- Fórmula: (hashrate_efectivo / dificultad) * tick_duration * luck_multiplier
     v_shares_probability := (v_effective_hashrate / v_difficulty) * v_tick_duration * v_luck_mult;
 
-    -- Generar shares (modelo probabilístico con redondeo)
-    -- Parte entera es garantizada, parte decimal es probabilística
-    v_base_shares := FLOOR(v_shares_probability);
-    v_fractional := v_shares_probability - v_base_shares;
-    v_random := random();
+    -- ⚖️ NUEVO: Sistema de cap inteligente con rendimientos decrecientes
+    -- Obtener shares actuales del jugador y total del bloque
+    SELECT COALESCE(mb.total_shares, 0), COALESCE(ps.shares_count, 0)
+    INTO v_block_total_shares, v_player_current_shares
+    FROM mining_blocks mb
+    LEFT JOIN player_shares ps ON ps.mining_block_id = mb.id AND ps.player_id = v_rig.player_id
+    WHERE mb.id = v_mining_block_id;
 
-    IF v_random < v_fractional THEN
-      v_shares_generated := v_base_shares + 1;
+    -- Calcular porcentaje actual del jugador (evitar división por cero)
+    IF v_block_total_shares > 0 THEN
+      v_player_percentage := (v_player_current_shares / v_block_total_shares) * 100;
     ELSE
-      v_shares_generated := v_base_shares;
+      v_player_percentage := 0;
     END IF;
 
-    -- Registrar shares si se generaron
-    IF v_shares_generated > 0 THEN
-      -- Actualizar o insertar en player_shares
-      INSERT INTO player_shares (mining_block_id, player_id, shares_count, last_share_at)
-      VALUES (v_mining_block_id, v_rig.player_id, v_shares_generated, NOW())
-      ON CONFLICT (mining_block_id, player_id)
-      DO UPDATE SET
-        shares_count = player_shares.shares_count + v_shares_generated,
-        last_share_at = NOW();
+    -- Aplicar rendimientos decrecientes según el porcentaje
+    -- Soft cap: 30% sin penalización, 30-50% penalización creciente, >50% penalización fuerte
+    IF v_player_percentage >= 50 THEN
+      -- Sobre 50%: solo 10% de eficiencia (penalización del 90%)
+      v_cap_multiplier := 0.10;
+    ELSIF v_player_percentage >= 30 THEN
+      -- Entre 30-50%: penalización creciente lineal de 0% a 90%
+      -- Formula: 1.0 - ((porcentaje - 30) / 20) * 0.9
+      v_cap_multiplier := 1.0 - ((v_player_percentage - 30) / 20.0) * 0.9;
+    ELSE
+      -- Bajo 30%: sin penalización
+      v_cap_multiplier := 1.0;
+    END IF;
 
+    -- Aplicar multiplicador de cap
+    v_shares_probability := v_shares_probability * v_cap_multiplier;
+
+    -- ⚙️ NUEVO: Sistema de acumulador fraccional para suavizar generación en baja actividad
+    -- Obtener acumulador actual del jugador
+    SELECT COALESCE(fractional_accumulator, 0) INTO v_current_accumulator
+    FROM player_shares
+    WHERE mining_block_id = v_mining_block_id AND player_id = v_rig.player_id;
+
+    IF v_current_accumulator IS NULL THEN
+      v_current_accumulator := 0;
+    END IF;
+
+    -- Agregar probabilidad al acumulador
+    v_new_accumulator := v_current_accumulator + v_shares_probability;
+
+    -- Generar shares enteras del acumulador
+    v_shares_generated := FLOOR(v_new_accumulator);
+
+    -- Mantener la parte fraccional para el próximo tick
+    v_new_accumulator := v_new_accumulator - v_shares_generated;
+
+    -- Registrar shares (siempre actualizar para mantener el acumulador)
+    INSERT INTO player_shares (mining_block_id, player_id, shares_count, fractional_accumulator, last_share_at)
+    VALUES (v_mining_block_id, v_rig.player_id, v_shares_generated, v_new_accumulator, NOW())
+    ON CONFLICT (mining_block_id, player_id)
+    DO UPDATE SET
+      shares_count = player_shares.shares_count + v_shares_generated,
+      fractional_accumulator = v_new_accumulator,
+      last_share_at = NOW();
+
+    -- Solo registrar en historial si se generaron shares
+    IF v_shares_generated > 0 THEN
       -- Guardar en historial
       INSERT INTO share_history (
         mining_block_id, player_id, player_rig_id,
@@ -7231,6 +7292,16 @@ BEGIN
     RETURN json_build_object('adjusted', false, 'error', 'Block not found');
   END IF;
 
+  -- ❗ IMPORTANTE: No ajustar dificultad para bloques activos
+  -- Solo ajustar después del cierre del bloque
+  IF v_mining_block.status = 'active' THEN
+    RETURN json_build_object(
+      'adjusted', false,
+      'reason', 'Cannot adjust difficulty for active blocks',
+      'block_status', v_mining_block.status
+    );
+  END IF;
+
   -- Obtener configuración actual
   SELECT difficulty, target_shares_per_block, last_difficulty_adjustment
   INTO v_current_difficulty, v_target_shares, v_last_adjustment
@@ -7246,6 +7317,7 @@ BEGIN
   END IF;
 
   -- Decidir si ajustar:
+  -- Solo ajustar si el bloque está cerrado/distribuido
   -- 1. Si se superó el objetivo de shares
   -- 2. Si pasaron más de 60 minutos sin ajustar
   IF v_actual_shares > v_target_shares THEN
@@ -7367,7 +7439,8 @@ BEGIN
     'target_shares', v_mining_block.target_shares,
     'progress_percent', LEAST(100, v_progress_percent),
     'reward', v_mining_block.reward,
-    'difficulty', v_mining_block.difficulty_at_start
+    'difficulty', v_mining_block.difficulty_at_start,
+    'block_type', COALESCE(v_mining_block.block_type, 'bronze')
   );
 END;
 $$;
@@ -7517,6 +7590,60 @@ END;
 $$;
 
 -- =====================================================
+-- OBTENER BLOQUES RECIENTES CON INFO DE SHARES
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION get_recent_mining_blocks(p_player_id UUID DEFAULT NULL, p_limit INTEGER DEFAULT 10)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_result JSON;
+BEGIN
+  SELECT json_agg(block_info ORDER BY block_number DESC)
+  INTO v_result
+  FROM (
+    SELECT
+      mb.id,
+      mb.block_number,
+      mb.total_shares,
+      mb.reward,
+      mb.closed_at as created_at,
+      -- Contar contribuyentes únicos
+      (SELECT COUNT(DISTINCT player_id) FROM pending_blocks
+       WHERE created_at >= mb.closed_at - INTERVAL '5 seconds'
+         AND created_at <= mb.closed_at + INTERVAL '5 seconds'
+         AND shares_contributed IS NOT NULL) as contributors_count,
+      -- Información del jugador actual (si participó)
+      CASE
+        WHEN p_player_id IS NOT NULL THEN
+          (SELECT json_build_object(
+            'participated', true,
+            'shares', pb.shares_contributed,
+            'percentage', pb.share_percentage,
+            'reward', pb.reward,
+            'is_premium', pb.is_premium
+          )
+          FROM pending_blocks pb
+          WHERE pb.player_id = p_player_id
+            AND pb.created_at >= mb.closed_at - INTERVAL '5 seconds'
+            AND pb.created_at <= mb.closed_at + INTERVAL '5 seconds'
+            AND pb.shares_contributed IS NOT NULL
+          LIMIT 1)
+        ELSE NULL
+      END as player_participation
+    FROM mining_blocks mb
+    WHERE mb.status = 'distributed'
+    ORDER BY mb.block_number DESC
+    LIMIT p_limit
+  ) block_info;
+
+  RETURN COALESCE(v_result, '[]'::JSON);
+END;
+$$;
+
+-- =====================================================
 -- GRANTS PARA FUNCIONES
 -- =====================================================
 
@@ -7539,3 +7666,4 @@ GRANT EXECUTE ON FUNCTION check_and_close_blocks TO authenticated;
 GRANT EXECUTE ON FUNCTION get_current_mining_block_info TO authenticated;
 GRANT EXECUTE ON FUNCTION get_player_shares_info TO authenticated;
 GRANT EXECUTE ON FUNCTION game_tick_share_system TO authenticated;
+GRANT EXECUTE ON FUNCTION get_recent_mining_blocks TO authenticated;
