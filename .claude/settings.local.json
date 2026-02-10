@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(del \"d:\\\\software\\\\block-lords\\\\src\\\\pages\\\\LeaderboardPage.vue\")",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }

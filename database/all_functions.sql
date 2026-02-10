@@ -7128,6 +7128,46 @@ BEGIN
   SET total_shares = COALESCE(total_shares, 0) + v_total_shares_generated
   WHERE id = v_mining_block_id;
 
+  -- 🌐 Actualizar estadísticas de red (hashrate y mineros activos) en tiempo real
+  UPDATE network_stats
+  SET
+    hashrate = (
+      SELECT COALESCE(SUM(
+        r.hashrate *
+        GREATEST(0.3, pr.condition / 100.0) *  -- condition penalty
+        CASE
+          WHEN p.reputation_score >= 80 THEN 1 + (p.reputation_score - 80) * 0.01
+          WHEN p.reputation_score < 50 THEN 0.5 + (p.reputation_score / 100.0)
+          ELSE 1
+        END *  -- reputation multiplier
+        CASE
+          WHEN pr.temperature > 50 THEN GREATEST(0.3, 1 - ((pr.temperature - 50) * 0.014))
+          ELSE 1
+        END *  -- temperature penalty
+        (1 + COALESCE((SELECT hashrate_bonus / 100.0 FROM upgrade_costs WHERE level = COALESCE(pr.hashrate_level, 1)), 0))  -- upgrade bonus
+      ), 0)
+      FROM player_rigs pr
+      JOIN rigs r ON r.id = pr.rig_id
+      JOIN players p ON p.id = pr.player_id
+      WHERE pr.is_active = true
+        AND p.energy > 0
+        AND p.internet > 0
+        AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
+        AND NOT is_player_in_mining_cooldown(pr.player_id)
+    ),
+    active_miners = (
+      SELECT COUNT(DISTINCT pr.player_id)
+      FROM player_rigs pr
+      JOIN players p ON p.id = pr.player_id
+      WHERE pr.is_active = true
+        AND p.energy > 0
+        AND p.internet > 0
+        AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
+        AND NOT is_player_in_mining_cooldown(pr.player_id)
+    ),
+    updated_at = NOW()
+  WHERE id = 'current';
+
   RETURN json_build_object(
     'success', true,
     'mining_block_id', v_mining_block_id,
@@ -7615,6 +7655,19 @@ BEGIN
        WHERE created_at >= mb.closed_at - INTERVAL '5 seconds'
          AND created_at <= mb.closed_at + INTERVAL '5 seconds'
          AND shares_contributed IS NOT NULL) as contributors_count,
+      -- Top contributor (jugador en primer lugar)
+      (SELECT json_build_object(
+        'username', p.username,
+        'percentage', pb.share_percentage,
+        'shares', pb.shares_contributed
+      )
+      FROM pending_blocks pb
+      INNER JOIN players p ON p.id = pb.player_id
+      WHERE pb.created_at >= mb.closed_at - INTERVAL '5 seconds'
+        AND pb.created_at <= mb.closed_at + INTERVAL '5 seconds'
+        AND pb.shares_contributed IS NOT NULL
+      ORDER BY pb.share_percentage DESC
+      LIMIT 1) as top_contributor,
       -- Información del jugador actual (si participó)
       CASE
         WHEN p_player_id IS NOT NULL THEN

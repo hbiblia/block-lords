@@ -22,10 +22,6 @@ const miningStore = useMiningStore();
 
 // Mining estimate
 const {
-  isMining: isEstimateMining,
-  estimatedTimeText,
-  timeRangeText,
-  blocksPerDayText,
   refresh: refreshEstimate
 } = useMiningEstimate(authStore.player?.id ?? '', 60000);
 
@@ -66,19 +62,16 @@ const loading = computed(() => miningStore.loading);
 const dataLoaded = computed(() => miningStore.dataLoaded);
 const totalHashrate = computed(() => miningStore.totalHashrate);
 const effectiveHashrate = computed(() => miningStore.effectiveHashrate);
-const miningChance = computed(() => miningStore.miningChance);
 const activeRigsCount = computed(() => miningStore.activeRigsCount);
 
 // Nuevo sistema de shares
 const currentMiningBlock = computed(() => miningStore.currentMiningBlock);
-const playerShares = computed(() => miningStore.playerShares);
 const blockTimeRemaining = computed(() => miningStore.blockTimeRemaining);
 const sharesProgress = computed(() => miningStore.sharesProgress);
 const playerSharePercentage = computed(() => miningStore.playerSharePercentage);
 const estimatedReward = computed(() => miningStore.estimatedReward);
 const sharesRate = computed(() => miningStore.sharesRate);
 const sharesEfficiency = computed(() => miningStore.sharesEfficiency);
-const projectedReward = computed(() => miningStore.projectedReward);
 const timeRemainingAlert = computed(() => miningStore.timeRemainingAlert);
 
 // Premium status
@@ -430,13 +423,6 @@ function formatUptime(activatedAt: string | null): string {
   } else {
     return `${seconds}s`;
   }
-}
-
-function getBlockReward(height: number): number {
-  const baseReward = 100;
-  const halvingInterval = 10000;
-  const halvings = Math.floor(height / halvingInterval);
-  return baseReward / Math.pow(2, halvings);
 }
 
 function formatTimeAgo(dateStr: string): string {

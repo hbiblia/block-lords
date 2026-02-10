@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { supabase } from '@/utils/supabase';
-import { getPlayerRigs, getNetworkStats, getRecentBlocks, getRecentMiningBlocks, getRigCooling, getRigBoosts, getPlayerSlotInfo, getPlayerBoosts, toggleRig as apiToggleRig } from '@/utils/api';
+import { getPlayerRigs, getNetworkStats, getRecentMiningBlocks, getRigCooling, getRigBoosts, getPlayerSlotInfo, getPlayerBoosts, toggleRig as apiToggleRig } from '@/utils/api';
 import { useAuthStore } from './auth';
 import { useNotificationsStore } from './notifications';
 import { useToastStore } from './toast';
@@ -58,6 +58,11 @@ interface Block {
   // Nuevo sistema de shares
   total_shares?: number;
   contributors_count?: number;
+  top_contributor?: {
+    username: string;
+    percentage: number;
+    shares: number;
+  };
   player_participation?: {
     participated: boolean;
     shares: number;
@@ -131,6 +136,7 @@ interface MiningBlockInfo {
   progress_percent: number;
   reward: number;
   difficulty: number;
+  block_type?: string;
 }
 
 interface PlayerSharesInfo {
@@ -215,6 +221,8 @@ export const useMiningStore = defineStore('mining', () => {
   let boostsChannel: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let networkStatsChannel: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let miningBlocksChannel: any = null;
 
   // Computed
   const activeRigsCount = computed(() => rigs.value.filter(r => r.is_active).length);
@@ -779,6 +787,10 @@ export const useMiningStore = defineStore('mining', () => {
       supabase.removeChannel(networkStatsChannel);
       networkStatsChannel = null;
     }
+    if (miningBlocksChannel) {
+      supabase.removeChannel(miningBlocksChannel);
+      miningBlocksChannel = null;
+    }
     if (coolingDebounceTimer) {
       clearTimeout(coolingDebounceTimer);
       coolingDebounceTimer = null;
@@ -938,7 +950,7 @@ export const useMiningStore = defineStore('mining', () => {
     const authStore = useAuthStore();
     if (!authStore.player?.id) return;
 
-    const channel = supabase
+    miningBlocksChannel = supabase
       .channel('mining_blocks_realtime')
       .on('postgres_changes', {
         event: '*',
