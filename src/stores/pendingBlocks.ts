@@ -10,6 +10,9 @@ export interface PendingBlock {
   block_height: number;
   reward: number;
   is_premium: boolean;
+  shares_contributed?: number;     // NUEVO: Shares aportadas por el jugador
+  total_block_shares?: number;     // NUEVO: Total de shares del bloque
+  share_percentage?: number;       // NUEVO: Porcentaje de contribución
   created_at: string;
 }
 

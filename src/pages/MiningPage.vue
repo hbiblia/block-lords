@@ -69,6 +69,14 @@ const effectiveHashrate = computed(() => miningStore.effectiveHashrate);
 const miningChance = computed(() => miningStore.miningChance);
 const activeRigsCount = computed(() => miningStore.activeRigsCount);
 
+// Nuevo sistema de shares
+const currentMiningBlock = computed(() => miningStore.currentMiningBlock);
+const playerShares = computed(() => miningStore.playerShares);
+const blockTimeRemaining = computed(() => miningStore.blockTimeRemaining);
+const sharesProgress = computed(() => miningStore.sharesProgress);
+const playerSharePercentage = computed(() => miningStore.playerSharePercentage);
+const estimatedReward = computed(() => miningStore.estimatedReward);
+
 // Premium status
 const isPremium = computed(() => {
   const premiumUntil = authStore.player?.premium_until;
@@ -452,6 +460,16 @@ onMounted(() => {
   startUptimeTimer();
   requestWakeLock();
 
+  // Nuevo sistema de shares
+  miningStore.loadMiningBlockInfo();
+  miningStore.loadPlayerShares();
+  miningStore.subscribeToMiningBlocks();
+
+  // Actualizar bloque info cada segundo para countdown
+  setInterval(() => {
+    miningStore.loadMiningBlockInfo();
+  }, 1000);
+
   window.addEventListener('block-mined', handleBlockMined as EventListener);
 
   // Initialize AdSense
@@ -603,6 +621,57 @@ onUnmounted(() => {
             <div class="text-6xl mb-4 animate-bounce">🎉</div>
             <div class="text-2xl font-bold text-status-success">{{ t('mining.blockMined') }}</div>
             <div class="text-lg text-white">#{{ lastBlockFound?.height }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NUEVO: Bloque Actual Progress -->
+      <div class="card" v-if="currentMiningBlock?.active">
+        <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span>⏱️</span> Bloque Actual #{{ currentMiningBlock.block_number }}
+        </h3>
+
+        <!-- Barra de progreso de shares -->
+        <div class="mb-4">
+          <div class="flex justify-between text-sm mb-2">
+            <span class="text-text-muted">Progreso de Shares</span>
+            <span class="font-mono">{{ currentMiningBlock.total_shares }} / {{ currentMiningBlock.target_shares }}</span>
+          </div>
+          <div class="h-4 bg-bg-tertiary rounded-full overflow-hidden">
+            <div
+              class="h-full bg-gradient-to-r from-accent-primary to-accent-secondary transition-all"
+              :style="{ width: `${sharesProgress}%` }"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Info grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div class="bg-bg-secondary rounded-lg p-3">
+            <div class="text-xs text-text-muted mb-1">Tiempo Restante</div>
+            <div class="text-xl font-bold font-mono text-accent-primary">{{ blockTimeRemaining }}</div>
+          </div>
+
+          <div class="bg-bg-secondary rounded-lg p-3">
+            <div class="text-xs text-text-muted mb-1">Tus Shares</div>
+            <div class="text-xl font-bold font-mono">
+              {{ playerShares?.shares || 0 }}
+              <span class="text-sm text-text-muted">
+                ({{ playerSharePercentage.toFixed(2) }}%)
+              </span>
+            </div>
+          </div>
+
+          <div class="bg-bg-secondary rounded-lg p-3">
+            <div class="text-xs text-text-muted mb-1">Recompensa Total</div>
+            <div class="text-xl font-bold font-mono">{{ currentMiningBlock.reward.toFixed(2) }} ₿</div>
+          </div>
+
+          <div class="bg-bg-secondary rounded-lg p-3">
+            <div class="text-xs text-text-muted mb-1">Tu Recompensa Estimada</div>
+            <div class="text-xl font-bold font-mono text-status-success">
+              {{ estimatedReward.toFixed(4) }} ₿
+            </div>
           </div>
         </div>
       </div>

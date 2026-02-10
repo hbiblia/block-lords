@@ -643,6 +643,70 @@ CREATE TABLE IF NOT EXISTS player_rig_inventory (
 CREATE INDEX IF NOT EXISTS idx_player_rig_inventory_player ON player_rig_inventory(player_id);
 
 -- =====================================================
+-- 15. SISTEMA DE BLOQUES DE TIEMPO FIJO CON SHARES
+-- =====================================================
+
+-- Tabla principal: Bloques de minería por tiempo
+CREATE TABLE IF NOT EXISTS mining_blocks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  block_number INTEGER NOT NULL,
+  started_at TIMESTAMPTZ NOT NULL,
+  target_close_at TIMESTAMPTZ NOT NULL,
+  closed_at TIMESTAMPTZ,
+  total_shares NUMERIC DEFAULT 0,
+  target_shares NUMERIC DEFAULT 100,
+  reward NUMERIC NOT NULL,
+  status TEXT DEFAULT 'active',  -- 'active', 'closed', 'distributed'
+  difficulty_at_start NUMERIC NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mining_blocks_status ON mining_blocks(status);
+CREATE INDEX IF NOT EXISTS idx_mining_blocks_target_close ON mining_blocks(target_close_at);
+CREATE INDEX IF NOT EXISTS idx_mining_blocks_number ON mining_blocks(block_number DESC);
+
+-- Tabla de contribuciones: Shares por jugador por bloque
+CREATE TABLE IF NOT EXISTS player_shares (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  mining_block_id UUID NOT NULL REFERENCES mining_blocks(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  shares_count NUMERIC DEFAULT 0,
+  last_share_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(mining_block_id, player_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_shares_block ON player_shares(mining_block_id);
+CREATE INDEX IF NOT EXISTS idx_player_shares_player ON player_shares(player_id);
+
+-- Tabla de historial (opcional, para análisis)
+CREATE TABLE IF NOT EXISTS share_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  mining_block_id UUID NOT NULL REFERENCES mining_blocks(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  player_rig_id UUID REFERENCES player_rigs(id) ON DELETE SET NULL,
+  shares_generated NUMERIC NOT NULL,
+  hashrate_at_generation NUMERIC NOT NULL,
+  difficulty NUMERIC NOT NULL,
+  generated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_share_history_block ON share_history(mining_block_id);
+CREATE INDEX IF NOT EXISTS idx_share_history_player ON share_history(player_id, generated_at DESC);
+
+-- Modificaciones a tablas existentes para soportar shares
+ALTER TABLE network_stats ADD COLUMN IF NOT EXISTS current_mining_block_id UUID REFERENCES mining_blocks(id);
+ALTER TABLE network_stats ADD COLUMN IF NOT EXISTS last_block_closed_at TIMESTAMPTZ;
+ALTER TABLE network_stats ADD COLUMN IF NOT EXISTS target_shares_per_block NUMERIC DEFAULT 100;
+
+ALTER TABLE blocks ADD COLUMN IF NOT EXISTS is_share_based BOOLEAN DEFAULT false;
+ALTER TABLE blocks ADD COLUMN IF NOT EXISTS total_shares NUMERIC;
+
+ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS shares_contributed NUMERIC;
+ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS total_block_shares NUMERIC;
+ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS share_percentage NUMERIC;
+
+-- =====================================================
 -- NOTA: Las funciones están en all_functions.sql
 -- NOTA: Las políticas RLS están en all_rls_policies.sql
 -- =====================================================

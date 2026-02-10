@@ -108,6 +108,29 @@ interface SlotInfo {
   } | null;
 }
 
+// Interfaces para sistema de shares
+interface MiningBlockInfo {
+  active: boolean;
+  block_number: number;
+  started_at: string;
+  target_close_at: string;
+  time_remaining_seconds: number;
+  total_shares: number;
+  target_shares: number;
+  progress_percent: number;
+  reward: number;
+  difficulty: number;
+}
+
+interface PlayerSharesInfo {
+  has_shares: boolean;
+  shares: number;
+  total_shares: number;
+  share_percentage: number;
+  estimated_reward: number;
+  mining_block_id: string;
+}
+
 // LocalStorage cache
 const STORAGE_KEY = 'blocklords_mining_cache';
 
@@ -769,6 +792,87 @@ export const useMiningStore = defineStore('mining', () => {
     slotInfo.value = DEFAULT_SLOT_INFO;
     loading.value = false;
     dataLoaded.value = true;
+    currentMiningBlock.value = null;
+    playerShares.value = null;
+  }
+
+  // ===== NUEVO SISTEMA DE SHARES =====
+
+  const currentMiningBlock = ref<MiningBlockInfo | null>(null);
+  const playerShares = ref<PlayerSharesInfo | null>(null);
+
+  async function loadMiningBlockInfo() {
+    try {
+      const { data, error } = await supabase.rpc('get_current_mining_block_info');
+      if (error) throw error;
+      currentMiningBlock.value = data;
+    } catch (e) {
+      console.error('Error loading mining block info:', e);
+    }
+  }
+
+  async function loadPlayerShares() {
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) return;
+
+    try {
+      const { data, error } = await supabase.rpc('get_player_shares_info', {
+        p_player_id: authStore.player.id
+      });
+      if (error) throw error;
+      playerShares.value = data;
+    } catch (e) {
+      console.error('Error loading player shares:', e);
+    }
+  }
+
+  // Computed properties
+  const blockTimeRemaining = computed(() => {
+    if (!currentMiningBlock.value?.active) return '0:00';
+    const seconds = currentMiningBlock.value.time_remaining_seconds;
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  });
+
+  const sharesProgress = computed(() => {
+    if (!currentMiningBlock.value?.active) return 0;
+    return Math.min(100, currentMiningBlock.value.progress_percent);
+  });
+
+  const playerSharePercentage = computed(() => {
+    if (!playerShares.value?.has_shares) return 0;
+    return playerShares.value.share_percentage;
+  });
+
+  const estimatedReward = computed(() => {
+    if (!playerShares.value?.has_shares) return 0;
+    return playerShares.value.estimated_reward;
+  });
+
+  // Suscripción a cambios en realtime
+  function subscribeToMiningBlocks() {
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) return;
+
+    const channel = supabase
+      .channel('mining_blocks_realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'mining_blocks',
+      }, () => {
+        loadMiningBlockInfo();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'player_shares',
+        filter: `player_id=eq.${authStore.player.id}`,
+      }, () => {
+        loadPlayerShares();
+      })
+      .subscribe();
   }
 
   return {
@@ -819,5 +923,16 @@ export const useMiningStore = defineStore('mining', () => {
     subscribeToRealtime,
     unsubscribeFromRealtime,
     clearState,
+
+    // Nuevo sistema de shares
+    currentMiningBlock,
+    playerShares,
+    blockTimeRemaining,
+    sharesProgress,
+    playerSharePercentage,
+    estimatedReward,
+    loadMiningBlockInfo,
+    loadPlayerShares,
+    subscribeToMiningBlocks,
   };
 });
