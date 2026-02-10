@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 import { useI18n } from 'vue-i18n';
 import MainLayout from '@/layouts/MainLayout.vue';
+import UpdateModal from '@/components/UpdateModal.vue';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -139,6 +140,9 @@ async function handleRetry() {
     </div>
   </div>
   </Transition>
+
+  <!-- Modal de actualización (se muestra una sola vez por versión) -->
+  <UpdateModal />
 
   <!-- App siempre renderizado (skeleton lo cubre inicialmente) -->
   <MainLayout>

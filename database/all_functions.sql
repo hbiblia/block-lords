@@ -6974,10 +6974,6 @@ DECLARE
   v_upgrade_hashrate_bonus NUMERIC;
   v_current_accumulator NUMERIC;  -- ⚙️ Acumulador actual del jugador
   v_new_accumulator NUMERIC;      -- ⚙️ Nuevo acumulador después de generación
-  v_player_current_shares NUMERIC;  -- ⚖️ Shares actuales del jugador
-  v_block_total_shares NUMERIC;     -- ⚖️ Total de shares del bloque
-  v_player_percentage NUMERIC;      -- ⚖️ Porcentaje actual del jugador
-  v_cap_multiplier NUMERIC := 1.0;  -- ⚖️ Multiplicador de cap (rendimientos decrecientes)
 BEGIN
   -- Obtener bloque de minería actual
   SELECT current_mining_block_id, difficulty
@@ -7046,39 +7042,7 @@ BEGIN
     -- Fórmula: (hashrate_efectivo / dificultad) * tick_duration * luck_multiplier
     v_shares_probability := (v_effective_hashrate / v_difficulty) * v_tick_duration * v_luck_mult;
 
-    -- ⚖️ NUEVO: Sistema de cap inteligente con rendimientos decrecientes
-    -- Obtener shares actuales del jugador y total del bloque
-    SELECT COALESCE(mb.total_shares, 0), COALESCE(ps.shares_count, 0)
-    INTO v_block_total_shares, v_player_current_shares
-    FROM mining_blocks mb
-    LEFT JOIN player_shares ps ON ps.mining_block_id = mb.id AND ps.player_id = v_rig.player_id
-    WHERE mb.id = v_mining_block_id;
-
-    -- Calcular porcentaje actual del jugador (evitar división por cero)
-    IF v_block_total_shares > 0 THEN
-      v_player_percentage := (v_player_current_shares / v_block_total_shares) * 100;
-    ELSE
-      v_player_percentage := 0;
-    END IF;
-
-    -- Aplicar rendimientos decrecientes según el porcentaje
-    -- Soft cap: 30% sin penalización, 30-50% penalización creciente, >50% penalización fuerte
-    IF v_player_percentage >= 50 THEN
-      -- Sobre 50%: solo 10% de eficiencia (penalización del 90%)
-      v_cap_multiplier := 0.10;
-    ELSIF v_player_percentage >= 30 THEN
-      -- Entre 30-50%: penalización creciente lineal de 0% a 90%
-      -- Formula: 1.0 - ((porcentaje - 30) / 20) * 0.9
-      v_cap_multiplier := 1.0 - ((v_player_percentage - 30) / 20.0) * 0.9;
-    ELSE
-      -- Bajo 30%: sin penalización
-      v_cap_multiplier := 1.0;
-    END IF;
-
-    -- Aplicar multiplicador de cap
-    v_shares_probability := v_shares_probability * v_cap_multiplier;
-
-    -- ⚙️ NUEVO: Sistema de acumulador fraccional para suavizar generación en baja actividad
+    -- ⚙️ Sistema de acumulador fraccional para suavizar generación en baja actividad
     -- Obtener acumulador actual del jugador
     SELECT COALESCE(fractional_accumulator, 0) INTO v_current_accumulator
     FROM player_shares

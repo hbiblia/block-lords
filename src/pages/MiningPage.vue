@@ -628,26 +628,76 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- Barra de progreso de shares -->
-            <div class="mb-4">
-              <div class="flex justify-between text-sm mb-2">
-                <span class="text-text-muted">Progreso de Shares</span>
-                <span class="font-mono">{{ currentMiningBlock.total_shares.toFixed(0) }} / {{ currentMiningBlock.target_shares }}</span>
+            <!-- Indicador Dual: Tiempo + Actividad de Red -->
+            <div class="mb-4 p-4 bg-bg-secondary rounded-xl border border-border/30"
+              :class="{
+                'border-status-danger': timeRemainingAlert === 'critical',
+                'border-status-warning': timeRemainingAlert === 'warning'
+              }">
+              <!-- Header con tiempo restante -->
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl">⏰</span>
+                  <div>
+                    <div class="text-sm text-text-muted">Cierre del Bloque</div>
+                    <div class="text-2xl font-bold font-mono"
+                      :class="{
+                        'text-status-danger': timeRemainingAlert === 'critical',
+                        'text-status-warning': timeRemainingAlert === 'warning',
+                        'text-blue-400': timeRemainingAlert === 'normal'
+                      }">
+                      {{ blockTimeRemaining }}
+                    </div>
+                  </div>
+                </div>
+                <div v-if="timeRemainingAlert === 'critical'"
+                  class="px-3 py-1 bg-status-danger/20 border border-status-danger/50 rounded-lg animate-pulse">
+                  <span class="text-status-danger font-semibold text-sm">⚠️ ¡Cierra pronto!</span>
+                </div>
               </div>
-              <div class="h-4 bg-bg-tertiary rounded-full overflow-hidden relative">
+
+              <!-- Barra de progreso del tiempo -->
+              <div class="h-3 bg-bg-tertiary rounded-full overflow-hidden relative mb-3">
                 <div
-                  class="h-full bg-gradient-to-r from-accent-primary to-accent-secondary transition-all"
-                  :style="{ width: `${sharesProgress}%` }"
+                  class="h-full transition-all duration-1000"
+                  :class="{
+                    'bg-gradient-to-r from-status-danger to-red-400': timeRemainingAlert === 'critical',
+                    'bg-gradient-to-r from-status-warning to-amber-400': timeRemainingAlert === 'warning',
+                    'bg-gradient-to-r from-accent-primary to-purple-500': timeRemainingAlert === 'normal'
+                  }"
+                  :style="{ width: `${Math.max(0, 100 - (currentMiningBlock.time_remaining_seconds / 1800 * 100))}%` }"
                 ></div>
                 <div v-if="totalHashrate > 0"
                   class="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
                   style="animation: shimmer 2s linear infinite;">
                 </div>
               </div>
+
+              <!-- Info secundaria: actividad de red -->
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center gap-4">
+                  <span class="text-text-muted">
+                    📊 Actividad: <span class="font-mono text-text-secondary">{{ currentMiningBlock.total_shares.toFixed(0) }} / {{ currentMiningBlock.target_shares }}</span> shares ({{ sharesProgress.toFixed(0) }}%)
+                  </span>
+                  <span class="text-text-muted">
+                    ⚡ Ritmo: <span class="font-mono"
+                      :class="{
+                        'text-status-success': sharesProgress > 90,
+                        'text-status-warning': sharesProgress >= 70 && sharesProgress <= 90,
+                        'text-status-danger': sharesProgress < 70
+                      }">
+                      {{ sharesProgress > 90 ? 'Alto' : sharesProgress >= 70 ? 'Normal' : 'Bajo' }}
+                    </span>
+                  </span>
+                </div>
+                <span class="text-text-muted">
+                  👥 {{ networkStats.activeMiners }} mineros activos
+                </span>
+              </div>
             </div>
 
-            <!-- Grid de 6 Stats -->
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <!-- Grid de 5 Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
               <!-- Velocidad -->
               <div v-tooltip="'Velocidad a la que generas tu porción del bloque. Basada en tu hashrate efectivo y la dificultad actual.'"
                 class="bg-bg-secondary rounded-xl p-3 border-l-4 border-accent-primary cursor-help">
@@ -700,32 +750,6 @@ onUnmounted(() => {
                 <div class="text-[10px] text-text-muted">vs promedio</div>
                 <div class="mt-0.5 text-[10px] text-text-muted">
                   {{ (100 / Math.max(1, networkStats.activeMiners)).toFixed(1) }}% base
-                </div>
-              </div>
-
-              <!-- Tiempo Restante -->
-              <div v-tooltip="'Tiempo restante hasta que el bloque se cierre y las recompensas se distribuyan. Los bloques duran ~30 minutos.'"
-                class="bg-bg-secondary rounded-xl p-3 border-l-4 cursor-help"
-                :class="{
-                  'border-status-danger animate-pulse': timeRemainingAlert === 'critical',
-                  'border-status-warning': timeRemainingAlert === 'warning',
-                  'border-blue-500': timeRemainingAlert === 'normal'
-                }">
-                <div class="flex items-center gap-1 mb-1">
-                  <span class="text-base">⏱️</span>
-                  <div class="text-[10px] text-text-muted">Cierre</div>
-                </div>
-                <div class="text-xl font-bold font-mono"
-                  :class="{
-                    'text-status-danger': timeRemainingAlert === 'critical',
-                    'text-status-warning': timeRemainingAlert === 'warning',
-                    'text-blue-400': timeRemainingAlert === 'normal'
-                  }">
-                  {{ blockTimeRemaining }}
-                </div>
-                <div class="text-[10px] text-text-muted">restante</div>
-                <div v-if="timeRemainingAlert === 'critical'" class="mt-0.5 text-[10px] text-status-danger font-medium">
-                  ⚠️ Cierra pronto!
                 </div>
               </div>
 
