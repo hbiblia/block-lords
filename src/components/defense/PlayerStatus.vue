@@ -15,9 +15,10 @@ const props = defineProps<{
 }>();
 
 const { t } = useI18n();
-const maxHpVal = computed(() => props.maxHp || 100);
+const maxHpVal = computed(() => props.maxHp || 200);
 const maxEnergyVal = computed(() => props.maxEnergy || 3);
 const hpPercent = computed(() => Math.max(0, (props.hp / maxHpVal.value) * 100));
+const shieldPercent = computed(() => Math.max(0, Math.min(100, (props.shield / 50) * 100)));
 </script>
 
 <template>
@@ -82,43 +83,62 @@ const hpPercent = computed(() => Math.max(0, (props.hp / maxHpVal.value) * 100))
         </div>
 
         <!-- Energy orbs (only for self) -->
-        <div v-if="energy !== undefined" class="flex items-center gap-1.5">
-          <div class="flex gap-0.5">
+        <div v-if="energy !== undefined" class="flex items-center gap-2">
+          <div class="flex gap-1">
             <div
               v-for="i in maxEnergyVal"
               :key="i"
-              class="w-4 h-4 rounded-md text-[9px] flex items-center justify-center font-bold transition-all duration-300"
+              class="w-6 h-6 rounded-lg text-sm flex items-center justify-center font-bold transition-all duration-300"
               :class="i <= (energy ?? 0)
-                ? 'bg-gradient-to-b from-yellow-400 to-amber-500 text-black shadow-sm shadow-yellow-400/40 scale-100'
-                : 'bg-slate-800 text-slate-600 border border-slate-700/50 scale-90'"
+                ? 'bg-slate-900 border border-yellow-500/60 text-yellow-400 shadow-sm shadow-yellow-500/15 scale-100'
+                : 'bg-slate-800 text-slate-600 border border-slate-700/50 scale-90 opacity-40'"
             >&#9889;</div>
           </div>
+          <span
+            class="text-xs font-black font-mono px-1.5 py-0.5 rounded-md"
+            :class="(energy ?? 0) > 0
+              ? 'bg-yellow-500/15 text-yellow-300'
+              : 'bg-slate-800 text-slate-500'"
+          >{{ energy }}/{{ maxEnergyVal }}</span>
         </div>
       </div>
 
       <!-- Row 2: HP bar -->
-      <div class="flex items-center gap-2 mb-1">
+      <div class="flex items-center gap-2 mb-1.5">
         <div class="flex items-center gap-1 w-8 justify-end">
-          <span class="text-[9px] font-black" :class="hpPercent > 30 ? 'text-red-400' : 'text-red-500 animate-pulse'">HP</span>
+          <span class="text-[10px]">&#10084;</span>
+          <span
+            class="text-[10px] font-black uppercase tracking-wide"
+            :class="hpPercent > 30 ? 'text-red-400' : 'text-red-500 animate-pulse'"
+          >HP</span>
         </div>
-        <div class="flex-1 h-4 bg-slate-900 rounded-full overflow-hidden border border-slate-700/60 shadow-inner relative">
+        <div
+          class="flex-1 h-5 rounded-lg overflow-hidden relative"
+          :class="{
+            'bg-slate-900/80 border border-green-500/20': hpPercent > 60,
+            'bg-slate-900/80 border border-yellow-500/20': hpPercent > 30 && hpPercent <= 60,
+            'bg-slate-900/80 border border-red-500/30': hpPercent <= 30,
+          }"
+        >
           <!-- HP fill -->
           <div
-            class="h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden"
+            class="h-full rounded-lg transition-all duration-700 ease-out relative overflow-hidden"
             :class="{
-              'bg-gradient-to-r from-green-500 to-emerald-400': hpPercent > 60,
-              'bg-gradient-to-r from-yellow-500 to-amber-400': hpPercent > 30 && hpPercent <= 60,
-              'bg-gradient-to-r from-red-600 to-red-400': hpPercent <= 30,
+              'bg-gradient-to-r from-green-600 via-emerald-500 to-green-400': hpPercent > 60,
+              'bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-400': hpPercent > 30 && hpPercent <= 60,
+              'bg-gradient-to-r from-red-700 via-red-500 to-red-400': hpPercent <= 30,
             }"
             :style="{ width: hpPercent + '%' }"
           >
             <!-- Shimmer effect -->
-            <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-[shimmer_2s_infinite]" />
+            <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent animate-[shimmer_3s_infinite]" />
+            <!-- Inner highlight -->
+            <div class="absolute inset-x-0 top-0 h-[40%] bg-gradient-to-b from-white/20 to-transparent rounded-t-lg" />
           </div>
           <!-- HP text overlay -->
           <div class="absolute inset-0 flex items-center justify-center">
-            <span class="text-[10px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-              {{ hp }}/{{ maxHpVal }}
+            <span class="text-[11px] font-black text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] tracking-wide">
+              {{ hp }} / {{ maxHpVal }}
             </span>
           </div>
         </div>
@@ -127,17 +147,24 @@ const hpPercent = computed(() => Math.max(0, (props.hp / maxHpVal.value) * 100))
       <!-- Row 3: Shield bar -->
       <div v-if="shield > 0 || !isEnemy" class="flex items-center gap-2">
         <div class="flex items-center gap-1 w-8 justify-end">
-          <span class="text-[9px] text-blue-400 font-bold">{{ t('battle.shieldLabel', 'SH') }}</span>
+          <span class="text-[10px]">&#128737;</span>
+          <span class="text-[10px] text-blue-400 font-black uppercase tracking-wide">{{ t('battle.shieldLabel', 'SH') }}</span>
         </div>
-        <div class="flex-1 h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-700/60 shadow-inner relative">
+        <div class="flex-1 h-4 rounded-lg overflow-hidden relative bg-slate-900/80 border border-blue-500/20">
           <div
-            class="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-500 relative overflow-hidden"
-            :style="{ width: Math.min(shield, 50) * 2 + '%' }"
+            class="h-full rounded-lg bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400 transition-all duration-500 relative overflow-hidden"
+            :style="{ width: shieldPercent + '%' }"
           >
-            <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent animate-[shimmer_2s_infinite]" />
+            <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent animate-[shimmer_3s_infinite]" />
+            <div class="absolute inset-x-0 top-0 h-[40%] bg-gradient-to-b from-white/20 to-transparent rounded-t-lg" />
+          </div>
+          <!-- Shield text overlay -->
+          <div class="absolute inset-0 flex items-center justify-center">
+            <span class="text-[10px] font-black text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] tracking-wide">
+              {{ shield }}
+            </span>
           </div>
         </div>
-        <span class="text-[10px] text-blue-300 w-6 text-right font-mono font-bold">{{ shield }}</span>
       </div>
     </div>
   </div>

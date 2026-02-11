@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue';
+import { watch, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useCraftingStore } from '@/stores/crafting';
 import type { CraftingTab } from '@/stores/crafting';
@@ -31,6 +31,10 @@ watch(() => props.show, (visible) => {
   } else {
     document.body.style.overflow = '';
   }
+}, { immediate: true });
+
+onUnmounted(() => {
+  document.body.style.overflow = '';
 });
 
 function handleClose() {

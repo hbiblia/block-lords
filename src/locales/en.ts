@@ -1333,6 +1333,8 @@ export default {
     // Queued cards
     queuedCards: 'Queued',
     energyUsed: 'energy used',
+    noCardsQueued: 'No cards queued — play cards from your hand',
+    minimize: 'Minimize (battle continues)',
     // Game info (lobby)
     gameSubtitle: '1v1 PvP Turn-Based Card Game',
     info: {

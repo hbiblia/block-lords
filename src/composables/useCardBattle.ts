@@ -9,7 +9,7 @@ import {
   forfeitBattle,
   getBattleLobby,
 } from '@/utils/api';
-import { getCard, type CardDefinition, TURN_DURATION, BET_AMOUNT, MAX_ENERGY } from '@/utils/battleCards';
+import { getCard, type CardDefinition, TURN_DURATION, BET_AMOUNT, MAX_ENERGY, MAX_HP } from '@/utils/battleCards';
 import { playSound } from '@/utils/sounds';
 
 export interface LobbyEntry {
@@ -71,10 +71,10 @@ export function useCardBattle() {
   // Battle state
   const session = ref<BattleSession | null>(null);
   const myHand = ref<string[]>([]);
-  const myHp = ref(100);
+  const myHp = ref(MAX_HP);
   const myShield = ref(0);
   const myEnergy = ref(MAX_ENERGY);
-  const enemyHp = ref(100);
+  const enemyHp = ref(MAX_HP);
   const enemyShield = ref(0);
   const enemyUsername = ref('');
   const isMyTurn = ref(false);
@@ -232,6 +232,7 @@ export function useCardBattle() {
 
     // Subscribe to battle updates
     subscribeToBattle(sessionData.id);
+    playSound('battle_start');
 
     // Check if already finished
     if (sessionData.status === 'completed' || sessionData.status === 'forfeited') {
@@ -268,7 +269,7 @@ export function useCardBattle() {
     if (newSession.status === 'completed' || newSession.status === 'forfeited') {
       handleBattleEnd(newSession);
     } else if (isMyTurn.value) {
-      playSound('warning');
+      playSound('turn_start');
     }
   }
 
@@ -283,7 +284,7 @@ export function useCardBattle() {
     myEnergy.value -= card.cost;
     myHand.value.splice(idx, 1);
     cardsPlayedThisTurn.value.push(cardId);
-    playSound('click');
+    playSound('card_play');
   }
 
   function undoLastCard() {
@@ -343,9 +344,9 @@ export function useCardBattle() {
       reward: won ? BET_AMOUNT * 2 : 0,
     };
     if (won) {
-      playSound('reward');
+      playSound('battle_win');
     } else {
-      playSound('error');
+      playSound('battle_lose');
     }
   }
 
@@ -463,10 +464,10 @@ export function useCardBattle() {
   function resetBattle() {
     session.value = null;
     myHand.value = [];
-    myHp.value = 100;
+    myHp.value = MAX_HP;
     myShield.value = 0;
     myEnergy.value = MAX_ENERGY;
-    enemyHp.value = 100;
+    enemyHp.value = MAX_HP;
     enemyShield.value = 0;
     isMyTurn.value = false;
     turnTimer.value = TURN_DURATION;

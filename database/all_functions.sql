@@ -9147,8 +9147,8 @@ CREATE TABLE IF NOT EXISTS battle_sessions (
   current_turn UUID NOT NULL,
   turn_number INTEGER DEFAULT 1,
   turn_deadline TIMESTAMPTZ,
-  player1_hp INTEGER DEFAULT 100,
-  player2_hp INTEGER DEFAULT 100,
+  player1_hp INTEGER DEFAULT 200,
+  player2_hp INTEGER DEFAULT 200,
   player1_shield INTEGER DEFAULT 0,
   player2_shield INTEGER DEFAULT 0,
   game_state JSONB NOT NULL,
@@ -9368,7 +9368,7 @@ BEGIN
     player1_id, player2_id, bet_amount, current_turn, turn_deadline, game_state
   ) VALUES (
     p_player_id, v_opponent.player_id, v_opponent.bet_amount,
-    v_first_turn, NOW() + INTERVAL '30 seconds', v_game_state
+    v_first_turn, NOW() + INTERVAL '45 seconds', v_game_state
   ) RETURNING id INTO v_session_id;
 
   -- Mark both lobby entries as matched
@@ -9586,7 +9586,7 @@ BEGIN
         v_log_entries := v_log_entries || jsonb_build_object('type', 'defense', 'card', v_card, 'shield', 10, 'draw', 1);
 
       WHEN 'heal' THEN
-        v_my_hp := LEAST(v_my_hp + 15, 100);
+        v_my_hp := LEAST(v_my_hp + 15, 200);
         v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'heal', 15);
 
       WHEN 'weaken' THEN
@@ -9599,7 +9599,7 @@ BEGIN
         v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
         v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
         v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
-        v_my_hp := LEAST(v_my_hp + 6, 100);
+        v_my_hp := LEAST(v_my_hp + 6, 200);
         v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'damage', v_damage, 'heal', 6);
     END CASE;
 
@@ -9693,7 +9693,7 @@ BEGIN
       player2_shield = v_opp_shield,
       current_turn = CASE WHEN v_winner_id IS NULL THEN v_session.player2_id ELSE current_turn END,
       turn_number = turn_number + 1,
-      turn_deadline = CASE WHEN v_winner_id IS NULL THEN NOW() + INTERVAL '30 seconds' ELSE turn_deadline END,
+      turn_deadline = CASE WHEN v_winner_id IS NULL THEN NOW() + INTERVAL '45 seconds' ELSE turn_deadline END,
       game_state = v_state,
       status = CASE WHEN v_winner_id IS NOT NULL THEN 'completed' ELSE 'active' END,
       winner_id = v_winner_id,
@@ -9707,7 +9707,7 @@ BEGIN
       player2_shield = v_my_shield,
       current_turn = CASE WHEN v_winner_id IS NULL THEN v_session.player1_id ELSE current_turn END,
       turn_number = turn_number + 1,
-      turn_deadline = CASE WHEN v_winner_id IS NULL THEN NOW() + INTERVAL '30 seconds' ELSE turn_deadline END,
+      turn_deadline = CASE WHEN v_winner_id IS NULL THEN NOW() + INTERVAL '45 seconds' ELSE turn_deadline END,
       game_state = v_state,
       status = CASE WHEN v_winner_id IS NOT NULL THEN 'completed' ELSE 'active' END,
       winner_id = v_winner_id,

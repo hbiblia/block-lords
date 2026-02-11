@@ -87,7 +87,8 @@ watch(session, (s) => {
 
 function handleClose() {
   if (session.value && session.value.status === 'active') {
-    // Don't close during active battle
+    // Minimize — hide modal without leaving battle
+    emit('close');
     return;
   }
   cleanup();
@@ -183,24 +184,31 @@ function getEnemyUsername(): string {
             </div>
           </div>
 
-          <!-- Close or battle indicator -->
-          <button
-            v-if="!session || session.status !== 'active'"
-            @click="handleClose"
-            class="relative p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-lg transition-colors"
-          >
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <div v-else class="relative flex items-center gap-1.5">
-            <span class="relative flex h-2 w-2">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-red-400" />
-            </span>
-            <span class="text-[10px] font-bold text-red-400 uppercase tracking-wider">
-              {{ t('battle.live', 'LIVE') }}
-            </span>
+          <!-- Close / minimize button -->
+          <div class="relative flex items-center gap-2">
+            <div v-if="session && session.status === 'active'" class="flex items-center gap-1.5">
+              <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-red-400" />
+              </span>
+              <span class="text-[10px] font-bold text-red-400 uppercase tracking-wider">
+                {{ t('battle.live', 'LIVE') }}
+              </span>
+            </div>
+            <button
+              @click="handleClose"
+              class="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-lg transition-colors"
+              :title="session && session.status === 'active'
+                ? t('battle.minimize', 'Minimize (battle continues)')
+                : t('common.close', 'Close')"
+            >
+              <svg v-if="session && session.status === 'active'" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+              <svg v-else class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         </div>
 

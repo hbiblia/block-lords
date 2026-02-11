@@ -99,7 +99,7 @@ function typeLabel(type: string): string {
 
     <!-- Info button (top-left) -->
     <div
-      class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold z-10 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-700/80 text-slate-300 hover:bg-slate-600 hover:text-white cursor-help"
+      class="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-tl-lg rounded-br-xl flex items-center justify-center text-[10px] font-black z-10 bg-slate-700/90 text-slate-300 hover:bg-slate-600 hover:text-white cursor-help shadow-md transition-colors"
       @click.stop="handleShowDetail($event)"
     >
       ?
@@ -108,9 +108,10 @@ function typeLabel(type: string): string {
     <!-- Card content -->
     <div class="relative z-[1] flex flex-col items-center w-full px-1.5 pt-2 pb-1.5">
       <!-- Type badge + icon row -->
-      <div class="flex items-center justify-between w-full mb-1">
+      <div class="flex items-center gap-1.5 w-full mb-1">
+        <canvas ref="iconCanvas" class="w-5 h-5 flex-shrink-0" />
         <span
-          class="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-sm"
+          class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-sm"
           :class="{
             'bg-red-500/25 text-red-300': card.type === 'attack',
             'bg-blue-500/25 text-blue-300': card.type === 'defense',
@@ -119,12 +120,11 @@ function typeLabel(type: string): string {
         >
           {{ typeLabel(card.type) }}
         </span>
-        <canvas ref="iconCanvas" class="w-4 h-4 opacity-70" />
       </div>
 
       <!-- Value (big number) -->
       <div
-        class="text-2xl font-black leading-none my-1 drop-shadow-sm"
+        class="text-2xl font-black leading-none mb-1 drop-shadow-sm"
         :class="{
           'text-red-300': card.type === 'attack',
           'text-blue-300': card.type === 'defense',
@@ -136,7 +136,7 @@ function typeLabel(type: string): string {
 
       <!-- Divider -->
       <div
-        class="w-8 h-[1px] mb-1 opacity-40"
+        class="w-10 h-[1px] mb-1 opacity-40"
         :class="{
           'bg-red-400': card.type === 'attack',
           'bg-blue-400': card.type === 'defense',
@@ -145,12 +145,12 @@ function typeLabel(type: string): string {
       />
 
       <!-- Name -->
-      <div class="text-[9px] font-bold text-slate-100 leading-tight text-center truncate w-full">
+      <div class="text-[11px] font-bold text-slate-100 leading-tight text-center truncate w-full">
         {{ t(card.nameKey, card.name) }}
       </div>
 
       <!-- Description -->
-      <div class="text-[7px] text-slate-400 leading-tight text-center truncate w-full mt-0.5">
+      <div class="text-[9px] text-slate-400 leading-tight text-center truncate w-full mt-0.5">
         {{ t(card.descriptionKey, card.description) }}
       </div>
     </div>

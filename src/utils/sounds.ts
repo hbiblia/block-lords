@@ -16,7 +16,16 @@ export type SoundType =
   | 'mission_complete'
   | 'warning'
   | 'notification'
-  | 'collect';
+  | 'collect'
+  | 'card_play'
+  | 'card_attack'
+  | 'card_defense'
+  | 'card_heal'
+  | 'card_special'
+  | 'battle_start'
+  | 'battle_win'
+  | 'battle_lose'
+  | 'turn_start';
 
 // Configuración de sonidos
 interface SoundConfig {
@@ -76,6 +85,58 @@ const SOUND_CONFIGS: Record<SoundType, SoundConfig[]> = {
     { frequency: 600, duration: 0.06, type: 'sine', volume: 0.18 },
     { frequency: 800, duration: 0.08, type: 'sine', volume: 0.2 },
     { frequency: 1000, duration: 0.1, type: 'sine', volume: 0.15, ramp: true }
+  ],
+  // Battle sounds
+  card_play: [
+    { frequency: 400, duration: 0.04, type: 'sine', volume: 0.15 },
+    { frequency: 600, duration: 0.06, type: 'sine', volume: 0.12, ramp: true }
+  ],
+  card_attack: [
+    { frequency: 150, duration: 0.08, type: 'sawtooth', volume: 0.2 },
+    { frequency: 100, duration: 0.06, type: 'square', volume: 0.18 },
+    { frequency: 80, duration: 0.12, type: 'sawtooth', volume: 0.15, ramp: true }
+  ],
+  card_defense: [
+    { frequency: 800, duration: 0.05, type: 'triangle', volume: 0.15 },
+    { frequency: 1200, duration: 0.08, type: 'sine', volume: 0.18 },
+    { frequency: 1000, duration: 0.06, type: 'sine', volume: 0.12, ramp: true }
+  ],
+  card_heal: [
+    { frequency: 523, duration: 0.1, type: 'sine', volume: 0.15 },
+    { frequency: 659, duration: 0.1, type: 'sine', volume: 0.18 },
+    { frequency: 784, duration: 0.12, type: 'sine', volume: 0.2 },
+    { frequency: 1047, duration: 0.15, type: 'sine', volume: 0.15, ramp: true }
+  ],
+  card_special: [
+    { frequency: 300, duration: 0.06, type: 'sine', volume: 0.15 },
+    { frequency: 500, duration: 0.06, type: 'triangle', volume: 0.18 },
+    { frequency: 700, duration: 0.08, type: 'sine', volume: 0.2 },
+    { frequency: 900, duration: 0.1, type: 'sine', volume: 0.15, ramp: true }
+  ],
+  battle_start: [
+    { frequency: 200, duration: 0.12, type: 'sawtooth', volume: 0.15 },
+    { frequency: 300, duration: 0.1, type: 'sawtooth', volume: 0.18 },
+    { frequency: 400, duration: 0.1, type: 'square', volume: 0.2 },
+    { frequency: 600, duration: 0.15, type: 'sawtooth', volume: 0.22 },
+    { frequency: 800, duration: 0.2, type: 'sine', volume: 0.18, ramp: true }
+  ],
+  battle_win: [
+    { frequency: 523, duration: 0.12, type: 'sine', volume: 0.2 },
+    { frequency: 659, duration: 0.12, type: 'sine', volume: 0.22 },
+    { frequency: 784, duration: 0.12, type: 'sine', volume: 0.25 },
+    { frequency: 1047, duration: 0.25, type: 'sine', volume: 0.28 },
+    { frequency: 1319, duration: 0.3, type: 'sine', volume: 0.2, ramp: true }
+  ],
+  battle_lose: [
+    { frequency: 400, duration: 0.15, type: 'sawtooth', volume: 0.15 },
+    { frequency: 300, duration: 0.15, type: 'sawtooth', volume: 0.12 },
+    { frequency: 200, duration: 0.2, type: 'square', volume: 0.1 },
+    { frequency: 100, duration: 0.3, type: 'sawtooth', volume: 0.08, ramp: true }
+  ],
+  turn_start: [
+    { frequency: 660, duration: 0.08, type: 'sine', volume: 0.18 },
+    { frequency: 880, duration: 0.1, type: 'sine', volume: 0.22 },
+    { frequency: 1100, duration: 0.12, type: 'sine', volume: 0.18, ramp: true }
   ]
 };
 

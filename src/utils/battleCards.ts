@@ -248,9 +248,9 @@ export function getCardTextClass(type: CardType): string {
 }
 
 // Constants
-export const MAX_HP = 100;
+export const MAX_HP = 200;
 export const MAX_ENERGY = 3;
 export const MAX_HAND_SIZE = 6;
 export const CARDS_PER_DRAW = 3;
-export const TURN_DURATION = 30;
+export const TURN_DURATION = 45;
 export const BET_AMOUNT = 20;

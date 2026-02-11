@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import PlayerStatus from './PlayerStatus.vue';
 import BattleLog from './BattleLog.vue';
@@ -8,6 +8,7 @@ import BattleResult from './BattleResult.vue';
 import type { CardDefinition } from '@/utils/battleCards';
 import { getCard } from '@/utils/battleCards';
 import type { LogEntry } from '@/composables/useCardBattle';
+import { playSound } from '@/utils/sounds';
 
 const props = defineProps<{
   myUsername: string;
@@ -45,6 +46,85 @@ const totalQueuedCost = computed(() => {
 });
 
 const timerUrgent = computed(() => props.turnTimer <= 10);
+
+// Combat effects
+interface CombatEffect {
+  id: number;
+  type: string;
+  icon: string;
+  value: string;
+  color: string;
+  fromEnemy: boolean;
+  label: string;
+}
+
+const combatEffects = ref<CombatEffect[]>([]);
+let effectCounter = 0;
+
+function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
+  let icon = '';
+  let value = '';
+  let color = '';
+
+  switch (entry.type) {
+    case 'attack':
+      icon = '\u2694';
+      value = `-${entry.damage}`;
+      color = 'text-red-400';
+      break;
+    case 'defense':
+      icon = '\uD83D\uDEE1';
+      value = `+${entry.shield}`;
+      color = 'text-blue-400';
+      break;
+    case 'special':
+      if (entry.heal) {
+        icon = '\u2764';
+        value = `+${entry.heal}`;
+        color = 'text-green-400';
+      } else if (entry.weaken) {
+        icon = '\u2B07';
+        value = `-${entry.weaken}`;
+        color = 'text-purple-400';
+      } else if (entry.damage) {
+        icon = '\u2728';
+        value = `-${entry.damage}`;
+        color = 'text-purple-400';
+      }
+      break;
+  }
+
+  if (!icon) return;
+
+  // Play sound based on type
+  switch (entry.type) {
+    case 'attack': playSound('card_attack'); break;
+    case 'defense': playSound('card_defense'); break;
+    case 'special': entry.heal ? playSound('card_heal') : playSound('card_special'); break;
+  }
+
+  const label = fromEnemy
+    ? props.enemyUsername
+    : props.myUsername;
+
+  const id = ++effectCounter;
+  combatEffects.value.push({ id, type: entry.type, icon, value, color, fromEnemy, label });
+  setTimeout(() => {
+    combatEffects.value = combatEffects.value.filter((e) => e.id !== id);
+  }, 3000);
+}
+
+watch(
+  () => props.battleLog.length,
+  (newLen, oldLen) => {
+    if (newLen > (oldLen ?? 0)) {
+      const latest = props.battleLog[newLen - 1];
+      // If it's now my turn, the entries are from the enemy's turn
+      const fromEnemy = props.isMyTurn;
+      if (latest) spawnEffect(latest, fromEnemy);
+    }
+  }
+);
 </script>
 
 <template>
@@ -59,7 +139,7 @@ const timerUrgent = computed(() => props.turnTimer <= 10);
     />
 
     <!-- Battle log with VS overlay -->
-    <div class="relative">
+    <div class="relative flex-1 flex flex-col min-h-0 max-h-[30vh]">
       <!-- VS badge -->
       <div class="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
         <div class="px-2 py-0.5 bg-slate-800 border border-slate-600/50 rounded-full shadow-lg">
@@ -73,17 +153,25 @@ const timerUrgent = computed(() => props.turnTimer <= 10);
       />
     </div>
 
-    <!-- Queued cards preview -->
-    <div v-if="cardsPlayed.length > 0" class="px-2.5 py-1.5 bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-yellow-500/10 border-y border-yellow-500/15">
+    <!-- Queued cards preview (always visible) -->
+    <div
+      class="px-2.5 py-1.5 border-y transition-colors duration-300"
+      :class="cardsPlayed.length > 0
+        ? 'bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-yellow-500/10 border-yellow-500/15'
+        : 'bg-slate-900/40 border-slate-800/50'"
+    >
       <div class="flex items-center justify-between mb-1">
-        <span class="text-[10px] text-yellow-300 font-bold uppercase tracking-wider flex items-center gap-1">
+        <span
+          class="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1"
+          :class="cardsPlayed.length > 0 ? 'text-yellow-300' : 'text-slate-500'"
+        >
           &#9889; {{ t('battle.queuedCards', 'Queued') }} ({{ cardsPlayed.length }})
         </span>
-        <span class="text-[10px] text-yellow-400/50 font-mono">
+        <span class="text-[10px] font-mono" :class="cardsPlayed.length > 0 ? 'text-yellow-400/50' : 'text-slate-600'">
           {{ totalQueuedCost }} {{ t('battle.energyUsed', 'energy used') }}
         </span>
       </div>
-      <div class="flex gap-1 flex-wrap">
+      <div v-if="cardsPlayed.length > 0" class="flex gap-1 flex-wrap">
         <span
           v-for="(card, i) in queuedCards"
           :key="i"
@@ -100,20 +188,23 @@ const timerUrgent = computed(() => props.turnTimer <= 10);
           {{ t(card.nameKey, card.name) }}
         </span>
       </div>
+      <div v-else class="text-[10px] text-slate-600 italic">
+        {{ t('battle.noCardsQueued', 'No cards queued — play cards from your hand') }}
+      </div>
     </div>
 
+    <!-- My status (always visible) -->
+    <PlayerStatus
+      :username="myUsername"
+      :hp="myHp"
+      :shield="myShield"
+      :energy="myEnergy"
+      :is-current-turn="isMyTurn"
+    />
+
     <!-- Card hand + Action buttons -->
-    <div class="flex-1 flex flex-col min-h-0">
-      <div class="flex-1 overflow-y-auto flex flex-col">
-        <div class="flex-1" />
-        <!-- My status -->
-        <PlayerStatus
-          :username="myUsername"
-          :hp="myHp"
-          :shield="myShield"
-          :energy="myEnergy"
-          :is-current-turn="isMyTurn"
-        />
+    <div class="flex flex-col">
+      <div class="h-[240px] overflow-y-auto">
         <CardHand
           :cards="handCards"
           :energy="myEnergy"
@@ -172,6 +263,34 @@ const timerUrgent = computed(() => props.turnTimer <= 10);
       </div>
     </div>
 
+    <!-- Combat effects overlay -->
+    <div class="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+      <TransitionGroup name="combat-fx">
+        <div
+          v-for="fx in combatEffects"
+          :key="fx.id"
+          class="absolute left-1/2 -translate-x-1/2 flex flex-col items-center"
+          :class="fx.fromEnemy ? 'bottom-[45%] combat-effect-up' : 'top-[15%] combat-effect-down'"
+        >
+          <!-- Label -->
+          <span
+            class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full mb-1"
+            :class="fx.fromEnemy
+              ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'"
+          >
+            {{ fx.label }}
+          </span>
+          <span class="text-4xl drop-shadow-[0_0_12px_currentColor]" :class="fx.color">
+            {{ fx.icon }}
+          </span>
+          <span class="text-2xl font-black drop-shadow-[0_0_8px_currentColor] mt-1" :class="fx.color">
+            {{ fx.value }}
+          </span>
+        </div>
+      </TransitionGroup>
+    </div>
+
     <!-- Result overlay -->
     <BattleResult
       v-if="result"
@@ -181,3 +300,70 @@ const timerUrgent = computed(() => props.turnTimer <= 10);
     />
   </div>
 </template>
+
+<style scoped>
+/* Enemy effect: appears near bottom, floats up */
+.combat-effect-up {
+  animation: combat-pop-up 3s ease-out forwards;
+}
+@keyframes combat-pop-up {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.3) translateY(30px);
+  }
+  8% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.2) translateY(0);
+  }
+  15% {
+    transform: translateX(-50%) scale(1) translateY(0);
+  }
+  75% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1) translateY(-15px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.8) translateY(-50px);
+  }
+}
+/* My effect: appears near top, floats down */
+.combat-effect-down {
+  animation: combat-pop-down 3s ease-out forwards;
+}
+@keyframes combat-pop-down {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.3) translateY(-30px);
+  }
+  8% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.2) translateY(0);
+  }
+  15% {
+    transform: translateX(-50%) scale(1) translateY(0);
+  }
+  75% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1) translateY(15px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.8) translateY(50px);
+  }
+}
+.combat-fx-enter-active {
+  transition: all 0.2s ease-out;
+}
+.combat-fx-leave-active {
+  transition: all 0.4s ease-in;
+}
+.combat-fx-enter-from {
+  opacity: 0;
+  transform: scale(0.5);
+}
+.combat-fx-leave-to {
+  opacity: 0;
+  transform: scale(0.5) translateY(-30px);
+}
+</style>

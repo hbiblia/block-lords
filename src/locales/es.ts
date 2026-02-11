@@ -1333,6 +1333,8 @@
     // Cartas en cola
     queuedCards: 'En Cola',
     energyUsed: 'energía usada',
+    noCardsQueued: 'Sin cartas en cola — juega cartas de tu mano',
+    minimize: 'Minimizar (la batalla continúa)',
     // Info del juego (lobby)
     gameSubtitle: 'Juego de Cartas PvP 1v1 por Turnos',
     info: {

@@ -12,6 +12,7 @@ const props = defineProps<{
 
 const { t } = useI18n();
 const logContainer = ref<HTMLElement | null>(null);
+const turnFlash = ref(false);
 
 watch(
   () => props.entries.length,
@@ -19,6 +20,16 @@ watch(
     await nextTick();
     if (logContainer.value) {
       logContainer.value.scrollTop = logContainer.value.scrollHeight;
+    }
+  }
+);
+
+watch(
+  () => props.isMyTurn,
+  (myTurn) => {
+    if (myTurn) {
+      turnFlash.value = true;
+      setTimeout(() => { turnFlash.value = false; }, 1500);
     }
   }
 );
@@ -71,13 +82,13 @@ function formatEntry(entry: LogEntry): string {
 <template>
   <div
     ref="logContainer"
-    class="h-24 overflow-y-auto px-2 py-1.5 bg-slate-950/60 text-[10px] space-y-0.5 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
+    class="flex-1 overflow-y-auto px-2 py-2 bg-slate-950/60 text-xs space-y-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
   >
     <!-- Log entries -->
     <div
       v-for="(entry, i) in entries"
       :key="i"
-      class="flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all duration-200"
+      class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all duration-200"
       :class="{
         'bg-red-500/8 border-l-2 border-red-500/40': entry.type === 'attack',
         'bg-blue-500/8 border-l-2 border-blue-500/40': entry.type === 'defense',
@@ -86,7 +97,7 @@ function formatEntry(entry: LogEntry): string {
     >
       <!-- Type icon -->
       <span
-        class="w-4 h-4 rounded flex items-center justify-center text-[9px] flex-shrink-0"
+        class="w-5 h-5 rounded flex items-center justify-center text-[11px] flex-shrink-0"
         :class="{
           'bg-red-500/20 text-red-400': entry.type === 'attack',
           'bg-blue-500/20 text-blue-400': entry.type === 'defense',
@@ -100,7 +111,7 @@ function formatEntry(entry: LogEntry): string {
 
       <!-- Entry text -->
       <span
-        class="font-medium leading-tight"
+        class="font-semibold leading-tight"
         :class="{
           'text-red-300/90': entry.type === 'attack',
           'text-blue-300/90': entry.type === 'defense',
@@ -113,7 +124,7 @@ function formatEntry(entry: LogEntry): string {
       <!-- Damage/value badge -->
       <span
         v-if="entry.damage"
-        class="ml-auto text-[9px] font-black px-1.5 py-0.5 rounded flex-shrink-0"
+        class="ml-auto text-[11px] font-black px-2 py-0.5 rounded flex-shrink-0"
         :class="entry.type === 'attack'
           ? 'bg-red-500/20 text-red-300'
           : 'bg-purple-500/20 text-purple-300'"
@@ -122,13 +133,13 @@ function formatEntry(entry: LogEntry): string {
       </span>
       <span
         v-else-if="entry.shield"
-        class="ml-auto text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 flex-shrink-0"
+        class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 flex-shrink-0"
       >
         +{{ entry.shield }}
       </span>
       <span
         v-else-if="entry.heal"
-        class="ml-auto text-[9px] font-black px-1.5 py-0.5 rounded bg-green-500/20 text-green-300 flex-shrink-0"
+        class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-green-500/20 text-green-300 flex-shrink-0"
       >
         +{{ entry.heal }}
       </span>
@@ -136,26 +147,29 @@ function formatEntry(entry: LogEntry): string {
 
     <!-- Turn status indicator (always at bottom) -->
     <div
-      class="flex items-center gap-2 px-2 py-1.5 rounded-lg mt-1"
-      :class="isMyTurn
-        ? 'bg-gradient-to-r from-yellow-500/10 to-amber-500/5 border border-yellow-500/20'
-        : 'bg-slate-800/40 border border-slate-700/30'"
+      class="flex items-center gap-2 px-3 py-2 rounded-xl mt-1.5 transition-all duration-500"
+      :class="[
+        isMyTurn
+          ? 'bg-gradient-to-r from-yellow-500/15 via-amber-500/10 to-yellow-500/15 border border-yellow-500/30 shadow-lg shadow-yellow-500/10'
+          : 'bg-slate-800/40 border border-slate-700/30',
+        turnFlash ? 'animate-turn-flash scale-[1.02]' : '',
+      ]"
     >
-      <span v-if="isMyTurn" class="relative flex h-2 w-2 flex-shrink-0">
+      <span v-if="isMyTurn" class="relative flex h-3 w-3 flex-shrink-0">
         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75" />
-        <span class="relative inline-flex rounded-full h-2 w-2 bg-yellow-400" />
+        <span class="relative inline-flex rounded-full h-3 w-3 bg-yellow-400" />
       </span>
-      <span v-else class="w-2 h-2 rounded-full bg-slate-600 flex-shrink-0" />
+      <span v-else class="w-3 h-3 rounded-full bg-slate-600 flex-shrink-0" />
 
       <span
-        class="font-bold flex-1"
+        class="font-black flex-1 text-sm"
         :class="isMyTurn ? 'text-yellow-300' : 'text-slate-500'"
       >
         {{ isMyTurn ? t('battle.yourTurn', 'Your turn!') : t('battle.waitingTurn', 'Waiting...') }}
       </span>
 
       <span
-        class="font-mono font-black text-[11px] px-1.5 py-0.5 rounded"
+        class="font-mono font-black text-sm px-2 py-0.5 rounded-lg"
         :class="isMyTurn
           ? (turnTimer <= 10 ? 'bg-red-500/30 text-red-300 animate-pulse' : 'bg-yellow-500/20 text-yellow-300')
           : 'bg-slate-700/50 text-slate-500'"
@@ -165,3 +179,14 @@ function formatEntry(entry: LogEntry): string {
     </div>
   </div>
 </template>
+
+<style scoped>
+@keyframes turn-flash {
+  0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.6); }
+  30% { box-shadow: 0 0 20px 4px rgba(234, 179, 8, 0.4); }
+  100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
+}
+.animate-turn-flash {
+  animation: turn-flash 1.5s ease-out;
+}
+</style>
