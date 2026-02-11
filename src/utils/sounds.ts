@@ -5,6 +5,7 @@
 
 // Importar el audio como asset de Vite (debe estar al inicio)
 import computerFanLoop from '@/assets/ComputerFanLoop.mp3';
+import { isTabLocked } from '@/composables/useTabLock';
 
 export type SoundType =
   | 'click'
@@ -145,6 +146,7 @@ class SoundManager {
   private enabled: boolean = true;
   private volume: number = 0.5;
   private initialized: boolean = false;
+  private battleSoundEnabled: boolean = true;
 
   constructor() {
     this.loadSettings();
@@ -157,6 +159,7 @@ class SoundManager {
         const settings = JSON.parse(saved);
         this.enabled = settings.enabled ?? true;
         this.volume = settings.volume ?? 0.5;
+        this.battleSoundEnabled = settings.battleSoundEnabled ?? true;
       }
     } catch {
       // Use defaults
@@ -167,7 +170,8 @@ class SoundManager {
     try {
       localStorage.setItem('blockLords_soundSettings', JSON.stringify({
         enabled: this.enabled,
-        volume: this.volume
+        volume: this.volume,
+        battleSoundEnabled: this.battleSoundEnabled
       }));
     } catch {
       // Ignore storage errors
@@ -269,6 +273,42 @@ class SoundManager {
   public setVolume(volume: number): void {
     this.volume = Math.max(0, Math.min(1, volume));
     this.saveSettings();
+  }
+
+  // Battle sound (independent from global)
+  public playBattle(sound: SoundType): void {
+    if (!this.battleSoundEnabled) return;
+
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+
+    const configs = SOUND_CONFIGS[sound];
+    if (!configs) return;
+
+    let startTime = ctx.currentTime;
+    for (const config of configs) {
+      this.playTone(ctx, config, startTime);
+      startTime += config.duration;
+    }
+  }
+
+  public isBattleSoundEnabled(): boolean {
+    return this.battleSoundEnabled;
+  }
+
+  public setBattleSoundEnabled(enabled: boolean): void {
+    this.battleSoundEnabled = enabled;
+    this.saveSettings();
+  }
+
+  public toggleBattleSoundEnabled(): boolean {
+    this.battleSoundEnabled = !this.battleSoundEnabled;
+    this.saveSettings();
+    return this.battleSoundEnabled;
   }
 }
 
@@ -441,5 +481,12 @@ export const rigSoundManager = new RigSoundManager();
 
 // Helper para usar en componentes
 export function playSound(sound: SoundType): void {
+  if (isTabLocked.value) return;
   soundManager.play(sound);
+}
+
+// Helper para sonidos de batalla (independiente del sonido global)
+export function playBattleSound(sound: SoundType): void {
+  if (isTabLocked.value) return;
+  soundManager.playBattle(sound);
 }

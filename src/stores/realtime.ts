@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { supabase } from '@/utils/supabase';
 import { useAuthStore } from './auth';
+import { isTabLocked } from '@/composables/useTabLock';
 
 export const useRealtimeStore = defineStore('realtime', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,6 +63,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
     if (visibilityHandler) return;
 
     visibilityHandler = () => {
+      if (isTabLocked.value) return;
       if (document.visibilityState === 'visible') {
         // Si estábamos conectados pero ya no lo estamos, reconectar
         if (wasConnected.value && !connected.value) {
@@ -89,10 +91,11 @@ export const useRealtimeStore = defineStore('realtime', () => {
     if (onlineHandler) return;
 
     onlineHandler = () => {
+      if (isTabLocked.value) return;
       if (wasConnected.value && !connected.value) {
         // Esperar un momento para que la red se estabilice
         setTimeout(() => {
-          manualReconnect();
+          if (!isTabLocked.value) manualReconnect();
         }, 1000);
       }
     };
@@ -110,6 +113,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
     if (focusHandler) return;
 
     focusHandler = () => {
+      if (isTabLocked.value) return;
       // Verificar inmediatamente el estado de los canales
       if (wasConnected.value) {
         let needsReconnect = false;
@@ -210,6 +214,8 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
   function handleChannelError() {
     connected.value = false;
+
+    if (isTabLocked.value) return;
 
     if (reconnectAttempts.value < maxReconnectAttempts) {
       reconnecting.value = true;

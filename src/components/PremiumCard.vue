@@ -160,7 +160,7 @@ async function confirmPurchase() {
           </div>
           <div>
             <p class="font-medium">{{ t('premium.benefits.blockBonus') }}</p>
-            <p class="text-xs text-text-muted">150 BLC vs 100 BLC</p>
+            <p class="text-xs text-text-muted">Tus shares × 1.5</p>
           </div>
         </div>
 
@@ -185,6 +185,42 @@ async function confirmPurchase() {
           <div>
             <p class="font-medium">{{ t('premium.benefits.resourceBonus') }}</p>
             <p class="text-xs text-text-muted">+1000 max energy & internet</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 bg-bg-tertiary rounded-lg p-3">
+          <div class="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center text-orange-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <div>
+            <p class="font-medium">{{ t('premium.benefits.rigDurability') }}</p>
+            <p class="text-xs text-text-muted">🔥 Tus rigs duran más</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 bg-bg-tertiary rounded-lg p-3">
+          <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+            </svg>
+          </div>
+          <div>
+            <p class="font-medium">{{ t('premium.benefits.reducedConsumption') }}</p>
+            <p class="text-xs text-text-muted">⚡ Ahorra energía e internet</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 bg-bg-tertiary rounded-lg p-3">
+          <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+            </svg>
+          </div>
+          <div>
+            <p class="font-medium">{{ t('premium.benefits.improvedCooling') }}</p>
+            <p class="text-xs text-text-muted">🧊 Recuperación rápida</p>
           </div>
         </div>
       </div>
@@ -252,6 +288,9 @@ async function confirmPurchase() {
               <p>✓ {{ t('premium.benefits.blockBonus') }}</p>
               <p>✓ {{ t('premium.benefits.withdrawalFee') }}</p>
               <p>✓ {{ t('premium.benefits.resourceBonus') }}</p>
+              <p>✓ {{ t('premium.benefits.rigDurability') }}</p>
+              <p>✓ {{ t('premium.benefits.reducedConsumption') }}</p>
+              <p>✓ {{ t('premium.benefits.improvedCooling') }}</p>
             </div>
             <div class="flex items-center justify-between border-t border-border/50 pt-3">
               <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.price', 'Precio') }}</span>

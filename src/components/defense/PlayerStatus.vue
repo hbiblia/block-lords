@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const props = defineProps<{
@@ -12,6 +12,7 @@ const props = defineProps<{
   isCurrentTurn?: boolean;
   isEnemy?: boolean;
   weakened?: boolean;
+  boosted?: boolean;
 }>();
 
 const { t } = useI18n();
@@ -19,6 +20,45 @@ const maxHpVal = computed(() => props.maxHp || 200);
 const maxEnergyVal = computed(() => props.maxEnergy || 3);
 const hpPercent = computed(() => Math.max(0, (props.hp / maxHpVal.value) * 100));
 const shieldPercent = computed(() => Math.max(0, Math.min(100, (props.shield / 50) * 100)));
+
+// Animation states
+const shaking = ref(false);
+const healGlow = ref(false);
+const shieldFlash = ref(false);
+const shieldBreak = ref(false);
+const energyPop = ref(false);
+const weakenedFlash = ref(false);
+const boostedFlash = ref(false);
+
+function triggerAnim(animRef: typeof shaking, duration: number) {
+  animRef.value = true;
+  setTimeout(() => { animRef.value = false; }, duration);
+}
+
+watch(() => props.hp, (newVal, oldVal) => {
+  if (oldVal === undefined || oldVal === newVal) return;
+  if (newVal < oldVal) triggerAnim(shaking, 500);
+  else triggerAnim(healGlow, 600);
+});
+
+watch(() => props.shield, (newVal, oldVal) => {
+  if (oldVal === undefined || oldVal === newVal) return;
+  if (newVal > oldVal) triggerAnim(shieldFlash, 500);
+  else if (newVal <= 0 && oldVal > 0) triggerAnim(shieldBreak, 400);
+});
+
+watch(() => props.energy, (newVal, oldVal) => {
+  if (oldVal === undefined || oldVal === newVal) return;
+  triggerAnim(energyPop, 300);
+});
+
+watch(() => props.weakened, (newVal, oldVal) => {
+  if (newVal && !oldVal) triggerAnim(weakenedFlash, 400);
+});
+
+watch(() => props.boosted, (newVal, oldVal) => {
+  if (newVal && !oldVal) triggerAnim(boostedFlash, 400);
+});
 </script>
 
 <template>
@@ -26,8 +66,31 @@ const shieldPercent = computed(() => Math.max(0, Math.min(100, (props.shield / 5
     class="px-3 py-2 relative overflow-hidden"
     :class="[
       isEnemy ? 'border-b border-red-500/20' : 'border-t border-green-500/20',
+      shaking ? 'damage-shake' : '',
+      healGlow ? 'heal-glow' : '',
     ]"
   >
+    <!-- Damage flash overlay -->
+    <div
+      v-if="shaking"
+      class="absolute inset-0 z-10 pointer-events-none bg-red-500/20 damage-flash"
+    />
+    <!-- Heal flash overlay -->
+    <div
+      v-if="healGlow"
+      class="absolute inset-0 z-10 pointer-events-none bg-green-500/20 heal-flash"
+    />
+    <!-- Weakened flash overlay -->
+    <div
+      v-if="weakenedFlash"
+      class="absolute inset-0 z-10 pointer-events-none bg-purple-500/25 status-flash"
+    />
+    <!-- Boosted flash overlay -->
+    <div
+      v-if="boostedFlash"
+      class="absolute inset-0 z-10 pointer-events-none bg-yellow-500/25 status-flash"
+    />
+
     <!-- Subtle background glow -->
     <div
       class="absolute inset-0 opacity-[0.07]"
@@ -79,6 +142,12 @@ const shieldPercent = computed(() => Math.max(0, Math.min(100, (props.shield / 5
                 {{ t('battle.weakenedStatus', 'Weakened: next attack -8 dmg') }}
               </span>
             </div>
+            <div v-if="boosted" class="flex items-center gap-1 mt-0.5">
+              <span class="w-1 h-1 rounded-full bg-yellow-400 animate-pulse" />
+              <span class="text-[8px] text-yellow-300 font-medium">
+                {{ t('battle.boostedStatus', 'Boosted: next attack +10 dmg') }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -89,9 +158,12 @@ const shieldPercent = computed(() => Math.max(0, Math.min(100, (props.shield / 5
               v-for="i in maxEnergyVal"
               :key="i"
               class="w-6 h-6 rounded-lg text-sm flex items-center justify-center font-bold transition-all duration-300"
-              :class="i <= (energy ?? 0)
-                ? 'bg-slate-900 border border-yellow-500/60 text-yellow-400 shadow-sm shadow-yellow-500/15 scale-100'
-                : 'bg-slate-800 text-slate-600 border border-slate-700/50 scale-90 opacity-40'"
+              :class="[
+                i <= (energy ?? 0)
+                  ? 'bg-slate-900 border border-yellow-500/60 text-yellow-400 shadow-sm shadow-yellow-500/15 scale-100'
+                  : 'bg-slate-800 text-slate-600 border border-slate-700/50 scale-90 opacity-40',
+                energyPop ? 'energy-bounce' : '',
+              ]"
             >&#9889;</div>
           </div>
           <span
@@ -150,9 +222,13 @@ const shieldPercent = computed(() => Math.max(0, Math.min(100, (props.shield / 5
           <span class="text-[10px]">&#128737;</span>
           <span class="text-[10px] text-blue-400 font-black uppercase tracking-wide">{{ t('battle.shieldLabel', 'SH') }}</span>
         </div>
-        <div class="flex-1 h-4 rounded-lg overflow-hidden relative bg-slate-900/80 border border-blue-500/20">
+        <div
+          class="flex-1 h-4 rounded-lg overflow-hidden relative bg-slate-900/80 border border-blue-500/20"
+          :class="{ 'shield-break-anim': shieldBreak }"
+        >
           <div
             class="h-full rounded-lg bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400 transition-all duration-500 relative overflow-hidden"
+            :class="{ 'shield-flash-anim': shieldFlash }"
             :style="{ width: shieldPercent + '%' }"
           >
             <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent animate-[shimmer_3s_infinite]" />
@@ -174,5 +250,80 @@ const shieldPercent = computed(() => Math.max(0, Math.min(100, (props.shield / 5
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+
+/* Damage shake */
+@keyframes damage-shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 50%, 90% { transform: translateX(-4px); }
+  30%, 70% { transform: translateX(4px); }
+}
+.damage-shake {
+  animation: damage-shake 500ms ease-out;
+}
+
+/* Damage red flash overlay */
+@keyframes damage-flash {
+  0% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+.damage-flash {
+  animation: damage-flash 500ms ease-out forwards;
+}
+
+/* Heal green glow */
+@keyframes heal-glow-anim {
+  0% { box-shadow: inset 0 0 0 rgba(34, 197, 94, 0); }
+  30% { box-shadow: inset 0 0 20px rgba(34, 197, 94, 0.3); }
+  100% { box-shadow: inset 0 0 0 rgba(34, 197, 94, 0); }
+}
+.heal-glow {
+  animation: heal-glow-anim 600ms ease-out;
+}
+
+/* Heal flash overlay */
+@keyframes heal-flash {
+  0% { opacity: 0.5; }
+  100% { opacity: 0; }
+}
+.heal-flash {
+  animation: heal-flash 600ms ease-out forwards;
+}
+
+/* Shield flash pulse */
+@keyframes shield-flash {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.8); }
+}
+.shield-flash-anim {
+  animation: shield-flash 500ms ease-out;
+}
+
+/* Shield break burst */
+@keyframes shield-break {
+  0% { transform: scale(1); border-color: rgba(59, 130, 246, 0.5); }
+  40% { transform: scale(1.05); border-color: rgba(59, 130, 246, 0.8); }
+  100% { transform: scale(1); border-color: rgba(59, 130, 246, 0.2); }
+}
+.shield-break-anim {
+  animation: shield-break 400ms ease-out;
+}
+
+/* Energy orb bounce */
+@keyframes energy-bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+}
+.energy-bounce {
+  animation: energy-bounce 300ms ease-out;
+}
+
+/* Status effect flash (weakened/boosted) */
+@keyframes status-flash-anim {
+  0% { opacity: 0.7; }
+  100% { opacity: 0; }
+}
+.status-flash {
+  animation: status-flash-anim 400ms ease-out forwards;
 }
 </style>

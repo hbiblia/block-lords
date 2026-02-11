@@ -9,6 +9,7 @@ import { usePendingBlocksStore } from '@/stores/pendingBlocks';
 import { useMiningStore } from '@/stores/mining';
 import { useGiftsStore } from '@/stores/gifts';
 import { useToastStore } from '@/stores/toast';
+import { useDefenseStore } from '@/stores/defense';
 import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
@@ -34,9 +35,9 @@ function openDefense() {
 
 import NavBar from '@/components/NavBar.vue';
 import InfoBar from '@/components/InfoBar.vue';
+import UpdateNotificationModal from '@/components/UpdateNotificationModal.vue';
 import ConnectionLostModal from '@/components/ConnectionLostModal.vue';
 import GameNotificationsModal from '@/components/GameNotificationsModal.vue';
-import StreakModal from '@/components/StreakModal.vue';
 import MissionsPanel from '@/components/MissionsPanel.vue';
 import ToastContainer from '@/components/ToastContainer.vue';
 import BlockClaimModal from '@/components/BlockClaimModal.vue';
@@ -54,6 +55,18 @@ const pendingBlocksStore = usePendingBlocksStore();
 const miningStore = useMiningStore();
 const giftsStore = useGiftsStore();
 const toastStore = useToastStore();
+const defenseStore = useDefenseStore();
+
+// Combined rewards panel (missions + streak)
+const showRewards = ref(false);
+
+function openRewards() {
+  showRewards.value = true;
+}
+
+function closeRewards() {
+  showRewards.value = false;
+}
 
 // Handle purchase events - reload mining data
 async function handlePurchased() {
@@ -68,6 +81,9 @@ function handleInventoryUsed() {
 // InfoBar visibility state - shared via provide/inject
 const infoBarVisible = ref(false);
 provide('infoBarVisible', infoBarVisible);
+
+// Desktop action buttons visibility (persisted in localStorage)
+const desktopButtonsVisible = ref(localStorage.getItem('desktopButtonsVisible') !== 'false');
 
 // Escuchar evento de bloque minado para actualizar pending blocks
 function handleBlockMined(event: CustomEvent) {
@@ -126,6 +142,8 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
     giftsStore.startPolling();
     // Iniciar verificación periódica de sesión
     authStore.startSessionCheck();
+    // Subscribe to lobby count for badge
+    defenseStore.subscribeLobbyCount();
     // Inicializar AdSense cuando el usuario se autentica
     nextTick(() => {
       try {
@@ -138,13 +156,20 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
     missionsStore.stopHeartbeat();
     authStore.stopSessionCheck();
     giftsStore.stopPolling();
+    defenseStore.unsubscribeLobbyCount();
   }
 }, { immediate: true });
+
+// Guardar estado del menú de botones en localStorage
+watch(desktopButtonsVisible, (visible) => {
+  localStorage.setItem('desktopButtonsVisible', String(visible));
+});
 
 onUnmounted(() => {
   missionsStore.stopHeartbeat();
   authStore.stopSessionCheck();
   giftsStore.stopPolling();
+  defenseStore.unsubscribeLobbyCount();
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
   window.removeEventListener('pending-block-created', handlePendingBlockCreated as EventListener);
   window.removeEventListener('open-market', handleOpenMarketEvent);
@@ -217,6 +242,9 @@ async function handleConnectionClick() {
     <!-- InfoBar (announcements) -->
     <InfoBar />
 
+    <!-- Update Notification Modal -->
+    <UpdateNotificationModal />
+
     <NavBar />
 
     <!-- Connection Lost Modal -->
@@ -228,16 +256,10 @@ async function handleConnectionClick() {
     <!-- Toast Notifications -->
     <ToastContainer />
 
-    <!-- Streak Modal -->
-    <StreakModal
-      :show="streakStore.showModal"
-      @close="streakStore.closeModal"
-    />
-
-    <!-- Missions Panel -->
+    <!-- Missions & Streak Panel -->
     <MissionsPanel
-      :show="missionsStore.showPanel"
-      @close="missionsStore.closePanel"
+      :show="showRewards"
+      @close="closeRewards"
     />
 
     <!-- Block Claim Modal -->
@@ -284,27 +306,26 @@ async function handleConnectionClick() {
       <slot />
     </main>
 
-    <!-- Connection Status -->
-    <div
-      v-if="authStore.isAuthenticated || authStore.sessionLost"
-      class="fixed bottom-[4.5rem] sm:bottom-20 left-2 sm:left-4 flex items-center gap-1.5 px-2 py-1 bg-bg-secondary/80 backdrop-blur-sm border rounded-full text-[10px] sm:text-xs shadow-lg cursor-pointer transition-all hover:bg-bg-secondary"
-      :class="connectionBorderClass"
-      @click="handleConnectionClick"
-    >
-      <span
-        class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full"
-        :class="connectionDotClass"
-      ></span>
-      <span :class="connectionTextClass">
-        {{ connectionStatusText }}
-      </span>
-    </div>
-
     <!-- Mobile Bottom Action Bar -->
     <div
       v-if="authStore.isAuthenticated"
-      class="fixed bottom-0 left-0 right-0 z-40 sm:bottom-14 sm:left-auto sm:right-4 sm:w-auto"
+      class="fixed bottom-0 left-0 right-0 z-40 sm:left-auto sm:right-4 sm:w-auto"
     >
+      <!-- Connection Status (mobile, above action bar) -->
+      <div
+        v-if="(authStore.isAuthenticated || authStore.sessionLost) && (authStore.isAuthenticated)"
+        class="sm:hidden flex justify-start px-3 py-1 bg-bg-secondary/60 backdrop-blur-sm border-t border-border/20"
+      >
+        <div
+          class="flex items-center gap-1.5 px-2 py-0.5 bg-bg-secondary/80 border rounded-full text-[10px] cursor-pointer transition-all"
+          :class="connectionBorderClass"
+          @click="handleConnectionClick"
+        >
+          <span class="w-1.5 h-1.5 rounded-full" :class="connectionDotClass"></span>
+          <span :class="connectionTextClass">{{ connectionStatusText }}</span>
+        </div>
+      </div>
+
       <!-- Mobile Bar -->
       <div class="sm:hidden mobile-action-bar">
         <div class="flex items-center justify-around px-2 py-1.5 safe-area-bottom">
@@ -321,45 +342,38 @@ async function handleConnectionClick() {
             <span class="mobile-action-label text-accent-primary">{{ t('blocks.claim', 'Claim') }}</span>
           </button>
 
-          <!-- Missions -->
+          <!-- Rewards -->
           <button
-            @click="missionsStore.openPanel"
+            @click="openRewards()"
             class="mobile-action-btn"
-            :class="{ 'mobile-action-btn-success': missionsStore.claimableCount > 0 }"
+            :class="{ 'mobile-action-btn-success': missionsStore.claimableCount > 0 || streakStore.canClaim }"
           >
             <div class="relative">
               <span class="text-xl">🎯</span>
               <span
-                v-if="missionsStore.claimableCount > 0"
+                v-if="missionsStore.claimableCount > 0 || streakStore.canClaim"
                 class="mobile-badge bg-status-success"
-              >{{ missionsStore.claimableCount }}</span>
+              >{{ (missionsStore.claimableCount || 0) + (streakStore.canClaim ? 1 : 0) }}</span>
             </div>
             <span class="mobile-action-label">{{ t('missions.short', 'Missions') }}</span>
           </button>
-
-          <!-- Streak -->
-          <button
-            @click="streakStore.openModal"
-            class="mobile-action-btn"
-            :class="{ 'mobile-action-btn-highlight': streakStore.canClaim }"
-          >
-            <div class="relative">
-              <span class="text-xl">🔥</span>
-              <span
-                v-if="streakStore.canClaim"
-                class="mobile-badge bg-accent-primary"
-              >!</span>
-            </div>
-            <span class="mobile-action-label">{{ t('streak.short', 'Streak') }}</span>
-          </button>
-
-          <!-- Divider -->
-          <div class="w-px h-8 bg-border/50"></div>
 
           <!-- Market -->
           <button @click="openMarket" class="mobile-action-btn">
             <span class="text-xl">🛒</span>
             <span class="mobile-action-label">{{ t('mining.market', 'Market') }}</span>
+          </button>
+
+          <!-- Battle (distinctive) -->
+          <button @click="openDefense" class="mobile-battle-btn">
+            <div class="relative">
+              <span class="text-xl leading-none">&#9876;</span>
+              <span
+                v-if="defenseStore.lobbyCount > 0"
+                class="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] px-0.5 text-[9px] font-bold text-white bg-green-500 rounded-full flex items-center justify-center shadow-sm"
+              >{{ defenseStore.lobbyCount }}</span>
+            </div>
+            <span class="mobile-action-label text-red-400/80">{{ t('defense.short', 'Battle') }}</span>
           </button>
 
           <!-- Exchange -->
@@ -373,17 +387,41 @@ async function handleConnectionClick() {
             <span class="text-xl">🎒</span>
             <span class="mobile-action-label">{{ t('mining.inventory', 'Inventory') }}</span>
           </button>
-
-          <!-- Defense -->
-          <button @click="openDefense" class="mobile-action-btn">
-            <span class="text-xl">&#9876;</span>
-            <span class="mobile-action-label">{{ t('defense.short', 'Defense') }}</span>
-          </button>
         </div>
       </div>
 
       <!-- Desktop Floating Cards -->
-      <div class="hidden sm:flex flex-col gap-2">
+      <div class="hidden sm:flex flex-col justify-end gap-2 pb-4">
+        <transition
+          enter-active-class="transition-all duration-200 ease-out"
+          leave-active-class="transition-all duration-200 ease-in"
+          enter-from-class="opacity-0 -translate-y-2"
+          enter-to-class="opacity-100 translate-y-0"
+          leave-from-class="opacity-100 translate-y-0"
+          leave-to-class="opacity-0 -translate-y-2"
+        >
+        <div v-show="desktopButtonsVisible" class="flex flex-col gap-2">
+        <!-- Defense Button -->
+        <button
+          @click="openDefense"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group overflow-hidden"
+        >
+          <div class="absolute left-0 top-0 bottom-0 w-[3px] bg-red-500"></div>
+          <div class="w-8 h-8 rounded-md flex items-center justify-center">
+            <span class="text-lg">&#9876;</span>
+          </div>
+          <div class="text-left">
+            <div class="text-xs font-semibold text-slate-200">{{ t('defense.title', 'Block Defense') }}</div>
+            <div class="text-[10px] text-slate-400">{{ t('defense.subtitle', 'Tower Defense') }}</div>
+          </div>
+          <div
+            v-if="defenseStore.lobbyCount > 0"
+            class="ml-auto px-1.5 py-0.5 bg-green-500 text-white text-[10px] font-bold rounded-full animate-pulse"
+          >
+            {{ defenseStore.lobbyCount }}
+          </div>
+        </button>
+
         <!-- Market Button -->
         <button
           @click="openMarket"
@@ -426,28 +464,15 @@ async function handleConnectionClick() {
           </div>
         </button>
 
-        <!-- Defense Button -->
-        <button
-          @click="openDefense"
-          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-red-600/50 hover:bg-slate-700 transition-all rounded-lg group"
-        >
-          <div class="w-8 h-8 rounded-md flex items-center justify-center">
-            <span class="text-lg">&#9876;</span>
-          </div>
-          <div class="text-left">
-            <div class="text-xs font-semibold text-slate-200">{{ t('defense.title', 'Block Defense') }}</div>
-            <div class="text-[10px] text-slate-400">{{ t('defense.subtitle', 'Tower Defense') }}</div>
-          </div>
-        </button>
-
         <div class="w-full h-px bg-border/30 my-1"></div>
 
         <!-- Pending Blocks Button -->
         <button
           v-if="pendingBlocksStore.hasPending"
           @click="pendingBlocksStore.openModal"
-          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-green-500 hover:bg-slate-700 transition-all rounded-lg group animate-border-pulse-green"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group overflow-hidden"
         >
+          <div class="absolute left-0 top-0 bottom-0 w-[3px] bg-green-500"></div>
           <div class="w-8 h-8 rounded-md flex items-center justify-center">
             <span class="text-lg">⛏️</span>
           </div>
@@ -460,47 +485,71 @@ async function handleConnectionClick() {
           </div>
         </button>
 
-        <!-- Missions Button -->
+        <!-- Rewards (Missions + Streak) -->
         <button
-          @click="missionsStore.openPanel"
+          @click="openRewards()"
           class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
-          :class="{ 'border-green-500 animate-border-pulse-green': missionsStore.claimableCount > 0 }"
+          :class="{ 'border-green-500 animate-border-pulse-green': missionsStore.claimableCount > 0 || streakStore.canClaim }"
         >
           <div class="w-8 h-8 rounded-md flex items-center justify-center">
             <span class="text-lg">🎯</span>
           </div>
           <div class="text-left">
             <div class="text-xs font-semibold text-slate-200">{{ t('missions.button') }}</div>
-            <div class="text-[10px] text-slate-400">{{ missionsStore.completedCount }}/{{ missionsStore.totalCount }}</div>
+            <div class="text-[10px] text-slate-400">
+              {{ missionsStore.completedCount }}/{{ missionsStore.totalCount }}
+              <span v-if="streakStore.currentStreak > 0" class="ml-1">· 🔥{{ streakStore.currentStreak }}</span>
+            </div>
           </div>
           <div
             class="ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded-full"
-            :class="missionsStore.claimableCount > 0 ? 'bg-status-success text-white' : 'bg-slate-700 text-slate-300'"
+            :class="(missionsStore.claimableCount > 0 || streakStore.canClaim) ? 'bg-status-success text-white' : 'bg-slate-700 text-slate-300'"
           >
-            {{ missionsStore.claimableCount > 0 ? missionsStore.claimableCount : `${missionsStore.completedCount}/${missionsStore.totalCount}` }}
+            {{ (missionsStore.claimableCount > 0 || streakStore.canClaim) ? (missionsStore.claimableCount || 0) + (streakStore.canClaim ? 1 : 0) : `${missionsStore.completedCount}/${missionsStore.totalCount}` }}
           </div>
         </button>
+        </div>
+        </transition>
 
-        <!-- Streak Button -->
-        <button
-          @click="streakStore.openModal"
-          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
-          :class="{ 'border-green-500 animate-border-pulse-green': streakStore.canClaim }"
+        <!-- Connection Status (desktop, always visible above toggle button) -->
+        <div
+          v-if="authStore.isAuthenticated || authStore.sessionLost"
+          class="flex items-center gap-1.5 px-2 py-1 bg-bg-secondary/80 backdrop-blur-sm border rounded-full text-[10px] cursor-pointer transition-all hover:bg-bg-secondary self-end"
+          :class="connectionBorderClass"
+          @click="handleConnectionClick"
         >
-          <div class="w-8 h-8 rounded-md flex items-center justify-center">
-            <span class="text-lg">🔥</span>
-          </div>
-          <div class="text-left">
-            <div class="text-xs font-semibold text-slate-200">{{ t('streak.button') }}</div>
-            <div class="text-[10px] text-slate-400">{{ streakStore.currentStreak }} {{ t('streak.days') }}</div>
-          </div>
-          <div
-            class="ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded-full"
-            :class="streakStore.canClaim ? 'bg-accent-primary text-white' : 'bg-slate-700 text-slate-300'"
+          <span class="w-1.5 h-1.5 rounded-full" :class="connectionDotClass"></span>
+          <span :class="connectionTextClass">{{ connectionStatusText }}</span>
+        </div>
+
+        <!-- Toggle visibility button + badges when collapsed -->
+        <div class="flex items-center gap-1.5 ml-auto">
+          <template v-if="!desktopButtonsVisible">
+            <span
+              v-if="pendingBlocksStore.hasPending"
+              class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-green-500 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer animate-border-pulse-green"
+              @click="pendingBlocksStore.openModal"
+            >⛏️ {{ pendingBlocksStore.count }}</span>
+            <span
+              v-if="missionsStore.claimableCount > 0 || streakStore.canClaim"
+              class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-green-500 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer animate-border-pulse-green"
+              @click="openRewards()"
+            >🎯 {{ (missionsStore.claimableCount || 0) + (streakStore.canClaim ? 1 : 0) }}</span>
+            <span
+              v-if="defenseStore.lobbyCount > 0"
+              class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-red-600/50 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer"
+              @click="openDefense"
+            >&#9876; {{ defenseStore.lobbyCount }}</span>
+          </template>
+          <button
+            @click="desktopButtonsVisible = !desktopButtonsVisible"
+            class="flex items-center gap-1.5 px-2 h-8 bg-slate-800/80 border border-slate-600/50 hover:bg-slate-700 transition-all rounded-lg text-slate-400 hover:text-slate-200"
+            :title="desktopButtonsVisible ? 'Hide buttons' : 'Show buttons'"
           >
-            {{ streakStore.canClaim ? '!' : streakStore.currentStreak }}
-          </div>
-        </button>
+            <span v-if="!desktopButtonsVisible" class="text-[11px] font-medium">{{ t('nav.menu', 'Menu') }}</span>
+            <span class="text-sm transition-transform duration-200" :class="desktopButtonsVisible ? 'rotate-180' : 'rotate-0'">&#9660;</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -538,10 +587,9 @@ async function handleConnectionClick() {
   align-items: center;
   justify-content: center;
   gap: 0.125rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.375rem 0.4rem;
   border-radius: 0.75rem;
   transition: all 0.2s ease;
-  min-width: 3.5rem;
 }
 
 .mobile-action-btn:active {
@@ -580,6 +628,26 @@ async function handleConnectionClick() {
   font-weight: 500;
   color: rgba(255, 255, 255, 0.6);
   white-space: nowrap;
+}
+
+/* Battle button inline but distinctive */
+.mobile-battle-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  padding: 0.375rem 0.5rem;
+  min-width: 2.8rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  background: rgba(220, 38, 38, 0.12);
+  transition: all 0.2s ease;
+}
+
+.mobile-battle-btn:active {
+  transform: scale(0.95);
+  background: rgba(220, 38, 38, 0.2);
 }
 
 .mobile-badge {

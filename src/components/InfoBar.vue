@@ -12,7 +12,7 @@ interface Announcement {
   id: string;
   message: string;
   message_es?: string;
-  type: 'info' | 'warning' | 'success' | 'error' | 'maintenance';
+  type: 'info' | 'warning' | 'success' | 'error' | 'maintenance' | 'update';
   icon: string;
   link_url?: string;
   link_text?: string;
@@ -29,6 +29,10 @@ const dismissedIds = ref<Set<string>>(new Set());
 
 // Auto-rotate announcements
 let rotateInterval: number | null = null;
+
+// Throttle announcement reloading (max once per minute)
+let lastAnnouncementCheck = 0;
+const ANNOUNCEMENT_CHECK_INTERVAL = 60000; // 1 minute
 
 const currentAnnouncement = computed(() => {
   const visible = announcements.value.filter(a => !dismissedIds.value.has(a.id));
@@ -64,7 +68,8 @@ const typeClasses = computed(() => {
 async function loadAnnouncements() {
   try {
     const data = await getActiveAnnouncements();
-    announcements.value = data ?? [];
+    // Filter out 'update' type announcements (they are shown in UpdateNotificationModal)
+    announcements.value = (data ?? []).filter((a: any) => a.type !== 'update');
   } catch (e) {
     console.error('Error loading announcements:', e);
     announcements.value = [];
@@ -123,6 +128,15 @@ watch(
   { immediate: true }
 );
 
+// Event listener for player updates (indicates tick occurred)
+function handlePlayerUpdate() {
+  const now = Date.now();
+  if (now - lastAnnouncementCheck >= ANNOUNCEMENT_CHECK_INTERVAL) {
+    lastAnnouncementCheck = now;
+    loadAnnouncements();
+  }
+}
+
 onMounted(() => {
   // Check if all announcements were dismissed this session
   if (sessionStorage.getItem('allAnnouncementsDismissed') === 'true') {
@@ -139,10 +153,14 @@ onMounted(() => {
 
   loadAnnouncements();
   startRotation();
+
+  // Listen for player updates (tick events)
+  window.addEventListener('player-rigs-updated', handlePlayerUpdate as EventListener);
 });
 
 onUnmounted(() => {
   stopRotation();
+  window.removeEventListener('player-rigs-updated', handlePlayerUpdate as EventListener);
 });
 </script>
 

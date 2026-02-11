@@ -2,14 +2,29 @@
 import { watch, onMounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
+import { useMiningStore } from '@/stores/mining';
 import { useI18n } from 'vue-i18n';
 import MainLayout from '@/layouts/MainLayout.vue';
 import UpdateModal from '@/components/UpdateModal.vue';
+import { useTabLock } from '@/composables/useTabLock';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
+const miningStore = useMiningStore();
 const isRetrying = ref(false);
+const { isSuperseded } = useTabLock();
+
+// Pause/resume DB activity based on tab lock state
+watch(isSuperseded, (locked) => {
+  if (locked) {
+    realtimeStore.disconnect();
+    miningStore.unsubscribeFromRealtime();
+  } else if (authStore.isAuthenticated) {
+    realtimeStore.connect();
+    miningStore.subscribeToRealtime();
+  }
+});
 
 // Inicializar auth al montar la app
 onMounted(async () => {
@@ -98,7 +113,7 @@ async function handleRetry() {
 
   <!-- Error de conexión overlay -->
   <Transition name="fade">
-  <div v-if="authStore.connectionError || !authStore.isServerOnline" class="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div v-if="!isSuperseded && (authStore.connectionError || !authStore.isServerOnline)" class="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="card p-8 max-w-md w-full text-center border border-border/50 shadow-2xl">
       <!-- Icono de error -->
       <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-red-500/10 flex items-center justify-center">
@@ -137,6 +152,20 @@ async function handleRetry() {
 
       <!-- Sugerencias -->
       <p class="text-xs text-text-muted mt-4">{{ t('connection.error.suggestions') }}</p>
+    </div>
+  </div>
+  </Transition>
+
+  <!-- Duplicate tab overlay -->
+  <Transition name="fade">
+  <div v-if="isSuperseded" class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="card p-8 max-w-sm w-full text-center border border-border/50 shadow-2xl">
+      <div class="w-16 h-16 mx-auto mb-5 rounded-full bg-amber-500/10 flex items-center justify-center text-3xl">
+        🪟
+      </div>
+      <h2 class="text-xl font-bold text-text-primary mb-2">{{ t('tabLock.title') }}</h2>
+      <p class="text-text-secondary text-sm mb-2">{{ t('tabLock.message') }}</p>
+      <p class="text-text-muted text-xs">{{ t('tabLock.hint') }}</p>
     </div>
   </div>
   </Transition>

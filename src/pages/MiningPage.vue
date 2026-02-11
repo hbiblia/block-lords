@@ -7,6 +7,7 @@ import { buyRigSlot } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { useRigSound } from '@/composables/useSound';
 import { useWakeLock } from '@/composables/useWakeLock';
+import { isTabLocked } from '@/composables/useTabLock';
 import { useMiningEstimate } from '@/composables/useMiningEstimate';
 import RigEnhanceModal from '@/components/RigEnhanceModal.vue';
 
@@ -46,9 +47,20 @@ const miningInterval = ref<number | null>(null);
 const lastBlockFound = ref<any>(null);
 const showBlockFound = ref(false);
 
+// Recent blocks panel
+const recentBlocksCollapsed = ref(localStorage.getItem('recentBlocksCollapsed') !== 'false');
+function toggleRecentBlocks() {
+  recentBlocksCollapsed.value = !recentBlocksCollapsed.value;
+  localStorage.setItem('recentBlocksCollapsed', String(recentBlocksCollapsed.value));
+}
+
 // Uptime timer
 const uptimeKey = ref(0);
 let uptimeInterval: number | null = null;
+
+// Polling intervals (stored for cleanup)
+let blockInfoInterval: number | null = null;
+let playerSharesInterval: number | null = null;
 
 // Computed from store
 const rigs = computed(() => miningStore.rigs);
@@ -89,18 +101,29 @@ const blockTypeEmoji = computed(() => {
 
 const blockTypeLabel = computed(() => {
   const type = currentMiningBlock.value?.block_type || 'bronze';
-  return type === 'gold' ? 'Bloque Oro' : type === 'silver' ? 'Bloque Plata' : 'Bloque Bronce';
+  return type === 'gold' ? t('mining.blockType.gold') : type === 'silver' ? t('mining.blockType.silver') : t('mining.blockType.bronze');
 });
 
 // Watch active rigs to control fan sound
 watch(activeRigsCount, (newCount) => {
-  updateRigSound(newCount);
+  if (!isTabLocked.value) {
+    updateRigSound(newCount);
+  }
 });
+
+// Stop sound when tab is locked, resume when unlocked
+watch(isTabLocked, (locked) => {
+  if (locked) {
+    stopRigSound();
+  } else {
+    updateRigSound(activeRigsCount.value);
+  }
+}, { immediate: true });
 
 // Iniciar sonido de rigs en la primera interacción del usuario (si hay rigs activos)
 // Esto es necesario porque el navegador bloquea audio sin interacción
 const initRigSoundOnInteraction = () => {
-  if (activeRigsCount.value > 0) {
+  if (activeRigsCount.value > 0 && !isTabLocked.value) {
     updateRigSound(activeRigsCount.value);
   }
   document.removeEventListener('click', initRigSoundOnInteraction);
@@ -455,14 +478,14 @@ onMounted(() => {
   miningStore.subscribeToMiningBlocks();
 
   // Actualizar bloque info cada segundo para countdown
-  setInterval(() => {
+  blockInfoInterval = setInterval(() => {
     miningStore.loadMiningBlockInfo();
-  }, 1000);
+  }, 1000) as unknown as number;
 
   // Actualizar shares del jugador cada 30 segundos (respaldo por si realtime falla)
-  setInterval(() => {
+  playerSharesInterval = setInterval(() => {
     miningStore.loadPlayerShares();
-  }, 30000);
+  }, 30000) as unknown as number;
 
   window.addEventListener('block-mined', handleBlockMined as EventListener);
 
@@ -482,6 +505,10 @@ onUnmounted(() => {
   stopRigSound();
   miningStore.unsubscribeFromRealtime();
   releaseWakeLock();
+
+  // Limpiar intervalos de polling
+  if (blockInfoInterval) clearInterval(blockInfoInterval);
+  if (playerSharesInterval) clearInterval(playerSharesInterval);
 
   // Limpiar listeners de inicialización de sonido (si aún no se ejecutaron)
   document.removeEventListener('click', initRigSoundOnInteraction);
@@ -529,35 +556,29 @@ onUnmounted(() => {
     <!-- Contenido (con datos en cache o cargados) -->
     <div v-else class="space-y-6">
       <!-- Bloque Actual - Dashboard Unificado -->
-      <div class="card relative overflow-hidden">
+      <div class="card relative overflow-hidden p-3 sm:p-6">
         <div v-if="totalHashrate > 0"
           class="absolute inset-0 bg-gradient-to-r from-accent-primary/5 via-accent-secondary/5 to-accent-primary/5 animate-pulse">
         </div>
 
         <div class="relative z-10">
           <!-- Header -->
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-3">
-              <div class="w-14 h-14 rounded-xl flex items-center justify-center text-3xl"
+          <div class="flex items-center justify-between mb-3 sm:mb-4">
+            <div class="flex items-center gap-2 sm:gap-3">
+              <div class="w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-2xl sm:text-3xl"
                 :class="totalHashrate > 0 ? 'bg-gradient-primary animate-pulse' : 'bg-bg-tertiary'">
                 ⛏️
               </div>
               <div>
-                <div class="flex items-center gap-2">
-                  <h2 class="text-lg font-semibold">
-                    <span v-if="currentMiningBlock?.active" v-tooltip="'Número secuencial del bloque que se está minando ahora. Cada bloque dura ~30 minutos.'" class="cursor-help">Bloque Actual #{{ currentMiningBlock.block_number }}</span>
-                    <span v-else>Centro de Minería</span>
+                <div class="flex items-center gap-1.5 sm:gap-2">
+                  <h2 class="text-base sm:text-lg font-semibold">
+                    <span v-if="currentMiningBlock?.active" v-tooltip="t('mining.tooltip.blockNumber')" class="cursor-help">{{ t('mining.currentBlock') }} #{{ currentMiningBlock.block_number }}</span>
+                    <span v-else>{{ t('mining.miningCenter') }}</span>
                   </h2>
-                  <span v-if="isPremium"
-                    class="px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1 cursor-help"
-                    v-tooltip="'Como usuario Premium, recibes +50% extra en cada recompensa de bloque'">
-                    <span>👑</span>
-                    <span>+50% Bonus</span>
-                  </span>
                   <!-- Tooltip educativo -->
                   <button
                     class="text-text-muted hover:text-accent-primary transition-colors"
-                    v-tooltip="'Sistema de minería por shares: Tu recompensa es proporcional a las shares que generas. Más hashrate = más shares = más recompensa.'"
+                    v-tooltip="t('mining.tooltip.sharesSystem')"
                   >
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
@@ -565,24 +586,20 @@ onUnmounted(() => {
                   </button>
                 </div>
                 <p class="text-sm text-text-muted cursor-help"
-                  v-tooltip="totalHashrate > 0
-                    ? 'Tus rigs están activos generando shares que se convierten en recompensas al cierre del bloque'
-                    : 'Necesitas encender al menos un rig para empezar a minar y generar shares'">
-                  {{ totalHashrate > 0 ? 'Generando shares' : 'Activa tus rigs para empezar' }}
+                  v-tooltip="totalHashrate > 0 ? t('mining.tooltip.rigActive') : t('mining.tooltip.rigInactive')">
+                  {{ totalHashrate > 0 ? t('mining.generatingShares') : t('mining.activateRigs') }}
                 </p>
               </div>
             </div>
 
             <div class="text-right cursor-help"
-              v-tooltip="effectiveHashrate < totalHashrate
-                ? `Tu hashrate real después de penalizaciones. Base: ${totalHashrate.toLocaleString()} H/s, reducido por temperatura o condición de tus rigs.`
-                : 'Tu hashrate total combinado de todos los rigs activos. Determina cuántas shares generas por minuto.'">
-              <div class="text-3xl font-bold font-mono"
+              v-tooltip="effectiveHashrate < totalHashrate ? t('mining.tooltip.effectiveHashrate', { base: totalHashrate.toLocaleString() }) : t('mining.tooltip.totalHashrate')">
+              <div class="text-xl sm:text-3xl font-bold font-mono"
                 :class="effectiveHashrate > 0 ? 'gradient-text' : 'text-text-muted'">
                 {{ Math.round(effectiveHashrate).toLocaleString() }}
               </div>
-              <div class="text-xs text-text-muted flex items-center justify-end gap-1">
-                <span>H/s efectivo</span>
+              <div class="text-[10px] sm:text-xs text-text-muted flex items-center justify-end gap-1">
+                <span>{{ t('mining.effectiveHs') }}</span>
                 <span v-if="effectiveHashrate < totalHashrate" class="text-status-danger">
                   (↓{{ Math.round(((totalHashrate - effectiveHashrate) / totalHashrate) * 100) }}%)
                 </span>
@@ -593,54 +610,54 @@ onUnmounted(() => {
           <!-- Estado: Sin bloque activo -->
           <div v-if="!currentMiningBlock?.active" class="text-center py-8 text-text-muted">
             <div class="text-4xl mb-3">⏳</div>
-            <div class="text-lg font-medium mb-1">Esperando nuevo bloque...</div>
-            <div class="text-sm">El próximo bloque se iniciará automáticamente</div>
+            <div class="text-lg font-medium mb-1">{{ t('mining.waitingBlock') }}</div>
+            <div class="text-sm">{{ t('mining.nextBlockAuto') }}</div>
           </div>
 
           <!-- Estado: Con bloque activo -->
           <div v-else>
             <!-- Info de Red (Dificultad, etc) -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4 p-3 bg-bg-tertiary/50 rounded-lg">
-              <div v-tooltip="'Mayor dificultad = menos shares por H/s. Se ajusta automáticamente cada bloque.'" class="text-center cursor-help">
-                <div class="text-xs text-text-muted mb-1">🎯 Dificultad</div>
-                <div class="text-base font-bold font-mono text-cyan-400">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 sm:mb-4 p-2 sm:p-3 bg-bg-tertiary/50 rounded-lg">
+              <div v-tooltip="t('mining.tooltip.difficulty')" class="text-center cursor-help">
+                <div class="text-[10px] sm:text-xs text-text-muted mb-0.5 sm:mb-1">🎯 {{ t('mining.difficulty') }}</div>
+                <div class="text-sm sm:text-base font-bold font-mono text-cyan-400">
                   {{ (currentMiningBlock.difficulty / 1000).toFixed(1) }}K
                 </div>
               </div>
-              <div v-tooltip="'Hashrate combinado de todos los mineros activos en la red'" class="text-center cursor-help">
-                <div class="text-xs text-text-muted mb-1">🌐 Hashrate Red</div>
-                <div class="text-base font-bold font-mono text-purple-400">
+              <div v-tooltip="t('mining.tooltip.networkHashrate')" class="text-center cursor-help">
+                <div class="text-[10px] sm:text-xs text-text-muted mb-0.5 sm:mb-1">🌐 {{ t('mining.networkHashrateLabel') }}</div>
+                <div class="text-sm sm:text-base font-bold font-mono text-purple-400">
                   {{ (networkStats.hashrate / 1000).toFixed(1) }}K
                 </div>
               </div>
-              <div v-tooltip="'Número de mineros con rigs activos en este momento'" class="text-center cursor-help">
-                <div class="text-xs text-text-muted mb-1">👥 Mineros</div>
-                <div class="text-base font-bold font-mono text-emerald-400">
+              <div v-tooltip="t('mining.tooltip.activeMiners')" class="text-center cursor-help">
+                <div class="text-[10px] sm:text-xs text-text-muted mb-0.5 sm:mb-1">👥 {{ t('mining.minersLabel') }}</div>
+                <div class="text-sm sm:text-base font-bold font-mono text-emerald-400">
                   {{ networkStats.activeMiners }}
                 </div>
               </div>
-              <div v-tooltip="'Tu hashrate efectivo como % del total de la red. Mayor % = más shares'" class="text-center cursor-help">
-                <div class="text-xs text-text-muted mb-1">⚡ Tu Potencia</div>
-                <div class="text-base font-bold font-mono text-amber-400">
+              <div v-tooltip="t('mining.tooltip.yourPower')" class="text-center cursor-help">
+                <div class="text-[10px] sm:text-xs text-text-muted mb-0.5 sm:mb-1">⚡ {{ t('mining.yourPower') }}</div>
+                <div class="text-sm sm:text-base font-bold font-mono text-amber-400">
                   {{ networkStats.hashrate > 0 ? ((effectiveHashrate / networkStats.hashrate) * 100).toFixed(2) : '0.00' }}%
                 </div>
               </div>
             </div>
 
             <!-- Indicador Dual: Tiempo + Actividad de Red -->
-            <div class="mb-4 p-4 bg-bg-secondary rounded-xl border border-border/30"
+            <div class="mb-3 sm:mb-4 p-3 sm:p-4 bg-bg-secondary rounded-xl border border-border/30"
               :class="{
                 'border-status-danger': timeRemainingAlert === 'critical',
                 'border-status-warning': timeRemainingAlert === 'warning'
               }">
               <!-- Header con tiempo restante -->
-              <div class="flex items-center justify-between mb-3">
-                <div class="flex items-center gap-2 cursor-help"
-                  v-tooltip="'Tiempo restante para que este bloque se cierre y se repartan las recompensas. Cada bloque dura 30 minutos.'">
-                  <span class="text-2xl">⏰</span>
+              <div class="flex items-center justify-between mb-2 sm:mb-3">
+                <div class="flex items-center gap-1.5 sm:gap-2 cursor-help"
+                  v-tooltip="t('mining.tooltip.blockCloseTime')">
+                  <span class="text-xl sm:text-2xl">⏰</span>
                   <div>
-                    <div class="text-sm text-text-muted">Cierre del Bloque</div>
-                    <div class="text-2xl font-bold font-mono"
+                    <div class="text-xs sm:text-sm text-text-muted">{{ t('mining.blockClose') }}</div>
+                    <div class="text-xl sm:text-2xl font-bold font-mono"
                       :class="{
                         'text-status-danger': timeRemainingAlert === 'critical',
                         'text-status-warning': timeRemainingAlert === 'warning',
@@ -651,13 +668,13 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div v-if="timeRemainingAlert === 'critical'"
-                  class="px-3 py-1 bg-status-danger/20 border border-status-danger/50 rounded-lg animate-pulse">
-                  <span class="text-status-danger font-semibold text-sm">⚠️ ¡Cierra pronto!</span>
+                  class="px-2 sm:px-3 py-0.5 sm:py-1 bg-status-danger/20 border border-status-danger/50 rounded-lg animate-pulse">
+                  <span class="text-status-danger font-semibold text-xs sm:text-sm">⚠️ {{ t('mining.closingSoon') }}</span>
                 </div>
               </div>
 
               <!-- Barra de progreso del tiempo -->
-              <div class="h-3 bg-bg-tertiary rounded-full overflow-hidden relative mb-3">
+              <div class="h-2 sm:h-3 bg-bg-tertiary rounded-full overflow-hidden relative mb-2 sm:mb-3">
                 <div
                   class="h-full transition-all duration-1000"
                   :class="{
@@ -674,42 +691,42 @@ onUnmounted(() => {
               </div>
 
               <!-- Info secundaria: actividad de red -->
-              <div class="flex items-center justify-between text-xs">
-                <div class="flex items-center gap-4">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 text-[10px] sm:text-xs">
+                <div class="flex items-center gap-2 sm:gap-4">
                   <span class="text-text-muted cursor-help"
-                    v-tooltip="'Shares generadas por todos los mineros vs el objetivo del bloque. El objetivo es una meta de referencia para medir la actividad de la red.'">
-                    📊 Actividad: <span class="font-mono text-text-secondary">{{ currentMiningBlock.total_shares.toFixed(0) }} / {{ currentMiningBlock.target_shares }}</span> shares ({{ sharesProgress.toFixed(0) }}%)
+                    v-tooltip="t('mining.tooltip.sharesActivity')">
+                    📊 <span class="hidden sm:inline">{{ t('mining.activityLabel') }}:</span> <span class="font-mono text-text-secondary">{{ currentMiningBlock.total_shares.toFixed(0) }} / {{ currentMiningBlock.target_shares }}</span> <span class="hidden sm:inline">shares</span> ({{ sharesProgress.toFixed(0) }}%)
                   </span>
-                  <span class="text-text-muted cursor-help"
-                    v-tooltip="'Velocidad a la que la red está generando shares. Alto = muchos mineros activos, Bajo = pocos mineros.'">
-                    ⚡ Ritmo: <span class="font-mono"
+                  <span class="hidden sm:inline text-text-muted cursor-help"
+                    v-tooltip="t('mining.tooltip.sharesRhythm')">
+                    ⚡ {{ t('mining.rhythmLabel') }}: <span class="font-mono"
                       :class="{
                         'text-status-success': sharesProgress > 90,
                         'text-status-warning': sharesProgress >= 70 && sharesProgress <= 90,
                         'text-status-danger': sharesProgress < 70
                       }">
-                      {{ sharesProgress > 90 ? 'Alto' : sharesProgress >= 70 ? 'Normal' : 'Bajo' }}
+                      {{ sharesProgress > 90 ? t('mining.rhythmHigh') : sharesProgress >= 70 ? t('mining.rhythmNormal') : t('mining.rhythmLow') }}
                     </span>
                   </span>
                 </div>
                 <span class="text-text-muted cursor-help"
-                  v-tooltip="'Jugadores con al menos un rig encendido minando en este momento'">
-                  👥 {{ networkStats.activeMiners }} mineros activos
+                  v-tooltip="t('mining.tooltip.activeMinersList')">
+                  👥 {{ networkStats.activeMiners }} {{ t('mining.activeMinersLabel') }}
                 </span>
               </div>
             </div>
 
             <!-- Grid de 5 Stats -->
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
               <!-- Velocidad -->
-              <div v-tooltip="'Velocidad a la que generas tu porción del bloque. Basada en tu hashrate efectivo y la dificultad actual.'"
-                class="bg-bg-secondary rounded-xl p-3 border-l-4 border-accent-primary cursor-help">
-                <div class="flex items-center gap-1 mb-1">
-                  <span class="text-base">⚡</span>
-                  <div class="text-[10px] text-text-muted">Velocidad</div>
+              <div v-tooltip="t('mining.tooltip.blockSpeed')"
+                class="bg-bg-secondary rounded-xl p-2 sm:p-3 border-l-4 border-accent-primary cursor-help">
+                <div class="flex items-center gap-1 mb-0.5 sm:mb-1">
+                  <span class="text-sm sm:text-base">⚡</span>
+                  <div class="text-[10px] text-text-muted">{{ t('mining.speedLabel') }}</div>
                 </div>
-                <div class="text-xl font-bold font-mono text-accent-primary">
-                  {{ sharesRate < 1 ? '🐌 Lento' : sharesRate < 3 ? '🚶 Normal' : '🚀 Rápido' }}
+                <div class="text-lg sm:text-xl font-bold font-mono text-accent-primary">
+                  {{ sharesRate < 1 ? t('mining.speedSlow') : sharesRate < 3 ? t('mining.speedNormal') : t('mining.speedFast') }}
                 </div>
                 <div class="text-[10px] text-text-muted">{{ sharesRate.toFixed(1) }}/min</div>
                 <div v-if="sharesEfficiency !== 100" class="mt-0.5 text-[10px]"
@@ -719,72 +736,83 @@ onUnmounted(() => {
               </div>
 
               <!-- % del Bloque -->
-              <div v-tooltip="'Tu participación en el bloque actual. Más % = mayor recompensa al cierre.'"
-                class="bg-bg-secondary rounded-xl p-3 border-l-4 border-purple-500 cursor-help">
-                <div class="flex items-center gap-1 mb-1">
-                  <span class="text-base">📊</span>
-                  <div class="text-[10px] text-text-muted">% del Bloque</div>
+              <div v-tooltip="t('mining.tooltip.blockParticipation')"
+                class="bg-bg-secondary rounded-xl p-2 sm:p-3 border-l-4 border-purple-500 cursor-help">
+                <div class="flex items-center gap-1 mb-0.5 sm:mb-1">
+                  <span class="text-sm sm:text-base">📊</span>
+                  <div class="text-[10px] text-text-muted">{{ t('mining.blockPercent') }}</div>
                 </div>
-                <div class="text-xl font-bold font-mono text-purple-400">
+                <div class="text-lg sm:text-xl font-bold font-mono text-purple-400">
                   {{ playerSharePercentage.toFixed(1) }}%
                 </div>
-                <div class="text-[10px] text-text-muted">tu participación</div>
+                <div class="text-[10px] text-text-muted">{{ t('mining.yourParticipation') }}</div>
                 <div v-if="playerSharePercentage > 0" class="mt-0.5 text-[10px] text-status-info">
                   Top {{ Math.min(100, Math.round((100 - playerSharePercentage) + playerSharePercentage / 2)) }}%
                 </div>
               </div>
 
               <!-- Contribución Relativa -->
-              <div v-tooltip="'Tu posición relativa respecto al promedio. Verde = por encima, Amarillo = promedio, Rojo = por debajo.'"
-                class="bg-bg-secondary rounded-xl p-3 border-l-4 border-emerald-500 cursor-help">
-                <div class="flex items-center gap-1 mb-1">
-                  <span class="text-base">📈</span>
-                  <div class="text-[10px] text-text-muted">Contribución</div>
+              <div v-tooltip="t('mining.tooltip.relativeContribution')"
+                class="bg-bg-secondary rounded-xl p-2 sm:p-3 border-l-4 border-emerald-500 cursor-help">
+                <div class="flex items-center gap-1 mb-0.5 sm:mb-1">
+                  <span class="text-sm sm:text-base">📈</span>
+                  <div class="text-[10px] text-text-muted">{{ t('mining.contributionLabel') }}</div>
                 </div>
-                <div class="text-xl font-bold font-mono"
+                <div class="text-lg sm:text-xl font-bold font-mono"
                   :class="{
                     'text-status-success': playerSharePercentage > (100 / Math.max(1, networkStats.activeMiners)) * 1.5,
                     'text-status-warning': playerSharePercentage > (100 / Math.max(1, networkStats.activeMiners)) * 0.5,
                     'text-status-danger': playerSharePercentage <= (100 / Math.max(1, networkStats.activeMiners)) * 0.5
                   }">
-                  {{ playerSharePercentage > (100 / Math.max(1, networkStats.activeMiners)) * 1.5 ? '🔥 Alta' :
-                     playerSharePercentage > (100 / Math.max(1, networkStats.activeMiners)) * 0.5 ? '✓ Media' : '📉 Baja' }}
+                  {{ playerSharePercentage > (100 / Math.max(1, networkStats.activeMiners)) * 1.5 ? t('mining.contributionHigh') :
+                     playerSharePercentage > (100 / Math.max(1, networkStats.activeMiners)) * 0.5 ? t('mining.contributionMedium') : t('mining.contributionLow') }}
                 </div>
-                <div class="text-[10px] text-text-muted">vs promedio</div>
+                <div class="text-[10px] text-text-muted">{{ t('mining.vsAverage') }}</div>
                 <div class="mt-0.5 text-[10px] text-text-muted">
-                  {{ (100 / Math.max(1, networkStats.activeMiners)).toFixed(1) }}% base
+                  {{ (100 / Math.max(1, networkStats.activeMiners)).toFixed(1) }}{{ t('mining.basePercent') }}
                 </div>
               </div>
 
               <!-- Tu Recompensa -->
-              <div v-tooltip="'Tu recompensa estimada al cierre del bloque. Basada en tu % actual de participación.'"
-                class="bg-bg-secondary rounded-xl p-3 border-l-4 border-amber-500 cursor-help">
-                <div class="flex items-center gap-1 mb-1">
-                  <span class="text-base">💰</span>
-                  <div class="text-[10px] text-text-muted">Tu Recompensa</div>
+              <div v-tooltip="t('mining.tooltip.estimatedReward')"
+                class="bg-bg-secondary rounded-xl p-2 sm:p-3 border-l-4 cursor-help"
+                :class="isPremium ? 'border-amber-400 bg-gradient-to-br from-amber-500/5 via-bg-secondary to-bg-secondary' : 'border-amber-500'">
+                <div class="flex items-center gap-1 mb-0.5 sm:mb-1">
+                  <span class="text-sm sm:text-base">💰</span>
+                  <div class="text-[10px] text-text-muted">{{ t('mining.yourReward') }}</div>
                 </div>
-                <div class="text-xl font-bold font-mono text-amber-400">
-                  {{ estimatedReward.toFixed(3) }}
+                <div class="flex items-center gap-1.5">
+                  <div class="text-lg sm:text-xl font-bold font-mono"
+                    :class="isPremium ? 'text-amber-400' : 'text-amber-400'">
+                    {{ estimatedReward.toFixed(3) }}
+                  </div>
+                  <!-- Premium Badge -->
+                  <span v-if="isPremium"
+                    class="px-1.5 py-0.5 text-[11px] font-bold bg-slate-800 text-amber-400 rounded-full shadow-md flex items-center gap-0.5 border border-amber-400/50"
+                    v-tooltip="t('mining.tooltip.premiumBonus')">
+                    <span>👑</span>
+                    <span class="hidden sm:inline">+50%</span>
+                  </span>
                 </div>
-                <div class="text-[10px] text-text-muted">₿ estimado</div>
+                <div class="text-[10px] text-text-muted">{{ t('mining.estimatedBtc') }}</div>
                 <div class="mt-0.5 text-[10px] text-text-muted">
-                  {{ playerSharePercentage.toFixed(1) }}% del pool
+                  {{ playerSharePercentage.toFixed(1) }}{{ t('mining.ofPool') }}
                 </div>
               </div>
 
               <!-- Pool Total con Tipo de Bloque -->
-              <div v-tooltip="`Recompensa total del bloque que se repartirá proporcionalmente. ${blockTypeLabel}: ${currentMiningBlock.reward} BLC. Premium players reciben +50% bonus en su parte.`"
-                class="bg-bg-secondary rounded-xl p-3 border-l-4 cursor-help"
+              <div v-tooltip="t('mining.tooltip.blockRewardPool', { blockType: blockTypeLabel, reward: currentMiningBlock.reward })"
+                class="bg-bg-secondary rounded-xl p-2 sm:p-3 border-l-4 cursor-help col-span-2 md:col-span-1"
                 :class="{
                   'border-amber-600': currentMiningBlock.block_type === 'bronze',
                   'border-gray-400': currentMiningBlock.block_type === 'silver',
                   'border-yellow-400': currentMiningBlock.block_type === 'gold'
                 }">
-                <div class="flex items-center gap-1 mb-1">
-                  <span class="text-base">{{ blockTypeEmoji }}</span>
+                <div class="flex items-center gap-1 mb-0.5 sm:mb-1">
+                  <span class="text-sm sm:text-base">{{ blockTypeEmoji }}</span>
                   <div class="text-[10px] text-text-muted">{{ blockTypeLabel }}</div>
                 </div>
-                <div class="text-xl font-bold font-mono"
+                <div class="text-lg sm:text-xl font-bold font-mono"
                   :class="{
                     'text-amber-600': currentMiningBlock.block_type === 'bronze',
                     'text-gray-300': currentMiningBlock.block_type === 'silver',
@@ -792,9 +820,9 @@ onUnmounted(() => {
                   }">
                   {{ currentMiningBlock.reward.toFixed(1) }}
                 </div>
-                <div class="text-[10px] text-text-muted">₿ a repartir</div>
+                <div class="text-[10px] text-text-muted">{{ t('mining.toDistribute') }}</div>
                 <div class="mt-0.5 text-[10px] text-text-muted">
-                  {{ networkStats.activeMiners }} mineros
+                  {{ networkStats.activeMiners }} {{ t('mining.networkMiners') }}
                 </div>
               </div>
             </div>
@@ -846,10 +874,15 @@ onUnmounted(() => {
 
               <!-- Header -->
               <div class="flex items-center justify-between mb-3">
-                <div class="flex items-center gap-2">
+                <div class="flex flex-col gap-1" v-tooltip="playerRig.is_active && playerRig.activated_at ? t('mining.tooltips.uptime') : ''">
                   <h3 class="font-semibold" :class="getTierColor(playerRig.rig.tier)">
                     {{ getRigName(playerRig.rig.id) }}
                   </h3>
+                  <!-- Uptime badge (moved from stats row) -->
+                  <span v-if="playerRig.is_active && playerRig.activated_at"
+                    class="flex items-center gap-1 text-[10px] text-text-secondary px-1.5 py-0.5 bg-bg-tertiary/80 rounded w-fit pointer-events-none" :key="uptimeKey">
+                    ⏱️ {{ formatUptime(playerRig.activated_at) }}
+                  </span>
                 </div>
                 <div class="flex items-center gap-2">
                   <!-- Upgrade levels indicator -->
@@ -926,10 +959,6 @@ onUnmounted(() => {
                   class="flex items-center gap-1 cursor-help">
                   <span class="text-purple-400">🚀</span>
                   <span class="text-purple-400">{{ rigBoosts[playerRig.id].length }}</span>
-                </span>
-                <span v-if="playerRig.is_active && playerRig.activated_at" v-tooltip="t('mining.tooltips.uptime')"
-                  class="flex items-center gap-1 ml-auto cursor-help" :key="uptimeKey">
-                  ⏱️ {{ formatUptime(playerRig.activated_at) }}
                 </span>
               </div>
 
@@ -1044,16 +1073,26 @@ onUnmounted(() => {
         <div class="space-y-4">
           <!-- Recent Blocks -->
           <div class="card p-3">
-            <h3 class="text-sm font-semibold mb-2 flex items-center gap-1.5 text-text-muted">
-              <span>📦</span> Bloques Recientes
-            </h3>
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-semibold flex items-center gap-1.5 text-text-muted">
+                <span>📦</span> {{ t('mining.recentBlocks') }}
+                <span v-if="recentBlocks.length > 0" class="text-xs bg-bg-secondary text-text-muted px-1.5 py-0.5 rounded-full font-mono">{{ recentBlocks.length }}</span>
+              </h3>
+              <button
+                @click="toggleRecentBlocks"
+                class="text-text-muted hover:text-white transition-colors p-0.5 rounded"
+                :title="recentBlocksCollapsed ? t('mining.showBlocks') : t('mining.hideBlocks')"
+              >
+                <span class="text-xs transition-transform duration-200 inline-block" :class="recentBlocksCollapsed ? 'rotate-180' : 'rotate-0'">▲</span>
+              </button>
+            </div>
 
             <div v-if="recentBlocks.length === 0" class="text-center py-4 text-text-muted text-xs">
-              No hay bloques recientes
+              {{ t('mining.noRecentBlocks') }}
             </div>
 
             <div v-else class="space-y-1.5">
-              <div v-for="(block, index) in recentBlocks" :key="block.id" class="px-2.5 py-2 rounded-lg" :class="[
+              <div v-for="(block, index) in (recentBlocksCollapsed ? recentBlocks.slice(0, 2) : recentBlocks)" :key="block.id" class="px-2.5 py-2 rounded-lg" :class="[
                 block.player_participation?.participated
                   ? 'bg-status-success/10 border border-status-success/20'
                   : 'bg-bg-secondary/50'
@@ -1061,48 +1100,46 @@ onUnmounted(() => {
                 <!-- Row 1: Block number + Time -->
                 <div class="flex items-center justify-between mb-1">
                   <div class="flex items-center gap-1.5">
-                    <span v-if="index === 0" class="text-xs" v-tooltip="'Bloque más reciente'">🆕</span>
-                    <span v-if="block.player_participation?.participated" class="text-xs cursor-help" v-tooltip="'Participaste en este bloque'">⭐</span>
-                    <span v-if="block.player_participation?.is_premium" class="text-xs cursor-help" v-tooltip="'Eras Premium - Recibiste +50% de bonus'">👑</span>
+                    <span v-if="index === 0" class="text-xs" v-tooltip="t('mining.tooltip.latestBlock')">🆕</span>
+                    <span v-if="block.player_participation?.participated" class="text-xs cursor-help" v-tooltip="t('mining.tooltip.participatedBlock')">⭐</span>
+                    <span v-if="block.player_participation?.is_premium" class="text-xs cursor-help" v-tooltip="t('mining.tooltip.premiumBlock')">👑</span>
                     <span class="text-sm font-medium cursor-help"
                       :class="block.player_participation?.participated ? 'text-status-success' : 'text-accent-primary'"
-                      v-tooltip="block.player_participation?.participated
-                        ? 'Participaste en este bloque y recibiste recompensa proporcional a tus shares'
-                        : 'No participaste en este bloque. Mantén tus rigs encendidos para contribuir shares y ganar recompensas'">Bloque <span class="font-mono">#{{
+                      v-tooltip="block.player_participation?.participated ? t('mining.tooltip.participatedDetail') : t('mining.tooltip.notParticipated')">{{ t('mining.recentBlock.blockLabel') }} <span class="font-mono">#{{
                       block.block_number || block.height }}</span></span>
                   </div>
                   <span class="text-[10px] text-text-muted cursor-help" :key="uptimeKey"
-                    v-tooltip="'Tiempo desde que se cerró este bloque y se distribuyeron las recompensas'">{{ formatTimeAgo(block.created_at)
+                    v-tooltip="t('mining.tooltip.blockClosedTime')">{{ formatTimeAgo(block.created_at)
                     }}</span>
                 </div>
 
                 <!-- Row 2: Si participaste -->
                 <div v-if="block.player_participation?.participated" class="space-y-0.5">
                   <div class="flex items-center justify-between text-xs">
-                    <span class="text-text-muted cursor-help" v-tooltip="'Tu porcentaje de shares respecto al total del bloque. Más shares = mayor recompensa'">Tu contribución</span>
-                    <span class="font-mono text-status-success cursor-help" v-tooltip="'Aportaste el ' + block.player_participation.percentage.toFixed(1) + '% de las shares totales del bloque'">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.tooltip.contributionPct')">{{ t('mining.recentBlock.yourContribution') }}</span>
+                    <span class="font-mono text-status-success cursor-help" v-tooltip="t('mining.tooltip.contributionPctValue', { pct: block.player_participation.percentage.toFixed(1) })">
                       {{ block.player_participation.percentage.toFixed(1) }}%
                     </span>
                   </div>
                   <div class="flex items-center justify-between text-xs">
-                    <span class="text-text-muted cursor-help" v-tooltip="'El BLC que tú ganaste en este bloque, proporcional a tus shares'">Tu recompensa</span>
-                    <span class="font-mono text-status-warning cursor-help" v-tooltip="block.player_participation.reward.toFixed(6) + ' BLC ganados en este bloque'">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.tooltip.yourBlockReward')">{{ t('mining.recentBlock.yourReward') }}</span>
+                    <span class="font-mono text-status-warning cursor-help" v-tooltip="t('mining.tooltip.yourBlockRewardValue', { reward: block.player_participation.reward.toFixed(6) })">
                       +{{ block.player_participation.reward.toFixed(3) }} ₿
                     </span>
                   </div>
                   <div class="flex items-center justify-between text-xs">
-                    <span class="text-text-muted cursor-help" v-tooltip="'Total de BLC distribuido a todos los participantes (incluye bonos premium)'">Total del bloque</span>
-                    <span class="font-mono text-text-secondary cursor-help" v-tooltip="(block.total_distributed || block.reward || 0).toFixed(3) + ' BLC repartidos entre ' + (block.contributors_count || 0) + ' participantes'">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.tooltip.blockTotal')">{{ t('mining.recentBlock.blockTotal') }}</span>
+                    <span class="font-mono text-text-secondary cursor-help" v-tooltip="t('mining.tooltip.blockTotalValue', { total: (block.total_distributed || block.reward || 0).toFixed(3), count: block.contributors_count || 0 })">
                       {{ (block.total_distributed || block.reward || 0).toFixed(1) }} ₿
                     </span>
                   </div>
                   <!-- Top contributor -->
                   <div v-if="block.top_contributor" class="flex items-center justify-between text-xs pt-0.5 border-t border-border/20">
-                    <span class="text-text-muted flex items-center gap-1 cursor-help" v-tooltip="'El jugador que más shares aportó a este bloque'">
+                    <span class="text-text-muted flex items-center gap-1 cursor-help" v-tooltip="t('mining.tooltip.topContributor')">
                       <span>🥇</span>
                       <span>{{ block.top_contributor.username }}</span>
                     </span>
-                    <span class="font-mono text-amber-400 cursor-help" v-tooltip="block.top_contributor.username + ' aportó el ' + block.top_contributor.percentage.toFixed(1) + '% de las shares totales'">
+                    <span class="font-mono text-amber-400 cursor-help" v-tooltip="t('mining.tooltip.topContributorValue', { username: block.top_contributor.username, pct: block.top_contributor.percentage.toFixed(1) })">
                       {{ block.top_contributor.percentage.toFixed(1) }}%
                     </span>
                   </div>
@@ -1111,22 +1148,22 @@ onUnmounted(() => {
                 <!-- Row 2: Si NO participaste -->
                 <div v-else class="space-y-0.5">
                   <div class="flex items-center justify-between text-xs">
-                    <span class="text-text-muted cursor-help" v-tooltip="'Cantidad de jugadores que minaron y aportaron shares a este bloque'">Contribuyentes</span>
-                    <span class="font-mono" v-tooltip="(block.contributors_count || 0) + ' jugadores participaron en este bloque'">{{ block.contributors_count || 0 }}</span>
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.tooltip.contributors')">{{ t('mining.recentBlock.contributors') }}</span>
+                    <span class="font-mono" v-tooltip="t('mining.tooltip.contributorsValue', { count: block.contributors_count || 0 })">{{ block.contributors_count || 0 }}</span>
                   </div>
                   <div class="flex items-center justify-between text-xs">
-                    <span class="text-text-muted cursor-help" v-tooltip="'Total de BLC repartido entre todos los participantes de este bloque (incluye bonos premium)'">Total distribuido</span>
-                    <span class="font-mono text-status-warning" v-tooltip="'Recompensa total: ' + (block.total_distributed || block.reward || 0).toFixed(3) + ' BLC'">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.tooltip.totalDistributed')">{{ t('mining.recentBlock.totalDistributed') }}</span>
+                    <span class="font-mono text-status-warning" v-tooltip="t('mining.tooltip.totalDistributedValue', { total: (block.total_distributed || block.reward || 0).toFixed(3) })">
                       {{ (block.total_distributed || block.reward || 0).toFixed(1) }} ₿
                     </span>
                   </div>
                   <!-- Top contributor -->
                   <div v-if="block.top_contributor" class="flex items-center justify-between text-xs pt-0.5 border-t border-border/20">
-                    <span class="text-text-muted flex items-center gap-1 cursor-help" v-tooltip="'El jugador que más shares aportó a este bloque'">
+                    <span class="text-text-muted flex items-center gap-1 cursor-help" v-tooltip="t('mining.tooltip.topContributor')">
                       <span>🥇</span>
                       <span>{{ block.top_contributor.username }}</span>
                     </span>
-                    <span class="font-mono text-amber-400 cursor-help" v-tooltip="block.top_contributor.username + ' aportó el ' + block.top_contributor.percentage.toFixed(1) + '% de las shares totales'">
+                    <span class="font-mono text-amber-400 cursor-help" v-tooltip="t('mining.tooltip.topContributorValue', { username: block.top_contributor.username, pct: block.top_contributor.percentage.toFixed(1) })">
                       {{ block.top_contributor.percentage.toFixed(1) }}%
                     </span>
                   </div>

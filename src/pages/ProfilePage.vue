@@ -756,6 +756,24 @@ onUnmounted(() => {
                 <span>Actualizado: {{ new Date(gameStatus.timestamp).toLocaleTimeString() }}</span>
               </div>
             </div>
+
+            <!-- Admin Tools -->
+            <div class="mt-6 pt-6 border-t border-border/30">
+              <h4 class="text-sm font-semibold text-purple-400 mb-3 flex items-center gap-2">
+                <span>⚙️</span>
+                Herramientas de Administración
+              </h4>
+              <div class="flex flex-wrap gap-3">
+                <button
+                  @click="router.push('/admin')"
+                  class="px-4 py-2.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 font-medium transition-colors flex items-center gap-2"
+                >
+                  <span>📢</span>
+                  Gestionar Anuncios
+                </button>
+                <!-- Aquí se pueden agregar más herramientas de admin en el futuro -->
+              </div>
+            </div>
           </div>
         </Transition>
       </div>

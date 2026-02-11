@@ -10,7 +10,11 @@
       "Bash(grep:*)",
       "Bash(npx vite build:*)",
       "Bash(ls -la \"d:\\\\software\\\\block-lords\\\\src\\\\components\\\\crafting\"\" 2>&1 || echo \"Directory listing failed \")",
-      "Bash(npx vue-tsc:*)"
+      "Bash(npx vue-tsc:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(awk:*)",
+      "Bash(npm run dev:*)"
     ]
   }
 }

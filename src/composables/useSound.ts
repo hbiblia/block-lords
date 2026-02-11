@@ -117,3 +117,27 @@ export function useRigSound() {
     setRigLoopVolume
   };
 }
+
+// =====================================================
+// Hook para sonido de batalla (independiente del global)
+// =====================================================
+
+export function useBattleSound() {
+  const battleSoundEnabled = ref(soundManager.isBattleSoundEnabled());
+
+  function toggle() {
+    const newState = soundManager.toggleBattleSoundEnabled();
+    battleSoundEnabled.value = newState;
+    return newState;
+  }
+
+  function play(sound: SoundType) {
+    soundManager.playBattle(sound);
+  }
+
+  return {
+    battleSoundEnabled,
+    toggle,
+    play,
+  };
+}

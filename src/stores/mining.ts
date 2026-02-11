@@ -7,6 +7,7 @@ import { useNotificationsStore } from './notifications';
 import { useToastStore } from './toast';
 import { playSound } from '@/utils/sounds';
 import { i18n } from '@/plugins/i18n';
+import { isTabLocked } from '@/composables/useTabLock';
 
 // Types
 interface Rig {
@@ -239,11 +240,13 @@ export const useMiningStore = defineStore('mining', () => {
       .reduce((sum, r) => sum + r.rig.hashrate, 0)
   );
 
-  const effectiveHashrate = computed(() =>
-    rigs.value
+  const effectiveHashrate = computed(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    warmupTick.value; // dependency to force recompute during warm-up
+    return rigs.value
       .filter(r => r.is_active)
-      .reduce((sum, r) => sum + getRigEffectiveHashrate(r), 0)
-  );
+      .reduce((sum, r) => sum + getRigEffectiveHashrate(r), 0);
+  });
 
   const totalEnergyConsumption = computed(() =>
     rigs.value
@@ -281,6 +284,13 @@ export const useMiningStore = defineStore('mining', () => {
     return multiplier;
   }
 
+  function getRigWarmupMultiplier(rig: PlayerRig): number {
+    if (!rig.activated_at) return 1;
+    const elapsedSec = (Date.now() - new Date(rig.activated_at).getTime()) / 1000;
+    // +20% por tick (30s): 20% → 40% → 60% → 80% → 100% en 120s
+    return Math.max(0, Math.min(1, (1 + Math.floor(elapsedSec / 30)) * 0.20));
+  }
+
   function getRigEffectiveHashrate(rig: PlayerRig): number {
     const temp = rig.temperature ?? 25;
     const condition = rig.condition ?? 100;
@@ -295,7 +305,9 @@ export const useMiningStore = defineStore('mining', () => {
     let boostMultiplier = getRigBoostMultiplier(rig.id, 'hashrate');
     const hashrateBonus = rig.hashrate_bonus ?? 0;
     boostMultiplier *= (1 + hashrateBonus / 100);
-    return rig.rig.hashrate * conditionPenalty * tempPenalty * boostMultiplier;
+    // Warm-up: 0% → 100% en 5 minutos tras encender
+    const warmup = getRigWarmupMultiplier(rig);
+    return rig.rig.hashrate * conditionPenalty * tempPenalty * boostMultiplier * warmup;
   }
 
   function getRigHashrateBoostPercent(rig: PlayerRig): number {
@@ -348,6 +360,35 @@ export const useMiningStore = defineStore('mining', () => {
     return durability < 50;
   }
 
+  // Warm-up tick: forces reactive recomputation of effectiveHashrate
+  // while any rig is in warm-up phase (< 120s since activated_at)
+  const warmupTick = ref(0);
+  let warmupInterval: number | null = null;
+  const WARMUP_DURATION_SEC = 120; // 5 ticks × 30s = 120s, matches backend
+
+  function startWarmupTick() {
+    if (warmupInterval) return;
+    warmupInterval = window.setInterval(() => {
+      const hasWarmingRig = rigs.value.some(r => {
+        if (!r.is_active || !r.activated_at) return false;
+        const elapsed = (Date.now() - new Date(r.activated_at).getTime()) / 1000;
+        return elapsed < WARMUP_DURATION_SEC;
+      });
+      if (hasWarmingRig) {
+        warmupTick.value++;
+      } else {
+        stopWarmupTick();
+      }
+    }, 1000);
+  }
+
+  function stopWarmupTick() {
+    if (warmupInterval) {
+      clearInterval(warmupInterval);
+      warmupInterval = null;
+    }
+  }
+
   // Actions
   async function loadData() {
     const authStore = useAuthStore();
@@ -384,6 +425,13 @@ export const useMiningStore = defineStore('mining', () => {
       loadRigsCooling();
       loadRigsBoosts();
       loadActiveBoosts();
+
+      // Start warm-up tick if any rig is still warming up
+      const hasWarmingRig = rigs.value.some(r => {
+        if (!r.is_active || !r.activated_at) return false;
+        return (Date.now() - new Date(r.activated_at).getTime()) / 1000 < WARMUP_DURATION_SEC;
+      });
+      if (hasWarmingRig) startWarmupTick();
 
       dataLoaded.value = true;
     } catch (e) {
@@ -686,6 +734,7 @@ export const useMiningStore = defineStore('mining', () => {
       // Show toast notification for rig toggle
       if (wasTurningOn) {
         playSound('success');
+        startWarmupTick();
         // Check for quick toggle penalty
         if (result.quickTogglePenalty && result.temperature) {
           toastStore.quickTogglePenalty(result.temperature);
@@ -825,6 +874,7 @@ export const useMiningStore = defineStore('mining', () => {
   }
 
   function clearState() {
+    unsubscribeFromRealtime();
     rigs.value = [];
     networkStats.value = DEFAULT_NETWORK_STATS;
     recentBlocks.value = [];
@@ -836,6 +886,7 @@ export const useMiningStore = defineStore('mining', () => {
     dataLoaded.value = true;
     currentMiningBlock.value = null;
     playerShares.value = null;
+    stopWarmupTick();
   }
 
   // ===== NUEVO SISTEMA DE SHARES =====
@@ -855,6 +906,7 @@ export const useMiningStore = defineStore('mining', () => {
   }
 
   async function loadMiningBlockInfo() {
+    if (isTabLocked.value) return;
     try {
       const wasActive = currentMiningBlock.value?.active;
       const prevBlockNumber = currentMiningBlock.value?.block_number;
@@ -867,12 +919,13 @@ export const useMiningStore = defineStore('mining', () => {
         loadRecentBlocks();
         loadPlayerShares();
       }
-    } catch (e) {
-      console.error('Error loading mining block info:', e);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') console.error('Error loading mining block info:', e);
     }
   }
 
   async function loadPlayerShares() {
+    if (isTabLocked.value) return;
     const authStore = useAuthStore();
     if (!authStore.player?.id) return;
 
@@ -882,8 +935,8 @@ export const useMiningStore = defineStore('mining', () => {
       });
       if (error) throw error;
       playerShares.value = data;
-    } catch (e) {
-      console.error('Error loading player shares:', e);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') console.error('Error loading player shares:', e);
     }
   }
 
@@ -1043,6 +1096,7 @@ export const useMiningStore = defineStore('mining', () => {
 
     // Rig helpers
     getRigEffectiveHashrate,
+    getRigWarmupMultiplier,
     getRigPenaltyPercent,
     getRigEffectivePower,
     getPowerPenaltyPercent,

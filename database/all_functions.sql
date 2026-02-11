@@ -5,6 +5,22 @@
 -- Ejecutar después del schema inicial (001_initial_schema.sql)
 -- =====================================================
 
+-- Borrar TODAS las funciones existentes del schema public
+DO $$
+DECLARE
+  func_record RECORD;
+BEGIN
+  FOR func_record IN
+    SELECT p.oid::regprocedure::text AS func_signature
+    FROM pg_proc p
+    JOIN pg_namespace ns ON p.pronamespace = ns.oid
+    WHERE ns.nspname = 'public'
+    AND p.prokind = 'f'
+  LOOP
+    EXECUTE 'DROP FUNCTION IF EXISTS ' || func_record.func_signature || ' CASCADE';
+  END LOOP;
+END $$;
+
 -- Agregar columna blocks_mined si no existe
 ALTER TABLE players ADD COLUMN IF NOT EXISTS blocks_mined INTEGER DEFAULT 0;
 
@@ -48,86 +64,17 @@ ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP WITH TIM
 ALTER TABLE players ADD COLUMN IF NOT EXISTS max_energy NUMERIC DEFAULT 300;
 ALTER TABLE players ADD COLUMN IF NOT EXISTS max_internet NUMERIC DEFAULT 300;
 
+-- Fix: corregir jugadores no-premium con max_energy/max_internet incorrecto
+UPDATE players SET max_energy = 300, max_internet = 300
+WHERE (max_energy != 300 OR max_internet != 300)
+  AND (premium_until IS NULL OR premium_until <= NOW());
+
 -- Agregar columnas para degradación de rigs
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS max_condition NUMERIC DEFAULT 100;
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS times_repaired INTEGER DEFAULT 0;
 
 -- Permitir múltiples rigs del mismo tipo por jugador (eliminar constraint único)
 ALTER TABLE player_rigs DROP CONSTRAINT IF EXISTS player_rigs_player_id_rig_id_key;
-
--- =====================================================
--- ELIMINAR FUNCIONES EXISTENTES
--- =====================================================
-
-DROP FUNCTION IF EXISTS create_player_profile(UUID, TEXT, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS get_player_profile(UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_rank_for_score(NUMERIC) CASCADE;
-DROP FUNCTION IF EXISTS get_player_rigs(UUID) CASCADE;
-DROP FUNCTION IF EXISTS toggle_rig(UUID, UUID) CASCADE;
-DROP FUNCTION IF EXISTS repair_rig(UUID, UUID) CASCADE;
-DROP FUNCTION IF EXISTS delete_rig(UUID, UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_player_transactions(UUID, INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS get_network_stats() CASCADE;
-DROP FUNCTION IF EXISTS get_home_stats() CASCADE;
-DROP FUNCTION IF EXISTS get_recent_blocks(INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS get_recent_blocks() CASCADE;
-DROP FUNCTION IF EXISTS get_player_mining_stats(UUID) CASCADE;
-DROP FUNCTION IF EXISTS process_mining_tick() CASCADE;
-DROP FUNCTION IF EXISTS game_tick() CASCADE;
-DROP FUNCTION IF EXISTS process_resource_decay() CASCADE;
-DROP FUNCTION IF EXISTS create_new_block(UUID, NUMERIC, NUMERIC) CASCADE;
-DROP FUNCTION IF EXISTS create_new_block(UUID, NUMERIC, NUMERIC, NUMERIC, BOOLEAN) CASCADE;
-DROP FUNCTION IF EXISTS calculate_block_reward(INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS check_difficulty_adjustment(INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS adjust_difficulty() CASCADE;
-DROP FUNCTION IF EXISTS get_order_book(TEXT) CASCADE;
-DROP FUNCTION IF EXISTS create_market_order(UUID, TEXT, TEXT, NUMERIC, NUMERIC, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS match_market_orders(UUID) CASCADE;
-DROP FUNCTION IF EXISTS execute_trade(market_orders, market_orders, NUMERIC, NUMERIC) CASCADE;
-DROP FUNCTION IF EXISTS cancel_market_order(UUID, UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_player_orders(UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_player_trades(UUID, INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS get_market_stats() CASCADE;
-DROP FUNCTION IF EXISTS get_item_stats(TEXT) CASCADE;
-DROP FUNCTION IF EXISTS get_reputation_leaderboard(INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS get_mining_leaderboard(INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS increment_balance(UUID, DECIMAL, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS transfer_gamecoin(UUID, UUID, DECIMAL) CASCADE;
-DROP FUNCTION IF EXISTS transfer_crypto(UUID, UUID, DECIMAL) CASCADE;
-DROP FUNCTION IF EXISTS transfer_energy(UUID, UUID, DECIMAL) CASCADE;
-DROP FUNCTION IF EXISTS transfer_internet(UUID, UUID, DECIMAL) CASCADE;
-DROP FUNCTION IF EXISTS update_reputation(UUID, DECIMAL, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS get_cooling_items() CASCADE;
-DROP FUNCTION IF EXISTS get_player_cooling(UUID) CASCADE;
-DROP FUNCTION IF EXISTS install_cooling(UUID, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS buy_cooling(UUID, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS buy_rig(UUID, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS confirm_ron_rig_purchase(UUID, TEXT, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS get_prepaid_cards() CASCADE;
-DROP FUNCTION IF EXISTS get_player_cards(UUID) CASCADE;
-DROP FUNCTION IF EXISTS buy_prepaid_card(UUID, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS redeem_prepaid_card(UUID, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS get_player_inventory(UUID) CASCADE;
-DROP FUNCTION IF EXISTS install_cooling_from_inventory(UUID, UUID) CASCADE;
-DROP FUNCTION IF EXISTS install_cooling_to_rig(UUID, UUID, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS get_rig_cooling(UUID) CASCADE;
-DROP FUNCTION IF EXISTS exchange_crypto_to_gamecoin(UUID, NUMERIC) CASCADE;
-DROP FUNCTION IF EXISTS exchange_crypto_to_ron(UUID, NUMERIC) CASCADE;
-DROP FUNCTION IF EXISTS get_exchange_rates() CASCADE;
-DROP FUNCTION IF EXISTS apply_passive_regeneration(UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_streak_status(UUID) CASCADE;
-DROP FUNCTION IF EXISTS claim_daily_streak(UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_daily_missions(UUID) CASCADE;
-DROP FUNCTION IF EXISTS assign_daily_missions(UUID) CASCADE;
-DROP FUNCTION IF EXISTS update_mission_progress(UUID, TEXT, NUMERIC) CASCADE;
-DROP FUNCTION IF EXISTS claim_mission_reward(UUID, UUID) CASCADE;
-DROP FUNCTION IF EXISTS record_online_heartbeat(UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_player_slot_info(UUID) CASCADE;
-DROP FUNCTION IF EXISTS buy_rig_slot(UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_rig_slot_upgrades() CASCADE;
-DROP FUNCTION IF EXISTS get_crypto_packages() CASCADE;
-DROP FUNCTION IF EXISTS buy_crypto_package(UUID, TEXT, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS get_player_crypto_purchases(UUID, INTEGER) CASCADE;
 
 -- =====================================================
 -- 1. FUNCIONES DE UTILIDAD
@@ -406,8 +353,8 @@ BEGIN
   END IF;
 
   -- Crear jugador
-  INSERT INTO players (id, email, username, gamecoin_balance, crypto_balance, energy, internet, reputation_score, region)
-  VALUES (p_user_id, p_email, p_username, 1000, 0, 300, 300, 50, 'global')
+  INSERT INTO players (id, email, username, gamecoin_balance, crypto_balance, energy, internet, max_energy, max_internet, reputation_score, region)
+  VALUES (p_user_id, p_email, p_username, 1000, 0, 300, 300, 300, 300, 50, 'global')
   RETURNING * INTO v_player;
 
   -- Dar rig inicial
@@ -1512,7 +1459,7 @@ DECLARE
 BEGIN
   -- Procesar jugadores que están ONLINE o tienen rigs con autonomous mining boost
   FOR v_player IN
-    SELECT p.id, p.energy, p.internet
+    SELECT p.id, p.energy, p.internet, is_player_premium(p.id) as is_premium
     FROM players p
     WHERE EXISTS (SELECT 1 FROM player_rigs pr WHERE pr.player_id = p.id AND pr.is_active = true)
       AND (
@@ -1585,23 +1532,42 @@ BEGIN
       -- Aplicar bonus de eficiencia del upgrade (reduce consumo)
       v_total_internet := v_total_internet + (v_rig.internet_consumption * v_internet_mult * (1 - v_efficiency_bonus / 100.0));
 
-      -- Calcular aumento de temperatura basado en consumo de energía
-      -- Calentamiento más notorio para que el jugador note el efecto
+      -- Calcular hashrate efectivo para determinar generación de calor
+      -- Solo genera calor si está minando efectivamente
+      DECLARE
+        v_temp_penalty NUMERIC;
+        v_condition_penalty NUMERIC;
+        v_hashrate_ratio NUMERIC;
+      BEGIN
+        -- Penalización por temperatura (misma lógica que generate_shares_tick)
+        IF v_rig.temperature <= 50 THEN
+          v_temp_penalty := 1;
+        ELSE
+          v_temp_penalty := GREATEST(0.3, 1 - ((v_rig.temperature - 50) * 0.014));
+        END IF;
+
+        -- Penalización por condición
+        v_condition_penalty := v_rig.condition / 100.0;
+
+        -- Ratio de trabajo real (0 a 1): cuánto está trabajando el rig realmente
+        v_hashrate_ratio := v_temp_penalty * v_condition_penalty;
+      END;
+
+      -- Calcular aumento de temperatura basado en hashrate efectivo
+      -- Solo se calienta si está trabajando (hashrate_ratio > 0)
       -- Sin cooling: temperatura sube rápidamente
       -- Con cooling apropiado: temperatura se estabiliza
       -- Aplicar multiplicador de boost de coolant_injection
       -- Aplicar bonus térmico del upgrade (reduce generación de calor)
       IF v_rig_cooling_power <= 0 THEN
         -- Sin cooling: calentamiento significativo (max 15°C por tick)
-        -- Minero Básico (2.5): +2.5°C/tick → peligro en ~4 min
-        -- ASIC S19 (18): +15°C/tick → peligro en ~40s
-        -- Quantum (55): +15°C/tick (cap) → peligro en ~40s
-        v_temp_increase := LEAST(v_rig.power_consumption * 1.0, 15) * v_temp_mult;
+        -- Solo si está trabajando (v_hashrate_ratio > 0)
+        v_temp_increase := LEAST(v_rig.power_consumption * v_hashrate_ratio * 1.0, 15) * v_temp_mult;
         -- Reducción directa por upgrade térmico (en °C)
         v_temp_increase := GREATEST(0, v_temp_increase - v_thermal_bonus);
       ELSE
         -- Con cooling: calentamiento reducido por poder de refrigeración
-        v_temp_increase := v_rig.power_consumption * 0.8;
+        v_temp_increase := v_rig.power_consumption * v_hashrate_ratio * 0.8;
         -- Reducción adicional por upgrade térmico (en °C)
         v_temp_increase := GREATEST(0, v_temp_increase - v_rig_cooling_power - v_thermal_bonus) * v_temp_mult;
       END IF;
@@ -1609,10 +1575,19 @@ BEGIN
       -- Calcular nueva temperatura
       v_new_temp := v_rig.temperature + v_temp_increase;
 
-      -- Enfriamiento pasivo (solo con cooling instalado)
-      IF v_new_temp > v_ambient_temp AND v_rig_cooling_power > 0 THEN
-        -- Con cooling: enfriamiento basado en poder de refrigeración
-        v_new_temp := v_new_temp - (v_rig_cooling_power * 0.15);
+      -- Enfriamiento pasivo
+      IF v_new_temp > v_ambient_temp THEN
+        IF v_rig_cooling_power > 0 THEN
+          -- Con cooling: enfriamiento basado en poder de refrigeración
+          -- Premium: 25% más rápido (multiplicador 1.25)
+          v_new_temp := v_new_temp - (v_rig_cooling_power * 0.15 * CASE WHEN v_player.is_premium THEN 1.25 ELSE 1.0 END);
+        ELSE
+          -- Sin cooling pero sin trabajar (hashrate_ratio bajo): enfriamiento natural
+          -- Si no está minando efectivamente, se enfría lentamente hacia 0°C
+          IF v_hashrate_ratio < 0.5 THEN
+            v_new_temp := v_new_temp - (2.0 * (1 - v_hashrate_ratio));  -- hasta -2°C por tick
+          END IF;
+        END IF;
         v_new_temp := GREATEST(v_ambient_temp, v_new_temp);
       END IF;
 
@@ -1653,6 +1628,11 @@ BEGIN
 
       -- Aplicar multiplicador de boost de durability_shield
       v_deterioration := v_deterioration * v_durability_mult;
+
+      -- Premium: -25% desgaste (multiplicador 0.75)
+      IF v_player.is_premium THEN
+        v_deterioration := v_deterioration * 0.75;
+      END IF;
 
       -- Aplicar deterioro y actualizar temperatura
       UPDATE player_rigs
@@ -1719,11 +1699,6 @@ BEGIN
           -- multi_rig_time: minutos con múltiples rigs activos (0.5 = 30 segundos)
           PERFORM update_mission_progress(v_player.id, 'multi_rig_time', 0.5);
         END IF;
-      ELSE
-        -- Sin rigs activos: resetear streak de minería
-        UPDATE players
-        SET mining_streak_minutes = 0
-        WHERE id = v_player.id;
       END IF;
     END;
 
@@ -1731,8 +1706,9 @@ BEGIN
     -- Ambos bajan proporcionalmente a su consumo real (mismo multiplicador)
     -- Los multiplicadores de boost ya fueron aplicados por rig en el loop anterior
     -- Multiplicador 0.05 = tick cada 30 segundos (antes 0.1 para ticks de 60 segundos)
-    v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.05));
-    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.05));
+    -- Premium: -20% consumo (multiplicador 0.8)
+    v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.05 * CASE WHEN v_player.is_premium THEN 0.8 ELSE 1.0 END));
+    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.05 * CASE WHEN v_player.is_premium THEN 0.8 ELSE 1.0 END));
 
     -- Actualizar recursos del jugador
     UPDATE players
@@ -1747,11 +1723,6 @@ BEGIN
           deactivated_at = NOW(),
           activated_at = NULL
       WHERE player_id = v_player.id AND is_active = true;
-
-      -- Resetear streak de minería (dejó de minar)
-      UPDATE players
-      SET mining_streak_minutes = 0
-      WHERE id = v_player.id;
 
       INSERT INTO player_events (player_id, type, data)
       VALUES (v_player.id, 'rigs_shutdown', json_build_object(
@@ -1817,241 +1788,11 @@ END;
 $$;
 
 -- Tick de minería (selección de ganador)
-CREATE OR REPLACE FUNCTION process_mining_tick()
-RETURNS TABLE(block_mined BOOLEAN, block_height INT)
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_network_hashrate NUMERIC := 0;
-  v_difficulty NUMERIC;
-  v_block_probability NUMERIC;
-  v_roll NUMERIC;
-  v_winner_player_id UUID;
-  v_block blocks%ROWTYPE;
-  v_reward NUMERIC;
-  v_rig RECORD;
-  v_effective_hashrate NUMERIC;
-  v_rep_multiplier NUMERIC;
-  v_hashrate_sum NUMERIC := 0;
-  v_random_pick NUMERIC;
-  v_temp_penalty NUMERIC;
-  v_condition_penalty NUMERIC;
-  -- Boost multipliers
-  v_boosts JSON;
-  v_hashrate_mult NUMERIC;
-  v_luck_mult NUMERIC;
-  v_current_player_id UUID := NULL;
-  v_total_luck_mult NUMERIC := 1.0;
-  v_luck_count INTEGER := 0;
-BEGIN
-  SELECT COALESCE(ns.difficulty, 1000) INTO v_difficulty FROM network_stats ns WHERE ns.id = 'current';
-  IF v_difficulty IS NULL THEN v_difficulty := 1000; END IF;
-
-  -- Calcular hashrate total con penalizaciones por temperatura y condición
-  -- Incluye jugadores online O rigs con autonomous mining boost
-  -- Excluye jugadores en cooldown (>5 bloques en <2 minutos)
-  FOR v_rig IN
-    SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score,
-           COALESCE(pr.hashrate_level, 1) as hashrate_level
-    FROM player_rigs pr
-    JOIN rigs r ON r.id = pr.rig_id
-    JOIN players p ON p.id = pr.player_id
-    WHERE pr.is_active = true AND p.energy > 0 AND p.internet > 0
-      AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
-      AND NOT is_player_in_mining_cooldown(pr.player_id)
-  LOOP
-    -- Obtener multiplicadores de boost POR RIG (no por jugador)
-    v_boosts := get_rig_boost_multipliers(v_rig.rig_id);
-    v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
-    v_luck_mult := COALESCE((v_boosts->>'luck')::NUMERIC, 1.0);
-
-    -- Aplicar bonus de hashrate del upgrade (de la tabla upgrade_costs)
-    DECLARE
-      v_upgrade_hashrate_bonus NUMERIC := 0;
-    BEGIN
-      SELECT COALESCE(hashrate_bonus, 0) INTO v_upgrade_hashrate_bonus
-      FROM upgrade_costs WHERE level = v_rig.hashrate_level;
-      IF v_upgrade_hashrate_bonus IS NULL THEN v_upgrade_hashrate_bonus := 0; END IF;
-      v_hashrate_mult := v_hashrate_mult * (1 + v_upgrade_hashrate_bonus / 100.0);
-    END;
-
-    -- Acumular luck multiplier para probabilidad de bloque
-    IF v_luck_mult > 1.0 THEN
-      v_total_luck_mult := v_total_luck_mult + (v_luck_mult - 1.0);
-      v_luck_count := v_luck_count + 1;
-    END IF;
-
-    -- Multiplicador de reputación
-    IF v_rig.reputation_score >= 80 THEN
-      v_rep_multiplier := 1 + (v_rig.reputation_score - 80) * 0.01;
-    ELSIF v_rig.reputation_score < 50 THEN
-      v_rep_multiplier := 0.5 + (v_rig.reputation_score / 100.0);
-    ELSE
-      v_rep_multiplier := 1;
-    END IF;
-
-    -- Penalización por temperatura: reduce hashrate cuando temp > 50°C
-    -- A 50°C: 100% hashrate, a 100°C: 30% hashrate
-    v_temp_penalty := 1;
-    IF v_rig.temperature > 50 THEN
-      v_temp_penalty := 1 - ((v_rig.temperature - 50) * 0.014);
-      v_temp_penalty := GREATEST(0.3, v_temp_penalty);  -- Mínimo 30% hashrate
-    END IF;
-
-    -- Penalización por condición: proporcional directo
-    -- 100% condición = 100% hashrate, 50% = 50%, mínimo 10%
-    v_condition_penalty := GREATEST(0.1, v_rig.condition / 100.0);
-
-    -- Aplicar multiplicador de boost de hashrate
-    v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty * v_hashrate_mult;
-    v_network_hashrate := v_network_hashrate + v_effective_hashrate;
-  END LOOP;
-
-  -- Actualizar hashrate de red y mineros activos
-  INSERT INTO network_stats (id, difficulty, hashrate, active_miners, updated_at)
-  VALUES ('current', v_difficulty, v_network_hashrate,
-          (SELECT COUNT(DISTINCT player_id) FROM player_rigs WHERE is_active = true),
-          NOW())
-  ON CONFLICT (id) DO UPDATE SET
-    hashrate = v_network_hashrate,
-    active_miners = (SELECT COUNT(DISTINCT player_id) FROM player_rigs WHERE is_active = true),
-    updated_at = NOW();
-
-  IF v_network_hashrate = 0 THEN
-    RETURN QUERY SELECT false, NULL::INT;
-    RETURN;
-  END IF;
-
-  -- Probabilidad de minar (aplicar multiplicador de luck promedio si hay boosts activos)
-  -- El luck multiplier aumenta la probabilidad global de encontrar un bloque
-  IF v_luck_count > 0 THEN
-    v_total_luck_mult := v_total_luck_mult / v_luck_count;
-  END IF;
-  v_block_probability := (v_network_hashrate / v_difficulty) * v_total_luck_mult;
-  v_roll := random();
-
-  IF v_roll > v_block_probability THEN
-    RETURN QUERY SELECT false, NULL::INT;
-    RETURN;
-  END IF;
-
-  -- Seleccionar ganador (con mismas penalizaciones y boosts)
-  -- Incluye jugadores online O rigs con autonomous mining boost
-  -- Excluye jugadores en cooldown (>5 bloques en <2 minutos)
-  v_random_pick := random() * v_network_hashrate;
-  v_hashrate_sum := 0;
-  v_current_player_id := NULL;
-
-  FOR v_rig IN
-    SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature, r.hashrate, p.reputation_score,
-           COALESCE(pr.hashrate_level, 1) as hashrate_level
-    FROM player_rigs pr
-    JOIN rigs r ON r.id = pr.rig_id
-    JOIN players p ON p.id = pr.player_id
-    WHERE pr.is_active = true AND p.energy > 0 AND p.internet > 0
-      AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
-      AND NOT is_player_in_mining_cooldown(pr.player_id)
-  LOOP
-    -- Obtener multiplicador de hashrate del boost POR RIG
-    v_boosts := get_rig_boost_multipliers(v_rig.rig_id);
-    v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
-
-    -- Aplicar bonus de hashrate del upgrade (de la tabla upgrade_costs)
-    DECLARE
-      v_upgrade_hashrate_bonus NUMERIC := 0;
-    BEGIN
-      SELECT COALESCE(hashrate_bonus, 0) INTO v_upgrade_hashrate_bonus
-      FROM upgrade_costs WHERE level = v_rig.hashrate_level;
-      IF v_upgrade_hashrate_bonus IS NULL THEN v_upgrade_hashrate_bonus := 0; END IF;
-      v_hashrate_mult := v_hashrate_mult * (1 + v_upgrade_hashrate_bonus / 100.0);
-    END;
-
-    IF v_rig.reputation_score >= 80 THEN
-      v_rep_multiplier := 1 + (v_rig.reputation_score - 80) * 0.01;
-    ELSIF v_rig.reputation_score < 50 THEN
-      v_rep_multiplier := 0.5 + (v_rig.reputation_score / 100.0);
-    ELSE
-      v_rep_multiplier := 1;
-    END IF;
-
-    v_temp_penalty := 1;
-    IF v_rig.temperature > 50 THEN
-      v_temp_penalty := 1 - ((v_rig.temperature - 50) * 0.014);
-      v_temp_penalty := GREATEST(0.3, v_temp_penalty);
-    END IF;
-
-    IF v_rig.condition >= 80 THEN
-      v_condition_penalty := 1.0;
-    ELSE
-      v_condition_penalty := 0.3 + (v_rig.condition / 80.0) * 0.7;
-    END IF;
-
-    -- Aplicar multiplicador de boost de hashrate
-    v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty * v_hashrate_mult;
-    v_hashrate_sum := v_hashrate_sum + v_effective_hashrate;
-
-    IF v_hashrate_sum >= v_random_pick THEN
-      v_winner_player_id := v_rig.player_id;
-      EXIT;
-    END IF;
-  END LOOP;
-
-  IF v_winner_player_id IS NULL THEN
-    RETURN QUERY SELECT false, NULL::INT;
-    RETURN;
-  END IF;
-
-  -- Calcular altura del siguiente bloque y recompensa ANTES de crear
-  DECLARE
-    v_next_height INT;
-    v_is_premium BOOLEAN;
-    v_base_reward NUMERIC;
-  BEGIN
-    SELECT COALESCE(MAX(height), 0) + 1 INTO v_next_height FROM blocks;
-    v_base_reward := calculate_block_reward(v_next_height);
-    v_is_premium := is_player_premium(v_winner_player_id);
-
-    -- Aplicar bonus premium (+50%)
-    IF v_is_premium THEN
-      v_reward := v_base_reward * 1.5;
-    ELSE
-      v_reward := v_base_reward;
-    END IF;
-
-    -- Crear bloque con reward e is_premium guardados
-    v_block := create_new_block(v_winner_player_id, v_difficulty, v_network_hashrate, v_reward, v_is_premium);
-
-    IF v_block.id IS NULL THEN
-      RETURN QUERY SELECT false, NULL::INT;
-      RETURN;
-    END IF;
-
-    -- Crear pending_block para que el jugador lo reclame
-    INSERT INTO pending_blocks (block_id, player_id, reward, is_premium)
-    VALUES (v_block.id, v_winner_player_id, v_reward, v_is_premium);
-
-    -- Actualizar contador de bloques minados (para leaderboard)
-    -- Resetear pity timer (encontró bloque real, no necesita pity)
-    -- Mantener el streak de minería (sigue minando activamente)
-    UPDATE players
-    SET blocks_mined = COALESCE(blocks_mined, 0) + 1,
-        mining_bonus_accumulated = 0,
-        pity_minutes_accumulated = 0
-    WHERE id = v_winner_player_id;
-
-    PERFORM update_reputation(v_winner_player_id, 0.1, 'block_mined');
-
-    -- Actualizar progreso de misiones de minado
-    PERFORM update_mission_progress(v_winner_player_id, 'mine_blocks', 1);
-    PERFORM update_mission_progress(v_winner_player_id, 'mine_blocks_weekly', 1);
-    PERFORM update_mission_progress(v_winner_player_id, 'first_block', 1);
-    PERFORM update_mission_progress(v_winner_player_id, 'total_blocks', 1);
-
-    RETURN QUERY SELECT true, v_block.height;
-  END;
-END;
-$$;
+-- =====================================================
+-- NOTA: La función process_mining_tick() fue eliminada.
+-- El sistema ahora usa exclusivamente el sistema de shares
+-- para distribución de recompensas de bloques compartidos.
+-- =====================================================
 
 -- =====================================================
 -- AJUSTE DE DIFICULTAD ESTILO BITCOIN (TARGET DINÁMICO)
@@ -2238,92 +1979,11 @@ END;
 $$;
 
 -- Game tick principal (ejecutar cada minuto)
-CREATE OR REPLACE FUNCTION game_tick()
-RETURNS JSON
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_resources_processed INT := 0;
-  v_block_mined BOOLEAN := false;
-  v_block_height INT;
-  v_difficulty_result JSON;
-  v_pity_result JSON;
-  v_inactive_marked INT := 0;
-  v_rigs_shutdown INT := 0;
-BEGIN
-  -- Marcar como offline a usuarios inactivos (sin heartbeat por más de 5 minutos)
-  -- Y apagar sus rigs automáticamente
-  WITH inactive_players AS (
-    UPDATE players
-    SET is_online = false
-    WHERE is_online = true
-      AND last_seen < NOW() - INTERVAL '5 minutes'
-    RETURNING id
-  )
-  SELECT COUNT(*) INTO v_inactive_marked FROM inactive_players;
-
-  -- Apagar rigs de jugadores que acaban de ser marcados offline
-  -- EXCEPTO los que tienen boost de autonomous_mining activo
-  -- Conservar temperatura para anti-exploit de toggle rápido
-  IF v_inactive_marked > 0 THEN
-    UPDATE player_rigs
-    SET is_active = false,
-        deactivated_at = NOW(),
-        activated_at = NULL
-    WHERE player_id IN (
-      SELECT id FROM players
-      WHERE is_online = false
-        AND last_seen < NOW() - INTERVAL '5 minutes'
-        AND last_seen > NOW() - INTERVAL '6 minutes'
-    ) AND is_active = true
-    AND NOT rig_has_autonomous_boost(id);
-    GET DIAGNOSTICS v_rigs_shutdown = ROW_COUNT;
-
-    -- Resetear streak de minería para jugadores que dejaron de minar
-    -- (solo los que no tienen autonomous mining)
-    IF v_rigs_shutdown > 0 THEN
-      UPDATE players
-      SET mining_streak_minutes = 0
-      WHERE id IN (
-        SELECT id FROM players
-        WHERE is_online = false
-          AND last_seen < NOW() - INTERVAL '5 minutes'
-          AND last_seen > NOW() - INTERVAL '6 minutes'
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM player_rigs pr
-        WHERE pr.player_id = players.id
-          AND pr.is_active = true
-      );
-    END IF;
-  END IF;
-
-  -- Procesar decay de recursos (solo jugadores online)
-  v_resources_processed := process_resource_decay();
-
-  -- Ajustar dificultad antes de intentar minar
-  v_difficulty_result := adjust_difficulty();
-
-  -- Intentar minar bloque
-  SELECT * INTO v_block_mined, v_block_height FROM process_mining_tick();
-
-  -- Procesar bonus de tiempo de minado (Pity Timer)
-  v_pity_result := process_mining_time_bonus();
-
-  RETURN json_build_object(
-    'success', true,
-    'resourcesProcessed', v_resources_processed,
-    'blockMined', v_block_mined,
-    'blockHeight', v_block_height,
-    'difficultyAdjusted', (v_difficulty_result->>'adjusted')::BOOLEAN,
-    'playersMarkedOffline', v_inactive_marked,
-    'rigsShutdown', v_rigs_shutdown,
-    'pityBlocksCreated', (v_pity_result->>'pityBlocksCreated')::INT,
-    'timestamp', NOW()
-  );
-END;
-$$;
+-- =====================================================
+-- NOTA: La función game_tick() fue eliminada ya que el cron
+-- ahora solo llama a game_tick_share_system().
+-- El sistema de minería usa exclusivamente shares.
+-- =====================================================
 
 -- =====================================================
 -- 6. FUNCIONES DE MERCADO
@@ -3967,6 +3627,20 @@ BEGIN
 END;
 $$;
 
+-- Actualizar estado online del jugador (login/logout)
+CREATE OR REPLACE FUNCTION update_online_status(p_player_id UUID, p_is_online BOOLEAN)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE players
+  SET is_online = p_is_online,
+      last_seen = NOW()
+  WHERE id = p_player_id;
+END;
+$$;
+
 -- Registrar heartbeat de tiempo online
 CREATE OR REPLACE FUNCTION record_online_heartbeat(p_player_id UUID)
 RETURNS JSON
@@ -3989,6 +3663,8 @@ BEGIN
     UPDATE players SET
       energy = v_free_max,
       internet = v_free_max,
+      max_energy = v_free_max,
+      max_internet = v_free_max,
       premium_until = NULL  -- Marcar como procesado
     WHERE id = p_player_id AND premium_until IS NOT NULL AND premium_until <= NOW();
 
@@ -4183,7 +3859,7 @@ ON CONFLICT (id) DO UPDATE SET
   tier = EXCLUDED.tier;
 
 -- Obtener todos los boost items disponibles
-DROP FUNCTION IF EXISTS get_boost_items() CASCADE;
+
 CREATE OR REPLACE FUNCTION get_boost_items()
 RETURNS JSON
 LANGUAGE plpgsql
@@ -4203,7 +3879,6 @@ END;
 $$;
 
 -- Obtener boosts del jugador (inventario y activos)
-DROP FUNCTION IF EXISTS get_player_boosts(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION get_player_boosts(p_player_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -4244,7 +3919,6 @@ END;
 $$;
 
 -- Comprar boost (agregar al inventario)
-DROP FUNCTION IF EXISTS buy_boost(UUID, TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION buy_boost(p_player_id UUID, p_boost_id TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -4313,7 +3987,6 @@ END;
 $$;
 
 -- Activar boost (usar del inventario)
-DROP FUNCTION IF EXISTS activate_boost(UUID, TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION activate_boost(p_player_id UUID, p_boost_id TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -4385,7 +4058,6 @@ END;
 $$;
 
 -- Obtener multiplicadores de boosts activos (para game tick)
-DROP FUNCTION IF EXISTS get_active_boost_multipliers(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION get_active_boost_multipliers(p_player_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -4451,7 +4123,6 @@ $$;
 -- =====================================================
 
 -- Instalar boost en un rig específico (similar a install_cooling_to_rig)
-DROP FUNCTION IF EXISTS install_boost_to_rig(UUID, UUID, TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION install_boost_to_rig(p_player_id UUID, p_rig_id UUID, p_boost_id TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -4541,7 +4212,6 @@ END;
 $$;
 
 -- Obtener boosts instalados en un rig específico
-DROP FUNCTION IF EXISTS get_rig_boosts(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION get_rig_boosts(p_rig_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -4565,7 +4235,6 @@ END;
 $$;
 
 -- Obtener multiplicadores de boosts de un rig específico (para game tick)
-DROP FUNCTION IF EXISTS get_rig_boost_multipliers(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION get_rig_boost_multipliers(p_rig_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -4628,7 +4297,6 @@ END;
 $$;
 
 -- Helper function to check if rig has autonomous mining boost
-DROP FUNCTION IF EXISTS rig_has_autonomous_boost(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION rig_has_autonomous_boost(p_rig_id UUID)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -4651,7 +4319,6 @@ $$;
 -- =====================================================
 
 -- Actualizar wallet RON
-DROP FUNCTION IF EXISTS update_ron_wallet(UUID, TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION update_ron_wallet(
   p_player_id UUID,
   p_wallet_address TEXT
@@ -4692,7 +4359,6 @@ END;
 $$;
 
 -- Reiniciar cuenta (soft reset)
-DROP FUNCTION IF EXISTS reset_player_account(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION reset_player_account(p_player_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -4741,6 +4407,8 @@ BEGIN
     crypto_balance = 0,
     energy = 300,
     internet = 300,
+    max_energy = 300,
+    max_internet = 300,
     reputation_score = 50,
     rig_slots = 1,
     blocks_mined = 0,
@@ -4929,7 +4597,7 @@ CREATE TABLE IF NOT EXISTS announcements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   message TEXT NOT NULL,
   message_es TEXT,  -- Mensaje en español (opcional)
-  type TEXT NOT NULL DEFAULT 'info' CHECK (type IN ('info', 'warning', 'success', 'error', 'maintenance')),
+  type TEXT NOT NULL DEFAULT 'info' CHECK (type IN ('info', 'warning', 'success', 'error', 'maintenance', 'update')),
   icon TEXT DEFAULT '📢',
   link_url TEXT,
   link_text TEXT,
@@ -4944,7 +4612,6 @@ CREATE TABLE IF NOT EXISTS announcements (
 CREATE INDEX IF NOT EXISTS idx_announcements_active ON announcements(is_active, starts_at, ends_at);
 
 -- Función para obtener anuncios activos
-DROP FUNCTION IF EXISTS get_active_announcements() CASCADE;
 CREATE OR REPLACE FUNCTION get_active_announcements()
 RETURNS JSON
 LANGUAGE plpgsql
@@ -4975,6 +4642,684 @@ BEGIN
   );
 END;
 $$;
+
+-- Función para obtener TODOS los anuncios (admin)
+CREATE OR REPLACE FUNCTION admin_get_all_announcements()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+BEGIN
+  -- Verificar que el usuario sea admin
+  SELECT role INTO v_player_role
+  FROM players
+  WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT
+        id,
+        message,
+        message_es,
+        type,
+        icon,
+        link_url,
+        link_text,
+        is_active,
+        priority,
+        starts_at,
+        ends_at,
+        created_at,
+        updated_at
+      FROM announcements
+      ORDER BY created_at DESC
+    ) t
+  );
+END;
+$$;
+
+-- Función para crear anuncio (admin)
+CREATE OR REPLACE FUNCTION admin_create_announcement(
+  p_message TEXT,
+  p_message_es TEXT DEFAULT NULL,
+  p_type TEXT DEFAULT 'info',
+  p_icon TEXT DEFAULT '📢',
+  p_link_url TEXT DEFAULT NULL,
+  p_link_text TEXT DEFAULT NULL,
+  p_is_active BOOLEAN DEFAULT true,
+  p_priority INTEGER DEFAULT 0,
+  p_starts_at TIMESTAMPTZ DEFAULT NOW(),
+  p_ends_at TIMESTAMPTZ DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+  v_announcement_id UUID;
+BEGIN
+  -- Verificar que el usuario sea admin
+  SELECT role INTO v_player_role
+  FROM players
+  WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  -- Validar type
+  IF p_type NOT IN ('info', 'warning', 'success', 'error', 'maintenance') THEN
+    RAISE EXCEPTION 'Invalid announcement type';
+  END IF;
+
+  -- Crear anuncio
+  INSERT INTO announcements (
+    message,
+    message_es,
+    type,
+    icon,
+    link_url,
+    link_text,
+    is_active,
+    priority,
+    starts_at,
+    ends_at
+  ) VALUES (
+    p_message,
+    p_message_es,
+    p_type,
+    p_icon,
+    p_link_url,
+    p_link_text,
+    p_is_active,
+    p_priority,
+    p_starts_at,
+    p_ends_at
+  ) RETURNING id INTO v_announcement_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'announcement_id', v_announcement_id
+  );
+END;
+$$;
+
+-- Función para actualizar anuncio (admin)
+CREATE OR REPLACE FUNCTION admin_update_announcement(
+  p_announcement_id UUID,
+  p_message TEXT DEFAULT NULL,
+  p_message_es TEXT DEFAULT NULL,
+  p_type TEXT DEFAULT NULL,
+  p_icon TEXT DEFAULT NULL,
+  p_link_url TEXT DEFAULT NULL,
+  p_link_text TEXT DEFAULT NULL,
+  p_is_active BOOLEAN DEFAULT NULL,
+  p_priority INTEGER DEFAULT NULL,
+  p_starts_at TIMESTAMPTZ DEFAULT NULL,
+  p_ends_at TIMESTAMPTZ DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+BEGIN
+  -- Verificar que el usuario sea admin
+  SELECT role INTO v_player_role
+  FROM players
+  WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  -- Validar type si se proporciona
+  IF p_type IS NOT NULL AND p_type NOT IN ('info', 'warning', 'success', 'error', 'maintenance') THEN
+    RAISE EXCEPTION 'Invalid announcement type';
+  END IF;
+
+  -- Actualizar solo los campos proporcionados
+  UPDATE announcements
+  SET
+    message = COALESCE(p_message, message),
+    message_es = CASE WHEN p_message_es IS NOT NULL THEN p_message_es ELSE message_es END,
+    type = COALESCE(p_type, type),
+    icon = COALESCE(p_icon, icon),
+    link_url = CASE WHEN p_link_url IS NOT NULL THEN p_link_url ELSE link_url END,
+    link_text = CASE WHEN p_link_text IS NOT NULL THEN p_link_text ELSE link_text END,
+    is_active = COALESCE(p_is_active, is_active),
+    priority = COALESCE(p_priority, priority),
+    starts_at = COALESCE(p_starts_at, starts_at),
+    ends_at = CASE WHEN p_ends_at IS NOT NULL THEN p_ends_at ELSE ends_at END,
+    updated_at = NOW()
+  WHERE id = p_announcement_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Announcement not found';
+  END IF;
+
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+-- Función para eliminar anuncio (admin)
+CREATE OR REPLACE FUNCTION admin_delete_announcement(
+  p_announcement_id UUID
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+BEGIN
+  -- Verificar que el usuario sea admin
+  SELECT role INTO v_player_role
+  FROM players
+  WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  -- Eliminar anuncio
+  DELETE FROM announcements
+  WHERE id = p_announcement_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Announcement not found';
+  END IF;
+
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+-- Función para crear anuncio de actualización (admin only)
+CREATE OR REPLACE FUNCTION admin_create_update_announcement(
+  p_version TEXT,
+  p_message TEXT DEFAULT NULL,
+  p_message_es TEXT DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+  v_announcement_id UUID;
+  v_default_message TEXT;
+  v_default_message_es TEXT;
+BEGIN
+  -- Verificar admin
+  SELECT role INTO v_player_role FROM players WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  -- Mensajes por defecto si no se proporcionan
+  v_default_message := COALESCE(p_message,
+    'A new version (' || p_version || ') is available! Please refresh to update.');
+  v_default_message_es := COALESCE(p_message_es,
+    'Una nueva versión (' || p_version || ') está disponible! Por favor actualiza la página.');
+
+  -- Desactivar cualquier anuncio de actualización existente
+  UPDATE announcements SET is_active = false WHERE type = 'update';
+
+  -- Crear nuevo anuncio de actualización
+  INSERT INTO announcements (
+    message,
+    message_es,
+    type,
+    icon,
+    link_url,
+    link_text,
+    is_active,
+    priority,
+    starts_at,
+    ends_at
+  ) VALUES (
+    v_default_message,
+    v_default_message_es,
+    'update',
+    '🔄',
+    NULL,
+    NULL,
+    true,
+    999, -- Máxima prioridad
+    NOW(),
+    NULL -- Sin expiración hasta que se desactive manualmente
+  ) RETURNING id INTO v_announcement_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'announcement_id', v_announcement_id,
+    'version', p_version
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_create_update_announcement TO authenticated;
+
+-- Función para obtener información de usuarios (admin only)
+-- Función para listar usuarios - INFORMACIÓN BÁSICA (admin only)
+CREATE OR REPLACE FUNCTION admin_get_players(
+  p_search TEXT DEFAULT NULL,
+  p_limit INTEGER DEFAULT 50,
+  p_offset INTEGER DEFAULT 0
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+BEGIN
+  -- Verificar admin
+  SELECT role INTO v_player_role FROM players WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT
+        -- Información básica
+        p.id,
+        p.username,
+        p.email,
+        p.role,
+        p.created_at as registered_at,
+        p.last_seen as last_login_at,
+        p.is_online,
+
+        -- Balances resumen
+        p.gamecoin_balance,
+        p.crypto_balance,
+        COALESCE(p.ron_balance, 0) as ron_balance,
+
+        -- Estado
+        p.reputation_score,
+        (p.premium_until IS NOT NULL AND p.premium_until > NOW()) as is_premium,
+
+        -- Minería básica
+        COALESCE(p.blocks_mined, 0) as blocks_mined,
+        (
+          SELECT COALESCE(SUM(r.hashrate * (pr.condition / 100.0)), 0)
+          FROM player_rigs pr
+          JOIN rigs r ON r.id = pr.rig_id
+          WHERE pr.player_id = p.id AND pr.is_active = true
+        ) as total_hashrate,
+
+        -- Contadores rápidos
+        (SELECT COUNT(*) FROM player_rigs WHERE player_id = p.id AND is_active = true) as active_rigs,
+        COALESCE(p.referral_count, 0) as referrals_count
+
+      FROM players p
+      WHERE
+        (p_search IS NULL OR
+         p.username ILIKE '%' || p_search || '%' OR
+         p.email ILIKE '%' || p_search || '%' OR
+         p.id::TEXT = p_search)
+      ORDER BY p.created_at DESC
+      LIMIT p_limit
+      OFFSET p_offset
+    ) t
+  );
+END;
+$$;
+
+-- Función para ver DETALLES COMPLETOS de un jugador específico (admin only)
+CREATE OR REPLACE FUNCTION admin_get_player_detail(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+  v_result JSON;
+BEGIN
+  -- Verificar admin
+  SELECT role INTO v_player_role FROM players WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  -- Construir respuesta detallada
+  SELECT json_build_object(
+    'success', true,
+    'player', json_build_object(
+      -- Información básica
+      'id', p.id,
+      'username', p.username,
+      'email', p.email,
+      'role', p.role,
+      'registered_at', p.created_at,
+      'last_login_at', p.last_seen,
+      'is_online', p.is_online,
+
+      -- Balances y economía
+      'gamecoin_balance', p.gamecoin_balance,
+      'crypto_balance', p.crypto_balance,
+      'ron_balance', COALESCE(p.ron_balance, 0),
+      'total_crypto_earned', COALESCE(p.total_crypto_earned, 0),
+      'ron_wallet', p.ron_wallet,
+
+      -- Recursos
+      'energy', p.energy,
+      'max_energy', p.max_energy,
+      'internet', p.internet,
+      'max_internet', p.max_internet,
+      'reputation_score', p.reputation_score,
+
+      -- Premium
+      'is_premium', (p.premium_until IS NOT NULL AND p.premium_until > NOW()),
+      'premium_until', p.premium_until,
+
+      -- Minería
+      'blocks_mined', COALESCE(p.blocks_mined, 0),
+      'total_hashrate', (
+        SELECT COALESCE(SUM(r.hashrate * (pr.condition / 100.0)), 0)
+        FROM player_rigs pr
+        JOIN rigs r ON r.id = pr.rig_id
+        WHERE pr.player_id = p.id AND pr.is_active = true
+      ),
+
+      -- Shares (sistema actual de minería)
+      'shares_stats', (
+        SELECT json_build_object(
+          'current_block_shares', COALESCE(ps.shares_count, 0),
+          'last_share_at', ps.last_share_at,
+          'total_shares_generated', (
+            SELECT COALESCE(SUM(sh.shares_generated), 0)
+            FROM share_history sh
+            WHERE sh.player_id = p.id
+          )
+        )
+        FROM player_shares ps
+        WHERE ps.player_id = p.id
+          AND ps.mining_block_id = (SELECT current_mining_block_id FROM network_stats WHERE id = 'current')
+        LIMIT 1
+      ),
+
+      -- 🆕 Lista detallada de RIGS del jugador
+      'rigs', (
+        SELECT COALESCE(json_agg(json_build_object(
+          'id', pr.id,
+          'rig_id', r.id,
+          'rig_name', r.name,
+          'tier', r.tier,
+          'hashrate', r.hashrate,
+          'power_consumption', r.power_consumption,
+          'internet_consumption', r.internet_consumption,
+          'is_active', pr.is_active,
+          'condition', pr.condition,
+          'max_condition', COALESCE(pr.max_condition, 100),
+          'temperature', pr.temperature,
+          'times_repaired', COALESCE(pr.times_repaired, 0),
+          'hashrate_level', COALESCE(pr.hashrate_level, 1),
+          'efficiency_level', COALESCE(pr.efficiency_level, 1),
+          'thermal_level', COALESCE(pr.thermal_level, 1),
+          'acquired_at', pr.acquired_at,
+          'activated_at', pr.activated_at,
+          'deactivated_at', pr.deactivated_at,
+          'cooling_installed', (
+            SELECT COALESCE(json_agg(json_build_object(
+              'id', rc.id,
+              'cooling_id', ci.id,
+              'cooling_name', ci.name,
+              'cooling_power', ci.cooling_power,
+              'durability', rc.durability,
+              'installed_at', rc.installed_at
+            )), '[]'::JSON)
+            FROM rig_cooling rc
+            JOIN cooling_items ci ON ci.id = rc.cooling_item_id
+            WHERE rc.player_rig_id = pr.id
+          ),
+          'boosts_installed', (
+            SELECT COALESCE(json_agg(json_build_object(
+              'id', rb.id,
+              'boost_id', bi.id,
+              'boost_name', bi.name,
+              'boost_type', bi.boost_type,
+              'remaining_seconds', rb.remaining_seconds,
+              'stack_count', rb.stack_count,
+              'activated_at', rb.activated_at
+            )), '[]'::JSON)
+            FROM rig_boosts rb
+            JOIN boost_items bi ON bi.id = rb.boost_item_id
+            WHERE rb.player_rig_id = pr.id AND rb.remaining_seconds > 0
+          )
+        ) ORDER BY pr.acquired_at DESC), '[]'::JSON)
+        FROM player_rigs pr
+        JOIN rigs r ON r.id = pr.rig_id
+        WHERE pr.player_id = p.id
+      ),
+
+      -- 🆕 COMPRAS (Crypto Packages)
+      'crypto_purchases', (
+        SELECT COALESCE(json_agg(json_build_object(
+          'id', cp.id,
+          'package_id', cp.package_id,
+          'package_name', pkg.name,
+          'crypto_amount', cp.crypto_amount,
+          'ron_paid', cp.ron_paid,
+          'status', cp.status,
+          'purchased_at', cp.purchased_at,
+          'completed_at', cp.completed_at,
+          'tx_hash', cp.tx_hash
+        ) ORDER BY cp.purchased_at DESC), '[]'::JSON)
+        FROM crypto_purchases cp
+        LEFT JOIN crypto_packages pkg ON pkg.id = cp.package_id
+        WHERE cp.player_id = p.id
+        LIMIT 20
+      ),
+
+      -- 🆕 BLOQUES - Pendientes (con detalle)
+      'pending_blocks', (
+        SELECT json_build_object(
+          'pending_count', COUNT(*),
+          'total_reward', COALESCE(SUM(reward), 0),
+          'blocks', COALESCE(json_agg(json_build_object(
+            'id', pb.id,
+            'block_id', pb.block_id,
+            'reward', pb.reward,
+            'is_premium', pb.is_premium,
+            'shares_contributed', pb.shares_contributed,
+            'total_block_shares', pb.total_block_shares,
+            'share_percentage', pb.share_percentage,
+            'created_at', pb.created_at
+          ) ORDER BY pb.created_at DESC), '[]'::JSON)
+        )
+        FROM pending_blocks pb
+        WHERE pb.player_id = p.id AND pb.claimed = false
+      ),
+
+      -- 🆕 BLOQUES - Historial de claims (últimos 20)
+      'claimed_blocks', (
+        SELECT COALESCE(json_agg(json_build_object(
+          'id', pb.id,
+          'block_id', pb.block_id,
+          'reward', pb.reward,
+          'is_premium', pb.is_premium,
+          'shares_contributed', pb.shares_contributed,
+          'total_block_shares', pb.total_block_shares,
+          'share_percentage', pb.share_percentage,
+          'created_at', pb.created_at,
+          'claimed_at', pb.claimed_at
+        ) ORDER BY pb.claimed_at DESC), '[]'::JSON)
+        FROM pending_blocks pb
+        WHERE pb.player_id = p.id AND pb.claimed = true
+        LIMIT 20
+      ),
+
+      -- Rigs (resumen)
+      'total_rigs', (SELECT COUNT(*) FROM player_rigs WHERE player_id = p.id),
+      'active_rigs', (SELECT COUNT(*) FROM player_rigs WHERE player_id = p.id AND is_active = true),
+      'rig_slots', p.rig_slots,
+
+      -- Inventario
+      'inventory_stats', (
+        SELECT json_build_object(
+          'cooling_items', COALESCE((
+            SELECT COUNT(DISTINCT item_id) FROM player_inventory WHERE player_id = p.id AND item_type = 'cooling'
+          ), 0),
+          'boost_items', COALESCE((
+            SELECT COUNT(DISTINCT boost_id) FROM player_boosts WHERE player_id = p.id
+          ), 0),
+          'prepaid_cards', COALESCE((
+            SELECT COUNT(*) FROM player_cards WHERE player_id = p.id AND is_redeemed = false
+          ), 0),
+          'crafting_elements', COALESCE((
+            SELECT SUM(quantity) FROM player_crafting_inventory WHERE player_id = p.id
+          ), 0)
+        )
+      ),
+
+      -- Transacciones recientes (últimas 10)
+      'recent_transactions', (
+        SELECT COALESCE(json_agg(json_build_object(
+          'type', t.type,
+          'amount', t.amount,
+          'currency', t.currency,
+          'description', t.description,
+          'created_at', t.created_at
+        ) ORDER BY t.created_at DESC), '[]'::JSON)
+        FROM (
+          SELECT type, amount, currency, description, created_at
+          FROM transactions
+          WHERE player_id = p.id
+          ORDER BY created_at DESC
+          LIMIT 10
+        ) t
+      ),
+
+      -- Referidos
+      'referral_code', p.referral_code,
+      'referrals_count', COALESCE(p.referral_count, 0),
+      'referred_by_username', (
+        SELECT username FROM players WHERE id = p.referred_by LIMIT 1
+      ),
+
+      -- Misiones completadas (hoy)
+      'missions_completed_today', (
+        SELECT COUNT(*)
+        FROM player_missions pm
+        WHERE pm.player_id = p.id
+          AND pm.assigned_date = CURRENT_DATE
+          AND pm.is_completed = true
+      ),
+
+      -- Racha de login
+      'login_streak', (
+        SELECT json_build_object(
+          'current_streak', COALESCE(ps.current_streak, 0),
+          'longest_streak', COALESCE(ps.longest_streak, 0),
+          'last_claim_date', ps.last_claim_date
+        )
+        FROM player_streaks ps
+        WHERE ps.player_id = p.id
+        LIMIT 1
+      ),
+
+      -- Crafting
+      'crafting_stats', (
+        SELECT json_build_object(
+          'sessions_completed', COALESCE(cooldown.sessions_completed, 0),
+          'last_completed', cooldown.last_session_completed,
+          'has_active_session', EXISTS(
+            SELECT 1 FROM player_crafting_sessions
+            WHERE player_id = p.id AND status = 'active'
+          )
+        )
+        FROM player_crafting_cooldown cooldown
+        WHERE cooldown.player_id = p.id
+        LIMIT 1
+      ),
+
+      -- Defense (Tower Defense)
+      'defense_stats', (
+        SELECT json_build_object(
+          'max_level', COALESCE(prog.max_level_completed, 0),
+          'total_games', COALESCE(prog.total_games, 0),
+          'total_wins', COALESCE(prog.total_wins, 0),
+          'total_gc_earned', COALESCE(prog.total_gc_earned, 0)
+        )
+        FROM player_defense_progress prog
+        WHERE prog.player_id = p.id
+        LIMIT 1
+      ),
+
+      -- PVP Battles
+      'battle_stats', (
+        SELECT json_build_object(
+          'total_battles', COUNT(*),
+          'wins', COUNT(*) FILTER (WHERE bs.winner_id = p.id),
+          'losses', COUNT(*) FILTER (WHERE bs.winner_id IS NOT NULL AND bs.winner_id != p.id AND bs.status IN ('completed', 'forfeited')),
+          'in_lobby', EXISTS(SELECT 1 FROM battle_lobby WHERE player_id = p.id AND status = 'waiting'),
+          'has_active_battle', EXISTS(SELECT 1 FROM battle_sessions WHERE (player1_id = p.id OR player2_id = p.id) AND status = 'active')
+        )
+        FROM battle_sessions bs
+        WHERE (bs.player1_id = p.id OR bs.player2_id = p.id)
+          AND bs.status IN ('completed', 'forfeited')
+      ),
+
+      -- RON movements
+      'ron_movements', (
+        SELECT json_build_object(
+          'total_deposited', COALESCE((
+            SELECT SUM(amount) FROM ron_deposits WHERE player_id = p.id AND status = 'completed'
+          ), 0),
+          'total_withdrawn', COALESCE((
+            SELECT SUM(net_amount) FROM ron_withdrawals WHERE player_id = p.id AND status = 'completed'
+          ), 0),
+          'pending_withdrawals', COALESCE((
+            SELECT COUNT(*) FROM ron_withdrawals WHERE player_id = p.id AND status IN ('pending', 'processing')
+          ), 0)
+        )
+      ),
+
+      -- Tiempo online hoy
+      'minutes_online_today', (
+        SELECT COALESCE(minutes_online, 0)
+        FROM player_online_tracking
+        WHERE player_id = p.id AND tracking_date = CURRENT_DATE
+      ),
+
+      -- Flags de seguridad/moderación
+      'flags', (
+        SELECT json_build_object(
+          'is_in_cooldown', is_player_in_mining_cooldown(p.id),
+          'has_pending_gifts', EXISTS(SELECT 1 FROM player_gifts WHERE player_id = p.id AND claimed = false)
+        )
+      )
+    )
+  ) INTO v_result
+  FROM players p
+  WHERE p.id = p_player_id;
+
+  IF v_result IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+
+  RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_get_players TO authenticated;
+GRANT EXECUTE ON FUNCTION admin_get_player_detail TO authenticated;
 
 -- =====================================================
 -- FUNCIONES BASICAS (desde migrations)
@@ -5088,12 +5433,6 @@ $$;
 -- =====================================================
 
 -- Drop old function signatures (necesario si cambia el tipo de retorno)
-DROP FUNCTION IF EXISTS get_pending_blocks(UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_pending_blocks(UUID, INT, INT) CASCADE;
-DROP FUNCTION IF EXISTS claim_block(UUID) CASCADE;
-DROP FUNCTION IF EXISTS claim_block(UUID, UUID) CASCADE;
-DROP FUNCTION IF EXISTS claim_all_blocks() CASCADE;
-DROP FUNCTION IF EXISTS claim_all_blocks(UUID) CASCADE;
 
 CREATE OR REPLACE FUNCTION get_pending_blocks(p_player_id UUID, p_limit INT DEFAULT 20, p_offset INT DEFAULT 0)
 RETURNS JSON
@@ -5103,7 +5442,7 @@ DECLARE
   v_blocks JSON;
   v_total INT;
 BEGIN
-  -- Get current max block height for pity blocks display
+  -- Get current max block height for display
   SELECT COALESCE(MAX(height), 1) INTO v_max_height FROM blocks;
 
   -- Total count for pagination
@@ -5140,12 +5479,8 @@ BEGIN
   UPDATE pending_blocks SET claimed = true, claimed_at = NOW() WHERE id = p_pending_id;
   UPDATE players SET crypto_balance = crypto_balance + v_pending.reward,
     total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_pending.reward WHERE id = p_player_id;
-  -- Get block height (real or simulated for pity)
-  IF COALESCE(v_pending.is_pity, false) THEN
-    SELECT COALESCE(MAX(height), 1) INTO v_height FROM blocks;
-  ELSE
-    SELECT height INTO v_height FROM blocks WHERE id = v_pending.block_id;
-  END IF;
+  -- Get block height
+  SELECT height INTO v_height FROM blocks WHERE id = v_pending.block_id;
   v_description := 'Bloque reclamado #' || v_height;
   INSERT INTO transactions (player_id, type, amount, currency, description)
   VALUES (p_player_id, 'block_claim', v_pending.reward, 'crypto', v_description);
@@ -5470,7 +5805,7 @@ BEGIN
   DELETE FROM streak_claims WHERE player_id = p_player_id;
   DELETE FROM market_orders WHERE player_id = p_player_id;
   DELETE FROM transactions WHERE player_id = p_player_id;
-  UPDATE players SET gamecoin_balance = 1000, crypto_balance = 0, energy = 300, internet = 300, reputation_score = 50, rig_slots = 1, blocks_mined = 0, updated_at = NOW() WHERE id = p_player_id;
+  UPDATE players SET gamecoin_balance = 1000, crypto_balance = 0, energy = 300, internet = 300, max_energy = 300, max_internet = 300, reputation_score = 50, rig_slots = 1, blocks_mined = 0, updated_at = NOW() WHERE id = p_player_id;
   INSERT INTO player_rigs (player_id, rig_id, condition, is_active) VALUES (p_player_id, 'basic_miner', 100, false);
   INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (p_player_id, 'account_reset', 1000, 'gamecoin', 'Cuenta reiniciada');
   RETURN json_build_object('success', true, 'message', 'Cuenta reiniciada');
@@ -5613,7 +5948,6 @@ SET referral_code = UPPER(SUBSTRING(MD5(id::text || COALESCE(created_at::text, N
 WHERE referral_code IS NULL;
 
 -- Función para obtener info de referidos
-DROP FUNCTION IF EXISTS get_referral_info(UUID);
 CREATE OR REPLACE FUNCTION get_referral_info(p_player_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -5665,7 +5999,6 @@ END;
 $$;
 
 -- Función para aplicar código de referido
-DROP FUNCTION IF EXISTS apply_referral_code(UUID, TEXT);
 CREATE OR REPLACE FUNCTION apply_referral_code(p_player_id UUID, p_referral_code TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -5749,7 +6082,6 @@ END;
 $$;
 
 -- Función para actualizar código de referido (cuesta 500 crypto)
-DROP FUNCTION IF EXISTS update_referral_code(UUID, TEXT);
 CREATE OR REPLACE FUNCTION update_referral_code(p_player_id UUID, p_new_code TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -5829,8 +6161,6 @@ GRANT EXECUTE ON FUNCTION update_referral_code TO authenticated;
 -- Calcula tiempo estimado hasta próximo bloque
 -- =====================================================
 
-DROP FUNCTION IF EXISTS get_mining_estimate(UUID) CASCADE;
-
 CREATE OR REPLACE FUNCTION get_mining_estimate(p_player_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -5873,7 +6203,7 @@ BEGIN
   v_network_hashrate := COALESCE(v_network_stats.hashrate, 0);
   v_total_active_miners := COALESCE(v_network_stats.active_miners, 0);
 
-  -- Calcular hashrate efectivo del jugador (mismo cálculo que process_mining_tick)
+  -- Calcular hashrate efectivo del jugador (penalizaciones de temperatura y condición)
   FOR v_rig IN
     SELECT pr.id as rig_id, pr.condition, pr.temperature, r.hashrate,
            pr.hashrate_level, pr.efficiency_level, pr.thermal_level
@@ -6010,8 +6340,6 @@ $$;
 -- FUNCIÓN PARA LISTAR REFERIDOS
 -- =====================================================
 
-DROP FUNCTION IF EXISTS get_referral_list(UUID, INTEGER, INTEGER);
-
 CREATE OR REPLACE FUNCTION get_referral_list(
   p_player_id UUID,
   p_limit INTEGER DEFAULT 50,
@@ -6104,7 +6432,6 @@ GRANT EXECUTE ON FUNCTION get_referral_list TO authenticated;
 -- =====================================================
 
 -- Destruir/remover cooling instalado en un rig
-DROP FUNCTION IF EXISTS remove_cooling_from_rig(UUID, UUID, UUID) CASCADE;
 CREATE OR REPLACE FUNCTION remove_cooling_from_rig(
   p_player_id UUID,
   p_rig_id UUID,
@@ -6156,7 +6483,6 @@ END;
 $$;
 
 -- Destruir/remover boost instalado en un rig
-DROP FUNCTION IF EXISTS remove_boost_from_rig(UUID, UUID, UUID) CASCADE;
 CREATE OR REPLACE FUNCTION remove_boost_from_rig(
   p_player_id UUID,
   p_rig_id UUID,
@@ -6208,7 +6534,6 @@ END;
 $$;
 
 -- Destruir TODOS los coolings de un rig
-DROP FUNCTION IF EXISTS remove_all_cooling_from_rig(UUID, UUID) CASCADE;
 CREATE OR REPLACE FUNCTION remove_all_cooling_from_rig(
   p_player_id UUID,
   p_rig_id UUID
@@ -6252,7 +6577,6 @@ END;
 $$;
 
 -- Destruir TODOS los boosts de un rig
-DROP FUNCTION IF EXISTS remove_all_boosts_from_rig(UUID, UUID) CASCADE;
 CREATE OR REPLACE FUNCTION remove_all_boosts_from_rig(
   p_player_id UUID,
   p_rig_id UUID
@@ -6303,343 +6627,13 @@ GRANT EXECUTE ON FUNCTION remove_all_boosts_from_rig TO authenticated;
 -- =====================================================
 -- PITY TIMER SYSTEM V2 - Bad Luck Protection
 -- =====================================================
--- Sistema mejorado que garantiza recompensas por tiempo minando:
---
--- CONCEPTO: Acumulas "minutos de mala suerte" mientras minas sin ganar.
--- Al alcanzar el umbral, recibes un bloque de consolación.
---
--- CONFIGURACIÓN:
---   - Umbral base: 60 minutos minando sin bloque = 1 pity block
---   - Premium: Umbral reducido a 40 minutos
---   - Máximo 10 pity blocks por día (anti-exploit)
---   - Reward: 15-40% del bloque normal (según hashrate)
---   - Bonus por streak de minería continua
---
--- GARANTÍAS MENSUALES (minando 24/7):
---   - Free: ~720 pity blocks/mes (~36 crypto con block_reward=100)
---   - Premium: ~1080 pity blocks/mes (~81 crypto con block_reward=100)
+-- =====================================================
+-- NOTA: Sistema de pity timer eliminado.
+-- Ya no es necesario con el sistema de shares compartidas,
+-- donde todos los mineros reciben recompensa proporcional.
 -- =====================================================
 
--- Columnas adicionales para el sistema mejorado
-ALTER TABLE players ADD COLUMN IF NOT EXISTS pity_minutes_accumulated INTEGER DEFAULT 0;
-ALTER TABLE players ADD COLUMN IF NOT EXISTS pity_blocks_today INTEGER DEFAULT 0;
-ALTER TABLE players ADD COLUMN IF NOT EXISTS pity_last_reset_date DATE DEFAULT CURRENT_DATE;
-ALTER TABLE players ADD COLUMN IF NOT EXISTS mining_streak_minutes INTEGER DEFAULT 0;
-
--- Procesar pity timer (llamado cada tick desde game_tick)
-DROP FUNCTION IF EXISTS process_mining_time_bonus() CASCADE;
-CREATE OR REPLACE FUNCTION process_mining_time_bonus()
-RETURNS JSON
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_player_data RECORD;
-  v_pity_blocks_created INT := 0;
-  v_total_minutes_added INT := 0;
-  v_is_premium BOOLEAN;
-  v_effective_hashrate DECIMAL;
-  v_pity_reward DECIMAL;
-  v_current_block_reward DECIMAL;
-  v_current_height INT;
-  v_hashrate_bonus DECIMAL;
-  v_streak_bonus DECIMAL;
-  v_pity_block blocks%ROWTYPE;
-  v_network_difficulty DECIMAL;
-  v_network_hashrate DECIMAL;
-  -- Configuración del sistema
-  v_base_threshold_free INT := 60;      -- 60 minutos para free users
-  v_base_threshold_premium INT := 40;   -- 40 minutos para premium
-  v_max_pity_per_day INT := 10;         -- Máximo 10 pity blocks por día
-  v_min_reward_percent DECIMAL := 0.15; -- Mínimo 15% del bloque normal
-  v_max_reward_percent DECIMAL := 0.40; -- Máximo 40% del bloque normal
-  v_streak_bonus_threshold INT := 120;  -- 2 horas continuas = bonus
-  v_streak_bonus_percent DECIMAL := 0.10; -- +10% por streak
-  v_threshold INT;
-  v_today DATE := CURRENT_DATE;
-BEGIN
-  -- Obtener stats de la red
-  SELECT difficulty, hashrate INTO v_network_difficulty, v_network_hashrate
-  FROM network_stats WHERE id = 'current';
-
-  -- Obtener reward actual del bloque
-  SELECT COALESCE(MAX(height), 0) INTO v_current_height FROM blocks;
-  v_current_block_reward := calculate_block_reward(v_current_height + 1);
-
-  -- Procesar cada jugador que está minando activamente
-  FOR v_player_data IN
-    WITH active_miners AS (
-      SELECT
-        p.id as player_id,
-        p.premium_until,
-        p.pity_minutes_accumulated,
-        p.pity_blocks_today,
-        p.pity_last_reset_date,
-        p.mining_streak_minutes,
-        SUM(
-          r.hashrate *
-          GREATEST(0.1, pr.condition / 100.0) *
-          CASE
-            WHEN p.reputation_score >= 80 THEN 1 + (p.reputation_score - 80) * 0.01
-            WHEN p.reputation_score < 50 THEN 0.5 + (p.reputation_score / 100.0)
-            ELSE 1.0
-          END *
-          CASE
-            WHEN pr.temperature > 50 THEN GREATEST(0.3, 1 - ((pr.temperature - 50) * 0.014))
-            ELSE 1.0
-          END *
-          COALESCE((get_rig_boost_multipliers(pr.id)->>'hashrate')::NUMERIC, 1.0)
-        ) as total_effective_hashrate
-      FROM players p
-      JOIN player_rigs pr ON pr.player_id = p.id
-      JOIN rigs r ON r.id = pr.rig_id
-      WHERE pr.is_active = true
-        AND p.energy > 0
-        AND p.internet > 0
-        AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
-      GROUP BY p.id, p.premium_until, p.pity_minutes_accumulated,
-               p.pity_blocks_today, p.pity_last_reset_date, p.mining_streak_minutes
-    )
-    SELECT * FROM active_miners WHERE total_effective_hashrate > 0
-  LOOP
-    v_is_premium := v_player_data.premium_until IS NOT NULL AND v_player_data.premium_until > NOW();
-    v_effective_hashrate := v_player_data.total_effective_hashrate;
-
-    -- Resetear contador diario si es un nuevo día
-    IF COALESCE(v_player_data.pity_last_reset_date, v_today - 1) < v_today THEN
-      UPDATE players
-      SET pity_blocks_today = 0,
-          pity_last_reset_date = v_today
-      WHERE id = v_player_data.player_id;
-      v_player_data.pity_blocks_today := 0;
-    END IF;
-
-    -- Verificar límite diario
-    IF v_player_data.pity_blocks_today >= v_max_pity_per_day THEN
-      -- Solo incrementar streak, no dar más pity blocks hoy (0.5 minutos = 30 segundos por tick)
-      UPDATE players
-      SET mining_streak_minutes = COALESCE(mining_streak_minutes, 0) + 0.5
-      WHERE id = v_player_data.player_id;
-      CONTINUE;
-    END IF;
-
-    -- Determinar threshold basado en premium
-    v_threshold := CASE WHEN v_is_premium THEN v_base_threshold_premium ELSE v_base_threshold_free END;
-
-    -- Incrementar minutos acumulados y streak (0.5 minutos = 30 segundos por tick)
-    UPDATE players
-    SET pity_minutes_accumulated = COALESCE(pity_minutes_accumulated, 0) + 0.5,
-        mining_streak_minutes = COALESCE(mining_streak_minutes, 0) + 0.5
-    WHERE id = v_player_data.player_id;
-
-    v_total_minutes_added := v_total_minutes_added + 0.5;
-
-    -- Verificar si alcanzó el umbral para pity block
-    IF (v_player_data.pity_minutes_accumulated + 0.5) >= v_threshold THEN
-
-      -- Calcular bonus por hashrate (escala logarítmica para no favorecer demasiado a whales)
-      -- 100 hashrate = 15%, 1000 = 25%, 10000 = 35%, 50000+ = 40%
-      v_hashrate_bonus := v_min_reward_percent +
-        (v_max_reward_percent - v_min_reward_percent) *
-        LEAST(1.0, LOG(GREATEST(100, v_effective_hashrate)) / LOG(50000));
-
-      -- Bonus por streak de minería continua (+10% si lleva 2+ horas)
-      v_streak_bonus := CASE
-        WHEN COALESCE(v_player_data.mining_streak_minutes, 0) >= v_streak_bonus_threshold
-        THEN v_streak_bonus_percent
-        ELSE 0
-      END;
-
-      -- Calcular reward final
-      v_pity_reward := v_current_block_reward * (v_hashrate_bonus + v_streak_bonus);
-
-      -- Premium bonus (+50%)
-      IF v_is_premium THEN
-        v_pity_reward := v_pity_reward * 1.5;
-      END IF;
-
-      -- Mínimo 1 crypto
-      v_pity_reward := GREATEST(1.0, v_pity_reward);
-
-      -- Crear bloque real en la blockchain
-      v_pity_block := create_new_block(
-        v_player_data.player_id,
-        COALESCE(v_network_difficulty, 1000),
-        COALESCE(v_network_hashrate, 0),
-        v_pity_reward,
-        v_is_premium
-      );
-
-      -- Crear entrada en pending_blocks
-      INSERT INTO pending_blocks (
-        block_id,
-        player_id,
-        reward,
-        is_premium,
-        is_pity,
-        created_at
-      ) VALUES (
-        v_pity_block.id,
-        v_player_data.player_id,
-        v_pity_reward,
-        v_is_premium,
-        TRUE,
-        NOW()
-      );
-
-      -- Resetear acumulador y actualizar contador diario
-      UPDATE players
-      SET pity_minutes_accumulated = 0,
-          pity_blocks_today = COALESCE(pity_blocks_today, 0) + 1
-      WHERE id = v_player_data.player_id;
-
-      v_pity_blocks_created := v_pity_blocks_created + 1;
-    END IF;
-  END LOOP;
-
-  RETURN json_build_object(
-    'success', true,
-    'pityBlocksCreated', v_pity_blocks_created,
-    'totalMinutesAdded', v_total_minutes_added
-  );
-END;
-$$;
-
--- Obtener estadísticas de pity timer de un jugador
-DROP FUNCTION IF EXISTS get_player_pity_stats(UUID) CASCADE;
-CREATE OR REPLACE FUNCTION get_player_pity_stats(p_player_id UUID)
-RETURNS JSON
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_player RECORD;
-  v_pending_pity_count INT;
-  v_total_pity_claimed DECIMAL;
-  v_total_pity_count INT;
-  v_is_premium BOOLEAN;
-  v_threshold INT;
-  v_minutes_to_next INT;
-  v_effective_hashrate DECIMAL;
-  v_estimated_reward DECIMAL;
-  v_current_block_reward DECIMAL;
-  v_hashrate_bonus DECIMAL;
-  v_streak_bonus DECIMAL;
-  -- Config
-  v_base_threshold_free INT := 60;
-  v_base_threshold_premium INT := 40;
-  v_max_pity_per_day INT := 10;
-  v_min_reward_percent DECIMAL := 0.15;
-  v_max_reward_percent DECIMAL := 0.40;
-  v_streak_bonus_threshold INT := 120;
-  v_streak_bonus_percent DECIMAL := 0.10;
-BEGIN
-  -- Obtener datos del jugador
-  SELECT
-    id,
-    COALESCE(pity_minutes_accumulated, 0) as pity_minutes,
-    COALESCE(pity_blocks_today, 0) as blocks_today,
-    COALESCE(mining_streak_minutes, 0) as streak_minutes,
-    premium_until IS NOT NULL AND premium_until > NOW() as is_premium
-  INTO v_player
-  FROM players WHERE id = p_player_id;
-
-  IF v_player IS NULL THEN
-    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
-  END IF;
-
-  v_is_premium := v_player.is_premium;
-  v_threshold := CASE WHEN v_is_premium THEN v_base_threshold_premium ELSE v_base_threshold_free END;
-  v_minutes_to_next := GREATEST(0, v_threshold - v_player.pity_minutes);
-
-  -- Calcular hashrate efectivo actual
-  SELECT COALESCE(SUM(
-    r.hashrate *
-    GREATEST(0.1, pr.condition / 100.0) *
-    COALESCE((get_rig_boost_multipliers(pr.id)->>'hashrate')::NUMERIC, 1.0)
-  ), 0) INTO v_effective_hashrate
-  FROM player_rigs pr
-  JOIN rigs r ON r.id = pr.rig_id
-  WHERE pr.player_id = p_player_id AND pr.is_active = true;
-
-  -- Obtener reward actual del bloque
-  SELECT calculate_block_reward(COALESCE(MAX(height), 0) + 1) INTO v_current_block_reward FROM blocks;
-
-  -- Calcular reward estimado
-  v_hashrate_bonus := v_min_reward_percent +
-    (v_max_reward_percent - v_min_reward_percent) *
-    LEAST(1.0, LOG(GREATEST(100, v_effective_hashrate)) / LOG(50000));
-
-  v_streak_bonus := CASE
-    WHEN v_player.streak_minutes >= v_streak_bonus_threshold
-    THEN v_streak_bonus_percent
-    ELSE 0
-  END;
-
-  v_estimated_reward := v_current_block_reward * (v_hashrate_bonus + v_streak_bonus);
-  IF v_is_premium THEN
-    v_estimated_reward := v_estimated_reward * 1.5;
-  END IF;
-  v_estimated_reward := GREATEST(1.0, v_estimated_reward);
-
-  -- Contar pity blocks pendientes
-  SELECT COUNT(*) INTO v_pending_pity_count
-  FROM pending_blocks
-  WHERE player_id = p_player_id AND is_pity = true AND claimed = false;
-
-  -- Total crypto de pity blocks reclamados
-  SELECT COALESCE(SUM(reward), 0), COUNT(*)
-  INTO v_total_pity_claimed, v_total_pity_count
-  FROM pending_blocks
-  WHERE player_id = p_player_id AND is_pity = true AND claimed = true;
-
-  RETURN json_build_object(
-    'success', true,
-    -- Progreso actual
-    'minutesAccumulated', v_player.pity_minutes,
-    'threshold', v_threshold,
-    'minutesToNext', v_minutes_to_next,
-    'progressPercent', ROUND((v_player.pity_minutes::DECIMAL / v_threshold) * 100, 1),
-    -- Límites diarios
-    'blocksToday', v_player.blocks_today,
-    'maxBlocksPerDay', v_max_pity_per_day,
-    'blocksRemaining', GREATEST(0, v_max_pity_per_day - v_player.blocks_today),
-    -- Streak de minería
-    'miningStreakMinutes', v_player.streak_minutes,
-    'hasStreakBonus', v_player.streak_minutes >= v_streak_bonus_threshold,
-    'streakBonusPercent', CASE WHEN v_player.streak_minutes >= v_streak_bonus_threshold THEN v_streak_bonus_percent * 100 ELSE 0 END,
-    -- Rewards
-    'estimatedReward', ROUND(v_estimated_reward, 2),
-    'currentBlockReward', v_current_block_reward,
-    'effectiveHashrate', ROUND(v_effective_hashrate, 2),
-    -- Stats históricos
-    'pendingPityBlocks', v_pending_pity_count,
-    'totalPityClaimed', ROUND(v_total_pity_claimed, 2),
-    'totalPityBlocksClaimed', v_total_pity_count,
-    -- Info
-    'isPremium', v_is_premium,
-    'guaranteedPerDay', v_max_pity_per_day,
-    'guaranteedPerMonth', v_max_pity_per_day * 30
-  );
-END;
-$$;
-
--- Resetear streak cuando el jugador deja de minar (llamado desde process_resource_decay cuando se apagan rigs)
-DROP FUNCTION IF EXISTS reset_mining_streak(UUID) CASCADE;
-CREATE OR REPLACE FUNCTION reset_mining_streak(p_player_id UUID)
-RETURNS VOID
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-  UPDATE players
-  SET mining_streak_minutes = 0
-  WHERE id = p_player_id;
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION get_player_pity_stats TO authenticated;
-GRANT EXECUTE ON FUNCTION reset_mining_streak TO authenticated;
+-- Función reset_mining_streak eliminada (ya no se usa con sistema de shares)
 
 -- =====================================================
 -- CLAIM ALL BLOCKS WITH RON (Instant Claim)
@@ -6647,7 +6641,6 @@ GRANT EXECUTE ON FUNCTION reset_mining_streak TO authenticated;
 -- Costo: 0.01 RON por bloque
 -- =====================================================
 
-DROP FUNCTION IF EXISTS claim_all_blocks_with_ron(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION claim_all_blocks_with_ron(p_player_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -6809,7 +6802,6 @@ GRANT EXECUTE ON FUNCTION get_rig_upgrades TO authenticated;
 -- ADMIN: GAME STATUS (Estado del juego para admins)
 -- =====================================================
 
-DROP FUNCTION IF EXISTS get_game_status() CASCADE;
 CREATE OR REPLACE FUNCTION get_game_status()
 RETURNS JSON
 LANGUAGE plpgsql
@@ -7036,6 +7028,7 @@ DECLARE
   v_upgrade_hashrate_bonus NUMERIC;
   v_current_accumulator NUMERIC;  -- ⚙️ Acumulador actual del jugador
   v_new_accumulator NUMERIC;      -- ⚙️ Nuevo acumulador después de generación
+  v_warmup_mult NUMERIC;          -- Multiplicador de calentamiento al encender rig
 BEGIN
   -- Obtener bloque de minería actual
   SELECT current_mining_block_id, difficulty
@@ -7054,7 +7047,8 @@ BEGIN
   FOR v_rig IN
     SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature,
            r.hashrate, p.reputation_score,
-           COALESCE(pr.hashrate_level, 1) as hashrate_level
+           COALESCE(pr.hashrate_level, 1) as hashrate_level,
+           pr.activated_at
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
@@ -7102,6 +7096,13 @@ BEGIN
     -- Calcular hashrate efectivo
     v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier *
                            v_temp_penalty * v_hashrate_mult;
+
+    -- Warm-up: +20% por tick (30s), 100% en 5 ticks (120s)
+    IF v_rig.activated_at IS NOT NULL THEN
+      v_warmup_mult := LEAST(1.0, (1 + FLOOR(EXTRACT(EPOCH FROM (NOW() - v_rig.activated_at)) / 30.0)) * 0.20);
+      v_warmup_mult := GREATEST(0.0, v_warmup_mult);
+      v_effective_hashrate := v_effective_hashrate * v_warmup_mult;
+    END IF;
 
     -- Calcular probabilidad de generar shares
     -- Fórmula: (hashrate_efectivo / dificultad) * tick_duration * luck_multiplier
@@ -7152,6 +7153,61 @@ BEGIN
     v_players_processed := v_players_processed + 1;
   END LOOP;
 
+  -- 🤖 BOT DE BALANCEO: Sistema escalonado según número de mineros
+  DECLARE
+    v_active_miners INTEGER;
+    v_total_hashrate NUMERIC;
+    v_bot_hashrate NUMERIC;
+    v_bot_shares_probability NUMERIC;
+    v_bot_shares NUMERIC;
+    v_bot_percentage NUMERIC;
+    v_bot_player_id UUID := '00000000-0000-0000-0000-000000000001'; -- ID fijo del bot
+  BEGIN
+    -- Contar mineros activos (excluyendo el bot)
+    SELECT COUNT(DISTINCT pr.player_id) INTO v_active_miners
+    FROM player_rigs pr
+    JOIN players p ON p.id = pr.player_id
+    WHERE pr.is_active = true
+      AND p.energy > 0
+      AND p.internet > 0
+      AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
+      AND NOT is_player_in_mining_cooldown(pr.player_id)
+      AND p.id != v_bot_player_id;  -- No contar al bot
+
+    -- Sistema escalonado:
+    -- < 3 mineros: Bot al 45% del hashrate (competencia fuerte)
+    -- >= 3 mineros: Bot al 10% del hashrate (competencia de fondo)
+    IF v_active_miners < 3 THEN
+      v_bot_percentage := 0.45;  -- 45% cuando hay poca gente
+    ELSE
+      v_bot_percentage := 0.10;  -- 10% cuando hay 3+ usuarios
+    END IF;
+
+    -- Calcular hashrate total de la red
+    SELECT COALESCE(hashrate, 0) INTO v_total_hashrate
+    FROM network_stats WHERE id = 'current';
+
+    -- El bot tiene un porcentaje variable del hashrate total
+    v_bot_hashrate := v_total_hashrate * v_bot_percentage;
+
+    -- Calcular shares del bot (misma fórmula que jugadores reales)
+    v_bot_shares_probability := (v_bot_hashrate / v_difficulty) * v_tick_duration;
+    v_bot_shares := FLOOR(v_bot_shares_probability);
+
+    -- Registrar shares del bot (sin acumulador fraccional)
+    IF v_bot_shares > 0 THEN
+      INSERT INTO player_shares (mining_block_id, player_id, shares_count, fractional_accumulator, last_share_at)
+      VALUES (v_mining_block_id, v_bot_player_id, v_bot_shares, 0, NOW())
+      ON CONFLICT (mining_block_id, player_id)
+      DO UPDATE SET
+        shares_count = player_shares.shares_count + v_bot_shares,
+        last_share_at = NOW();
+
+      -- Agregar las shares del bot al total
+      v_total_shares_generated := v_total_shares_generated + v_bot_shares;
+    END IF;
+  END;
+
   -- Actualizar total de shares del bloque
   UPDATE mining_blocks
   SET total_shares = COALESCE(total_shares, 0) + v_total_shares_generated
@@ -7173,7 +7229,12 @@ BEGIN
           WHEN pr.temperature > 50 THEN GREATEST(0.3, 1 - ((pr.temperature - 50) * 0.014))
           ELSE 1
         END *  -- temperature penalty
-        (1 + COALESCE((SELECT hashrate_bonus / 100.0 FROM upgrade_costs WHERE level = COALESCE(pr.hashrate_level, 1)), 0))  -- upgrade bonus
+        (1 + COALESCE((SELECT hashrate_bonus / 100.0 FROM upgrade_costs WHERE level = COALESCE(pr.hashrate_level, 1)), 0)) *  -- upgrade bonus
+        -- warm-up: +25% por tick (30s), 100% en 4 ticks (90s)
+        CASE
+          WHEN pr.activated_at IS NOT NULL THEN GREATEST(0.0, LEAST(1.0, (1 + FLOOR(EXTRACT(EPOCH FROM (NOW() - pr.activated_at)) / 30.0)) * 0.20))
+          ELSE 1
+        END
       ), 0)
       FROM player_rigs pr
       JOIN rigs r ON r.id = pr.rig_id
@@ -7220,6 +7281,9 @@ DECLARE
   v_player_reward NUMERIC;
   v_participants_count INTEGER := 0;
   v_rewards_distributed NUMERIC := 0;
+  v_total_effective_shares NUMERIC := 0;
+  v_effective_shares NUMERIC;
+  v_bot_player_id UUID := '00000000-0000-0000-0000-000000000001';
 BEGIN
   -- Obtener bloque de minería
   SELECT * INTO v_mining_block FROM mining_blocks WHERE id = p_mining_block_id;
@@ -7253,25 +7317,45 @@ BEGIN
     );
   END IF;
 
-  -- Distribuir recompensas proporcionalmente
+  -- Paso 1: Calcular total de shares efectivas (con bonus premium en el peso)
+  BEGIN
+    FOR v_participant IN
+      SELECT player_id, shares_count
+      FROM player_shares
+      WHERE mining_block_id = p_mining_block_id
+        AND player_id != v_bot_player_id  -- 🤖 Excluir bot del cálculo de shares efectivas
+    LOOP
+      -- Shares efectivas: multiplicar por 1.5 si es premium
+      IF is_player_premium(v_participant.player_id) THEN
+        v_total_effective_shares := v_total_effective_shares + (v_participant.shares_count * 1.5);
+      ELSE
+        v_total_effective_shares := v_total_effective_shares + v_participant.shares_count;
+      END IF;
+    END LOOP;
+  END;
+
+  -- Paso 2: Distribuir recompensas proporcionalmente basadas en shares efectivas
   FOR v_participant IN
     SELECT player_id, shares_count
     FROM player_shares
     WHERE mining_block_id = p_mining_block_id
+      AND player_id != v_bot_player_id  -- 🤖 Excluir bot de recibir recompensas
     ORDER BY shares_count DESC
   LOOP
     v_participants_count := v_participants_count + 1;
 
-    -- Calcular porcentaje de shares
+    -- Calcular shares efectivas del jugador
+    IF is_player_premium(v_participant.player_id) THEN
+      v_effective_shares := v_participant.shares_count * 1.5;
+    ELSE
+      v_effective_shares := v_participant.shares_count;
+    END IF;
+
+    -- Calcular porcentaje basado en shares REALES (para registro)
     v_share_percentage := (v_participant.shares_count / v_mining_block.total_shares) * 100;
 
-    -- Calcular recompensa (con bonus premium si aplica)
-    v_player_reward := v_mining_block.reward * (v_participant.shares_count / v_mining_block.total_shares);
-
-    -- Aplicar bonus premium (+50%)
-    IF is_player_premium(v_participant.player_id) THEN
-      v_player_reward := v_player_reward * 1.5;
-    END IF;
+    -- Calcular recompensa basada en shares EFECTIVAS
+    v_player_reward := v_mining_block.reward * (v_effective_shares / v_total_effective_shares);
 
     -- Mínimo 0.01 crypto si contribuyó
     v_player_reward := GREATEST(0.01, v_player_reward);
@@ -7301,8 +7385,7 @@ BEGIN
 
     -- Actualizar estadísticas del jugador
     UPDATE players
-    SET blocks_mined = COALESCE(blocks_mined, 0) + 1,
-        pity_minutes_accumulated = 0  -- Resetear pity timer
+    SET blocks_mined = COALESCE(blocks_mined, 0) + 1
     WHERE id = v_participant.player_id;
 
     -- Actualizar progreso de misiones
@@ -7558,13 +7641,40 @@ BEGIN
 
   -- Calcular porcentaje y recompensa estimada
   IF v_total_shares > 0 THEN
-    v_share_percentage := (v_player_shares / v_total_shares) * 100;
-    v_estimated_reward := v_block_reward * (v_player_shares / v_total_shares);
+    -- Calcular total de shares efectivas (con bonus premium en el peso)
+    DECLARE
+      v_total_effective_shares NUMERIC := 0;
+      v_player_effective_shares NUMERIC;
+      v_temp_shares NUMERIC;
+      v_temp_player_id UUID;
+      v_temp_is_premium BOOLEAN;
+    BEGIN
+      FOR v_temp_player_id, v_temp_shares IN
+        SELECT player_id, shares_count
+        FROM player_shares
+        WHERE mining_block_id = v_mining_block_id
+      LOOP
+        v_temp_is_premium := is_player_premium(v_temp_player_id);
+        IF v_temp_is_premium THEN
+          v_total_effective_shares := v_total_effective_shares + (v_temp_shares * 1.5);
+        ELSE
+          v_total_effective_shares := v_total_effective_shares + v_temp_shares;
+        END IF;
+      END LOOP;
 
-    -- Aplicar bonus premium si aplica
-    IF is_player_premium(p_player_id) THEN
-      v_estimated_reward := v_estimated_reward * 1.5;
-    END IF;
+      -- Calcular shares efectivas del jugador
+      IF is_player_premium(p_player_id) THEN
+        v_player_effective_shares := v_player_shares * 1.5;
+      ELSE
+        v_player_effective_shares := v_player_shares;
+      END IF;
+
+      -- Porcentaje basado en shares reales
+      v_share_percentage := (v_player_shares / v_total_shares) * 100;
+
+      -- Recompensa basada en shares efectivas
+      v_estimated_reward := v_block_reward * (v_player_effective_shares / v_total_effective_shares);
+    END;
   ELSE
     v_share_percentage := 0;
     v_estimated_reward := 0;
@@ -7617,24 +7727,6 @@ BEGIN
     ) AND is_active = true
     AND NOT rig_has_autonomous_boost(id);
     GET DIAGNOSTICS v_rigs_shutdown = ROW_COUNT;
-
-    -- Resetear streak de minería para jugadores que dejaron de minar
-    -- (solo los que no tienen autonomous mining)
-    IF v_rigs_shutdown > 0 THEN
-      UPDATE players
-      SET mining_streak_minutes = 0
-      WHERE id IN (
-        SELECT id FROM players
-        WHERE is_online = false
-          AND last_seen < NOW() - INTERVAL '5 minutes'
-          AND last_seen > NOW() - INTERVAL '6 minutes'
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM player_rigs pr
-        WHERE pr.player_id = players.id
-          AND pr.is_active = true
-      );
-    END IF;
   END IF;
 
   -- 2. Procesar decay de recursos (cada tick)
@@ -7792,7 +7884,6 @@ CREATE POLICY player_gifts_select ON player_gifts FOR SELECT TO authenticated
   USING (player_id = auth.uid());
 
 -- Obtener regalos pendientes de un jugador
-DROP FUNCTION IF EXISTS get_pending_gifts(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION get_pending_gifts(p_player_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -7824,7 +7915,6 @@ END;
 $$;
 
 -- Reclamar un regalo
-DROP FUNCTION IF EXISTS claim_gift(UUID, UUID) CASCADE;
 CREATE OR REPLACE FUNCTION claim_gift(p_player_id UUID, p_gift_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -7929,10 +8019,6 @@ END;
 $$;
 
 -- Admin: Enviar regalo - usa @everyone para todos o un UUID para un jugador específico
-DROP FUNCTION IF EXISTS send_gift(TEXT, TEXT, TEXT, TEXT, DECIMAL, DECIMAL, DECIMAL, DECIMAL, TEXT, TEXT, INTEGER, TIMESTAMPTZ) CASCADE;
-DROP FUNCTION IF EXISTS send_gift_to_player(UUID, TEXT, TEXT, TEXT, DECIMAL, DECIMAL, DECIMAL, DECIMAL, TEXT, TEXT, INTEGER, TIMESTAMPTZ) CASCADE;
-DROP FUNCTION IF EXISTS send_gift_to_player(TEXT, TEXT, TEXT, TEXT, DECIMAL, DECIMAL, DECIMAL, DECIMAL, TEXT, TEXT, INTEGER, TIMESTAMPTZ) CASCADE;
-DROP FUNCTION IF EXISTS send_gift_to_all(TEXT, TEXT, TEXT, DECIMAL, DECIMAL, DECIMAL, DECIMAL, TEXT, TEXT, INTEGER, TIMESTAMPTZ) CASCADE;
 CREATE OR REPLACE FUNCTION send_gift(
   p_target TEXT,              -- '@everyone' para todos o UUID del jugador
   p_title TEXT DEFAULT 'Gift',
@@ -8192,14 +8278,6 @@ INSERT INTO crafting_recipe_ingredients (recipe_id, element_id, quantity) VALUES
 -- =====================================================
 
 -- Drop funciones existentes
-DROP FUNCTION IF EXISTS start_crafting_session(UUID) CASCADE;
-DROP FUNCTION IF EXISTS tap_crafting_element(UUID, UUID, INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS get_crafting_session(UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_crafting_inventory(UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_crafting_recipes() CASCADE;
-DROP FUNCTION IF EXISTS craft_recipe(UUID, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS delete_crafting_element(UUID, TEXT, INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS abandon_crafting_session(UUID, UUID) CASCADE;
 
 -- Iniciar sesión de crafting
 CREATE OR REPLACE FUNCTION start_crafting_session(p_player_id UUID)
@@ -8821,7 +8899,7 @@ GRANT EXECUTE ON FUNCTION abandon_crafting_session TO authenticated;
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS player_defense_progress (
-  player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+  player_id UUID PRIMARY KEY REFERENCES si(id) ON DELETE CASCADE,
   max_level_completed INTEGER DEFAULT 0,
   total_games INTEGER DEFAULT 0,
   total_wins INTEGER DEFAULT 0,
@@ -8866,13 +8944,6 @@ CREATE POLICY "defense_sessions_update" ON player_defense_sessions FOR UPDATE US
 -- =====================================================
 -- TOWER DEFENSE - FUNCTIONS
 -- =====================================================
-
-DROP FUNCTION IF EXISTS start_defense_game(UUID, INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS defense_buy_tower(UUID, UUID, INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS defense_sell_tower(UUID, UUID, INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS defense_enemy_killed(UUID, UUID, INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS complete_defense_game(UUID, UUID, BOOLEAN, INTEGER, INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS get_defense_progress(UUID) CASCADE;
 
 -- Start a defense game
 CREATE OR REPLACE FUNCTION start_defense_game(p_player_id UUID, p_level INTEGER)
@@ -9161,6 +9232,10 @@ CREATE TABLE IF NOT EXISTS battle_sessions (
 CREATE INDEX IF NOT EXISTS idx_battle_sessions_players ON battle_sessions(player1_id, player2_id);
 CREATE INDEX IF NOT EXISTS idx_battle_sessions_status ON battle_sessions(status);
 
+-- Ensure HP defaults are 200 (in case table was created with old defaults)
+ALTER TABLE battle_sessions ALTER COLUMN player1_hp SET DEFAULT 200;
+ALTER TABLE battle_sessions ALTER COLUMN player2_hp SET DEFAULT 200;
+
 -- RLS
 ALTER TABLE battle_lobby ENABLE ROW LEVEL SECURITY;
 ALTER TABLE battle_sessions ENABLE ROW LEVEL SECURITY;
@@ -9189,13 +9264,6 @@ CREATE POLICY "battle_sessions_select" ON battle_sessions FOR SELECT
 -- CARD BATTLE PVP - FUNCTIONS
 -- =====================================================
 
-DROP FUNCTION IF EXISTS join_battle_lobby(UUID, INTEGER) CASCADE;
-DROP FUNCTION IF EXISTS leave_battle_lobby(UUID) CASCADE;
-DROP FUNCTION IF EXISTS accept_battle_challenge(UUID, UUID) CASCADE;
-DROP FUNCTION IF EXISTS play_battle_turn(UUID, UUID, JSONB) CASCADE;
-DROP FUNCTION IF EXISTS forfeit_battle(UUID, UUID) CASCADE;
-DROP FUNCTION IF EXISTS get_battle_lobby(UUID) CASCADE;
-
 -- 1) Join battle lobby
 CREATE OR REPLACE FUNCTION join_battle_lobby(p_player_id UUID, p_bet_amount INTEGER DEFAULT 20)
 RETURNS JSON
@@ -9208,6 +9276,11 @@ DECLARE
   v_existing UUID;
   v_lobby_id UUID;
 BEGIN
+  -- Validate predefined bet amount
+  IF p_bet_amount NOT IN (20, 50, 100, 250, 500) THEN
+    RETURN json_build_object('success', false, 'error', 'Invalid bet amount');
+  END IF;
+
   -- Check not already in lobby
   SELECT id INTO v_existing
   FROM battle_lobby
@@ -9319,7 +9392,7 @@ BEGIN
   END IF;
 
   -- Card IDs for deck building
-  v_all_cards := '["quick_strike","power_slash","fury_attack","double_hit","critical_blow","guard","fortify","counter","deflect","heal","weaken","drain"]'::JSONB;
+  v_all_cards := '["quick_strike","power_slash","fury_attack","double_hit","critical_blow","venom_strike","guard","fortify","counter","deflect","spike_armor","barrier","heal","weaken","drain","war_cry","recharge","execute"]'::JSONB;
 
   -- Shuffle decks (using random ordering)
   SELECT jsonb_agg(card ORDER BY random()) INTO v_deck1
@@ -9360,15 +9433,17 @@ BEGIN
     'player2Energy', 3,
     'player1Weakened', false,
     'player2Weakened', false,
+    'player1Boosted', false,
+    'player2Boosted', false,
     'lastAction', null
   );
 
   -- Create session (challenger = player1, opponent = player2)
   INSERT INTO battle_sessions (
-    player1_id, player2_id, bet_amount, current_turn, turn_deadline, game_state
+    player1_id, player2_id, bet_amount, current_turn, turn_deadline, player1_hp, player2_hp, player1_shield, player2_shield, game_state
   ) VALUES (
     p_player_id, v_opponent.player_id, v_opponent.bet_amount,
-    v_first_turn, NOW() + INTERVAL '45 seconds', v_game_state
+    v_first_turn, NOW() + INTERVAL '45 seconds', 200, 200, 0, 0, v_game_state
   ) RETURNING id INTO v_session_id;
 
   -- Mark both lobby entries as matched
@@ -9407,6 +9482,7 @@ DECLARE
   v_opp_shield INTEGER;
   v_weakened BOOLEAN;
   v_opp_weakened BOOLEAN;
+  v_boosted BOOLEAN;
   v_card TEXT;
   v_card_cost INTEGER;
   v_card_type TEXT;
@@ -9454,6 +9530,7 @@ BEGIN
     v_opp_shield := v_session.player2_shield;
     v_weakened := (v_state->>'player1Weakened')::BOOLEAN;
     v_opp_weakened := (v_state->>'player2Weakened')::BOOLEAN;
+    v_boosted := COALESCE((v_state->>'player1Boosted')::BOOLEAN, false);
   ELSE
     v_my_hand := v_state->'player2Hand';
     v_my_deck := v_state->'player2Deck';
@@ -9467,6 +9544,7 @@ BEGIN
     v_opp_shield := v_session.player1_shield;
     v_weakened := (v_state->>'player2Weakened')::BOOLEAN;
     v_opp_weakened := (v_state->>'player1Weakened')::BOOLEAN;
+    v_boosted := COALESCE((v_state->>'player2Boosted')::BOOLEAN, false);
   END IF;
 
   -- Process each card played
@@ -9486,6 +9564,12 @@ BEGIN
       WHEN 'heal' THEN v_card_cost := 1; v_card_type := 'special';
       WHEN 'weaken' THEN v_card_cost := 1; v_card_type := 'special';
       WHEN 'drain' THEN v_card_cost := 2; v_card_type := 'special';
+      WHEN 'venom_strike' THEN v_card_cost := 1; v_card_type := 'attack';
+      WHEN 'spike_armor' THEN v_card_cost := 1; v_card_type := 'defense';
+      WHEN 'barrier' THEN v_card_cost := 2; v_card_type := 'defense';
+      WHEN 'war_cry' THEN v_card_cost := 1; v_card_type := 'special';
+      WHEN 'recharge' THEN v_card_cost := 1; v_card_type := 'special';
+      WHEN 'execute' THEN v_card_cost := 2; v_card_type := 'special';
       ELSE
         RETURN json_build_object('success', false, 'error', 'Unknown card: ' || v_card);
     END CASE;
@@ -9512,6 +9596,7 @@ BEGIN
     CASE v_card
       WHEN 'quick_strike' THEN
         v_damage := 12;
+        IF v_boosted THEN v_damage := v_damage + 10; v_boosted := false; END IF;
         IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
         v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
         v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
@@ -9520,6 +9605,7 @@ BEGIN
 
       WHEN 'power_slash' THEN
         v_damage := 25;
+        IF v_boosted THEN v_damage := v_damage + 10; v_boosted := false; END IF;
         IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
         v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
         v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
@@ -9528,6 +9614,7 @@ BEGIN
 
       WHEN 'fury_attack' THEN
         v_damage := 18;
+        IF v_boosted THEN v_damage := v_damage + 10; v_boosted := false; END IF;
         IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
         -- Ignores 8 shield
         v_shield_dmg := GREATEST(v_opp_shield - 8, 0);
@@ -9538,6 +9625,7 @@ BEGIN
 
       WHEN 'double_hit' THEN
         v_damage := 8;
+        IF v_boosted THEN v_damage := v_damage + 10; v_boosted := false; END IF;
         IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
         -- Hit 1
         v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
@@ -9551,6 +9639,7 @@ BEGIN
 
       WHEN 'critical_blow' THEN
         v_damage := 35;
+        IF v_boosted THEN v_damage := v_damage + 10; v_boosted := false; END IF;
         IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
         v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
         v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
@@ -9558,6 +9647,18 @@ BEGIN
         -- Self damage
         v_my_hp := GREATEST(v_my_hp - 5, 0);
         v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage, 'selfDamage', 5);
+
+      WHEN 'venom_strike' THEN
+        -- 8 normal damage + 5 piercing (direct to HP)
+        v_damage := 8;
+        IF v_boosted THEN v_damage := v_damage + 10; v_boosted := false; END IF;
+        IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
+        v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
+        v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
+        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
+        -- Pierce: 5 damage directly to HP ignoring shield
+        v_opp_hp := GREATEST(v_opp_hp - 5, 0);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage, 'pierce', 5);
 
       WHEN 'guard' THEN
         v_my_shield := v_my_shield + 12;
@@ -9585,6 +9686,20 @@ BEGIN
         END IF;
         v_log_entries := v_log_entries || jsonb_build_object('type', 'defense', 'card', v_card, 'shield', 10, 'draw', 1);
 
+      WHEN 'spike_armor' THEN
+        v_my_shield := v_my_shield + 5;
+        -- Deal 10 damage back
+        v_damage := 10;
+        v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
+        v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
+        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'defense', 'card', v_card, 'shield', 5, 'counterDamage', 10);
+
+      WHEN 'barrier' THEN
+        v_my_shield := v_my_shield + 18;
+        v_my_hp := LEAST(v_my_hp + 5, 200);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'defense', 'card', v_card, 'shield', 18, 'heal', 5);
+
       WHEN 'heal' THEN
         v_my_hp := LEAST(v_my_hp + 15, 200);
         v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'heal', 15);
@@ -9593,8 +9708,36 @@ BEGIN
         v_opp_weakened := true;
         v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'weaken', 8);
 
+      WHEN 'war_cry' THEN
+        v_boosted := true;
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'boost', 10);
+
+      WHEN 'recharge' THEN
+        -- Draw 2 cards
+        IF jsonb_array_length(COALESCE(v_my_deck, '[]'::JSONB)) > 0 THEN
+          v_my_hand := v_my_hand || jsonb_build_array(v_my_deck->0);
+          v_my_deck := v_my_deck - 0;
+        END IF;
+        IF jsonb_array_length(COALESCE(v_my_deck, '[]'::JSONB)) > 0 THEN
+          v_my_hand := v_my_hand || jsonb_build_array(v_my_deck->0);
+          v_my_deck := v_my_deck - 0;
+        END IF;
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'draw', 2);
+
+      WHEN 'execute' THEN
+        -- 15 damage, +15 bonus if enemy HP <= 60
+        v_damage := 15;
+        IF v_opp_hp <= 60 THEN v_damage := 30; END IF;
+        IF v_boosted THEN v_damage := v_damage + 10; v_boosted := false; END IF;
+        IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
+        v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
+        v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
+        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'damage', v_damage);
+
       WHEN 'drain' THEN
         v_damage := 12;
+        IF v_boosted THEN v_damage := v_damage + 10; v_boosted := false; END IF;
         IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
         v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
         v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
@@ -9656,6 +9799,8 @@ BEGIN
       'player2Energy', 3,
       'player1Weakened', v_weakened,
       'player2Weakened', v_opp_weakened,
+      'player1Boosted', v_boosted,
+      'player2Boosted', false,
       'lastAction', v_log_entries
     );
   ELSE
@@ -9670,6 +9815,8 @@ BEGIN
       'player2Energy', v_energy,
       'player1Weakened', v_opp_weakened,
       'player2Weakened', v_weakened,
+      'player1Boosted', false,
+      'player2Boosted', v_boosted,
       'lastAction', v_log_entries
     );
   END IF;
@@ -9789,16 +9936,30 @@ DECLARE
   v_lobby JSONB;
   v_active_session JSONB;
 BEGIN
-  -- Get waiting lobby entries (exclude self)
+  -- Get waiting lobby entries (exclude self) with battle stats
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
-    'id', id,
-    'player_id', player_id,
-    'username', username,
-    'bet_amount', bet_amount,
-    'created_at', created_at
+    'id', bl.id,
+    'player_id', bl.player_id,
+    'username', bl.username,
+    'bet_amount', bl.bet_amount,
+    'created_at', bl.created_at,
+    'wins', COALESCE(stats.wins, 0),
+    'losses', COALESCE(stats.losses, 0)
   )), '[]'::JSONB) INTO v_lobby
-  FROM battle_lobby
-  WHERE status = 'waiting' AND player_id != p_player_id;
+  FROM battle_lobby bl
+  LEFT JOIN LATERAL (
+    SELECT
+      COUNT(*) FILTER (WHERE bs.winner_id = bl.player_id) AS wins,
+      COUNT(*) FILTER (
+        WHERE bs.status IN ('completed', 'forfeited')
+          AND bs.winner_id IS NOT NULL
+          AND bs.winner_id != bl.player_id
+      ) AS losses
+    FROM battle_sessions bs
+    WHERE (bs.player1_id = bl.player_id OR bs.player2_id = bl.player_id)
+      AND bs.status IN ('completed', 'forfeited')
+  ) stats ON true
+  WHERE bl.status = 'waiting' AND bl.player_id != p_player_id;
 
   -- Check for active session
   SELECT jsonb_build_object(
@@ -9814,7 +9975,8 @@ BEGIN
     'player2_shield', player2_shield,
     'game_state', game_state,
     'status', status,
-    'winner_id', winner_id
+    'winner_id', winner_id,
+    'bet_amount', bet_amount
   ) INTO v_active_session
   FROM battle_sessions
   WHERE (player1_id = p_player_id OR player2_id = p_player_id) AND status = 'active'
@@ -9837,3 +9999,62 @@ GRANT EXECUTE ON FUNCTION accept_battle_challenge TO authenticated;
 GRANT EXECUTE ON FUNCTION play_battle_turn TO authenticated;
 GRANT EXECUTE ON FUNCTION forfeit_battle TO authenticated;
 GRANT EXECUTE ON FUNCTION get_battle_lobby TO authenticated;
+
+-- =====================================================
+-- BATTLE LEADERBOARD
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION get_battle_leaderboard(p_limit INT DEFAULT 10)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT
+        p.id AS "playerId",
+        p.username,
+        COUNT(*) FILTER (WHERE bs.status IN ('completed', 'forfeited')) AS "totalBattles",
+        COUNT(*) FILTER (WHERE bs.winner_id = p.id) AS "wins",
+        COUNT(*) FILTER (
+          WHERE bs.status IN ('completed', 'forfeited')
+            AND bs.winner_id IS NOT NULL
+            AND bs.winner_id != p.id
+        ) AS "losses",
+        ROUND(
+          (COUNT(*) FILTER (WHERE bs.winner_id = p.id))::NUMERIC /
+          NULLIF(COUNT(*) FILTER (WHERE bs.status IN ('completed', 'forfeited')), 0) * 100
+        , 0) AS "winRate"
+      FROM players p
+      INNER JOIN battle_sessions bs
+        ON (bs.player1_id = p.id OR bs.player2_id = p.id)
+      WHERE bs.status IN ('completed', 'forfeited')
+      GROUP BY p.id, p.username
+      HAVING COUNT(*) FILTER (WHERE bs.status IN ('completed', 'forfeited')) > 0
+      ORDER BY "wins" DESC, "winRate" DESC
+      LIMIT p_limit
+    ) t
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_battle_leaderboard TO authenticated;
+
+-- =====================================================
+-- MIGRACIONES: LIMPIEZA DE COLUMNAS OBSOLETAS
+-- =====================================================
+
+-- Eliminar columnas del sistema de pity timer (ya no usado con shares)
+-- Ejecutar en orden para evitar dependencias
+ALTER TABLE players DROP COLUMN IF EXISTS pity_minutes_accumulated;
+ALTER TABLE players DROP COLUMN IF EXISTS pity_blocks_today;
+ALTER TABLE players DROP COLUMN IF EXISTS pity_last_reset_date;
+ALTER TABLE players DROP COLUMN IF EXISTS mining_streak_minutes;
+
+-- Eliminar columna is_pity de pending_blocks (ya no hay bloques pity)
+ALTER TABLE pending_blocks DROP COLUMN IF EXISTS is_pity;
+
+-- Eliminar función de reset de mining streak (ya no se usa)
+DROP FUNCTION IF EXISTS reset_mining_streak(UUID);

@@ -56,6 +56,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('@/pages/AdminPanel.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/pages/NotFoundPage.vue'),
@@ -83,6 +89,9 @@ router.beforeEach(async (to, _from, next) => {
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'login', query: { redirect: to.fullPath } });
+  } else if (to.meta.requiresAdmin && authStore.player?.role !== 'admin') {
+    // Redirigir a perfil si intenta acceder a panel admin sin ser admin
+    next({ name: 'profile' });
   } else if (to.meta.guest && authStore.isAuthenticated) {
     next({ name: 'mining' });
   } else if (to.name === 'home' && authStore.isAuthenticated) {

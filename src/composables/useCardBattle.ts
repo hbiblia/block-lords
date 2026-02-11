@@ -8,9 +8,10 @@ import {
   playBattleTurn,
   forfeitBattle,
   getBattleLobby,
+  getBattleLeaderboard,
 } from '@/utils/api';
-import { getCard, type CardDefinition, TURN_DURATION, BET_AMOUNT, MAX_ENERGY, MAX_HP } from '@/utils/battleCards';
-import { playSound } from '@/utils/sounds';
+import { getCard, type CardDefinition, TURN_DURATION, MAX_ENERGY, MAX_HP, BET_OPTIONS, type BetAmount } from '@/utils/battleCards';
+import { playBattleSound } from '@/utils/sounds';
 
 export interface LobbyEntry {
   id: string;
@@ -18,6 +19,17 @@ export interface LobbyEntry {
   username: string;
   bet_amount: number;
   created_at: string;
+  wins?: number;
+  losses?: number;
+}
+
+export interface LeaderboardEntry {
+  playerId: string;
+  username: string;
+  totalBattles: number;
+  wins: number;
+  losses: number;
+  winRate: number;
 }
 
 export interface BattleSession {
@@ -42,10 +54,13 @@ export interface BattleSession {
     player2Energy: number;
     player1Weakened: boolean;
     player2Weakened: boolean;
+    player1Boosted: boolean;
+    player2Boosted: boolean;
     lastAction: LogEntry[] | null;
   };
   status: string;
   winner_id: string | null;
+  bet_amount: number;
 }
 
 export interface LogEntry {
@@ -58,6 +73,8 @@ export interface LogEntry {
   counterDamage?: number;
   weaken?: number;
   draw?: number;
+  pierce?: number;
+  boost?: number;
 }
 
 export function useCardBattle() {
@@ -76,14 +93,28 @@ export function useCardBattle() {
   const myEnergy = ref(MAX_ENERGY);
   const enemyHp = ref(MAX_HP);
   const enemyShield = ref(0);
-  const enemyUsername = ref('');
   const isMyTurn = ref(false);
+  const myWeakened = ref(false);
+  const myBoosted = ref(false);
+  const enemyWeakened = ref(false);
+  const enemyBoosted = ref(false);
   const turnTimer = ref(TURN_DURATION);
   const battleLog = ref<LogEntry[]>([]);
   const cardsPlayedThisTurn = ref<string[]>([]);
   const result = ref<{ won: boolean; reward: number } | null>(null);
   const battleLoading = ref(false);
   const errorMessage = ref<string | null>(null);
+
+  // Bet selection state
+  const selectedBetAmount = ref<BetAmount>(BET_OPTIONS[0]);
+
+  // Quick match state
+  const quickMatchMode = ref(false);
+  const quickMatchSearching = ref(false);
+
+  // Leaderboard state
+  const leaderboard = ref<LeaderboardEntry[]>([]);
+  const leaderboardLoading = ref(false);
 
   // Internal
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -123,6 +154,11 @@ export function useCardBattle() {
           console.log('[Battle] Found active session, starting battle');
           startBattle(data.active_session);
         }
+
+        // Auto-match if in quick match mode
+        if (quickMatchMode.value && inLobby.value && !data.active_session) {
+          setTimeout(() => tryAutoMatch(), 100);
+        }
       } else {
         errorMessage.value = data?.error || 'Error loading lobby';
       }
@@ -134,19 +170,35 @@ export function useCardBattle() {
     }
   }
 
-  async function enterLobby() {
+  async function loadLeaderboard() {
+    leaderboardLoading.value = true;
+    try {
+      const data = await getBattleLeaderboard(10);
+      if (Array.isArray(data)) {
+        leaderboard.value = data;
+      }
+    } catch (e) {
+      console.error('[Battle] Error loading leaderboard:', e);
+    } finally {
+      leaderboardLoading.value = false;
+    }
+  }
+
+  async function enterLobby(betAmount?: BetAmount) {
     if (!playerId.value) return;
     lobbyLoading.value = true;
     errorMessage.value = null;
+    const bet = betAmount ?? selectedBetAmount.value;
+    selectedBetAmount.value = bet;
     try {
-      const data = await joinBattleLobby(playerId.value, BET_AMOUNT);
+      const data = await joinBattleLobby(playerId.value, bet);
       console.log('[Battle] joinLobby response:', JSON.stringify(data));
       if (data?.success) {
         inLobby.value = true;
-        playSound('click');
+        playBattleSound('click');
         await loadLobby();
       } else {
-        playSound('error');
+        playBattleSound('error');
         errorMessage.value = data?.error || 'Failed to join lobby';
         throw new Error(errorMessage.value ?? 'Failed to join lobby');
       }
@@ -168,7 +220,7 @@ export function useCardBattle() {
       console.log('[Battle] leaveLobby response:', JSON.stringify(data));
       if (data?.success) {
         inLobby.value = false;
-        playSound('click');
+        playBattleSound('click');
       }
     } catch (e) {
       console.error('[Battle] Error leaving lobby:', e);
@@ -187,12 +239,12 @@ export function useCardBattle() {
       const data = await acceptBattleChallenge(playerId.value, opponentLobbyId);
       console.log('[Battle] challenge response:', JSON.stringify(data));
       if (data?.success) {
-        playSound('success');
+        playBattleSound('success');
         console.log('[Battle] Challenge accepted! Session:', data.session_id);
         // Load lobby to find active session and start battle
         await loadLobby();
       } else {
-        playSound('error');
+        playBattleSound('error');
         errorMessage.value = data?.error || 'Challenge failed';
         throw new Error(errorMessage.value ?? 'Challenge failed');
       }
@@ -203,6 +255,54 @@ export function useCardBattle() {
     } finally {
       battleLoading.value = false;
     }
+  }
+
+  // === Quick Match ===
+
+  async function quickMatch(betAmount?: BetAmount) {
+    if (!playerId.value) return;
+
+    quickMatchMode.value = true;
+    quickMatchSearching.value = true;
+    errorMessage.value = null;
+
+    try {
+      if (!inLobby.value) {
+        await enterLobby(betAmount);
+      }
+      await tryAutoMatch();
+    } catch (e) {
+      console.error('[Battle] Quick match error:', e);
+      quickMatchMode.value = false;
+      quickMatchSearching.value = false;
+      throw e;
+    }
+  }
+
+  async function tryAutoMatch() {
+    if (!quickMatchMode.value || !playerId.value) return;
+
+    const available = lobbyEntries.value.filter(
+      (entry) => entry.player_id !== playerId.value
+    );
+
+    if (available.length > 0) {
+      try {
+        console.log('[Battle] Quick match: found opponent, challenging', available[0].id);
+        await challengePlayer(available[0].id);
+        quickMatchSearching.value = false;
+      } catch (e) {
+        console.warn('[Battle] Quick match: challenge failed, will retry on next lobby update', e);
+        await loadLobby();
+      }
+    } else {
+      console.log('[Battle] Quick match: no opponents available, waiting...');
+    }
+  }
+
+  function cancelQuickMatch() {
+    quickMatchMode.value = false;
+    quickMatchSearching.value = false;
   }
 
   // === Battle Functions ===
@@ -219,6 +319,10 @@ export function useCardBattle() {
     myHand.value = amP1 ? (state.player1Hand || []) : (state.player2Hand || []);
     myEnergy.value = amP1 ? state.player1Energy : state.player2Energy;
     isMyTurn.value = sessionData.current_turn === playerId.value;
+    myWeakened.value = amP1 ? (state.player1Weakened || false) : (state.player2Weakened || false);
+    myBoosted.value = amP1 ? (state.player1Boosted || false) : (state.player2Boosted || false);
+    enemyWeakened.value = amP1 ? (state.player2Weakened || false) : (state.player1Weakened || false);
+    enemyBoosted.value = amP1 ? (state.player2Boosted || false) : (state.player1Boosted || false);
     cardsPlayedThisTurn.value = [];
     result.value = null;
 
@@ -232,7 +336,6 @@ export function useCardBattle() {
 
     // Subscribe to battle updates
     subscribeToBattle(sessionData.id);
-    playSound('battle_start');
 
     // Check if already finished
     if (sessionData.status === 'completed' || sessionData.status === 'forfeited') {
@@ -255,6 +358,10 @@ export function useCardBattle() {
     myHand.value = amP1 ? (state.player1Hand || []) : (state.player2Hand || []);
     myEnergy.value = amP1 ? state.player1Energy : state.player2Energy;
     isMyTurn.value = newSession.current_turn === playerId.value;
+    myWeakened.value = amP1 ? (state.player1Weakened || false) : (state.player2Weakened || false);
+    myBoosted.value = amP1 ? (state.player1Boosted || false) : (state.player2Boosted || false);
+    enemyWeakened.value = amP1 ? (state.player2Weakened || false) : (state.player1Weakened || false);
+    enemyBoosted.value = amP1 ? (state.player2Boosted || false) : (state.player1Boosted || false);
     cardsPlayedThisTurn.value = [];
 
     // Process log entries
@@ -269,7 +376,7 @@ export function useCardBattle() {
     if (newSession.status === 'completed' || newSession.status === 'forfeited') {
       handleBattleEnd(newSession);
     } else if (isMyTurn.value) {
-      playSound('turn_start');
+      playBattleSound('turn_start');
     }
   }
 
@@ -284,7 +391,7 @@ export function useCardBattle() {
     myEnergy.value -= card.cost;
     myHand.value.splice(idx, 1);
     cardsPlayedThisTurn.value.push(cardId);
-    playSound('card_play');
+    playBattleSound('card_play');
   }
 
   function undoLastCard() {
@@ -309,12 +416,12 @@ export function useCardBattle() {
         isMyTurn.value = false;
         // Server update will come via realtime
       } else {
-        playSound('error');
+        playBattleSound('error');
         console.error('Turn failed:', data?.error);
       }
     } catch (e) {
       console.error('Error playing turn:', e);
-      playSound('error');
+      playBattleSound('error');
     } finally {
       battleLoading.value = false;
     }
@@ -327,7 +434,7 @@ export function useCardBattle() {
       const data = await forfeitBattle(playerId.value, session.value.id);
       if (data?.success) {
         result.value = { won: false, reward: 0 };
-        playSound('error');
+        playBattleSound('error');
       }
     } catch (e) {
       console.error('Error forfeiting:', e);
@@ -339,14 +446,15 @@ export function useCardBattle() {
   function handleBattleEnd(s: BattleSession) {
     stopTurnTimer();
     const won = s.winner_id === playerId.value;
+    const betAmt = s.bet_amount || selectedBetAmount.value;
     result.value = {
       won,
-      reward: won ? BET_AMOUNT * 2 : 0,
+      reward: won ? betAmt * 2 : 0,
     };
     if (won) {
-      playSound('battle_win');
+      playBattleSound('battle_win');
     } else {
-      playSound('battle_lose');
+      playBattleSound('battle_lose');
     }
   }
 
@@ -470,11 +578,18 @@ export function useCardBattle() {
     enemyHp.value = MAX_HP;
     enemyShield.value = 0;
     isMyTurn.value = false;
+    myWeakened.value = false;
+    myBoosted.value = false;
+    enemyWeakened.value = false;
+    enemyBoosted.value = false;
     turnTimer.value = TURN_DURATION;
     battleLog.value = [];
     cardsPlayedThisTurn.value = [];
     result.value = null;
     battleLoading.value = false;
+    quickMatchMode.value = false;
+    quickMatchSearching.value = false;
+    selectedBetAmount.value = BET_OPTIONS[0];
 
     if (battleChannel) {
       supabase.removeChannel(battleChannel);
@@ -488,6 +603,8 @@ export function useCardBattle() {
     resetBattle();
     lobbyEntries.value = [];
     inLobby.value = false;
+    quickMatchMode.value = false;
+    quickMatchSearching.value = false;
   }
 
   onUnmounted(() => {
@@ -500,11 +617,21 @@ export function useCardBattle() {
     inLobby,
     lobbyLoading,
     errorMessage,
+    selectedBetAmount,
     loadLobby,
     enterLobby,
     exitLobby,
     challengePlayer,
     subscribeToLobby,
+    // Quick match
+    quickMatchMode,
+    quickMatchSearching,
+    quickMatch,
+    cancelQuickMatch,
+    // Leaderboard
+    leaderboard,
+    leaderboardLoading,
+    loadLeaderboard,
 
     // Battle
     session,
@@ -514,8 +641,11 @@ export function useCardBattle() {
     myEnergy,
     enemyHp,
     enemyShield,
-    enemyUsername,
     isMyTurn,
+    myWeakened,
+    myBoosted,
+    enemyWeakened,
+    enemyBoosted,
     turnTimer,
     battleLog,
     cardsPlayedThisTurn,

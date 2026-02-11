@@ -1,22 +1,30 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import type { LobbyEntry } from '@/composables/useCardBattle';
-import { BET_AMOUNT, MAX_HP, MAX_ENERGY, TURN_DURATION } from '@/utils/battleCards';
+import type { LobbyEntry, LeaderboardEntry } from '@/composables/useCardBattle';
+import { BET_OPTIONS, type BetAmount, MAX_HP, MAX_ENERGY, TURN_DURATION } from '@/utils/battleCards';
 
 defineProps<{
   entries: LobbyEntry[];
   inLobby: boolean;
   loading: boolean;
   error: string | null;
+  quickMatchSearching: boolean;
+  leaderboard: LeaderboardEntry[];
+  leaderboardLoading: boolean;
 }>();
 
 const emit = defineEmits<{
-  enter: [];
+  enter: [betAmount: BetAmount];
   leave: [];
   challenge: [lobbyId: string];
+  quickMatch: [betAmount: BetAmount];
+  cancelQuickMatch: [];
 }>();
 
 const { t } = useI18n();
+
+const selectedBet = ref<BetAmount>(BET_OPTIONS[0]);
 </script>
 
 <template>
@@ -24,7 +32,7 @@ const { t } = useI18n();
     <!-- Info banner -->
     <div class="px-3 py-2 bg-purple-500/10 border-b border-border/30">
       <p class="text-[11px] text-slate-300">
-        {{ t('battle.lobbyInfo', { amount: BET_AMOUNT }) }}
+        {{ t('battle.lobbyInfo', { amount: selectedBet }) }}
       </p>
     </div>
 
@@ -62,7 +70,7 @@ const { t } = useI18n();
           </div>
           <div class="bg-slate-800/40 rounded-lg p-2 border border-border/20">
             <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-0.5">{{ t('battle.info.prize', 'Prize') }}</div>
-            <div class="text-sm font-bold text-green-400">{{ BET_AMOUNT * 2 }} GC</div>
+            <div class="text-sm font-bold text-green-400">{{ selectedBet * 2 }} GC</div>
             <div class="text-[9px] text-slate-500">{{ t('battle.info.prizeDesc', 'Winner takes all') }}</div>
           </div>
         </div>
@@ -73,42 +81,121 @@ const { t } = useI18n();
           <div class="flex gap-3 justify-center">
             <div class="flex items-center gap-1">
               <span class="w-2 h-2 rounded-full bg-red-500" />
-              <span class="text-[10px] text-red-400 font-medium">{{ t('battle.info.attack', 'Attack') }} (5)</span>
+              <span class="text-[10px] text-red-400 font-medium">{{ t('battle.info.attack', 'Attack') }} (6)</span>
             </div>
             <div class="flex items-center gap-1">
               <span class="w-2 h-2 rounded-full bg-blue-500" />
-              <span class="text-[10px] text-blue-400 font-medium">{{ t('battle.info.defense', 'Defense') }} (4)</span>
+              <span class="text-[10px] text-blue-400 font-medium">{{ t('battle.info.defense', 'Defense') }} (6)</span>
             </div>
             <div class="flex items-center gap-1">
               <span class="w-2 h-2 rounded-full bg-purple-500" />
-              <span class="text-[10px] text-purple-400 font-medium">{{ t('battle.info.special', 'Special') }} (3)</span>
+              <span class="text-[10px] text-purple-400 font-medium">{{ t('battle.info.special', 'Special') }} (6)</span>
             </div>
           </div>
-          <p class="text-[9px] text-slate-500 text-center mt-1">{{ t('battle.info.deckInfo', '12 cards total. Both players get the same deck, shuffled randomly.') }}</p>
+          <p class="text-[9px] text-slate-500 text-center mt-1">{{ t('battle.info.deckInfo', '18 cards total. Both players get the same deck, shuffled randomly.') }}</p>
         </div>
 
-        <!-- Enter button -->
-        <button
-          @click="emit('enter')"
-          :disabled="loading"
-          class="w-full py-3 bg-accent-primary hover:bg-accent-primary/80 text-white rounded-lg font-bold text-sm transition-colors disabled:opacity-50 shadow-lg shadow-accent-primary/20"
-        >
-          <span v-if="loading" class="flex items-center justify-center gap-2">
-            <span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            {{ t('common.loading') }}
-          </span>
-          <span v-else class="flex items-center justify-center gap-2">
-            &#9876; {{ t('battle.enterLobby', 'Enter Lobby') }} ({{ BET_AMOUNT }} GC)
-          </span>
-        </button>
+        <!-- Bet selection -->
+        <div class="w-full bg-slate-800/30 rounded-lg p-2.5 border border-border/20">
+          <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">{{ t('battle.selectBet', 'Select Bet') }}</div>
+          <div class="flex gap-1.5 justify-center flex-wrap">
+            <button
+              v-for="amount in BET_OPTIONS"
+              :key="amount"
+              @click="selectedBet = amount"
+              class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border"
+              :class="selectedBet === amount
+                ? 'bg-green-500/20 border-green-500/60 text-green-400 shadow-sm shadow-green-500/10'
+                : 'bg-slate-800/50 border-border/30 text-slate-400 hover:border-slate-500/50 hover:text-slate-300'"
+            >
+              {{ amount }} GC
+            </button>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="w-full flex items-center gap-2">
+          <!-- Quick Match button (primary) -->
+          <button
+            @click="emit('quickMatch', selectedBet)"
+            :disabled="loading"
+            class="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-lg font-bold text-sm transition-all disabled:opacity-50 shadow-lg shadow-green-500/20"
+          >
+            <span v-if="loading" class="flex items-center justify-center gap-2">
+              <span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              {{ t('common.loading') }}
+            </span>
+            <span v-else class="flex items-center justify-center gap-2">
+              &#9876; {{ t('battle.quickMatch', 'Quick Match') }} ({{ selectedBet }} GC)
+            </span>
+          </button>
+
+          <!-- Enter Lobby button (secondary) -->
+          <button
+            @click="emit('enter', selectedBet)"
+            :disabled="loading"
+            class="py-3 px-3 bg-slate-700/50 hover:bg-slate-600/50 text-slate-400 rounded-lg font-medium text-[10px] transition-colors disabled:opacity-50 border border-border/30 whitespace-nowrap"
+          >
+            <span v-if="loading">
+              <span class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+            </span>
+            <span v-else>
+              {{ t('battle.enterLobby', 'Lobby') }}
+            </span>
+          </button>
+        </div>
       </div>
 
       <template v-else>
+        <!-- Leaderboard (top) -->
+        <div class="mb-2">
+          <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5 flex items-center gap-1">
+            &#127942; {{ t('battle.leaderboard.title', 'Top Fighters') }}
+          </div>
+
+          <div v-if="leaderboardLoading && leaderboard.length === 0" class="flex items-center justify-center py-4">
+            <div class="w-4 h-4 border-2 border-accent-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+
+          <div v-else-if="leaderboard.length === 0" class="text-center py-3 bg-slate-800/30 rounded-lg border border-border/20">
+            <p class="text-[10px] text-slate-500">{{ t('battle.leaderboard.empty', 'No battles yet. Be the first!') }}</p>
+          </div>
+
+          <div v-else class="bg-slate-800/30 rounded-lg border border-border/20 overflow-hidden">
+            <div class="grid grid-cols-[24px_1fr_40px_40px_44px] gap-1 px-2 py-1 border-b border-border/20 text-[9px] text-slate-500 uppercase tracking-wider font-semibold">
+              <span>#</span>
+              <span>{{ t('battle.leaderboard.player', 'Player') }}</span>
+              <span class="text-center">{{ t('battle.leaderboard.wins', 'W') }}</span>
+              <span class="text-center">{{ t('battle.leaderboard.losses', 'L') }}</span>
+              <span class="text-center">{{ t('battle.leaderboard.winRate', 'Win%') }}</span>
+            </div>
+            <div
+              v-for="(entry, index) in leaderboard"
+              :key="entry.playerId"
+              class="grid grid-cols-[24px_1fr_40px_40px_44px] gap-1 px-2 py-1 items-center"
+              :class="index % 2 === 0 ? 'bg-slate-800/20' : ''"
+            >
+              <span class="text-[10px] font-bold" :class="index === 0 ? 'text-yellow-400' : index === 1 ? 'text-slate-300' : index === 2 ? 'text-amber-600' : 'text-slate-500'">
+                {{ index + 1 }}
+              </span>
+              <span class="text-[11px] text-slate-200 truncate font-medium">{{ entry.username }}</span>
+              <span class="text-[10px] text-green-400 text-center font-semibold">{{ entry.wins }}</span>
+              <span class="text-[10px] text-red-400 text-center">{{ entry.losses }}</span>
+              <span class="text-[10px] text-slate-300 text-center">{{ entry.winRate }}%</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Waiting message -->
         <div v-if="entries.length === 0" class="flex flex-col items-center justify-center py-8">
           <div class="w-6 h-6 border-2 border-accent-primary border-t-transparent rounded-full animate-spin mb-3" />
           <p class="text-sm text-slate-400 text-center">
-            {{ t('battle.waitingPlayers', 'Waiting for opponents...') }}
+            <template v-if="quickMatchSearching">
+              {{ t('battle.quickMatchSearching', 'Searching for opponent...') }}
+            </template>
+            <template v-else>
+              {{ t('battle.waitingPlayers', 'Waiting for opponents...') }}
+            </template>
           </p>
         </div>
 
@@ -126,7 +213,15 @@ const { t } = useI18n();
             </div>
             <div class="text-left">
               <div class="text-sm font-semibold text-slate-200">{{ entry.username }}</div>
-              <div class="text-[10px] text-slate-500">{{ BET_AMOUNT }} GC</div>
+              <div class="text-[10px] text-slate-500">
+                {{ entry.bet_amount }} GC
+                <span v-if="entry.wins !== undefined" class="ml-1">
+                  &middot;
+                  <span class="text-green-400">{{ entry.wins }}W</span>
+                  <span class="text-slate-600">/</span>
+                  <span class="text-red-400">{{ entry.losses }}L</span>
+                </span>
+              </div>
             </div>
           </div>
           <span class="text-xs text-accent-primary font-semibold">
@@ -136,14 +231,22 @@ const { t } = useI18n();
       </template>
     </div>
 
-    <!-- Leave button (when in lobby) -->
-    <div v-if="inLobby" class="p-3 border-t border-border/30">
+    <!-- Footer buttons (when in lobby) -->
+    <div v-if="inLobby" class="p-3 border-t border-border/30 space-y-2">
+      <button
+        v-if="quickMatchSearching"
+        @click="emit('cancelQuickMatch')"
+        :disabled="loading"
+        class="w-full py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+      >
+        {{ t('battle.cancelQuickMatch', 'Cancel Search') }}
+      </button>
       <button
         @click="emit('leave')"
         :disabled="loading"
         class="w-full py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
       >
-        {{ t('battle.leaveLobby', 'Leave Lobby') }} (+{{ BET_AMOUNT }} GC)
+        {{ t('battle.leaveLobby', 'Leave Lobby') }} (+{{ selectedBet }} GC)
       </button>
     </div>
   </div>

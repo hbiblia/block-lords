@@ -212,10 +212,7 @@ export const useAuthStore = defineStore('auth', () => {
         // Marcar como online (no bloquear, ejecutar en background)
         (async () => {
           try {
-            await supabase
-              .from('players')
-              .update({ is_online: true, last_seen: new Date().toISOString() })
-              .eq('id', userId);
+            await supabase.rpc('update_online_status', { p_player_id: userId, p_is_online: true });
           } catch (e) {
             console.warn('Error updating online status:', e);
           }
@@ -329,10 +326,7 @@ export const useAuthStore = defineStore('auth', () => {
         const userId = user.value.id;
         (async () => {
           try {
-            await supabase
-              .from('players')
-              .update({ is_online: false, last_seen: new Date().toISOString() })
-              .eq('id', userId);
+            await supabase.rpc('update_online_status', { p_player_id: userId, p_is_online: false });
           } catch (e) {
             console.warn('Error updating offline status:', e);
           }

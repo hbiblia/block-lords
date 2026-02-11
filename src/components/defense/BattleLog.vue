@@ -45,6 +45,11 @@ function formatEntry(entry: LogEntry): string {
           card: cardName, dmg: entry.damage, self: entry.selfDamage
         });
       }
+      if (entry.pierce) {
+        return t('battle.log.pierce', {
+          card: cardName, dmg: entry.damage, pierce: entry.pierce
+        });
+      }
       return t('battle.log.attack', { card: cardName, dmg: entry.damage });
     case 'defense':
       if (entry.counterDamage) {
@@ -55,6 +60,11 @@ function formatEntry(entry: LogEntry): string {
       if (entry.draw) {
         return t('battle.log.defenseDraw', {
           card: cardName, shield: entry.shield, draw: entry.draw
+        });
+      }
+      if (entry.heal) {
+        return t('battle.log.defenseHeal', {
+          card: cardName, shield: entry.shield, heal: entry.heal
         });
       }
       return t('battle.log.defense', { card: cardName, shield: entry.shield });
@@ -70,6 +80,21 @@ function formatEntry(entry: LogEntry): string {
       if (entry.weaken) {
         return t('battle.log.weaken', {
           card: cardName, reduction: entry.weaken
+        });
+      }
+      if (entry.boost) {
+        return t('battle.log.boost', {
+          card: cardName, amount: entry.boost
+        });
+      }
+      if (entry.draw) {
+        return t('battle.log.draw', {
+          card: cardName, amount: entry.draw
+        });
+      }
+      if (entry.damage) {
+        return t('battle.log.execute', {
+          card: cardName, dmg: entry.damage
         });
       }
       return cardName;
@@ -142,6 +167,18 @@ function formatEntry(entry: LogEntry): string {
         class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-green-500/20 text-green-300 flex-shrink-0"
       >
         +{{ entry.heal }}
+      </span>
+      <span
+        v-else-if="entry.boost"
+        class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-300 flex-shrink-0"
+      >
+        +{{ entry.boost }}
+      </span>
+      <span
+        v-else-if="entry.draw"
+        class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 flex-shrink-0"
+      >
+        +{{ entry.draw }}
       </span>
     </div>
 

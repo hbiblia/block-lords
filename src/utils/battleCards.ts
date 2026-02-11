@@ -17,14 +17,19 @@ export interface CardDefinition {
 export type CardEffect =
   | { kind: 'damage'; amount: number }
   | { kind: 'damage_ignore_shield'; amount: number; ignoreShield: number }
+  | { kind: 'damage_pierce'; amount: number; pierce: number }
   | { kind: 'double_hit'; amount: number }
   | { kind: 'damage_self'; amount: number; selfDamage: number }
   | { kind: 'shield'; amount: number }
   | { kind: 'shield_counter'; shield: number; damage: number }
   | { kind: 'shield_draw'; shield: number; draw: number }
+  | { kind: 'shield_heal'; shield: number; heal: number }
   | { kind: 'heal'; amount: number }
   | { kind: 'weaken'; reduction: number }
-  | { kind: 'drain'; damage: number; heal: number };
+  | { kind: 'boost'; amount: number }
+  | { kind: 'drain'; damage: number; heal: number }
+  | { kind: 'draw'; amount: number }
+  | { kind: 'execute'; amount: number; bonusAmount: number; threshold: number };
 
 export interface BattleCard {
   uid: string; // unique instance id (for hand tracking)
@@ -42,13 +47,15 @@ export interface GameState {
   player2Energy: number;
   player1Weakened: boolean;
   player2Weakened: boolean;
+  player1Boosted: boolean;
+  player2Boosted: boolean;
   lastAction: string | null;
 }
 
-// === Card Definitions (12 cards total) ===
+// === Card Definitions (18 cards total) ===
 
 export const CARD_DEFINITIONS: CardDefinition[] = [
-  // ATTACK CARDS (5) - Red
+  // ATTACK CARDS (6) - Red
   {
     id: 'quick_strike',
     name: 'Quick Strike',
@@ -104,8 +111,19 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
     descriptionKey: 'battle.cards.criticalBlowDesc',
     effect: { kind: 'damage_self', amount: 35, selfDamage: 5 },
   },
+  {
+    id: 'venom_strike',
+    name: 'Venom Strike',
+    nameKey: 'battle.cards.venomStrike',
+    type: 'attack',
+    cost: 1,
+    value: 13,
+    description: '8 damage + 5 piercing damage to HP',
+    descriptionKey: 'battle.cards.venomStrikeDesc',
+    effect: { kind: 'damage_pierce', amount: 8, pierce: 5 },
+  },
 
-  // DEFENSE CARDS (4) - Blue
+  // DEFENSE CARDS (6) - Blue
   {
     id: 'guard',
     name: 'Guard',
@@ -150,8 +168,30 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
     descriptionKey: 'battle.cards.deflectDesc',
     effect: { kind: 'shield_draw', shield: 10, draw: 1 },
   },
+  {
+    id: 'spike_armor',
+    name: 'Spike Armor',
+    nameKey: 'battle.cards.spikeArmor',
+    type: 'defense',
+    cost: 1,
+    value: 15,
+    description: '+5 shield, deal 10 damage',
+    descriptionKey: 'battle.cards.spikeArmorDesc',
+    effect: { kind: 'shield_counter', shield: 5, damage: 10 },
+  },
+  {
+    id: 'barrier',
+    name: 'Barrier',
+    nameKey: 'battle.cards.barrier',
+    type: 'defense',
+    cost: 2,
+    value: 23,
+    description: '+18 shield, heal 5 HP',
+    descriptionKey: 'battle.cards.barrierDesc',
+    effect: { kind: 'shield_heal', shield: 18, heal: 5 },
+  },
 
-  // SPECIAL CARDS (3) - Purple
+  // SPECIAL CARDS (6) - Purple
   {
     id: 'heal',
     name: 'Heal',
@@ -185,6 +225,39 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
     descriptionKey: 'battle.cards.drainDesc',
     effect: { kind: 'drain', damage: 12, heal: 6 },
   },
+  {
+    id: 'war_cry',
+    name: 'War Cry',
+    nameKey: 'battle.cards.warCry',
+    type: 'special',
+    cost: 1,
+    value: 10,
+    description: 'Next attack deals +10 bonus damage',
+    descriptionKey: 'battle.cards.warCryDesc',
+    effect: { kind: 'boost', amount: 10 },
+  },
+  {
+    id: 'recharge',
+    name: 'Recharge',
+    nameKey: 'battle.cards.recharge',
+    type: 'special',
+    cost: 1,
+    value: 2,
+    description: 'Draw 2 cards from deck',
+    descriptionKey: 'battle.cards.rechargeDesc',
+    effect: { kind: 'draw', amount: 2 },
+  },
+  {
+    id: 'execute',
+    name: 'Execute',
+    nameKey: 'battle.cards.execute',
+    type: 'special',
+    cost: 2,
+    value: 30,
+    description: '15 damage, +15 bonus if enemy HP ≤ 60',
+    descriptionKey: 'battle.cards.executeDesc',
+    effect: { kind: 'execute', amount: 15, bonusAmount: 15, threshold: 60 },
+  },
 ];
 
 // Card lookup map
@@ -198,7 +271,7 @@ export function getCard(id: string): CardDefinition {
   return card;
 }
 
-// Build a full deck (all 12 cards) and shuffle
+// Build a full deck (all 18 cards) and shuffle
 export function buildShuffledDeck(): string[] {
   const deck = CARD_DEFINITIONS.map((c) => c.id);
   return shuffleArray(deck);
@@ -253,4 +326,8 @@ export const MAX_ENERGY = 3;
 export const MAX_HAND_SIZE = 6;
 export const CARDS_PER_DRAW = 3;
 export const TURN_DURATION = 45;
-export const BET_AMOUNT = 20;
+export const BET_AMOUNT = 20; // default, kept for backward compat
+
+// Predefined bet amounts players can choose from
+export const BET_OPTIONS = [20, 50, 100, 250, 500] as const;
+export type BetAmount = (typeof BET_OPTIONS)[number];

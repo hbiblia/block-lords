@@ -4,7 +4,9 @@ import { useI18n } from 'vue-i18n';
 import { useDefenseStore } from '@/stores/defense';
 import { useAuthStore } from '@/stores/auth';
 import { useCardBattle } from '@/composables/useCardBattle';
+import { useBattleSound } from '@/composables/useSound';
 import BattleLobby from './defense/BattleLobby.vue';
+import BattleIntro from './defense/BattleIntro.vue';
 import BattleArena from './defense/BattleArena.vue';
 
 const props = defineProps<{
@@ -18,6 +20,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const defenseStore = useDefenseStore();
 const authStore = useAuthStore();
+const { battleSoundEnabled, toggle: toggleBattleSound } = useBattleSound();
 
 const {
   lobbyEntries,
@@ -28,6 +31,14 @@ const {
   exitLobby,
   challengePlayer,
   subscribeToLobby,
+  // Quick match
+  quickMatchSearching,
+  quickMatch,
+  cancelQuickMatch,
+  // Leaderboard
+  leaderboard,
+  leaderboardLoading,
+  loadLeaderboard,
   // Battle
   myHp,
   myShield,
@@ -35,6 +46,10 @@ const {
   enemyHp,
   enemyShield,
   isMyTurn,
+  myWeakened,
+  myBoosted,
+  enemyWeakened,
+  enemyBoosted,
   turnTimer,
   handCards,
   battleLog,
@@ -71,6 +86,7 @@ watch(
     if (open) {
       defenseStore.setView('lobby');
       await loadLobby();
+      loadLeaderboard();
       subscribeToLobby();
     } else {
       cleanup();
@@ -78,10 +94,10 @@ watch(
   }
 );
 
-// Switch to battle view when session starts
+// Switch to intro view when session starts, then battle after intro
 watch(session, (s) => {
-  if (s && s.status === 'active') {
-    defenseStore.setView('battle');
+  if (s && s.status === 'active' && defenseStore.gameView === 'lobby') {
+    defenseStore.setView('intro');
   }
 });
 
@@ -116,6 +132,23 @@ async function handleChallenge(lobbyId: string) {
   } catch {
     // error handled in composable
   }
+}
+
+async function handleQuickMatch() {
+  try {
+    await quickMatch();
+    await authStore.refreshPlayer();
+  } catch {
+    // error handled in composable
+  }
+}
+
+function handleCancelQuickMatch() {
+  cancelQuickMatch();
+}
+
+function handleIntroDone() {
+  defenseStore.setView('battle');
 }
 
 function handleResultClose() {
@@ -195,6 +228,21 @@ function getEnemyUsername(): string {
                 {{ t('battle.live', 'LIVE') }}
               </span>
             </div>
+            <!-- Battle sound toggle -->
+            <button
+              @click="toggleBattleSound"
+              class="p-1.5 rounded-lg transition-colors"
+              :class="battleSoundEnabled ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 hover:text-slate-400 hover:bg-slate-700/50'"
+              :title="battleSoundEnabled ? t('battle.soundOn', 'Sound ON') : t('battle.soundOff', 'Sound OFF')"
+            >
+              <svg v-if="battleSoundEnabled" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072M17.95 6.05a8 8 0 010 11.9M11 5L6 9H2v6h4l5 4V5z" />
+              </svg>
+              <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            </button>
             <button
               @click="handleClose"
               class="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-lg transition-colors"
@@ -219,9 +267,22 @@ function getEnemyUsername(): string {
           :in-lobby="inLobby"
           :loading="lobbyLoading"
           :error="errorMessage"
+          :quick-match-searching="quickMatchSearching"
+          :leaderboard="leaderboard"
+          :leaderboard-loading="leaderboardLoading"
           @enter="handleEnterLobby"
           @leave="handleLeaveLobby"
           @challenge="handleChallenge"
+          @quick-match="handleQuickMatch"
+          @cancel-quick-match="handleCancelQuickMatch"
+        />
+
+        <!-- Intro View (VS screen) -->
+        <BattleIntro
+          v-else-if="defenseStore.gameView === 'intro'"
+          :my-username="authStore.player?.username || '???'"
+          :enemy-username="getEnemyUsername()"
+          @done="handleIntroDone"
         />
 
         <!-- Battle View -->
@@ -235,6 +296,10 @@ function getEnemyUsername(): string {
           :enemy-hp="enemyHp"
           :enemy-shield="enemyShield"
           :is-my-turn="isMyTurn"
+          :my-weakened="myWeakened"
+          :my-boosted="myBoosted"
+          :enemy-weakened="enemyWeakened"
+          :enemy-boosted="enemyBoosted"
           :turn-timer="turnTimer"
           :hand-cards="handCards"
           :battle-log="battleLog"

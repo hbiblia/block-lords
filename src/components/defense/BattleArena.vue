@@ -8,7 +8,7 @@ import BattleResult from './BattleResult.vue';
 import type { CardDefinition } from '@/utils/battleCards';
 import { getCard } from '@/utils/battleCards';
 import type { LogEntry } from '@/composables/useCardBattle';
-import { playSound } from '@/utils/sounds';
+import { playBattleSound } from '@/utils/sounds';
 
 const props = defineProps<{
   myUsername: string;
@@ -19,6 +19,10 @@ const props = defineProps<{
   enemyHp: number;
   enemyShield: number;
   isMyTurn: boolean;
+  myWeakened?: boolean;
+  myBoosted?: boolean;
+  enemyWeakened?: boolean;
+  enemyBoosted?: boolean;
   turnTimer: number;
   handCards: CardDefinition[];
   battleLog: LogEntry[];
@@ -61,6 +65,31 @@ interface CombatEffect {
 const combatEffects = ref<CombatEffect[]>([]);
 let effectCounter = 0;
 
+// Screen flash for big hits
+const screenFlash = ref<'red' | 'green' | null>(null);
+
+watch(() => props.myHp, (newVal, oldVal) => {
+  if (oldVal === undefined) return;
+  const delta = oldVal - newVal;
+  if (delta > 30) {
+    screenFlash.value = 'red';
+    setTimeout(() => { screenFlash.value = null; }, 300);
+  }
+});
+
+watch(() => props.enemyHp, (newVal, oldVal) => {
+  if (oldVal === undefined) return;
+  if (newVal > oldVal) {
+    screenFlash.value = 'green';
+    setTimeout(() => { screenFlash.value = null; }, 300);
+  }
+  const delta = oldVal - newVal;
+  if (delta > 30) {
+    screenFlash.value = 'red';
+    setTimeout(() => { screenFlash.value = null; }, 300);
+  }
+});
+
 function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
   let icon = '';
   let value = '';
@@ -78,7 +107,19 @@ function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
       color = 'text-blue-400';
       break;
     case 'special':
-      if (entry.heal) {
+      if (entry.boost) {
+        icon = '\u2B06';
+        value = `+${entry.boost}`;
+        color = 'text-yellow-400';
+      } else if (entry.draw) {
+        icon = '\uD83C\uDCCF';
+        value = `+${entry.draw}`;
+        color = 'text-cyan-400';
+      } else if (entry.damage && entry.heal) {
+        icon = '\u2728';
+        value = `-${entry.damage}`;
+        color = 'text-purple-400';
+      } else if (entry.heal) {
         icon = '\u2764';
         value = `+${entry.heal}`;
         color = 'text-green-400';
@@ -98,9 +139,9 @@ function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
 
   // Play sound based on type
   switch (entry.type) {
-    case 'attack': playSound('card_attack'); break;
-    case 'defense': playSound('card_defense'); break;
-    case 'special': entry.heal ? playSound('card_heal') : playSound('card_special'); break;
+    case 'attack': playBattleSound('card_attack'); break;
+    case 'defense': playBattleSound('card_defense'); break;
+    case 'special': entry.heal ? playBattleSound('card_heal') : playBattleSound('card_special'); break;
   }
 
   const label = fromEnemy
@@ -136,6 +177,8 @@ watch(
       :shield="enemyShield"
       :is-current-turn="!isMyTurn"
       :is-enemy="true"
+      :weakened="enemyWeakened"
+      :boosted="enemyBoosted"
     />
 
     <!-- Battle log with VS overlay -->
@@ -200,6 +243,8 @@ watch(
       :shield="myShield"
       :energy="myEnergy"
       :is-current-turn="isMyTurn"
+      :weakened="myWeakened"
+      :boosted="myBoosted"
     />
 
     <!-- Card hand + Action buttons -->
@@ -262,6 +307,13 @@ watch(
         </div>
       </div>
     </div>
+
+    <!-- Screen flash overlay for big hits -->
+    <div
+      v-if="screenFlash"
+      class="absolute inset-0 pointer-events-none z-[15] screen-flash"
+      :class="screenFlash === 'red' ? 'bg-red-500/15' : 'bg-green-500/15'"
+    />
 
     <!-- Combat effects overlay -->
     <div class="absolute inset-0 pointer-events-none z-20 overflow-hidden">
@@ -365,5 +417,14 @@ watch(
 .combat-fx-leave-to {
   opacity: 0;
   transform: scale(0.5) translateY(-30px);
+}
+
+/* Screen flash for big hits */
+@keyframes screen-flash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.screen-flash {
+  animation: screen-flash 300ms ease-out forwards;
 }
 </style>

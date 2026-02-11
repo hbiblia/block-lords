@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue';
+import { ref, computed, watch, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMissionsStore } from '@/stores/missions';
+import { useStreakStore } from '@/stores/streak';
 import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 const missionsStore = useMissionsStore();
+const streakStore = useStreakStore();
 
 const props = defineProps<{
   show: boolean;
@@ -41,6 +43,7 @@ watch(() => props.show, (isOpen) => {
   if (isOpen) {
     document.body.style.overflow = 'hidden';
     missionsStore.fetchMissions();
+    streakStore.fetchStatus();
   } else {
     document.body.style.overflow = '';
   }
@@ -50,7 +53,8 @@ onUnmounted(() => {
   document.body.style.overflow = '';
 });
 
-async function handleClaim(missionId: string) {
+// === Missions logic ===
+async function handleClaimMission(missionId: string) {
   const result = await missionsStore.claimReward(missionId);
   if (result) {
     playSound('reward');
@@ -58,17 +62,86 @@ async function handleClaim(missionId: string) {
   }
 }
 
-function handleClose() {
-  playSound('click');
-  missionsStore.closePanel();
-  emit('close');
-}
-
 function formatProgress(progress: number, target: number): string {
   if (target >= 1) {
     return `${Math.floor(progress)}/${Math.floor(target)}`;
   }
   return `${progress.toFixed(2)}/${target.toFixed(2)}`;
+}
+
+// === Streak logic ===
+const showStreakCalendar = ref(false);
+const mainRewardDays = [1, 2, 3, 4, 5, 6, 7, 14, 21, 30];
+
+const rewards = computed(() => {
+  const allRewards = streakStore.status?.allRewards ?? [];
+  return mainRewardDays.map(day => {
+    const reward = allRewards.find(r => r.day === day);
+    return reward ?? {
+      day,
+      gamecoin: day * 10,
+      crypto: 0,
+      itemType: null,
+      itemId: null,
+      description: `Día ${day}`,
+    };
+  });
+});
+
+const currentDay = computed(() => streakStore.status?.currentStreak ?? 0);
+const nextDay = computed(() => streakStore.status?.nextDay ?? 1);
+
+function isCompleted(day: number) {
+  return day <= currentDay.value;
+}
+
+function isCurrent(day: number) {
+  return day === nextDay.value && streakStore.canClaim;
+}
+
+function getItemEmoji(itemType: string | null, itemId: string | null) {
+  if (!itemType) return '';
+  if (itemType === 'prepaid_card') {
+    if (itemId?.includes('energy')) return '⚡';
+    if (itemId?.includes('internet')) return '📡';
+    return '🎴';
+  }
+  if (itemType === 'cooling') return '❄️';
+  if (itemType === 'rig') return '⛏️';
+  return '🎁';
+}
+
+async function handleClaimStreak() {
+  const result = await streakStore.claim();
+  if (result) {
+    playSound('reward');
+    triggerConfetti();
+  }
+}
+
+function formatTimeRemaining(dateStr: string | null) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diff = date.getTime() - now.getTime();
+
+  if (diff <= 0) return t('streak.available');
+
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+function handleClose() {
+  playSound('click');
+  missionsStore.closePanel();
+  streakStore.closeModal();
+  showStreakCalendar.value = false;
+  emit('close');
 }
 </script>
 
@@ -127,8 +200,142 @@ function formatProgress(progress: number, target: number): string {
 
         <!-- Content -->
         <div class="p-4 overflow-y-auto max-h-[60vh]">
-          <!-- Missions List -->
           <div class="space-y-3">
+
+            <!-- ========== STREAK CARD (as first "mission") ========== -->
+            <!-- Streak claim result -->
+            <div
+              v-if="streakStore.lastClaimResult"
+              class="bg-gradient-to-r from-orange-500/10 to-yellow-500/10 rounded-xl p-4 border-l-4 border-status-warning"
+            >
+              <div class="text-center py-4">
+                <div class="text-5xl mb-3 animate-bounce">🎉</div>
+                <h3 class="text-lg font-bold mb-1">{{ t('streak.congratulations', { day: streakStore.lastClaimResult.newStreak }) }}</h3>
+                <div class="flex items-center justify-center gap-4 mt-3">
+                  <div v-if="streakStore.lastClaimResult.gamecoinEarned > 0" class="flex items-center gap-1">
+                    <span>🪙</span>
+                    <span class="font-bold text-status-warning">+{{ streakStore.lastClaimResult.gamecoinEarned }}</span>
+                  </div>
+                  <div v-if="streakStore.lastClaimResult.cryptoEarned > 0" class="flex items-center gap-1">
+                    <span>💎</span>
+                    <span class="font-bold text-accent-primary">+{{ streakStore.lastClaimResult.cryptoEarned }}</span>
+                  </div>
+                  <div v-if="streakStore.lastClaimResult.itemType" class="flex items-center gap-1">
+                    <span>{{ getItemEmoji(streakStore.lastClaimResult.itemType, streakStore.lastClaimResult.itemId) }}</span>
+                    <span class="font-medium text-accent-secondary text-sm">{{ t('streak.specialItemReceived') }}</span>
+                  </div>
+                </div>
+                <button
+                  @click="streakStore.lastClaimResult = null"
+                  class="mt-4 px-4 py-1.5 rounded-lg bg-status-warning/20 text-status-warning text-sm font-medium hover:bg-status-warning/30 transition-colors"
+                >
+                  {{ t('streak.continue') }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Streak normal card -->
+            <div
+              v-else
+              class="bg-gradient-to-r from-orange-500/10 to-yellow-500/10 rounded-xl p-4 border-l-4 transition-all"
+              :class="streakStore.canClaim ? 'border-status-warning' : 'border-orange-500/30'"
+            >
+              <!-- Top row -->
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl">🔥</span>
+                  <div>
+                    <h3 class="font-medium">{{ t('streak.title') }}</h3>
+                    <p class="text-xs text-text-muted">
+                      {{ currentDay }} {{ t('streak.consecutiveDays') }}
+                      <span class="text-text-muted/50 mx-1">&middot;</span>
+                      {{ t('streak.longestStreak') }}: {{ streakStore.longestStreak }}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  @click="showStreakCalendar = !showStreakCalendar"
+                  class="text-[10px] text-text-muted hover:text-white transition-colors px-2 py-1 rounded bg-bg-tertiary/50"
+                >
+                  {{ showStreakCalendar ? '▲' : '▼' }}
+                </button>
+              </div>
+
+              <!-- Claim / Timer row -->
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="text-lg">🎁</span>
+                  <span v-if="streakStore.canClaim" class="font-bold text-status-warning text-sm">
+                    {{ t('streak.claimDay', { day: nextDay }) }}
+                  </span>
+                  <span v-else-if="streakStore.status?.nextClaimAvailable" class="text-xs text-text-muted">
+                    {{ t('streak.nextRewardIn') }} <strong class="text-accent-primary">{{ formatTimeRemaining(streakStore.status.nextClaimAvailable) }}</strong>
+                  </span>
+                  <span v-else class="text-xs text-text-muted">
+                    {{ t('streak.claimDay', { day: nextDay }) }}
+                  </span>
+                </div>
+
+                <button
+                  v-if="streakStore.canClaim"
+                  @click="handleClaimStreak"
+                  :disabled="streakStore.claiming"
+                  class="px-4 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-yellow-500 text-white font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {{ streakStore.claiming ? '...' : t('missions.claim') }}
+                </button>
+                <span
+                  v-else-if="!streakStore.canClaim && currentDay > 0"
+                  class="text-xs text-status-success font-medium flex items-center gap-1"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  D{{ currentDay }}
+                </span>
+              </div>
+
+              <!-- Streak expiration warning -->
+              <p v-if="streakStore.status?.streakExpiresAt && !streakStore.canClaim" class="text-[10px] text-status-warning mt-2">
+                ⚠️ {{ t('streak.streakExpires', { time: formatTimeRemaining(streakStore.status.streakExpiresAt) }) }}
+              </p>
+
+              <!-- Expandable calendar -->
+              <div v-if="showStreakCalendar" class="mt-3 pt-3 border-t border-border/30">
+                <div class="grid grid-cols-5 gap-1.5">
+                  <div
+                    v-for="reward in rewards"
+                    :key="reward.day"
+                    class="relative p-1.5 rounded-lg text-center transition-all"
+                    :class="{
+                      'bg-status-success/20 border border-status-success/50': isCompleted(reward.day),
+                      'bg-accent-primary/20 border-2 border-accent-primary animate-pulse': isCurrent(reward.day),
+                      'bg-bg-secondary/50 border border-border/30': !isCompleted(reward.day) && !isCurrent(reward.day),
+                      'opacity-40': reward.day > nextDay && !isCompleted(reward.day),
+                    }"
+                  >
+                    <div class="text-[9px] font-medium mb-0.5" :class="isCompleted(reward.day) ? 'text-status-success' : 'text-text-muted'">
+                      D{{ reward.day }}
+                    </div>
+                    <div class="text-xs font-bold" :class="isCompleted(reward.day) ? 'text-status-success' : ''">
+                      <span v-if="reward.itemType" class="text-sm">{{ getItemEmoji(reward.itemType, reward.itemId) }}</span>
+                      <span v-else-if="reward.crypto > 0" class="text-accent-primary">💎</span>
+                      <span v-else class="text-status-warning">{{ reward.gamecoin }}</span>
+                    </div>
+                    <div
+                      v-if="isCompleted(reward.day)"
+                      class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-status-success rounded-full flex items-center justify-center"
+                    >
+                      <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ========== MISSIONS LIST ========== -->
             <!-- Inline Loading -->
             <div v-if="missionsStore.loading && missionsStore.missions.length === 0" class="space-y-3">
               <div v-for="i in 3" :key="i" class="bg-bg-secondary rounded-xl p-4 border-l-4 border-border/50 animate-pulse">
@@ -197,7 +404,7 @@ function formatProgress(progress: number, target: number): string {
 
                 <button
                   v-if="mission.isCompleted && !mission.isClaimed"
-                  @click="handleClaim(mission.id)"
+                  @click="handleClaimMission(mission.id)"
                   :disabled="missionsStore.claiming"
                   class="px-4 py-1.5 rounded-lg bg-accent-primary text-white font-medium text-sm hover:bg-accent-primary/80 transition-colors disabled:opacity-50"
                 >
@@ -276,7 +483,6 @@ function formatProgress(progress: number, target: number): string {
   }
 }
 
-/* Add some variation with nth-child */
 .confetti-piece:nth-child(odd) {
   animation-name: confetti-fall-wobble;
 }

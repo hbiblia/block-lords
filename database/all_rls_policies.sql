@@ -746,6 +746,17 @@ CREATE POLICY "player_shares_select"
   USING (auth.uid() = player_id);
 
 -- =====================================================
+-- POLITICAS PARA SHARE_HISTORY (Historial de shares)
+-- =====================================================
+
+ALTER TABLE share_history ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "share_history_select" ON share_history;
+CREATE POLICY "share_history_select"
+  ON share_history FOR SELECT
+  USING (auth.uid() = player_id);
+
+-- =====================================================
 -- POLITICAS PARA CARD BATTLE PVP
 -- =====================================================
 

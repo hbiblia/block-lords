@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { withRetry, isRetryableError } from './retry';
+import { isTabLocked } from '@/composables/useTabLock';
 
 // =====================================================
 // WRAPPER FUNCTIONS PARA SUPABASE RPC
@@ -72,7 +73,7 @@ async function rpcWithRetry<T>(
   params: Record<string, unknown> = {},
   options: { maxRetries?: number; critical?: boolean; timeout?: number } = {}
 ): Promise<T> {
-  const { maxRetries = 3, critical = false, timeout } = options;
+  const { maxRetries = isTabLocked.value ? 0 : 3, critical = false, timeout } = options;
   const timeoutMs = timeout ?? (critical ? CRITICAL_TIMEOUT : DEFAULT_TIMEOUT);
 
   const executeRpc = async () => {
@@ -795,6 +796,122 @@ export async function getActiveAnnouncements(): Promise<any> {
   return rpcWithRetry('get_active_announcements');
 }
 
+// Admin: Obtener todos los anuncios
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function adminGetAllAnnouncements(): Promise<any> {
+  return rpcWithRetry('admin_get_all_announcements');
+}
+
+// Admin: Crear anuncio
+export interface CreateAnnouncementParams {
+  message: string;
+  message_es?: string;
+  type?: 'info' | 'warning' | 'success' | 'error' | 'maintenance' | 'update';
+  icon?: string;
+  link_url?: string;
+  link_text?: string;
+  is_active?: boolean;
+  priority?: number;
+  starts_at?: string;
+  ends_at?: string;
+}
+
+export async function adminCreateAnnouncement(params: CreateAnnouncementParams) {
+  const { data, error } = await supabase.rpc('admin_create_announcement', {
+    p_message: params.message,
+    p_message_es: params.message_es || null,
+    p_type: params.type || 'info',
+    p_icon: params.icon || '📢',
+    p_link_url: params.link_url || null,
+    p_link_text: params.link_text || null,
+    p_is_active: params.is_active ?? true,
+    p_priority: params.priority || 0,
+    p_starts_at: params.starts_at || null,
+    p_ends_at: params.ends_at || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Admin: Actualizar anuncio
+export interface UpdateAnnouncementParams {
+  announcement_id: string;
+  message?: string;
+  message_es?: string;
+  type?: 'info' | 'warning' | 'success' | 'error' | 'maintenance' | 'update';
+  icon?: string;
+  link_url?: string;
+  link_text?: string;
+  is_active?: boolean;
+  priority?: number;
+  starts_at?: string;
+  ends_at?: string;
+}
+
+export async function adminUpdateAnnouncement(params: UpdateAnnouncementParams) {
+  const { data, error } = await supabase.rpc('admin_update_announcement', {
+    p_announcement_id: params.announcement_id,
+    p_message: params.message || null,
+    p_message_es: params.message_es || null,
+    p_type: params.type || null,
+    p_icon: params.icon || null,
+    p_link_url: params.link_url || null,
+    p_link_text: params.link_text || null,
+    p_is_active: params.is_active ?? null,
+    p_priority: params.priority ?? null,
+    p_starts_at: params.starts_at || null,
+    p_ends_at: params.ends_at || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Admin: Eliminar anuncio
+export async function adminDeleteAnnouncement(announcementId: string) {
+  const { data, error } = await supabase.rpc('admin_delete_announcement', {
+    p_announcement_id: announcementId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Admin: Crear anuncio de actualización (quick action)
+export async function adminCreateUpdateAnnouncement(version: string, message?: string, messageEs?: string) {
+  const { data, error } = await supabase.rpc('admin_create_update_announcement', {
+    p_version: version,
+    p_message: message || null,
+    p_message_es: messageEs || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Admin: Obtener información de usuarios
+export async function adminGetPlayers(search?: string, limit = 50, offset = 0) {
+  const { data, error } = await supabase.rpc('admin_get_players', {
+    p_search: search || null,
+    p_limit: limit,
+    p_offset: offset,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Admin: Obtener detalle completo de un usuario
+export async function adminGetPlayerDetail(playerId: string) {
+  const { data, error } = await supabase.rpc('admin_get_player_detail', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 // === PENDING BLOCKS (CLAIM SYSTEM) ===
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1278,57 +1395,54 @@ export async function abandonCraftingSession(playerId: string, sessionId: string
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function joinBattleLobby(playerId: string, betAmount: number = 20): Promise<any> {
-  const { data, error } = await supabase.rpc('join_battle_lobby', {
+  return rpcWithRetry('join_battle_lobby', {
     p_player_id: playerId,
     p_bet_amount: betAmount,
   });
-  if (error) throw error;
-  return data;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function leaveBattleLobby(playerId: string): Promise<any> {
-  const { data, error } = await supabase.rpc('leave_battle_lobby', {
+  return rpcWithRetry('leave_battle_lobby', {
     p_player_id: playerId,
   });
-  if (error) throw error;
-  return data;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function acceptBattleChallenge(playerId: string, opponentLobbyId: string): Promise<any> {
-  const { data, error } = await supabase.rpc('accept_battle_challenge', {
+  return rpcWithRetry('accept_battle_challenge', {
     p_player_id: playerId,
     p_opponent_lobby_id: opponentLobbyId,
   });
-  if (error) throw error;
-  return data;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function playBattleTurn(playerId: string, sessionId: string, cardsPlayed: string[]): Promise<any> {
-  const { data, error } = await supabase.rpc('play_battle_turn', {
+  return rpcWithRetry('play_battle_turn', {
     p_player_id: playerId,
     p_session_id: sessionId,
     p_cards_played: cardsPlayed,
-  });
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function forfeitBattle(playerId: string, sessionId: string): Promise<any> {
-  const { data, error } = await supabase.rpc('forfeit_battle', {
+  return rpcWithRetry('forfeit_battle', {
     p_player_id: playerId,
     p_session_id: sessionId,
-  });
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getBattleLobby(playerId: string): Promise<any> {
   return rpcWithRetry('get_battle_lobby', {
     p_player_id: playerId,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getBattleLeaderboard(limit = 10): Promise<any> {
+  return rpcWithRetry('get_battle_leaderboard', {
+    p_limit: limit,
   });
 }
