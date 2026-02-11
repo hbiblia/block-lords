@@ -4,6 +4,7 @@ import { supabase } from '@/utils/supabase';
 import { createPlayerProfile, getPlayerProfile, applyPassiveRegeneration, applyReferralCode, connectionState, pingApi } from '@/utils/api';
 import { useNotificationsStore } from './notifications';
 import { useInventoryStore } from './inventory';
+import { useCraftingStore } from './crafting';
 import type { User, Session } from '@supabase/supabase-js';
 
 // Timeout para inicialización (10 segundos)
@@ -352,6 +353,11 @@ export const useAuthStore = defineStore('auth', () => {
       // Clear inventory cache
       const inventoryStore = useInventoryStore();
       inventoryStore.clear();
+
+      // Clear crafting data
+      const craftingStore = useCraftingStore();
+      craftingStore.clear();
+
     }
   }
 

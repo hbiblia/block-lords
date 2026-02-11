@@ -15,7 +15,8 @@ export type SoundType =
   | 'block_mined'
   | 'mission_complete'
   | 'warning'
-  | 'notification';
+  | 'notification'
+  | 'collect';
 
 // Configuración de sonidos
 interface SoundConfig {
@@ -70,6 +71,11 @@ const SOUND_CONFIGS: Record<SoundType, SoundConfig[]> = {
   notification: [
     { frequency: 880, duration: 0.08, type: 'sine', volume: 0.15 },
     { frequency: 1100, duration: 0.12, type: 'sine', volume: 0.18 }
+  ],
+  collect: [
+    { frequency: 600, duration: 0.06, type: 'sine', volume: 0.18 },
+    { frequency: 800, duration: 0.08, type: 'sine', volume: 0.2 },
+    { frequency: 1000, duration: 0.1, type: 'sine', volume: 0.15, ramp: true }
   ]
 };
 

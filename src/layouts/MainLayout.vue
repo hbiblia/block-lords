@@ -17,6 +17,7 @@ const { t } = useI18n();
 const showMarket = ref(false);
 const showInventory = ref(false);
 const showExchange = ref(false);
+const showDefense = ref(false);
 
 function openMarket() {
   showMarket.value = true;
@@ -26,6 +27,9 @@ function openExchange() {
 }
 function openInventory() {
   showInventory.value = true;
+}
+function openDefense() {
+  showDefense.value = true;
 }
 
 import NavBar from '@/components/NavBar.vue';
@@ -40,6 +44,7 @@ import MarketModal from '@/components/MarketModal.vue';
 import InventoryModal from '@/components/InventoryModal.vue';
 import ExchangeModal from '@/components/ExchangeModal.vue';
 import GiftModal from '@/components/GiftModal.vue';
+import DefenseModal from '@/components/DefenseModal.vue';
 
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
@@ -265,6 +270,12 @@ async function handleConnectionClick() {
       @exchanged="authStore.fetchPlayer()"
     />
 
+    <!-- Defense Modal -->
+    <DefenseModal
+      :show="showDefense"
+      @close="showDefense = false"
+    />
+
     <!-- Main Content -->
     <main
       class="flex-1 container mx-auto px-4 py-6 pb-20 sm:pb-6 transition-[margin] duration-300"
@@ -362,6 +373,12 @@ async function handleConnectionClick() {
             <span class="text-xl">🎒</span>
             <span class="mobile-action-label">{{ t('mining.inventory', 'Inventory') }}</span>
           </button>
+
+          <!-- Defense -->
+          <button @click="openDefense" class="mobile-action-btn">
+            <span class="text-xl">&#9876;</span>
+            <span class="mobile-action-label">{{ t('defense.short', 'Defense') }}</span>
+          </button>
         </div>
       </div>
 
@@ -406,6 +423,20 @@ async function handleConnectionClick() {
           <div class="text-left">
             <div class="text-xs font-semibold text-slate-200">{{ t('nav.inventory') }}</div>
             <div class="text-[10px] text-slate-400">{{ t('inventory.manageItems') }}</div>
+          </div>
+        </button>
+
+        <!-- Defense Button -->
+        <button
+          @click="openDefense"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-red-600/50 hover:bg-slate-700 transition-all rounded-lg group"
+        >
+          <div class="w-8 h-8 rounded-md flex items-center justify-center">
+            <span class="text-lg">&#9876;</span>
+          </div>
+          <div class="text-left">
+            <div class="text-xs font-semibold text-slate-200">{{ t('defense.title', 'Block Defense') }}</div>
+            <div class="text-[10px] text-slate-400">{{ t('defense.subtitle', 'Tower Defense') }}</div>
           </div>
         </button>
 

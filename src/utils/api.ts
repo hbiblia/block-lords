@@ -1202,3 +1202,133 @@ export async function verifyRoninPayment(
   return data as VerifyRoninPaymentResult;
 }
 
+// === CRAFTING LORDS ===
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function startCraftingSession(playerId: string): Promise<any> {
+  const { data, error } = await supabase.rpc('start_crafting_session', {
+    p_player_id: playerId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function tapCraftingElement(playerId: string, sessionId: string, cellIndex: number): Promise<any> {
+  const { data, error } = await supabase.rpc('tap_crafting_element', {
+    p_player_id: playerId,
+    p_session_id: sessionId,
+    p_cell_index: cellIndex,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getCraftingSession(playerId: string): Promise<any> {
+  return rpcWithRetry('get_crafting_session', {
+    p_player_id: playerId,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getCraftingInventory(playerId: string): Promise<any> {
+  return rpcWithRetry('get_crafting_inventory', {
+    p_player_id: playerId,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getCraftingRecipes(): Promise<any> {
+  return rpcWithRetry('get_crafting_recipes', {});
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function craftRecipe(playerId: string, recipeId: string): Promise<any> {
+  const { data, error } = await supabase.rpc('craft_recipe', {
+    p_player_id: playerId,
+    p_recipe_id: recipeId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function deleteCraftingElement(playerId: string, elementId: string, quantity: number): Promise<any> {
+  const { data, error } = await supabase.rpc('delete_crafting_element', {
+    p_player_id: playerId,
+    p_element_id: elementId,
+    p_quantity: quantity,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function abandonCraftingSession(playerId: string, sessionId: string): Promise<any> {
+  const { data, error } = await supabase.rpc('abandon_crafting_session', {
+    p_player_id: playerId,
+    p_session_id: sessionId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// === CARD BATTLE PVP ===
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function joinBattleLobby(playerId: string, betAmount: number = 20): Promise<any> {
+  const { data, error } = await supabase.rpc('join_battle_lobby', {
+    p_player_id: playerId,
+    p_bet_amount: betAmount,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function leaveBattleLobby(playerId: string): Promise<any> {
+  const { data, error } = await supabase.rpc('leave_battle_lobby', {
+    p_player_id: playerId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function acceptBattleChallenge(playerId: string, opponentLobbyId: string): Promise<any> {
+  const { data, error } = await supabase.rpc('accept_battle_challenge', {
+    p_player_id: playerId,
+    p_opponent_lobby_id: opponentLobbyId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function playBattleTurn(playerId: string, sessionId: string, cardsPlayed: string[]): Promise<any> {
+  const { data, error } = await supabase.rpc('play_battle_turn', {
+    p_player_id: playerId,
+    p_session_id: sessionId,
+    p_cards_played: cardsPlayed,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function forfeitBattle(playerId: string, sessionId: string): Promise<any> {
+  const { data, error } = await supabase.rpc('forfeit_battle', {
+    p_player_id: playerId,
+    p_session_id: sessionId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getBattleLobby(playerId: string): Promise<any> {
+  return rpcWithRetry('get_battle_lobby', {
+    p_player_id: playerId,
+  });
+}

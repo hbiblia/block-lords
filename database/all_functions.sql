@@ -5959,6 +5959,8 @@ BEGIN
   -- Tiempo esperado (en minutos, ya que cada tick es 1 minuto)
   -- E[X] para distribución geométrica = 1/p
   IF v_player_probability > 0 THEN
+    -- Clamp probability to < 1 for LN calculations (avoid log of zero/negative)
+    v_player_probability := LEAST(v_player_probability, 0.999);
     v_estimated_minutes := 1 / v_player_probability;
 
     -- Rango de confianza usando percentiles de distribución geométrica
@@ -7926,46 +7928,13 @@ BEGIN
 END;
 $$;
 
--- Admin: Enviar regalo a un jugador específico
+-- Admin: Enviar regalo - usa @everyone para todos o un UUID para un jugador específico
+DROP FUNCTION IF EXISTS send_gift(TEXT, TEXT, TEXT, TEXT, DECIMAL, DECIMAL, DECIMAL, DECIMAL, TEXT, TEXT, INTEGER, TIMESTAMPTZ) CASCADE;
 DROP FUNCTION IF EXISTS send_gift_to_player(UUID, TEXT, TEXT, TEXT, DECIMAL, DECIMAL, DECIMAL, DECIMAL, TEXT, TEXT, INTEGER, TIMESTAMPTZ) CASCADE;
-CREATE OR REPLACE FUNCTION send_gift_to_player(
-  p_player_id UUID,
-  p_title TEXT DEFAULT 'Gift',
-  p_description TEXT DEFAULT NULL,
-  p_icon TEXT DEFAULT '🎁',
-  p_gamecoin DECIMAL DEFAULT 0,
-  p_crypto DECIMAL DEFAULT 0,
-  p_energy DECIMAL DEFAULT 0,
-  p_internet DECIMAL DEFAULT 0,
-  p_item_type TEXT DEFAULT NULL,
-  p_item_id TEXT DEFAULT NULL,
-  p_item_quantity INTEGER DEFAULT 1,
-  p_expires_at TIMESTAMPTZ DEFAULT NULL
-)
-RETURNS UUID
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_gift_id UUID;
-BEGIN
-  INSERT INTO player_gifts (
-    player_id, title, description, icon,
-    reward_gamecoin, reward_crypto, reward_energy, reward_internet,
-    reward_item_type, reward_item_id, reward_item_quantity, expires_at
-  ) VALUES (
-    p_player_id, p_title, p_description, p_icon,
-    p_gamecoin, p_crypto, p_energy, p_internet,
-    p_item_type, p_item_id, p_item_quantity, p_expires_at
-  ) RETURNING id INTO v_gift_id;
-
-  RETURN v_gift_id;
-END;
-$$;
-
--- Admin: Enviar regalo a todos los jugadores
+DROP FUNCTION IF EXISTS send_gift_to_player(TEXT, TEXT, TEXT, TEXT, DECIMAL, DECIMAL, DECIMAL, DECIMAL, TEXT, TEXT, INTEGER, TIMESTAMPTZ) CASCADE;
 DROP FUNCTION IF EXISTS send_gift_to_all(TEXT, TEXT, TEXT, DECIMAL, DECIMAL, DECIMAL, DECIMAL, TEXT, TEXT, INTEGER, TIMESTAMPTZ) CASCADE;
-CREATE OR REPLACE FUNCTION send_gift_to_all(
+CREATE OR REPLACE FUNCTION send_gift(
+  p_target TEXT,              -- '@everyone' para todos o UUID del jugador
   p_title TEXT DEFAULT 'Gift',
   p_description TEXT DEFAULT NULL,
   p_icon TEXT DEFAULT '🎁',
@@ -7978,28 +7947,1893 @@ CREATE OR REPLACE FUNCTION send_gift_to_all(
   p_item_quantity INTEGER DEFAULT 1,
   p_expires_at TIMESTAMPTZ DEFAULT NULL
 )
-RETURNS INTEGER
+RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
   v_count INTEGER;
+  v_gift_id UUID;
+  v_player_id UUID;
 BEGIN
-  INSERT INTO player_gifts (
-    player_id, title, description, icon,
-    reward_gamecoin, reward_crypto, reward_energy, reward_internet,
-    reward_item_type, reward_item_id, reward_item_quantity, expires_at
-  )
-  SELECT
-    p.id, p_title, p_description, p_icon,
-    p_gamecoin, p_crypto, p_energy, p_internet,
-    p_item_type, p_item_id, p_item_quantity, p_expires_at
-  FROM players p;
+  IF LOWER(TRIM(p_target)) = '@everyone' THEN
+    -- Enviar a todos los jugadores
+    INSERT INTO player_gifts (
+      player_id, title, description, icon,
+      reward_gamecoin, reward_crypto, reward_energy, reward_internet,
+      reward_item_type, reward_item_id, reward_item_quantity, expires_at
+    )
+    SELECT
+      p.id, p_title, p_description, p_icon,
+      p_gamecoin, p_crypto, p_energy, p_internet,
+      p_item_type, p_item_id, p_item_quantity, p_expires_at
+    FROM players p;
 
-  GET DIAGNOSTICS v_count = ROW_COUNT;
-  RETURN v_count;
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    RETURN json_build_object('success', true, 'target', '@everyone', 'count', v_count);
+  ELSE
+    -- Enviar a un jugador específico
+    BEGIN
+      v_player_id := p_target::UUID;
+    EXCEPTION WHEN OTHERS THEN
+      RETURN json_build_object('success', false, 'error', 'Invalid target. Use @everyone or a valid UUID.');
+    END;
+
+    IF NOT EXISTS (SELECT 1 FROM players WHERE id = v_player_id) THEN
+      RETURN json_build_object('success', false, 'error', 'Player not found');
+    END IF;
+
+    INSERT INTO player_gifts (
+      player_id, title, description, icon,
+      reward_gamecoin, reward_crypto, reward_energy, reward_internet,
+      reward_item_type, reward_item_id, reward_item_quantity, expires_at
+    ) VALUES (
+      v_player_id, p_title, p_description, p_icon,
+      p_gamecoin, p_crypto, p_energy, p_internet,
+      p_item_type, p_item_id, p_item_quantity, p_expires_at
+    ) RETURNING id INTO v_gift_id;
+
+    RETURN json_build_object('success', true, 'target', v_player_id, 'gift_id', v_gift_id);
+  END IF;
 END;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_pending_gifts TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_gift TO authenticated;
+
+-- =====================================================
+-- CRAFTING LORDS - MINI-JUEGO DE RECOLECCIÓN Y CRAFTEO
+-- =====================================================
+
+-- Catálogo de elementos recolectables
+CREATE TABLE IF NOT EXISTS crafting_elements (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  icon TEXT NOT NULL DEFAULT '',
+  zone_type TEXT NOT NULL CHECK (zone_type IN ('forest', 'mine', 'meadow', 'swamp')),
+  rarity TEXT NOT NULL DEFAULT 'common' CHECK (rarity IN ('common', 'uncommon', 'rare', 'epic')),
+  taps_required INTEGER NOT NULL DEFAULT 1,
+  base_gamecoin_value INTEGER DEFAULT 0,
+  requires_element TEXT DEFAULT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE crafting_elements ADD COLUMN IF NOT EXISTS requires_element TEXT DEFAULT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_crafting_elements_zone ON crafting_elements(zone_type);
+
+-- Recetas de crafteo
+CREATE TABLE IF NOT EXISTS crafting_recipes (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  category TEXT NOT NULL CHECK (category IN ('cooling', 'boost', 'card', 'sellable')),
+  output_item_type TEXT NOT NULL,
+  output_item_id TEXT DEFAULT NULL,
+  output_quantity INTEGER DEFAULT 1,
+  gamecoin_reward INTEGER DEFAULT 0,
+  rarity TEXT DEFAULT 'common',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ingredientes de recetas
+CREATE TABLE IF NOT EXISTS crafting_recipe_ingredients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipe_id TEXT NOT NULL REFERENCES crafting_recipes(id) ON DELETE CASCADE,
+  element_id TEXT NOT NULL REFERENCES crafting_elements(id),
+  quantity INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON crafting_recipe_ingredients(recipe_id);
+
+-- Sesiones de crafting del jugador
+CREATE TABLE IF NOT EXISTS player_crafting_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  zone_type TEXT NOT NULL,
+  grid_config JSONB NOT NULL,
+  elements_collected INTEGER DEFAULT 0,
+  total_elements INTEGER DEFAULT 16,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'abandoned')),
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ DEFAULT NULL,
+  rewards_claimed BOOLEAN DEFAULT false,
+  gamecoin_reward INTEGER DEFAULT 0,
+  items_rewarded JSONB DEFAULT '[]'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_crafting_sessions_player ON player_crafting_sessions(player_id);
+CREATE INDEX IF NOT EXISTS idx_crafting_sessions_status ON player_crafting_sessions(player_id, status);
+
+-- Inventario de materiales de crafting
+CREATE TABLE IF NOT EXISTS player_crafting_inventory (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  element_id TEXT NOT NULL REFERENCES crafting_elements(id),
+  quantity INTEGER DEFAULT 1,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(player_id, element_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_crafting_inventory_player ON player_crafting_inventory(player_id);
+
+-- Cooldown entre sesiones
+CREATE TABLE IF NOT EXISTS player_crafting_cooldown (
+  player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+  last_session_completed TIMESTAMPTZ DEFAULT NULL,
+  cooldown_hours INTEGER DEFAULT 4,
+  sessions_completed INTEGER DEFAULT 0
+);
+
+-- =====================================================
+-- CRAFTING LORDS - SEED DATA
+-- =====================================================
+
+-- Elementos del Bosque
+INSERT INTO crafting_elements (id, name, icon, zone_type, rarity, taps_required, base_gamecoin_value, requires_element) VALUES
+('leaves', 'Leaves', '🍃', 'forest', 'common', 1, 2, NULL),
+('fruits', 'Fruits', '🍎', 'forest', 'common', 1, 3, NULL),
+('wood', 'Wood', '🪵', 'forest', 'common', 2, 5, 'leaves'),
+('mushrooms', 'Mushrooms', '🍄', 'forest', 'uncommon', 1, 8, 'leaves'),
+('vines', 'Vines', '🌿', 'forest', 'uncommon', 2, 7, 'wood'),
+('bark', 'Bark', '🪵', 'forest', 'common', 3, 10, 'wood')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name, icon = EXCLUDED.icon, zone_type = EXCLUDED.zone_type,
+  rarity = EXCLUDED.rarity, taps_required = EXCLUDED.taps_required, base_gamecoin_value = EXCLUDED.base_gamecoin_value,
+  requires_element = EXCLUDED.requires_element;
+
+-- Elementos de la Mina
+INSERT INTO crafting_elements (id, name, icon, zone_type, rarity, taps_required, base_gamecoin_value, requires_element) VALUES
+('coal', 'Coal', '⬛', 'mine', 'common', 2, 4, NULL),
+('ore', 'Ore', '⛏️', 'mine', 'common', 3, 8, NULL),
+('rocks', 'Rocks', '🪨', 'mine', 'common', 3, 5, 'ore'),
+('minerals', 'Minerals', '💎', 'mine', 'uncommon', 2, 10, 'rocks'),
+('gems', 'Gems', '🔮', 'mine', 'rare', 4, 25, 'minerals'),
+('crystite', 'Crystite', '✨', 'mine', 'epic', 5, 50, 'gems')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name, icon = EXCLUDED.icon, zone_type = EXCLUDED.zone_type,
+  rarity = EXCLUDED.rarity, taps_required = EXCLUDED.taps_required, base_gamecoin_value = EXCLUDED.base_gamecoin_value,
+  requires_element = EXCLUDED.requires_element;
+
+-- Elementos de la Pradera
+INSERT INTO crafting_elements (id, name, icon, zone_type, rarity, taps_required, base_gamecoin_value, requires_element) VALUES
+('seeds', 'Seeds', '🌱', 'meadow', 'common', 1, 2, NULL),
+('flowers', 'Flowers', '🌸', 'meadow', 'common', 1, 3, NULL),
+('berries', 'Berries', '🫐', 'meadow', 'common', 1, 4, 'seeds'),
+('herbs', 'Herbs', '🌿', 'meadow', 'uncommon', 1, 8, 'flowers'),
+('feathers', 'Feathers', '🪶', 'meadow', 'uncommon', 2, 12, 'herbs'),
+('honey', 'Honey', '🍯', 'meadow', 'rare', 3, 20, 'flowers')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name, icon = EXCLUDED.icon, zone_type = EXCLUDED.zone_type,
+  rarity = EXCLUDED.rarity, taps_required = EXCLUDED.taps_required, base_gamecoin_value = EXCLUDED.base_gamecoin_value,
+  requires_element = EXCLUDED.requires_element;
+
+-- Elementos del Pantano
+INSERT INTO crafting_elements (id, name, icon, zone_type, rarity, taps_required, base_gamecoin_value, requires_element) VALUES
+('moss', 'Moss', '🧩', 'swamp', 'common', 1, 3, NULL),
+('roots', 'Roots', '🌳', 'swamp', 'common', 2, 6, NULL),
+('mud_clay', 'Mud Clay', '🟤', 'swamp', 'common', 2, 5, 'roots'),
+('slime', 'Slime', '🟢', 'swamp', 'uncommon', 2, 10, 'moss'),
+('crystals', 'Crystals', '💠', 'swamp', 'rare', 4, 30, 'mud_clay'),
+('ancient_wood', 'Ancient Wood', '🪵', 'swamp', 'epic', 5, 45, 'crystals')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name, icon = EXCLUDED.icon, zone_type = EXCLUDED.zone_type,
+  rarity = EXCLUDED.rarity, taps_required = EXCLUDED.taps_required, base_gamecoin_value = EXCLUDED.base_gamecoin_value,
+  requires_element = EXCLUDED.requires_element;
+
+-- Recetas de Cooling
+INSERT INTO crafting_recipes (id, name, description, category, output_item_type, output_item_id, output_quantity, gamecoin_reward, rarity) VALUES
+('craft_fan_basic', 'Craft Basic Fan', 'A simple fan from forest materials', 'cooling', 'cooling_item', 'fan_basic', 1, 0, 'common'),
+('craft_heatsink', 'Craft Heatsink', 'A heatsink from mined minerals', 'cooling', 'cooling_item', 'heatsink', 1, 0, 'uncommon')
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, category = EXCLUDED.category,
+  output_item_type = EXCLUDED.output_item_type, output_item_id = EXCLUDED.output_item_id;
+
+-- Recetas de Boost
+INSERT INTO crafting_recipes (id, name, description, category, output_item_type, output_item_id, output_quantity, gamecoin_reward, rarity) VALUES
+('craft_hashrate_small', 'Brew Hash Potion', 'Temporary hashrate boost', 'boost', 'boost_item', 'hashrate_small', 1, 0, 'uncommon'),
+('craft_energy_saver', 'Energy Elixir', 'Reduces energy consumption', 'boost', 'boost_item', 'energy_saver_small', 1, 0, 'uncommon')
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, category = EXCLUDED.category,
+  output_item_type = EXCLUDED.output_item_type, output_item_id = EXCLUDED.output_item_id;
+
+-- Recetas de Tarjetas
+INSERT INTO crafting_recipes (id, name, description, category, output_item_type, output_item_id, output_quantity, gamecoin_reward, rarity) VALUES
+('craft_energy_card', 'Forge Energy Card', 'A basic energy recharge', 'card', 'prepaid_card', 'energy_small', 1, 0, 'rare'),
+('craft_internet_card', 'Forge Internet Card', 'A basic internet recharge', 'card', 'prepaid_card', 'internet_small', 1, 0, 'rare')
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, category = EXCLUDED.category,
+  output_item_type = EXCLUDED.output_item_type, output_item_id = EXCLUDED.output_item_id;
+
+-- Recetas vendibles (GameCoin)
+INSERT INTO crafting_recipes (id, name, description, category, output_item_type, output_item_id, output_quantity, gamecoin_reward, rarity) VALUES
+('sell_forest_bundle', 'Forest Bundle', 'Sell a bundle of forest goods', 'sellable', 'gamecoin', NULL, 0, 100, 'common'),
+('sell_mineral_pack', 'Mineral Pack', 'Sell a pack of minerals', 'sellable', 'gamecoin', NULL, 0, 150, 'uncommon'),
+('sell_swamp_treasure', 'Swamp Treasure', 'Rare swamp materials', 'sellable', 'gamecoin', NULL, 0, 250, 'rare')
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, gamecoin_reward = EXCLUDED.gamecoin_reward;
+
+-- Ingredientes de recetas (limpiar y reinsertar)
+DELETE FROM crafting_recipe_ingredients;
+
+INSERT INTO crafting_recipe_ingredients (recipe_id, element_id, quantity) VALUES
+-- Cooling
+('craft_fan_basic', 'wood', 3), ('craft_fan_basic', 'leaves', 2), ('craft_fan_basic', 'vines', 1),
+('craft_heatsink', 'ore', 4), ('craft_heatsink', 'minerals', 2), ('craft_heatsink', 'coal', 2),
+-- Boost
+('craft_hashrate_small', 'crystite', 1), ('craft_hashrate_small', 'herbs', 3), ('craft_hashrate_small', 'honey', 1),
+('craft_energy_saver', 'flowers', 4), ('craft_energy_saver', 'berries', 2), ('craft_energy_saver', 'moss', 2),
+-- Cards
+('craft_energy_card', 'crystals', 1), ('craft_energy_card', 'ancient_wood', 1), ('craft_energy_card', 'slime', 2),
+('craft_internet_card', 'gems', 1), ('craft_internet_card', 'feathers', 3), ('craft_internet_card', 'seeds', 2),
+-- Sellable
+('sell_forest_bundle', 'wood', 2), ('sell_forest_bundle', 'fruits', 2), ('sell_forest_bundle', 'bark', 1),
+('sell_mineral_pack', 'rocks', 2), ('sell_mineral_pack', 'ore', 2), ('sell_mineral_pack', 'minerals', 1),
+('sell_swamp_treasure', 'roots', 2), ('sell_swamp_treasure', 'crystals', 1), ('sell_swamp_treasure', 'ancient_wood', 1);
+
+-- =====================================================
+-- CRAFTING LORDS - FUNCIONES RPC
+-- =====================================================
+
+-- Drop funciones existentes
+DROP FUNCTION IF EXISTS start_crafting_session(UUID) CASCADE;
+DROP FUNCTION IF EXISTS tap_crafting_element(UUID, UUID, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS get_crafting_session(UUID) CASCADE;
+DROP FUNCTION IF EXISTS get_crafting_inventory(UUID) CASCADE;
+DROP FUNCTION IF EXISTS get_crafting_recipes() CASCADE;
+DROP FUNCTION IF EXISTS craft_recipe(UUID, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS delete_crafting_element(UUID, TEXT, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS abandon_crafting_session(UUID, UUID) CASCADE;
+
+-- Iniciar sesión de crafting
+CREATE OR REPLACE FUNCTION start_crafting_session(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_cooldown player_crafting_cooldown%ROWTYPE;
+  v_cooldown_remaining NUMERIC;
+  v_zone_type TEXT;
+  v_zone_types TEXT[] := ARRAY['forest', 'mine', 'meadow', 'swamp'];
+  v_elements RECORD;
+  v_grid JSONB := '[]'::JSONB;
+  v_element_pool TEXT[];
+  v_element_record RECORD;
+  v_picked_id TEXT;
+  v_session_id UUID;
+  v_existing_session UUID;
+  v_rarity_weights JSONB;
+  v_element_ids TEXT[];
+  v_element_icons TEXT[];
+  v_element_names TEXT[];
+  v_element_taps INTEGER[];
+  v_element_rarities TEXT[];
+  v_element_requires TEXT[];
+  v_pool_size INTEGER;
+  v_rand_idx INTEGER;
+  v_has_free BOOLEAN;
+  v_free_indices INTEGER[];
+  i INTEGER;
+BEGIN
+  -- Verificar si tiene sesión activa (lock para evitar race conditions)
+  DECLARE
+    v_existing_full player_crafting_sessions%ROWTYPE;
+  BEGIN
+    SELECT * INTO v_existing_full
+    FROM player_crafting_sessions
+    WHERE player_id = p_player_id AND status = 'active'
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1;
+
+    IF v_existing_full IS NOT NULL THEN
+      RETURN json_build_object(
+        'success', false,
+        'error', 'Ya tienes una sesión activa',
+        'session_id', v_existing_full.id,
+        'session', json_build_object(
+          'id', v_existing_full.id,
+          'zone_type', v_existing_full.zone_type,
+          'grid', v_existing_full.grid_config,
+          'elements_collected', v_existing_full.elements_collected,
+          'total_elements', v_existing_full.total_elements,
+          'status', v_existing_full.status,
+          'started_at', v_existing_full.started_at
+        )
+      );
+    END IF;
+  END;
+
+  -- Verificar cooldown
+  SELECT * INTO v_cooldown FROM player_crafting_cooldown WHERE player_id = p_player_id;
+
+  IF v_cooldown IS NOT NULL AND v_cooldown.last_session_completed IS NOT NULL THEN
+    v_cooldown_remaining := EXTRACT(EPOCH FROM (
+      v_cooldown.last_session_completed + (COALESCE(v_cooldown.cooldown_hours, 4) || ' hours')::INTERVAL - NOW()
+    ));
+
+    IF v_cooldown_remaining > 0 THEN
+      RETURN json_build_object(
+        'success', false,
+        'error', 'cooldown_active',
+        'cooldown_remaining_seconds', CEIL(v_cooldown_remaining),
+        'next_available_at', v_cooldown.last_session_completed + (COALESCE(v_cooldown.cooldown_hours, 4) || ' hours')::INTERVAL
+      );
+    END IF;
+  END IF;
+
+  -- Seleccionar zona aleatoria
+  v_zone_type := v_zone_types[1 + FLOOR(RANDOM() * 4)];
+
+  -- Obtener pool de elementos de esta zona
+  SELECT
+    array_agg(id ORDER BY rarity, id),
+    array_agg(icon ORDER BY rarity, id),
+    array_agg(name ORDER BY rarity, id),
+    array_agg(taps_required ORDER BY rarity, id),
+    array_agg(rarity ORDER BY rarity, id),
+    array_agg(COALESCE(requires_element, '') ORDER BY rarity, id)
+  INTO v_element_ids, v_element_icons, v_element_names, v_element_taps, v_element_rarities, v_element_requires
+  FROM crafting_elements
+  WHERE zone_type = v_zone_type;
+
+  v_pool_size := array_length(v_element_ids, 1);
+
+  IF v_pool_size IS NULL OR v_pool_size = 0 THEN
+    RETURN json_build_object('success', false, 'error', 'No hay elementos para esta zona');
+  END IF;
+
+  -- Obtener indices de elementos libres (sin requisito)
+  v_free_indices := ARRAY[]::INTEGER[];
+  FOR i IN 1..v_pool_size LOOP
+    IF v_element_requires[i] = '' THEN
+      v_free_indices := v_free_indices || i;
+    END IF;
+  END LOOP;
+
+  -- Generar grid de 16 celdas con elementos aleatorios del pool
+  v_has_free := false;
+  FOR i IN 0..15 LOOP
+    v_rand_idx := 1 + FLOOR(RANDOM() * v_pool_size);
+    IF v_element_requires[v_rand_idx] = '' THEN
+      v_has_free := true;
+    END IF;
+    v_grid := v_grid || jsonb_build_object(
+      'index', i,
+      'element_id', v_element_ids[v_rand_idx],
+      'icon', v_element_icons[v_rand_idx],
+      'name', v_element_names[v_rand_idx],
+      'taps_required', v_element_taps[v_rand_idx],
+      'taps_done', 0,
+      'collected', false,
+      'rarity', v_element_rarities[v_rand_idx],
+      'requires_element', CASE WHEN v_element_requires[v_rand_idx] = '' THEN NULL ELSE v_element_requires[v_rand_idx] END
+    );
+  END LOOP;
+
+  -- Garantizar al menos un elemento libre en el grid
+  IF NOT v_has_free AND array_length(v_free_indices, 1) > 0 THEN
+    v_rand_idx := v_free_indices[1 + FLOOR(RANDOM() * array_length(v_free_indices, 1))];
+    v_grid := jsonb_set(v_grid, ARRAY['0'], jsonb_build_object(
+      'index', 0,
+      'element_id', v_element_ids[v_rand_idx],
+      'icon', v_element_icons[v_rand_idx],
+      'name', v_element_names[v_rand_idx],
+      'taps_required', v_element_taps[v_rand_idx],
+      'taps_done', 0,
+      'collected', false,
+      'rarity', v_element_rarities[v_rand_idx],
+      'requires_element', NULL
+    ));
+  END IF;
+
+  -- Crear sesión
+  INSERT INTO player_crafting_sessions (player_id, zone_type, grid_config, elements_collected, total_elements, status)
+  VALUES (p_player_id, v_zone_type, v_grid, 0, 16, 'active')
+  RETURNING id INTO v_session_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'session_id', v_session_id,
+    'zone_type', v_zone_type,
+    'grid', v_grid
+  );
+END;
+$$;
+
+-- Tap en un elemento del grid
+CREATE OR REPLACE FUNCTION tap_crafting_element(p_player_id UUID, p_session_id UUID, p_cell_index INTEGER)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_session player_crafting_sessions%ROWTYPE;
+  v_cell JSONB;
+  v_taps_done INTEGER;
+  v_taps_required INTEGER;
+  v_element_id TEXT;
+  v_collected BOOLEAN;
+  v_new_grid JSONB;
+  v_total_collected INTEGER;
+  v_gamecoin_reward INTEGER := 0;
+  v_bonus_items JSONB := '[]'::JSONB;
+  v_element_value INTEGER;
+  v_requires TEXT;
+  v_dependency_met BOOLEAN;
+BEGIN
+  -- Validar índice
+  IF p_cell_index < 0 OR p_cell_index > 15 THEN
+    RETURN json_build_object('success', false, 'error', 'Índice de celda inválido');
+  END IF;
+
+  -- Obtener sesión
+  SELECT * INTO v_session
+  FROM player_crafting_sessions
+  WHERE id = p_session_id AND player_id = p_player_id AND status = 'active';
+
+  IF v_session IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Sesión no encontrada o no activa');
+  END IF;
+
+  -- Obtener celda
+  v_cell := v_session.grid_config->p_cell_index;
+
+  IF v_cell IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Celda no encontrada');
+  END IF;
+
+  -- Verificar si ya fue recolectada
+  IF (v_cell->>'collected')::BOOLEAN THEN
+    RETURN json_build_object('success', false, 'error', 'already_collected');
+  END IF;
+
+  -- Verificar dependencia de elemento
+  v_requires := v_cell->>'requires_element';
+  IF v_requires IS NOT NULL AND v_requires != '' THEN
+    SELECT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(v_session.grid_config) AS c
+      WHERE c->>'element_id' = v_requires AND (c->>'collected')::BOOLEAN = true
+    ) INTO v_dependency_met;
+
+    IF NOT v_dependency_met THEN
+      RETURN json_build_object('success', false, 'error', 'element_locked', 'requires_element', v_requires);
+    END IF;
+  END IF;
+
+  v_taps_done := (v_cell->>'taps_done')::INTEGER + 1;
+  v_taps_required := (v_cell->>'taps_required')::INTEGER;
+  v_element_id := v_cell->>'element_id';
+  v_collected := v_taps_done >= v_taps_required;
+
+  -- Actualizar celda en grid_config
+  v_new_grid := jsonb_set(
+    v_session.grid_config,
+    ARRAY[p_cell_index::TEXT],
+    jsonb_set(
+      jsonb_set(v_cell, '{taps_done}', to_jsonb(v_taps_done)),
+      '{collected}', to_jsonb(v_collected)
+    )
+  );
+
+  -- Si se recolectó el elemento
+  IF v_collected THEN
+    -- Agregar al inventario de crafting
+    INSERT INTO player_crafting_inventory (player_id, element_id, quantity)
+    VALUES (p_player_id, v_element_id, 1)
+    ON CONFLICT (player_id, element_id)
+    DO UPDATE SET quantity = player_crafting_inventory.quantity + 1, updated_at = NOW();
+
+    v_total_collected := v_session.elements_collected + 1;
+
+    -- Verificar si completó la zona
+    IF v_total_collected >= v_session.total_elements THEN
+      -- Calcular recompensa base: suma de valores de todos los elementos recolectados
+      SELECT COALESCE(SUM(ce.base_gamecoin_value), 50)
+      INTO v_gamecoin_reward
+      FROM jsonb_array_elements(v_new_grid) AS cell
+      JOIN crafting_elements ce ON ce.id = cell->>'element_id';
+
+      -- Bonus por zona completada
+      v_gamecoin_reward := v_gamecoin_reward + 50;
+
+      -- Marcar sesión como completada
+      UPDATE player_crafting_sessions
+      SET grid_config = v_new_grid,
+          elements_collected = v_total_collected,
+          status = 'completed',
+          completed_at = NOW(),
+          gamecoin_reward = v_gamecoin_reward
+      WHERE id = p_session_id;
+
+      -- Dar recompensa de GameCoin
+      UPDATE players
+      SET gamecoin_balance = gamecoin_balance + v_gamecoin_reward
+      WHERE id = p_player_id;
+
+      -- Registrar transacción
+      INSERT INTO transactions (player_id, type, amount, currency, description)
+      VALUES (p_player_id, 'crafting_reward', v_gamecoin_reward, 'gamecoin',
+              'Zona completada: ' || v_session.zone_type);
+
+      -- Actualizar cooldown
+      INSERT INTO player_crafting_cooldown (player_id, last_session_completed, sessions_completed)
+      VALUES (p_player_id, NOW(), 1)
+      ON CONFLICT (player_id)
+      DO UPDATE SET last_session_completed = NOW(),
+                    sessions_completed = player_crafting_cooldown.sessions_completed + 1;
+
+      -- Actualizar misiones
+      PERFORM update_mission_progress(p_player_id, 'crafting_session', 1);
+
+      RETURN json_build_object(
+        'success', true,
+        'cell_state', json_build_object('taps_done', v_taps_done, 'collected', true),
+        'element_collected', true,
+        'element_id', v_element_id,
+        'session_completed', true,
+        'rewards', json_build_object(
+          'gamecoin', v_gamecoin_reward,
+          'bonus_items', v_bonus_items
+        )
+      );
+    ELSE
+      -- Solo actualizar grid y contador
+      UPDATE player_crafting_sessions
+      SET grid_config = v_new_grid,
+          elements_collected = v_total_collected
+      WHERE id = p_session_id;
+
+      RETURN json_build_object(
+        'success', true,
+        'cell_state', json_build_object('taps_done', v_taps_done, 'collected', true),
+        'element_collected', true,
+        'element_id', v_element_id,
+        'session_completed', false
+      );
+    END IF;
+  ELSE
+    -- Solo tap, no recolectado aún
+    UPDATE player_crafting_sessions
+    SET grid_config = v_new_grid
+    WHERE id = p_session_id;
+
+    RETURN json_build_object(
+      'success', true,
+      'cell_state', json_build_object('taps_done', v_taps_done, 'collected', false),
+      'element_collected', false,
+      'session_completed', false
+    );
+  END IF;
+END;
+$$;
+
+-- Obtener sesión activa o estado de cooldown
+CREATE OR REPLACE FUNCTION get_crafting_session(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_session player_crafting_sessions%ROWTYPE;
+  v_cooldown player_crafting_cooldown%ROWTYPE;
+  v_cooldown_remaining NUMERIC := 0;
+  v_can_start BOOLEAN := true;
+BEGIN
+  -- Buscar sesión activa (query simple sin ORDER BY para máxima compatibilidad)
+  SELECT * INTO v_session
+  FROM player_crafting_sessions
+  WHERE player_id = p_player_id AND status = 'active'
+  LIMIT 1;
+
+  -- Verificar cooldown
+  SELECT * INTO v_cooldown FROM player_crafting_cooldown WHERE player_id = p_player_id;
+
+  IF v_cooldown IS NOT NULL AND v_cooldown.last_session_completed IS NOT NULL THEN
+    v_cooldown_remaining := EXTRACT(EPOCH FROM (
+      v_cooldown.last_session_completed + (COALESCE(v_cooldown.cooldown_hours, 4) || ' hours')::INTERVAL - NOW()
+    ));
+
+    IF v_cooldown_remaining > 0 THEN
+      v_can_start := false;
+    ELSE
+      v_cooldown_remaining := 0;
+    END IF;
+  END IF;
+
+  IF v_session IS NOT NULL THEN
+    RETURN json_build_object(
+      'success', true,
+      'has_session', true,
+      'session', json_build_object(
+        'id', v_session.id,
+        'zone_type', v_session.zone_type,
+        'grid', v_session.grid_config,
+        'elements_collected', v_session.elements_collected,
+        'total_elements', v_session.total_elements,
+        'status', v_session.status,
+        'started_at', v_session.started_at
+      ),
+      'cooldown_remaining_seconds', 0,
+      'can_start', false,
+      'sessions_completed', COALESCE(v_cooldown.sessions_completed, 0)
+    );
+  ELSE
+    RETURN json_build_object(
+      'success', true,
+      'has_session', false,
+      'session', NULL,
+      'cooldown_remaining_seconds', GREATEST(0, CEIL(v_cooldown_remaining)),
+      'can_start', v_can_start,
+      'sessions_completed', COALESCE(v_cooldown.sessions_completed, 0)
+    );
+  END IF;
+END;
+$$;
+
+-- Obtener inventario de crafting
+CREATE OR REPLACE FUNCTION get_crafting_inventory(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN json_build_object(
+    'success', true,
+    'items', (
+      SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.zone_type, t.rarity, t.name), '[]'::JSON)
+      FROM (
+        SELECT pci.element_id, ce.name, ce.icon, ce.zone_type, ce.rarity,
+               pci.quantity, ce.base_gamecoin_value, ce.taps_required
+        FROM player_crafting_inventory pci
+        JOIN crafting_elements ce ON ce.id = pci.element_id
+        WHERE pci.player_id = p_player_id AND pci.quantity > 0
+      ) t
+    )
+  );
+END;
+$$;
+
+-- Obtener todas las recetas con ingredientes
+CREATE OR REPLACE FUNCTION get_crafting_recipes()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN json_build_object(
+    'success', true,
+    'recipes', (
+      SELECT COALESCE(json_agg(row_to_json(r) ORDER BY r.category, r.rarity, r.name), '[]'::JSON)
+      FROM (
+        SELECT cr.id, cr.name, cr.description, cr.category, cr.output_item_type,
+               cr.output_item_id, cr.output_quantity, cr.gamecoin_reward, cr.rarity,
+               (
+                 SELECT json_agg(json_build_object(
+                   'element_id', cri.element_id,
+                   'name', ce.name,
+                   'icon', ce.icon,
+                   'quantity', cri.quantity
+                 ))
+                 FROM crafting_recipe_ingredients cri
+                 JOIN crafting_elements ce ON ce.id = cri.element_id
+                 WHERE cri.recipe_id = cr.id
+               ) as ingredients
+        FROM crafting_recipes cr
+      ) r
+    )
+  );
+END;
+$$;
+
+-- Craftear una receta
+CREATE OR REPLACE FUNCTION craft_recipe(p_player_id UUID, p_recipe_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_recipe crafting_recipes%ROWTYPE;
+  v_ingredient RECORD;
+  v_owned_qty INTEGER;
+  v_output_name TEXT;
+BEGIN
+  -- Obtener receta
+  SELECT * INTO v_recipe FROM crafting_recipes WHERE id = p_recipe_id;
+  IF v_recipe IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Receta no encontrada');
+  END IF;
+
+  -- Verificar que tiene todos los ingredientes
+  FOR v_ingredient IN
+    SELECT cri.element_id, cri.quantity, ce.name
+    FROM crafting_recipe_ingredients cri
+    JOIN crafting_elements ce ON ce.id = cri.element_id
+    WHERE cri.recipe_id = p_recipe_id
+  LOOP
+    SELECT COALESCE(quantity, 0) INTO v_owned_qty
+    FROM player_crafting_inventory
+    WHERE player_id = p_player_id AND element_id = v_ingredient.element_id;
+
+    IF v_owned_qty IS NULL OR v_owned_qty < v_ingredient.quantity THEN
+      RETURN json_build_object(
+        'success', false,
+        'error', 'Materiales insuficientes',
+        'missing', v_ingredient.name,
+        'needed', v_ingredient.quantity,
+        'owned', COALESCE(v_owned_qty, 0)
+      );
+    END IF;
+  END LOOP;
+
+  -- Descontar ingredientes
+  FOR v_ingredient IN
+    SELECT element_id, quantity
+    FROM crafting_recipe_ingredients
+    WHERE recipe_id = p_recipe_id
+  LOOP
+    UPDATE player_crafting_inventory
+    SET quantity = quantity - v_ingredient.quantity, updated_at = NOW()
+    WHERE player_id = p_player_id AND element_id = v_ingredient.element_id;
+
+    -- Eliminar filas con cantidad 0
+    DELETE FROM player_crafting_inventory
+    WHERE player_id = p_player_id AND element_id = v_ingredient.element_id AND quantity <= 0;
+  END LOOP;
+
+  -- Crear output según tipo
+  IF v_recipe.output_item_type = 'gamecoin' THEN
+    -- Dar GameCoin
+    UPDATE players
+    SET gamecoin_balance = gamecoin_balance + v_recipe.gamecoin_reward
+    WHERE id = p_player_id;
+
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'crafting_sell', v_recipe.gamecoin_reward, 'gamecoin',
+            'Venta de materiales: ' || v_recipe.name);
+
+    v_output_name := v_recipe.gamecoin_reward || ' GameCoin';
+
+  ELSIF v_recipe.output_item_type = 'cooling_item' THEN
+    -- Agregar cooling al inventario principal
+    INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+    VALUES (p_player_id, 'cooling', v_recipe.output_item_id, v_recipe.output_quantity)
+    ON CONFLICT (player_id, item_type, item_id)
+    DO UPDATE SET quantity = player_inventory.quantity + v_recipe.output_quantity;
+
+    v_output_name := v_recipe.name;
+
+  ELSIF v_recipe.output_item_type = 'boost_item' THEN
+    -- Agregar boost al inventario
+    INSERT INTO player_boosts (player_id, boost_id, quantity)
+    VALUES (p_player_id, v_recipe.output_item_id, v_recipe.output_quantity)
+    ON CONFLICT (player_id, boost_id)
+    DO UPDATE SET quantity = player_boosts.quantity + v_recipe.output_quantity;
+
+    v_output_name := v_recipe.name;
+
+  ELSIF v_recipe.output_item_type = 'prepaid_card' THEN
+    -- Crear tarjeta prepago
+    INSERT INTO player_cards (player_id, card_id, code)
+    VALUES (p_player_id, v_recipe.output_item_id, generate_card_code());
+
+    v_output_name := v_recipe.name;
+  END IF;
+
+  -- Registrar transacción de crafteo
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'crafting_craft', 0, 'gamecoin', 'Crafted: ' || v_recipe.name);
+
+  RETURN json_build_object(
+    'success', true,
+    'crafted_item', v_output_name,
+    'recipe', v_recipe.name,
+    'output_type', v_recipe.output_item_type,
+    'output_id', v_recipe.output_item_id,
+    'gamecoin_reward', v_recipe.gamecoin_reward
+  );
+END;
+$$;
+
+-- Eliminar elementos del inventario de crafting
+CREATE OR REPLACE FUNCTION delete_crafting_element(p_player_id UUID, p_element_id TEXT, p_quantity INTEGER)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current_qty INTEGER;
+BEGIN
+  SELECT quantity INTO v_current_qty
+  FROM player_crafting_inventory
+  WHERE player_id = p_player_id AND element_id = p_element_id;
+
+  IF v_current_qty IS NULL OR v_current_qty <= 0 THEN
+    RETURN json_build_object('success', false, 'error', 'No tienes este elemento');
+  END IF;
+
+  IF p_quantity >= v_current_qty THEN
+    DELETE FROM player_crafting_inventory
+    WHERE player_id = p_player_id AND element_id = p_element_id;
+  ELSE
+    UPDATE player_crafting_inventory
+    SET quantity = quantity - p_quantity, updated_at = NOW()
+    WHERE player_id = p_player_id AND element_id = p_element_id;
+  END IF;
+
+  RETURN json_build_object('success', true, 'deleted', LEAST(p_quantity, v_current_qty));
+END;
+$$;
+
+-- Abandonar sesión de crafting
+CREATE OR REPLACE FUNCTION abandon_crafting_session(p_player_id UUID, p_session_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_session player_crafting_sessions%ROWTYPE;
+BEGIN
+  SELECT * INTO v_session
+  FROM player_crafting_sessions
+  WHERE id = p_session_id AND player_id = p_player_id AND status = 'active';
+
+  IF v_session IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Sesión no encontrada');
+  END IF;
+
+  UPDATE player_crafting_sessions
+  SET status = 'abandoned', completed_at = NOW()
+  WHERE id = p_session_id;
+
+  RETURN json_build_object('success', true, 'message', 'Sesión abandonada');
+END;
+$$;
+
+-- Grants
+GRANT EXECUTE ON FUNCTION start_crafting_session TO authenticated;
+GRANT EXECUTE ON FUNCTION tap_crafting_element TO authenticated;
+GRANT EXECUTE ON FUNCTION get_crafting_session TO authenticated;
+GRANT EXECUTE ON FUNCTION get_crafting_inventory TO authenticated;
+GRANT EXECUTE ON FUNCTION get_crafting_recipes TO authenticated;
+GRANT EXECUTE ON FUNCTION craft_recipe TO authenticated;
+GRANT EXECUTE ON FUNCTION delete_crafting_element TO authenticated;
+GRANT EXECUTE ON FUNCTION abandon_crafting_session TO authenticated;
+
+-- =====================================================
+-- TOWER DEFENSE - TABLES
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS player_defense_progress (
+  player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+  max_level_completed INTEGER DEFAULT 0,
+  total_games INTEGER DEFAULT 0,
+  total_wins INTEGER DEFAULT 0,
+  total_gc_earned INTEGER DEFAULT 0,
+  total_gc_spent INTEGER DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS player_defense_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  level_number INTEGER NOT NULL,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'abandoned')),
+  gc_spent INTEGER DEFAULT 0,
+  gc_earned INTEGER DEFAULT 0,
+  waves_completed INTEGER DEFAULT 0,
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ DEFAULT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_defense_sessions_player ON player_defense_sessions(player_id);
+CREATE INDEX IF NOT EXISTS idx_defense_sessions_status ON player_defense_sessions(player_id, status);
+
+-- RLS
+ALTER TABLE player_defense_progress ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_defense_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "defense_progress_select" ON player_defense_progress;
+CREATE POLICY "defense_progress_select" ON player_defense_progress FOR SELECT USING (auth.uid() = player_id);
+DROP POLICY IF EXISTS "defense_progress_insert" ON player_defense_progress;
+CREATE POLICY "defense_progress_insert" ON player_defense_progress FOR INSERT WITH CHECK (auth.uid() = player_id);
+DROP POLICY IF EXISTS "defense_progress_update" ON player_defense_progress;
+CREATE POLICY "defense_progress_update" ON player_defense_progress FOR UPDATE USING (auth.uid() = player_id);
+
+DROP POLICY IF EXISTS "defense_sessions_select" ON player_defense_sessions;
+CREATE POLICY "defense_sessions_select" ON player_defense_sessions FOR SELECT USING (auth.uid() = player_id);
+DROP POLICY IF EXISTS "defense_sessions_insert" ON player_defense_sessions;
+CREATE POLICY "defense_sessions_insert" ON player_defense_sessions FOR INSERT WITH CHECK (auth.uid() = player_id);
+DROP POLICY IF EXISTS "defense_sessions_update" ON player_defense_sessions;
+CREATE POLICY "defense_sessions_update" ON player_defense_sessions FOR UPDATE USING (auth.uid() = player_id);
+
+-- =====================================================
+-- TOWER DEFENSE - FUNCTIONS
+-- =====================================================
+
+DROP FUNCTION IF EXISTS start_defense_game(UUID, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS defense_buy_tower(UUID, UUID, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS defense_sell_tower(UUID, UUID, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS defense_enemy_killed(UUID, UUID, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS complete_defense_game(UUID, UUID, BOOLEAN, INTEGER, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS get_defense_progress(UUID) CASCADE;
+
+-- Start a defense game
+CREATE OR REPLACE FUNCTION start_defense_game(p_player_id UUID, p_level INTEGER)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_progress player_defense_progress%ROWTYPE;
+  v_existing UUID;
+  v_session_id UUID;
+BEGIN
+  -- Check for existing active session
+  SELECT id INTO v_existing
+  FROM player_defense_sessions
+  WHERE player_id = p_player_id AND status = 'active'
+  LIMIT 1;
+
+  IF v_existing IS NOT NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Ya tienes una partida activa', 'session_id', v_existing);
+  END IF;
+
+  -- Get or create progress
+  INSERT INTO player_defense_progress (player_id)
+  VALUES (p_player_id)
+  ON CONFLICT (player_id) DO NOTHING;
+
+  SELECT * INTO v_progress FROM player_defense_progress WHERE player_id = p_player_id;
+
+  -- Check level is unlocked (level 1 always unlocked, others need previous completed)
+  IF p_level > 1 AND v_progress.max_level_completed < (p_level - 1) THEN
+    RETURN json_build_object('success', false, 'error', 'Nivel bloqueado', 'max_level', v_progress.max_level_completed + 1);
+  END IF;
+
+  -- Create session
+  INSERT INTO player_defense_sessions (player_id, level_number, status)
+  VALUES (p_player_id, p_level, 'active')
+  RETURNING id INTO v_session_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'session_id', v_session_id,
+    'level_number', p_level
+  );
+END;
+$$;
+
+-- Buy a tower (deduct GC)
+CREATE OR REPLACE FUNCTION defense_buy_tower(p_player_id UUID, p_session_id UUID, p_cost INTEGER)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_session player_defense_sessions%ROWTYPE;
+  v_balance INTEGER;
+BEGIN
+  -- Verify session
+  SELECT * INTO v_session
+  FROM player_defense_sessions
+  WHERE id = p_session_id AND player_id = p_player_id AND status = 'active';
+
+  IF v_session IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Sesion no activa');
+  END IF;
+
+  -- Check balance
+  SELECT gamecoin_balance INTO v_balance FROM players WHERE id = p_player_id;
+
+  IF v_balance < p_cost THEN
+    RETURN json_build_object('success', false, 'error', 'Fondos insuficientes', 'balance', v_balance);
+  END IF;
+
+  -- Deduct GC
+  UPDATE players SET gamecoin_balance = gamecoin_balance - p_cost WHERE id = p_player_id;
+  UPDATE player_defense_sessions SET gc_spent = gc_spent + p_cost WHERE id = p_session_id;
+
+  SELECT gamecoin_balance INTO v_balance FROM players WHERE id = p_player_id;
+
+  RETURN json_build_object('success', true, 'new_balance', v_balance);
+END;
+$$;
+
+-- Sell a tower (refund GC)
+CREATE OR REPLACE FUNCTION defense_sell_tower(p_player_id UUID, p_session_id UUID, p_refund INTEGER)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_session player_defense_sessions%ROWTYPE;
+  v_balance INTEGER;
+BEGIN
+  SELECT * INTO v_session
+  FROM player_defense_sessions
+  WHERE id = p_session_id AND player_id = p_player_id AND status = 'active';
+
+  IF v_session IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Sesion no activa');
+  END IF;
+
+  UPDATE players SET gamecoin_balance = gamecoin_balance + p_refund WHERE id = p_player_id;
+  UPDATE player_defense_sessions SET gc_spent = GREATEST(0, gc_spent - p_refund) WHERE id = p_session_id;
+
+  SELECT gamecoin_balance INTO v_balance FROM players WHERE id = p_player_id;
+
+  RETURN json_build_object('success', true, 'new_balance', v_balance);
+END;
+$$;
+
+-- Enemy killed (add GC reward)
+CREATE OR REPLACE FUNCTION defense_enemy_killed(p_player_id UUID, p_session_id UUID, p_reward INTEGER)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_balance INTEGER;
+BEGIN
+  UPDATE players SET gamecoin_balance = gamecoin_balance + p_reward WHERE id = p_player_id;
+  UPDATE player_defense_sessions SET gc_earned = gc_earned + p_reward WHERE id = p_session_id AND status = 'active';
+
+  SELECT gamecoin_balance INTO v_balance FROM players WHERE id = p_player_id;
+
+  RETURN json_build_object('success', true, 'new_balance', v_balance);
+END;
+$$;
+
+-- Complete defense game
+CREATE OR REPLACE FUNCTION complete_defense_game(
+  p_player_id UUID,
+  p_session_id UUID,
+  p_won BOOLEAN,
+  p_waves INTEGER,
+  p_bonus INTEGER
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_session player_defense_sessions%ROWTYPE;
+  v_balance INTEGER;
+  v_level_unlocked BOOLEAN := false;
+BEGIN
+  SELECT * INTO v_session
+  FROM player_defense_sessions
+  WHERE id = p_session_id AND player_id = p_player_id AND status = 'active';
+
+  IF v_session IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Sesion no encontrada');
+  END IF;
+
+  -- Mark session completed
+  UPDATE player_defense_sessions
+  SET status = 'completed',
+      completed_at = NOW(),
+      waves_completed = p_waves
+  WHERE id = p_session_id;
+
+  -- If won, give bonus and update progress
+  IF p_won AND p_bonus > 0 THEN
+    UPDATE players SET gamecoin_balance = gamecoin_balance + p_bonus WHERE id = p_player_id;
+  END IF;
+
+  -- Update progress
+  UPDATE player_defense_progress
+  SET total_games = total_games + 1,
+      total_wins = CASE WHEN p_won THEN total_wins + 1 ELSE total_wins END,
+      max_level_completed = CASE WHEN p_won AND v_session.level_number > max_level_completed
+                            THEN v_session.level_number ELSE max_level_completed END,
+      total_gc_earned = total_gc_earned + v_session.gc_earned + CASE WHEN p_won THEN p_bonus ELSE 0 END,
+      total_gc_spent = total_gc_spent + v_session.gc_spent,
+      updated_at = NOW()
+  WHERE player_id = p_player_id;
+
+  -- Check if level was unlocked
+  SELECT max_level_completed >= v_session.level_number INTO v_level_unlocked
+  FROM player_defense_progress WHERE player_id = p_player_id;
+
+  -- Log transaction
+  IF p_won AND p_bonus > 0 THEN
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'defense_reward', p_bonus, 'gamecoin',
+            'Tower Defense Level ' || v_session.level_number || ' completado');
+  END IF;
+
+  -- Update missions
+  IF p_won THEN
+    PERFORM update_mission_progress(p_player_id, 'defense_win', 1);
+  END IF;
+
+  SELECT gamecoin_balance INTO v_balance FROM players WHERE id = p_player_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'won', p_won,
+    'bonus', CASE WHEN p_won THEN p_bonus ELSE 0 END,
+    'new_balance', v_balance,
+    'level_unlocked', v_level_unlocked,
+    'waves_completed', p_waves
+  );
+END;
+$$;
+
+-- Get defense progress
+CREATE OR REPLACE FUNCTION get_defense_progress(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_progress player_defense_progress%ROWTYPE;
+  v_active_session player_defense_sessions%ROWTYPE;
+BEGIN
+  -- Get or create progress
+  INSERT INTO player_defense_progress (player_id)
+  VALUES (p_player_id)
+  ON CONFLICT (player_id) DO NOTHING;
+
+  SELECT * INTO v_progress FROM player_defense_progress WHERE player_id = p_player_id;
+
+  -- Check for active session
+  SELECT * INTO v_active_session
+  FROM player_defense_sessions
+  WHERE player_id = p_player_id AND status = 'active'
+  LIMIT 1;
+
+  RETURN json_build_object(
+    'success', true,
+    'max_level_completed', v_progress.max_level_completed,
+    'total_games', v_progress.total_games,
+    'total_wins', v_progress.total_wins,
+    'total_gc_earned', v_progress.total_gc_earned,
+    'total_gc_spent', v_progress.total_gc_spent,
+    'has_active_session', v_active_session IS NOT NULL,
+    'active_session_id', v_active_session.id,
+    'active_level', v_active_session.level_number
+  );
+END;
+$$;
+
+-- Grants
+GRANT EXECUTE ON FUNCTION start_defense_game TO authenticated;
+GRANT EXECUTE ON FUNCTION defense_buy_tower TO authenticated;
+GRANT EXECUTE ON FUNCTION defense_sell_tower TO authenticated;
+GRANT EXECUTE ON FUNCTION defense_enemy_killed TO authenticated;
+GRANT EXECUTE ON FUNCTION complete_defense_game TO authenticated;
+GRANT EXECUTE ON FUNCTION get_defense_progress TO authenticated;
+
+-- =====================================================
+-- CARD BATTLE PVP - TABLES
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS battle_lobby (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  username TEXT NOT NULL,
+  bet_amount INTEGER NOT NULL DEFAULT 20,
+  status TEXT DEFAULT 'waiting' CHECK (status IN ('waiting', 'matched', 'cancelled')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_battle_lobby_status ON battle_lobby(status);
+CREATE INDEX IF NOT EXISTS idx_battle_lobby_player ON battle_lobby(player_id);
+
+CREATE TABLE IF NOT EXISTS battle_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player1_id UUID NOT NULL REFERENCES players(id),
+  player2_id UUID NOT NULL REFERENCES players(id),
+  bet_amount INTEGER NOT NULL DEFAULT 20,
+  current_turn UUID NOT NULL,
+  turn_number INTEGER DEFAULT 1,
+  turn_deadline TIMESTAMPTZ,
+  player1_hp INTEGER DEFAULT 100,
+  player2_hp INTEGER DEFAULT 100,
+  player1_shield INTEGER DEFAULT 0,
+  player2_shield INTEGER DEFAULT 0,
+  game_state JSONB NOT NULL,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'forfeited')),
+  winner_id UUID REFERENCES players(id),
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_battle_sessions_players ON battle_sessions(player1_id, player2_id);
+CREATE INDEX IF NOT EXISTS idx_battle_sessions_status ON battle_sessions(status);
+
+-- RLS
+ALTER TABLE battle_lobby ENABLE ROW LEVEL SECURITY;
+ALTER TABLE battle_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "battle_lobby_select" ON battle_lobby;
+CREATE POLICY "battle_lobby_select" ON battle_lobby FOR SELECT
+  USING (status = 'waiting' OR player_id = auth.uid());
+
+DROP POLICY IF EXISTS "battle_lobby_insert" ON battle_lobby;
+CREATE POLICY "battle_lobby_insert" ON battle_lobby FOR INSERT
+  WITH CHECK (player_id = auth.uid());
+
+DROP POLICY IF EXISTS "battle_lobby_update" ON battle_lobby;
+CREATE POLICY "battle_lobby_update" ON battle_lobby FOR UPDATE
+  USING (player_id = auth.uid());
+
+DROP POLICY IF EXISTS "battle_lobby_delete" ON battle_lobby;
+CREATE POLICY "battle_lobby_delete" ON battle_lobby FOR DELETE
+  USING (player_id = auth.uid());
+
+DROP POLICY IF EXISTS "battle_sessions_select" ON battle_sessions;
+CREATE POLICY "battle_sessions_select" ON battle_sessions FOR SELECT
+  USING (player1_id = auth.uid() OR player2_id = auth.uid());
+
+-- =====================================================
+-- CARD BATTLE PVP - FUNCTIONS
+-- =====================================================
+
+DROP FUNCTION IF EXISTS join_battle_lobby(UUID, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS leave_battle_lobby(UUID) CASCADE;
+DROP FUNCTION IF EXISTS accept_battle_challenge(UUID, UUID) CASCADE;
+DROP FUNCTION IF EXISTS play_battle_turn(UUID, UUID, JSONB) CASCADE;
+DROP FUNCTION IF EXISTS forfeit_battle(UUID, UUID) CASCADE;
+DROP FUNCTION IF EXISTS get_battle_lobby(UUID) CASCADE;
+
+-- 1) Join battle lobby
+CREATE OR REPLACE FUNCTION join_battle_lobby(p_player_id UUID, p_bet_amount INTEGER DEFAULT 20)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_balance NUMERIC;
+  v_username TEXT;
+  v_existing UUID;
+  v_lobby_id UUID;
+BEGIN
+  -- Check not already in lobby
+  SELECT id INTO v_existing
+  FROM battle_lobby
+  WHERE player_id = p_player_id AND status = 'waiting';
+
+  IF v_existing IS NOT NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Already in lobby', 'lobby_id', v_existing);
+  END IF;
+
+  -- Check active session
+  SELECT id INTO v_existing
+  FROM battle_sessions
+  WHERE (player1_id = p_player_id OR player2_id = p_player_id) AND status = 'active';
+
+  IF v_existing IS NOT NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Already in a battle', 'session_id', v_existing);
+  END IF;
+
+  -- Check balance
+  SELECT gamecoin_balance, username INTO v_balance, v_username
+  FROM players WHERE id = p_player_id;
+
+  IF v_balance < p_bet_amount THEN
+    RETURN json_build_object('success', false, 'error', 'Insufficient balance');
+  END IF;
+
+  -- Deduct bet
+  UPDATE players SET gamecoin_balance = gamecoin_balance - p_bet_amount WHERE id = p_player_id;
+
+  -- Insert into lobby
+  INSERT INTO battle_lobby (player_id, username, bet_amount, status)
+  VALUES (p_player_id, v_username, p_bet_amount, 'waiting')
+  RETURNING id INTO v_lobby_id;
+
+  RETURN json_build_object('success', true, 'lobby_id', v_lobby_id);
+END;
+$$;
+
+-- 2) Leave battle lobby
+CREATE OR REPLACE FUNCTION leave_battle_lobby(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_lobby battle_lobby%ROWTYPE;
+BEGIN
+  SELECT * INTO v_lobby
+  FROM battle_lobby
+  WHERE player_id = p_player_id AND status = 'waiting';
+
+  IF v_lobby.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Not in lobby');
+  END IF;
+
+  -- Refund bet
+  UPDATE players SET gamecoin_balance = gamecoin_balance + v_lobby.bet_amount WHERE id = p_player_id;
+
+  -- Remove from lobby
+  DELETE FROM battle_lobby WHERE id = v_lobby.id;
+
+  RETURN json_build_object('success', true, 'refunded', v_lobby.bet_amount);
+END;
+$$;
+
+-- 3) Accept battle challenge
+CREATE OR REPLACE FUNCTION accept_battle_challenge(p_player_id UUID, p_opponent_lobby_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_opponent battle_lobby%ROWTYPE;
+  v_my_lobby battle_lobby%ROWTYPE;
+  v_balance NUMERIC;
+  v_session_id UUID;
+  v_first_turn UUID;
+  v_deck1 JSONB;
+  v_deck2 JSONB;
+  v_hand1 JSONB;
+  v_hand2 JSONB;
+  v_remaining1 JSONB;
+  v_remaining2 JSONB;
+  v_all_cards JSONB;
+  v_game_state JSONB;
+BEGIN
+  -- Lock opponent lobby entry
+  SELECT * INTO v_opponent
+  FROM battle_lobby
+  WHERE id = p_opponent_lobby_id AND status = 'waiting'
+  FOR UPDATE;
+
+  IF v_opponent.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Opponent no longer available');
+  END IF;
+
+  IF v_opponent.player_id = p_player_id THEN
+    RETURN json_build_object('success', false, 'error', 'Cannot challenge yourself');
+  END IF;
+
+  -- Lock my lobby entry
+  SELECT * INTO v_my_lobby
+  FROM battle_lobby
+  WHERE player_id = p_player_id AND status = 'waiting'
+  FOR UPDATE;
+
+  IF v_my_lobby.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'You must be in the lobby first');
+  END IF;
+
+  -- Card IDs for deck building
+  v_all_cards := '["quick_strike","power_slash","fury_attack","double_hit","critical_blow","guard","fortify","counter","deflect","heal","weaken","drain"]'::JSONB;
+
+  -- Shuffle decks (using random ordering)
+  SELECT jsonb_agg(card ORDER BY random()) INTO v_deck1
+  FROM jsonb_array_elements_text(v_all_cards) AS card;
+
+  SELECT jsonb_agg(card ORDER BY random()) INTO v_deck2
+  FROM jsonb_array_elements_text(v_all_cards) AS card;
+
+  -- Draw 3 cards for each player from their deck
+  SELECT jsonb_agg(c) INTO v_hand1
+  FROM (SELECT c FROM jsonb_array_elements(v_deck1) c LIMIT 3) sub;
+
+  SELECT jsonb_agg(c) INTO v_remaining1
+  FROM (SELECT c FROM jsonb_array_elements(v_deck1) c OFFSET 3) sub;
+
+  SELECT jsonb_agg(c) INTO v_hand2
+  FROM (SELECT c FROM jsonb_array_elements(v_deck2) c LIMIT 3) sub;
+
+  SELECT jsonb_agg(c) INTO v_remaining2
+  FROM (SELECT c FROM jsonb_array_elements(v_deck2) c OFFSET 3) sub;
+
+  -- Coin flip for first turn
+  IF random() < 0.5 THEN
+    v_first_turn := v_my_lobby.player_id;
+  ELSE
+    v_first_turn := v_opponent.player_id;
+  END IF;
+
+  -- Build game state
+  v_game_state := jsonb_build_object(
+    'player1Hand', v_hand1,
+    'player2Hand', v_hand2,
+    'player1Deck', COALESCE(v_remaining1, '[]'::JSONB),
+    'player2Deck', COALESCE(v_remaining2, '[]'::JSONB),
+    'player1Discard', '[]'::JSONB,
+    'player2Discard', '[]'::JSONB,
+    'player1Energy', 3,
+    'player2Energy', 3,
+    'player1Weakened', false,
+    'player2Weakened', false,
+    'lastAction', null
+  );
+
+  -- Create session (challenger = player1, opponent = player2)
+  INSERT INTO battle_sessions (
+    player1_id, player2_id, bet_amount, current_turn, turn_deadline, game_state
+  ) VALUES (
+    p_player_id, v_opponent.player_id, v_opponent.bet_amount,
+    v_first_turn, NOW() + INTERVAL '30 seconds', v_game_state
+  ) RETURNING id INTO v_session_id;
+
+  -- Mark both lobby entries as matched
+  UPDATE battle_lobby SET status = 'matched' WHERE id = v_my_lobby.id;
+  UPDATE battle_lobby SET status = 'matched' WHERE id = v_opponent.id;
+
+  RETURN json_build_object(
+    'success', true,
+    'session_id', v_session_id,
+    'first_turn', v_first_turn,
+    'player1_id', p_player_id,
+    'player2_id', v_opponent.player_id
+  );
+END;
+$$;
+
+-- 4) Play battle turn
+CREATE OR REPLACE FUNCTION play_battle_turn(p_player_id UUID, p_session_id UUID, p_cards_played JSONB)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_session battle_sessions%ROWTYPE;
+  v_state JSONB;
+  v_is_p1 BOOLEAN;
+  v_my_hand JSONB;
+  v_my_deck JSONB;
+  v_my_discard JSONB;
+  v_opp_hand JSONB;
+  v_opp_deck JSONB;
+  v_energy INTEGER;
+  v_my_hp INTEGER;
+  v_my_shield INTEGER;
+  v_opp_hp INTEGER;
+  v_opp_shield INTEGER;
+  v_weakened BOOLEAN;
+  v_opp_weakened BOOLEAN;
+  v_card TEXT;
+  v_card_cost INTEGER;
+  v_card_type TEXT;
+  v_damage INTEGER;
+  v_shield_dmg INTEGER;
+  v_remaining_dmg INTEGER;
+  v_winner_id UUID;
+  v_pot INTEGER;
+  v_new_hand JSONB;
+  v_draw_count INTEGER;
+  v_cards_to_draw JSONB;
+  v_new_deck JSONB;
+  v_log_entries JSONB := '[]'::JSONB;
+  v_total_cards INTEGER;
+BEGIN
+  -- Lock session
+  SELECT * INTO v_session
+  FROM battle_sessions
+  WHERE id = p_session_id AND status = 'active'
+  FOR UPDATE;
+
+  IF v_session.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Session not found or ended');
+  END IF;
+
+  -- Validate turn
+  IF v_session.current_turn != p_player_id THEN
+    RETURN json_build_object('success', false, 'error', 'Not your turn');
+  END IF;
+
+  -- Determine player position
+  v_is_p1 := (p_player_id = v_session.player1_id);
+  v_state := v_session.game_state;
+
+  IF v_is_p1 THEN
+    v_my_hand := v_state->'player1Hand';
+    v_my_deck := v_state->'player1Deck';
+    v_my_discard := v_state->'player1Discard';
+    v_opp_hand := v_state->'player2Hand';
+    v_opp_deck := v_state->'player2Deck';
+    v_energy := (v_state->>'player1Energy')::INTEGER;
+    v_my_hp := v_session.player1_hp;
+    v_my_shield := v_session.player1_shield;
+    v_opp_hp := v_session.player2_hp;
+    v_opp_shield := v_session.player2_shield;
+    v_weakened := (v_state->>'player1Weakened')::BOOLEAN;
+    v_opp_weakened := (v_state->>'player2Weakened')::BOOLEAN;
+  ELSE
+    v_my_hand := v_state->'player2Hand';
+    v_my_deck := v_state->'player2Deck';
+    v_my_discard := v_state->'player2Discard';
+    v_opp_hand := v_state->'player1Hand';
+    v_opp_deck := v_state->'player1Deck';
+    v_energy := (v_state->>'player2Energy')::INTEGER;
+    v_my_hp := v_session.player2_hp;
+    v_my_shield := v_session.player2_shield;
+    v_opp_hp := v_session.player1_hp;
+    v_opp_shield := v_session.player1_shield;
+    v_weakened := (v_state->>'player2Weakened')::BOOLEAN;
+    v_opp_weakened := (v_state->>'player1Weakened')::BOOLEAN;
+  END IF;
+
+  -- Process each card played
+  FOR v_card IN SELECT jsonb_array_elements_text(p_cards_played)
+  LOOP
+    -- Determine card cost and type
+    CASE v_card
+      WHEN 'quick_strike' THEN v_card_cost := 1; v_card_type := 'attack';
+      WHEN 'power_slash' THEN v_card_cost := 2; v_card_type := 'attack';
+      WHEN 'fury_attack' THEN v_card_cost := 2; v_card_type := 'attack';
+      WHEN 'double_hit' THEN v_card_cost := 1; v_card_type := 'attack';
+      WHEN 'critical_blow' THEN v_card_cost := 2; v_card_type := 'attack';
+      WHEN 'guard' THEN v_card_cost := 1; v_card_type := 'defense';
+      WHEN 'fortify' THEN v_card_cost := 2; v_card_type := 'defense';
+      WHEN 'counter' THEN v_card_cost := 1; v_card_type := 'defense';
+      WHEN 'deflect' THEN v_card_cost := 1; v_card_type := 'defense';
+      WHEN 'heal' THEN v_card_cost := 1; v_card_type := 'special';
+      WHEN 'weaken' THEN v_card_cost := 1; v_card_type := 'special';
+      WHEN 'drain' THEN v_card_cost := 2; v_card_type := 'special';
+      ELSE
+        RETURN json_build_object('success', false, 'error', 'Unknown card: ' || v_card);
+    END CASE;
+
+    -- Check energy
+    IF v_energy < v_card_cost THEN
+      RETURN json_build_object('success', false, 'error', 'Not enough energy for ' || v_card);
+    END IF;
+
+    -- Deduct energy
+    v_energy := v_energy - v_card_cost;
+
+    -- Remove card from hand
+    v_my_hand := v_my_hand - (
+      SELECT i::INTEGER FROM generate_series(0, jsonb_array_length(v_my_hand) - 1) i
+      WHERE v_my_hand->>i::INTEGER = v_card
+      LIMIT 1
+    );
+
+    -- Add to discard
+    v_my_discard := v_my_discard || to_jsonb(v_card);
+
+    -- Apply card effects
+    CASE v_card
+      WHEN 'quick_strike' THEN
+        v_damage := 12;
+        IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
+        v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
+        v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
+        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage);
+
+      WHEN 'power_slash' THEN
+        v_damage := 25;
+        IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
+        v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
+        v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
+        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage);
+
+      WHEN 'fury_attack' THEN
+        v_damage := 18;
+        IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
+        -- Ignores 8 shield
+        v_shield_dmg := GREATEST(v_opp_shield - 8, 0);
+        v_remaining_dmg := GREATEST(v_damage - v_shield_dmg, 0);
+        v_opp_shield := GREATEST(v_shield_dmg - v_damage, 0);
+        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage);
+
+      WHEN 'double_hit' THEN
+        v_damage := 8;
+        IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
+        -- Hit 1
+        v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
+        v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
+        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
+        -- Hit 2
+        v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
+        v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
+        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage * 2);
+
+      WHEN 'critical_blow' THEN
+        v_damage := 35;
+        IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
+        v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
+        v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
+        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
+        -- Self damage
+        v_my_hp := GREATEST(v_my_hp - 5, 0);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage, 'selfDamage', 5);
+
+      WHEN 'guard' THEN
+        v_my_shield := v_my_shield + 12;
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'defense', 'card', v_card, 'shield', 12);
+
+      WHEN 'fortify' THEN
+        v_my_shield := v_my_shield + 25;
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'defense', 'card', v_card, 'shield', 25);
+
+      WHEN 'counter' THEN
+        v_my_shield := v_my_shield + 8;
+        -- Deal 5 damage back
+        v_damage := 5;
+        v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
+        v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
+        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'defense', 'card', v_card, 'shield', 8, 'counterDamage', 5);
+
+      WHEN 'deflect' THEN
+        v_my_shield := v_my_shield + 10;
+        -- Draw 1 extra card
+        IF jsonb_array_length(COALESCE(v_my_deck, '[]'::JSONB)) > 0 THEN
+          v_my_hand := v_my_hand || jsonb_build_array(v_my_deck->0);
+          v_my_deck := v_my_deck - 0;
+        END IF;
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'defense', 'card', v_card, 'shield', 10, 'draw', 1);
+
+      WHEN 'heal' THEN
+        v_my_hp := LEAST(v_my_hp + 15, 100);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'heal', 15);
+
+      WHEN 'weaken' THEN
+        v_opp_weakened := true;
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'weaken', 8);
+
+      WHEN 'drain' THEN
+        v_damage := 12;
+        IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
+        v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
+        v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
+        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
+        v_my_hp := LEAST(v_my_hp + 6, 100);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'damage', v_damage, 'heal', 6);
+    END CASE;
+
+    -- Check win condition after each card
+    IF v_opp_hp <= 0 OR v_my_hp <= 0 THEN
+      EXIT;
+    END IF;
+  END LOOP;
+
+  -- Reset opponent's shield at start of their turn
+  v_opp_shield := 0;
+
+  -- Draw cards for opponent's next turn (up to 3, max hand 6)
+  v_draw_count := LEAST(3, 6 - jsonb_array_length(COALESCE(v_opp_hand, '[]'::JSONB)));
+
+  -- If opponent's deck is empty, reshuffle discard into deck
+  IF jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)) < v_draw_count THEN
+    -- Merge remaining deck + discard, reshuffle
+    v_opp_deck := COALESCE(v_opp_deck, '[]'::JSONB);
+    IF v_is_p1 THEN
+      SELECT jsonb_agg(card ORDER BY random()) INTO v_opp_deck
+      FROM jsonb_array_elements(v_opp_deck || COALESCE(v_state->'player2Discard', '[]'::JSONB)) AS card;
+      -- Clear discard handled below
+    ELSE
+      SELECT jsonb_agg(card ORDER BY random()) INTO v_opp_deck
+      FROM jsonb_array_elements(v_opp_deck || COALESCE(v_state->'player1Discard', '[]'::JSONB)) AS card;
+    END IF;
+    v_opp_deck := COALESCE(v_opp_deck, '[]'::JSONB);
+  END IF;
+
+  -- Draw cards
+  IF v_draw_count > 0 AND jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)) > 0 THEN
+    v_draw_count := LEAST(v_draw_count, jsonb_array_length(v_opp_deck));
+    SELECT jsonb_agg(c) INTO v_cards_to_draw
+    FROM (SELECT c FROM jsonb_array_elements(v_opp_deck) c LIMIT v_draw_count) sub;
+
+    v_opp_hand := COALESCE(v_opp_hand, '[]'::JSONB) || COALESCE(v_cards_to_draw, '[]'::JSONB);
+
+    SELECT COALESCE(jsonb_agg(c), '[]'::JSONB) INTO v_new_deck
+    FROM (SELECT c FROM jsonb_array_elements(v_opp_deck) c OFFSET v_draw_count) sub;
+    v_opp_deck := v_new_deck;
+  END IF;
+
+  -- Build new game state
+  IF v_is_p1 THEN
+    v_state := jsonb_build_object(
+      'player1Hand', COALESCE(v_my_hand, '[]'::JSONB),
+      'player2Hand', COALESCE(v_opp_hand, '[]'::JSONB),
+      'player1Deck', COALESCE(v_my_deck, '[]'::JSONB),
+      'player2Deck', COALESCE(v_opp_deck, '[]'::JSONB),
+      'player1Discard', COALESCE(v_my_discard, '[]'::JSONB),
+      'player2Discard', '[]'::JSONB,
+      'player1Energy', v_energy,
+      'player2Energy', 3,
+      'player1Weakened', v_weakened,
+      'player2Weakened', v_opp_weakened,
+      'lastAction', v_log_entries
+    );
+  ELSE
+    v_state := jsonb_build_object(
+      'player1Hand', COALESCE(v_opp_hand, '[]'::JSONB),
+      'player2Hand', COALESCE(v_my_hand, '[]'::JSONB),
+      'player1Deck', COALESCE(v_opp_deck, '[]'::JSONB),
+      'player2Deck', COALESCE(v_my_deck, '[]'::JSONB),
+      'player1Discard', '[]'::JSONB,
+      'player2Discard', COALESCE(v_my_discard, '[]'::JSONB),
+      'player1Energy', 3,
+      'player2Energy', v_energy,
+      'player1Weakened', v_opp_weakened,
+      'player2Weakened', v_weakened,
+      'lastAction', v_log_entries
+    );
+  END IF;
+
+  -- Determine winner
+  v_winner_id := NULL;
+  IF v_opp_hp <= 0 THEN
+    v_winner_id := p_player_id;
+  ELSIF v_my_hp <= 0 THEN
+    IF v_is_p1 THEN v_winner_id := v_session.player2_id;
+    ELSE v_winner_id := v_session.player1_id;
+    END IF;
+  END IF;
+
+  -- Update session
+  IF v_is_p1 THEN
+    UPDATE battle_sessions SET
+      player1_hp = v_my_hp,
+      player2_hp = v_opp_hp,
+      player1_shield = v_my_shield,
+      player2_shield = v_opp_shield,
+      current_turn = CASE WHEN v_winner_id IS NULL THEN v_session.player2_id ELSE current_turn END,
+      turn_number = turn_number + 1,
+      turn_deadline = CASE WHEN v_winner_id IS NULL THEN NOW() + INTERVAL '30 seconds' ELSE turn_deadline END,
+      game_state = v_state,
+      status = CASE WHEN v_winner_id IS NOT NULL THEN 'completed' ELSE 'active' END,
+      winner_id = v_winner_id,
+      completed_at = CASE WHEN v_winner_id IS NOT NULL THEN NOW() ELSE NULL END
+    WHERE id = p_session_id;
+  ELSE
+    UPDATE battle_sessions SET
+      player1_hp = v_opp_hp,
+      player2_hp = v_my_hp,
+      player1_shield = v_opp_shield,
+      player2_shield = v_my_shield,
+      current_turn = CASE WHEN v_winner_id IS NULL THEN v_session.player1_id ELSE current_turn END,
+      turn_number = turn_number + 1,
+      turn_deadline = CASE WHEN v_winner_id IS NULL THEN NOW() + INTERVAL '30 seconds' ELSE turn_deadline END,
+      game_state = v_state,
+      status = CASE WHEN v_winner_id IS NOT NULL THEN 'completed' ELSE 'active' END,
+      winner_id = v_winner_id,
+      completed_at = CASE WHEN v_winner_id IS NOT NULL THEN NOW() ELSE NULL END
+    WHERE id = p_session_id;
+  END IF;
+
+  -- Award pot to winner
+  IF v_winner_id IS NOT NULL THEN
+    v_pot := v_session.bet_amount * 2;
+    UPDATE players SET gamecoin_balance = gamecoin_balance + v_pot WHERE id = v_winner_id;
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'winner_id', v_winner_id,
+    'player1_hp', CASE WHEN v_is_p1 THEN v_my_hp ELSE v_opp_hp END,
+    'player2_hp', CASE WHEN v_is_p1 THEN v_opp_hp ELSE v_my_hp END,
+    'player1_shield', CASE WHEN v_is_p1 THEN v_my_shield ELSE v_opp_shield END,
+    'player2_shield', CASE WHEN v_is_p1 THEN v_opp_shield ELSE v_my_shield END,
+    'turn_number', v_session.turn_number + 1,
+    'log', v_log_entries
+  );
+END;
+$$;
+
+-- 5) Forfeit battle
+CREATE OR REPLACE FUNCTION forfeit_battle(p_player_id UUID, p_session_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_session battle_sessions%ROWTYPE;
+  v_winner_id UUID;
+  v_pot INTEGER;
+BEGIN
+  SELECT * INTO v_session
+  FROM battle_sessions
+  WHERE id = p_session_id AND status = 'active'
+  FOR UPDATE;
+
+  IF v_session.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Session not found or already ended');
+  END IF;
+
+  IF p_player_id != v_session.player1_id AND p_player_id != v_session.player2_id THEN
+    RETURN json_build_object('success', false, 'error', 'Not a participant');
+  END IF;
+
+  -- Winner is the other player
+  IF p_player_id = v_session.player1_id THEN
+    v_winner_id := v_session.player2_id;
+  ELSE
+    v_winner_id := v_session.player1_id;
+  END IF;
+
+  v_pot := v_session.bet_amount * 2;
+
+  UPDATE battle_sessions SET
+    status = 'forfeited',
+    winner_id = v_winner_id,
+    completed_at = NOW()
+  WHERE id = p_session_id;
+
+  UPDATE players SET gamecoin_balance = gamecoin_balance + v_pot WHERE id = v_winner_id;
+
+  RETURN json_build_object('success', true, 'winner_id', v_winner_id, 'pot', v_pot);
+END;
+$$;
+
+-- 6) Get battle lobby
+CREATE OR REPLACE FUNCTION get_battle_lobby(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_lobby JSONB;
+  v_active_session JSONB;
+BEGIN
+  -- Get waiting lobby entries (exclude self)
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'id', id,
+    'player_id', player_id,
+    'username', username,
+    'bet_amount', bet_amount,
+    'created_at', created_at
+  )), '[]'::JSONB) INTO v_lobby
+  FROM battle_lobby
+  WHERE status = 'waiting' AND player_id != p_player_id;
+
+  -- Check for active session
+  SELECT jsonb_build_object(
+    'id', id,
+    'player1_id', player1_id,
+    'player2_id', player2_id,
+    'current_turn', current_turn,
+    'turn_number', turn_number,
+    'turn_deadline', turn_deadline,
+    'player1_hp', player1_hp,
+    'player2_hp', player2_hp,
+    'player1_shield', player1_shield,
+    'player2_shield', player2_shield,
+    'game_state', game_state,
+    'status', status,
+    'winner_id', winner_id
+  ) INTO v_active_session
+  FROM battle_sessions
+  WHERE (player1_id = p_player_id OR player2_id = p_player_id) AND status = 'active'
+  ORDER BY started_at DESC
+  LIMIT 1;
+
+  RETURN json_build_object(
+    'success', true,
+    'lobby', v_lobby,
+    'active_session', v_active_session,
+    'in_lobby', EXISTS(SELECT 1 FROM battle_lobby WHERE player_id = p_player_id AND status = 'waiting')
+  );
+END;
+$$;
+
+-- Grants
+GRANT EXECUTE ON FUNCTION join_battle_lobby TO authenticated;
+GRANT EXECUTE ON FUNCTION leave_battle_lobby TO authenticated;
+GRANT EXECUTE ON FUNCTION accept_battle_challenge TO authenticated;
+GRANT EXECUTE ON FUNCTION play_battle_turn TO authenticated;
+GRANT EXECUTE ON FUNCTION forfeit_battle TO authenticated;
+GRANT EXECUTE ON FUNCTION get_battle_lobby TO authenticated;

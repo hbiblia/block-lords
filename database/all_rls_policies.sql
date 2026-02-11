@@ -670,3 +670,90 @@ DROP POLICY IF EXISTS "player_rig_inventory_all_auth" ON player_rig_inventory;
 CREATE POLICY "player_rig_inventory_all_auth"
   ON player_rig_inventory FOR ALL
   USING (player_id = auth.uid());
+
+-- =====================================================
+-- POLÍTICAS PARA CRAFTING LORDS
+-- =====================================================
+
+-- Catálogo de elementos (lectura pública para autenticados)
+ALTER TABLE crafting_elements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "crafting_elements_select" ON crafting_elements;
+CREATE POLICY "crafting_elements_select"
+  ON crafting_elements FOR SELECT
+  USING (true);
+
+-- Catálogo de recetas (lectura pública para autenticados)
+ALTER TABLE crafting_recipes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "crafting_recipes_select" ON crafting_recipes;
+CREATE POLICY "crafting_recipes_select"
+  ON crafting_recipes FOR SELECT
+  USING (true);
+
+-- Ingredientes de recetas (lectura pública para autenticados)
+ALTER TABLE crafting_recipe_ingredients ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "crafting_recipe_ingredients_select" ON crafting_recipe_ingredients;
+CREATE POLICY "crafting_recipe_ingredients_select"
+  ON crafting_recipe_ingredients FOR SELECT
+  USING (true);
+
+-- Sesiones de crafting (solo el dueño puede ver)
+ALTER TABLE player_crafting_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "player_crafting_sessions_select" ON player_crafting_sessions;
+CREATE POLICY "player_crafting_sessions_select"
+  ON player_crafting_sessions FOR SELECT
+  USING (player_id = auth.uid());
+
+-- Inventario de crafting (solo el dueño puede ver)
+ALTER TABLE player_crafting_inventory ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "player_crafting_inventory_select" ON player_crafting_inventory;
+CREATE POLICY "player_crafting_inventory_select"
+  ON player_crafting_inventory FOR SELECT
+  USING (player_id = auth.uid());
+
+-- Cooldown de crafting (solo el dueño puede ver)
+ALTER TABLE player_crafting_cooldown ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "player_crafting_cooldown_select" ON player_crafting_cooldown;
+CREATE POLICY "player_crafting_cooldown_select"
+  ON player_crafting_cooldown FOR SELECT
+  USING (player_id = auth.uid());
+
+-- =====================================================
+-- POLITICAS PARA CARD BATTLE PVP
+-- =====================================================
+
+-- Battle Lobby
+ALTER TABLE battle_lobby ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "battle_lobby_select" ON battle_lobby;
+CREATE POLICY "battle_lobby_select"
+  ON battle_lobby FOR SELECT
+  USING (status = 'waiting' OR player_id = auth.uid());
+
+DROP POLICY IF EXISTS "battle_lobby_insert" ON battle_lobby;
+CREATE POLICY "battle_lobby_insert"
+  ON battle_lobby FOR INSERT
+  WITH CHECK (player_id = auth.uid());
+
+DROP POLICY IF EXISTS "battle_lobby_update" ON battle_lobby;
+CREATE POLICY "battle_lobby_update"
+  ON battle_lobby FOR UPDATE
+  USING (player_id = auth.uid());
+
+DROP POLICY IF EXISTS "battle_lobby_delete" ON battle_lobby;
+CREATE POLICY "battle_lobby_delete"
+  ON battle_lobby FOR DELETE
+  USING (player_id = auth.uid());
+
+-- Battle Sessions (ambos jugadores pueden ver su partida)
+ALTER TABLE battle_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "battle_sessions_select" ON battle_sessions;
+CREATE POLICY "battle_sessions_select"
+  ON battle_sessions FOR SELECT
+  USING (player1_id = auth.uid() OR player2_id = auth.uid());
