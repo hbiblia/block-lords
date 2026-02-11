@@ -41,6 +41,7 @@ const {
   cardsPlayedThisTurn,
   result,
   battleLoading,
+  errorMessage,
   session,
   playCard,
   undoLastCard,
@@ -157,6 +158,7 @@ function getEnemyUsername(): string {
           :entries="lobbyEntries"
           :in-lobby="inLobby"
           :loading="lobbyLoading"
+          :error="errorMessage"
           @enter="handleEnterLobby"
           @leave="handleLeaveLobby"
           @challenge="handleChallenge"

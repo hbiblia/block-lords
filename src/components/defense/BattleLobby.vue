@@ -7,6 +7,7 @@ defineProps<{
   entries: LobbyEntry[];
   inLobby: boolean;
   loading: boolean;
+  error: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -25,6 +26,11 @@ const { t } = useI18n();
       <p class="text-[11px] text-slate-300">
         {{ t('battle.lobbyInfo', { amount: BET_AMOUNT }) }}
       </p>
+    </div>
+
+    <!-- Error display -->
+    <div v-if="error" class="mx-2 mt-2 px-3 py-2 bg-red-500/20 border border-red-500/40 rounded-lg">
+      <p class="text-xs text-red-400">{{ error }}</p>
     </div>
 
     <!-- Player list -->

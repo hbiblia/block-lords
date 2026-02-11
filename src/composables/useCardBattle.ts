@@ -83,6 +83,7 @@ export function useCardBattle() {
   const cardsPlayedThisTurn = ref<string[]>([]);
   const result = ref<{ won: boolean; reward: number } | null>(null);
   const battleLoading = ref(false);
+  const errorMessage = ref<string | null>(null);
 
   // Internal
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -109,19 +110,25 @@ export function useCardBattle() {
   async function loadLobby() {
     if (!playerId.value) return;
     lobbyLoading.value = true;
+    errorMessage.value = null;
     try {
       const data = await getBattleLobby(playerId.value);
+      console.log('[Battle] loadLobby response:', JSON.stringify(data));
       if (data?.success) {
         lobbyEntries.value = data.lobby || [];
         inLobby.value = data.in_lobby || false;
 
         // Resume active session if exists
         if (data.active_session) {
+          console.log('[Battle] Found active session, starting battle');
           startBattle(data.active_session);
         }
+      } else {
+        errorMessage.value = data?.error || 'Error loading lobby';
       }
     } catch (e) {
-      console.error('Error loading lobby:', e);
+      console.error('[Battle] Error loading lobby:', e);
+      errorMessage.value = String(e);
     } finally {
       lobbyLoading.value = false;
     }
@@ -130,17 +137,22 @@ export function useCardBattle() {
   async function enterLobby() {
     if (!playerId.value) return;
     lobbyLoading.value = true;
+    errorMessage.value = null;
     try {
       const data = await joinBattleLobby(playerId.value, BET_AMOUNT);
+      console.log('[Battle] joinLobby response:', JSON.stringify(data));
       if (data?.success) {
         inLobby.value = true;
         playSound('click');
+        await loadLobby();
       } else {
         playSound('error');
-        throw new Error(data?.error || 'Failed to join lobby');
+        errorMessage.value = data?.error || 'Failed to join lobby';
+        throw new Error(errorMessage.value ?? 'Failed to join lobby');
       }
     } catch (e) {
-      console.error('Error joining lobby:', e);
+      console.error('[Battle] Error joining lobby:', e);
+      if (!errorMessage.value) errorMessage.value = String(e);
       throw e;
     } finally {
       lobbyLoading.value = false;
@@ -150,14 +162,17 @@ export function useCardBattle() {
   async function exitLobby() {
     if (!playerId.value) return;
     lobbyLoading.value = true;
+    errorMessage.value = null;
     try {
       const data = await leaveBattleLobby(playerId.value);
+      console.log('[Battle] leaveLobby response:', JSON.stringify(data));
       if (data?.success) {
         inLobby.value = false;
         playSound('click');
       }
     } catch (e) {
-      console.error('Error leaving lobby:', e);
+      console.error('[Battle] Error leaving lobby:', e);
+      errorMessage.value = String(e);
     } finally {
       lobbyLoading.value = false;
     }
@@ -166,18 +181,24 @@ export function useCardBattle() {
   async function challengePlayer(opponentLobbyId: string) {
     if (!playerId.value) return;
     battleLoading.value = true;
+    errorMessage.value = null;
     try {
+      console.log('[Battle] Challenging opponent lobby:', opponentLobbyId);
       const data = await acceptBattleChallenge(playerId.value, opponentLobbyId);
+      console.log('[Battle] challenge response:', JSON.stringify(data));
       if (data?.success) {
         playSound('success');
-        // Battle will start via realtime update
+        console.log('[Battle] Challenge accepted! Session:', data.session_id);
+        // Load lobby to find active session and start battle
         await loadLobby();
       } else {
         playSound('error');
-        throw new Error(data?.error || 'Challenge failed');
+        errorMessage.value = data?.error || 'Challenge failed';
+        throw new Error(errorMessage.value ?? 'Challenge failed');
       }
     } catch (e) {
-      console.error('Error accepting challenge:', e);
+      console.error('[Battle] Error accepting challenge:', e);
+      if (!errorMessage.value) errorMessage.value = String(e);
       throw e;
     } finally {
       battleLoading.value = false;
@@ -477,6 +498,7 @@ export function useCardBattle() {
     lobbyEntries,
     inLobby,
     lobbyLoading,
+    errorMessage,
     loadLobby,
     enterLobby,
     exitLobby,

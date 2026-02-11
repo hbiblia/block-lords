@@ -724,6 +724,28 @@ CREATE POLICY "player_crafting_cooldown_select"
   USING (player_id = auth.uid());
 
 -- =====================================================
+-- POLITICAS PARA MINING_BLOCKS (Bloques de mineria)
+-- =====================================================
+
+ALTER TABLE mining_blocks ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "mining_blocks_select" ON mining_blocks;
+CREATE POLICY "mining_blocks_select"
+  ON mining_blocks FOR SELECT
+  USING (true);
+
+-- =====================================================
+-- POLITICAS PARA PLAYER_SHARES (Shares por jugador)
+-- =====================================================
+
+ALTER TABLE player_shares ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "player_shares_select" ON player_shares;
+CREATE POLICY "player_shares_select"
+  ON player_shares FOR SELECT
+  USING (auth.uid() = player_id);
+
+-- =====================================================
 -- POLITICAS PARA CARD BATTLE PVP
 -- =====================================================
 
