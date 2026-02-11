@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
 import type { LobbyEntry } from '@/composables/useCardBattle';
-import { BET_AMOUNT } from '@/utils/battleCards';
+import { BET_AMOUNT, MAX_HP, MAX_ENERGY, TURN_DURATION } from '@/utils/battleCards';
 
 defineProps<{
   entries: LobbyEntry[];
@@ -35,18 +35,71 @@ const { t } = useI18n();
 
     <!-- Player list -->
     <div class="flex-1 overflow-y-auto p-2 space-y-1.5">
-      <div v-if="!inLobby" class="flex-1 flex flex-col items-center justify-center py-8">
-        <span class="text-3xl mb-3">&#9876;</span>
-        <p class="text-sm text-slate-400 mb-4 text-center px-4">
-          {{ t('battle.enterLobbyDesc', { amount: BET_AMOUNT }) }}
-        </p>
+      <div v-if="!inLobby" class="flex-1 flex flex-col items-center py-4 px-3 space-y-3">
+        <!-- Title -->
+        <div class="text-center">
+          <span class="text-4xl block mb-1">&#9876;</span>
+          <h3 class="text-lg font-bold text-slate-100">{{ t('battle.title', 'Card Battle') }}</h3>
+          <p class="text-[11px] text-slate-400 mt-0.5">{{ t('battle.gameSubtitle', '1v1 PvP Turn-Based Card Game') }}</p>
+        </div>
+
+        <!-- Game rules grid -->
+        <div class="w-full grid grid-cols-2 gap-2">
+          <div class="bg-slate-800/40 rounded-lg p-2 border border-border/20">
+            <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-0.5">{{ t('battle.info.hp', 'Health') }}</div>
+            <div class="text-sm font-bold text-red-400">{{ MAX_HP }} HP</div>
+            <div class="text-[9px] text-slate-500">{{ t('battle.info.hpDesc', 'Each player starts with') }}</div>
+          </div>
+          <div class="bg-slate-800/40 rounded-lg p-2 border border-border/20">
+            <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-0.5">{{ t('battle.info.energy', 'Energy') }}</div>
+            <div class="text-sm font-bold text-yellow-400">{{ MAX_ENERGY }} &#9889;</div>
+            <div class="text-[9px] text-slate-500">{{ t('battle.info.energyDesc', 'Per turn to play cards') }}</div>
+          </div>
+          <div class="bg-slate-800/40 rounded-lg p-2 border border-border/20">
+            <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-0.5">{{ t('battle.info.timer', 'Turn Timer') }}</div>
+            <div class="text-sm font-bold text-green-400">{{ TURN_DURATION }}s</div>
+            <div class="text-[9px] text-slate-500">{{ t('battle.info.timerDesc', 'Seconds per turn') }}</div>
+          </div>
+          <div class="bg-slate-800/40 rounded-lg p-2 border border-border/20">
+            <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-0.5">{{ t('battle.info.prize', 'Prize') }}</div>
+            <div class="text-sm font-bold text-green-400">{{ BET_AMOUNT * 2 }} GC</div>
+            <div class="text-[9px] text-slate-500">{{ t('battle.info.prizeDesc', 'Winner takes all') }}</div>
+          </div>
+        </div>
+
+        <!-- Card types info -->
+        <div class="w-full bg-slate-800/30 rounded-lg p-2.5 border border-border/20">
+          <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">{{ t('battle.info.cardTypes', 'Card Types') }}</div>
+          <div class="flex gap-3 justify-center">
+            <div class="flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-red-500" />
+              <span class="text-[10px] text-red-400 font-medium">{{ t('battle.info.attack', 'Attack') }} (5)</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-blue-500" />
+              <span class="text-[10px] text-blue-400 font-medium">{{ t('battle.info.defense', 'Defense') }} (4)</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-purple-500" />
+              <span class="text-[10px] text-purple-400 font-medium">{{ t('battle.info.special', 'Special') }} (3)</span>
+            </div>
+          </div>
+          <p class="text-[9px] text-slate-500 text-center mt-1">{{ t('battle.info.deckInfo', '12 cards total. Both players get the same deck, shuffled randomly.') }}</p>
+        </div>
+
+        <!-- Enter button -->
         <button
           @click="emit('enter')"
           :disabled="loading"
-          class="px-6 py-2.5 bg-accent-primary hover:bg-accent-primary/80 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+          class="w-full py-3 bg-accent-primary hover:bg-accent-primary/80 text-white rounded-lg font-bold text-sm transition-colors disabled:opacity-50 shadow-lg shadow-accent-primary/20"
         >
-          <span v-if="loading">{{ t('common.loading') }}</span>
-          <span v-else>{{ t('battle.enterLobby', 'Enter Lobby') }} ({{ BET_AMOUNT }} GC)</span>
+          <span v-if="loading" class="flex items-center justify-center gap-2">
+            <span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            {{ t('common.loading') }}
+          </span>
+          <span v-else class="flex items-center justify-center gap-2">
+            &#9876; {{ t('battle.enterLobby', 'Enter Lobby') }} ({{ BET_AMOUNT }} GC)
+          </span>
         </button>
       </div>
 

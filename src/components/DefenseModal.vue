@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue';
+import { watch, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useDefenseStore } from '@/stores/defense';
 import { useAuthStore } from '@/stores/auth';
@@ -50,6 +50,19 @@ const {
   resetBattle,
   cleanup,
 } = useCardBattle();
+
+// Lock body scroll when modal is open
+watch(
+  () => props.show,
+  (open) => {
+    document.body.style.overflow = open ? 'hidden' : '';
+  },
+  { immediate: true }
+);
+
+onUnmounted(() => {
+  document.body.style.overflow = '';
+});
 
 // Load lobby when modal opens (watch the prop, not store)
 watch(
@@ -131,25 +144,64 @@ function getEnemyUsername(): string {
       <!-- Modal card -->
       <div class="relative w-full max-w-lg h-[90vh] flex flex-col bg-bg-primary border border-border rounded-xl shadow-2xl animate-fade-in overflow-hidden">
         <!-- Header -->
-        <div class="flex items-center justify-between p-3 border-b border-border/50">
-          <div class="flex items-center gap-2">
-            <span class="text-xl">&#9876;</span>
-            <h2 class="text-base font-bold bg-gradient-to-r from-red-400 to-orange-500 bg-clip-text text-transparent">
-              {{ t('battle.title', 'Card Battle') }}
-            </h2>
+        <div
+          class="flex items-center justify-between px-3 py-2.5 border-b relative overflow-hidden"
+          :class="session && session.status === 'active'
+            ? 'border-red-500/20 bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900'
+            : 'border-border/50'"
+        >
+          <!-- Battle mode background accent -->
+          <div
+            v-if="session && session.status === 'active'"
+            class="absolute inset-0 bg-gradient-to-r from-red-500/5 via-transparent to-orange-500/5"
+          />
+
+          <div class="relative flex items-center gap-2">
+            <div
+              class="w-7 h-7 rounded-lg flex items-center justify-center text-sm shadow-md"
+              :class="session && session.status === 'active'
+                ? 'bg-gradient-to-br from-red-500 to-orange-600 shadow-red-500/30'
+                : 'bg-gradient-to-br from-slate-700 to-slate-600 shadow-slate-500/20'"
+            >
+              &#9876;
+            </div>
+            <div class="flex flex-col">
+              <h2
+                class="text-sm font-black tracking-tight bg-gradient-to-r bg-clip-text text-transparent"
+                :class="session && session.status === 'active'
+                  ? 'from-red-400 via-orange-400 to-amber-400'
+                  : 'from-red-400 to-orange-500'"
+              >
+                {{ t('battle.title', 'Card Battle') }}
+              </h2>
+              <span
+                v-if="session && session.status === 'active'"
+                class="text-[9px] font-bold text-slate-500 uppercase tracking-widest"
+              >
+                {{ t('battle.turnLabel', 'Turn') }} {{ session.turn_number }}
+              </span>
+            </div>
           </div>
+
+          <!-- Close or battle indicator -->
           <button
             v-if="!session || session.status !== 'active'"
             @click="handleClose"
-            class="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-lg transition-colors"
+            class="relative p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-lg transition-colors"
           >
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <span v-else class="text-xs text-yellow-400 font-mono">
-            T{{ session.turn_number }}
-          </span>
+          <div v-else class="relative flex items-center gap-1.5">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-red-400" />
+            </span>
+            <span class="text-[10px] font-bold text-red-400 uppercase tracking-wider">
+              {{ t('battle.live', 'LIVE') }}
+            </span>
+          </div>
         </div>
 
         <!-- Lobby View -->
