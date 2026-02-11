@@ -1,17 +1,29 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
 const CURRENT_VERSION = '1.2.0';
 const STORAGE_KEY = 'block-lords-last-seen-version';
 
+const route = useRoute();
 const showModal = ref(false);
+const shouldShow = ref(false);
 
 onMounted(() => {
   const lastSeenVersion = localStorage.getItem(STORAGE_KEY);
-
-  // Si nunca vio ninguna versión o la versión cambió, mostrar el modal
   if (!lastSeenVersion || lastSeenVersion !== CURRENT_VERSION) {
+    shouldShow.value = true;
+    // Si ya estamos en /mining, mostrar inmediatamente
+    if (route.path === '/mining') {
+      showModal.value = true;
+    }
+  }
+});
+
+// Mostrar cuando el usuario navegue a /mining
+watch(() => route.path, (path) => {
+  if (path === '/mining' && shouldShow.value) {
     showModal.value = true;
   }
 });
@@ -26,8 +38,8 @@ watch(showModal, (isOpen) => {
 });
 
 function closeModal() {
-  // Guardar la versión actual como vista
   localStorage.setItem(STORAGE_KEY, CURRENT_VERSION);
+  shouldShow.value = false;
   showModal.value = false;
 }
 </script>
