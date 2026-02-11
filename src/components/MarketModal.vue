@@ -128,7 +128,7 @@ const confirmAction = ref<{
 
 // Processing modal state
 const showProcessingModal = ref(false);
-const processingStatus = ref<'processing' | 'success' | 'error'>('processing');
+const processingStatus = ref<'processing' | 'error'>('processing');
 const processingError = ref<string>('');
 
 // Use store data
@@ -334,7 +334,7 @@ async function buyRig(rigId: string) {
   const result = await marketStore.buyRig(rigId);
 
   if (result.success) {
-    processingStatus.value = 'success';
+    closeProcessingModal();
     toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
     emit('purchased');
   } else if (result.requiresRon) {
@@ -369,7 +369,7 @@ async function buyCooling(coolingId: string) {
   const result = await marketStore.buyCooling(coolingId);
 
   if (result.success) {
-    processingStatus.value = 'success';
+    closeProcessingModal();
     toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
     emit('purchased');
   } else {
@@ -399,7 +399,7 @@ async function buyCard(cardId: string) {
   const result = await marketStore.buyCard(cardId);
 
   if (result.success) {
-    processingStatus.value = 'success';
+    closeProcessingModal();
     toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
     emit('purchased');
   } else {
@@ -429,7 +429,7 @@ async function buyBoost(boostId: string) {
   const result = await marketStore.buyBoost(boostId);
 
   if (result.success) {
-    processingStatus.value = 'success';
+    closeProcessingModal();
     toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
     emit('purchased');
   } else {
@@ -445,7 +445,7 @@ function requestBuyCryptoPackage(pkg: CryptoPackageType) {
     id: pkg.id,
     name: getCryptoPackageName(pkg.id),
     price: pkg.ron_price,
-    description: `${pkg.total_crypto} 💎 Crypto${bonusText}`,
+    description: `${pkg.total_crypto} 💎 BLC${bonusText}`,
     currency: 'ron',
   };
   showConfirm.value = true;
@@ -462,7 +462,7 @@ async function buyCryptoPackage(packageId: string) {
   const result = await marketStore.buyCryptoPackage(packageId);
 
   if (result.success) {
-    processingStatus.value = 'success';
+    closeProcessingModal();
     toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
     emit('purchased');
   } else {
@@ -627,7 +627,7 @@ watch(() => props.show, (newVal) => {
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
               <span>💎</span>
-              <span>{{ t('market.tabs.crypto', 'Crypto') }}</span>
+              <span>{{ t('market.tabs.crypto', 'BLC') }}</span>
             </button>
           </div>
 
@@ -1131,7 +1131,7 @@ watch(() => props.show, (newVal) => {
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
                 <span class="text-lg">💎</span>
-                <span class="text-[10px] font-medium">Crypto</span>
+                <span class="text-[10px] font-medium">BLC</span>
               </button>
             </div>
           </div>
@@ -1152,23 +1152,6 @@ watch(() => props.show, (newVal) => {
             </div>
             <h3 class="text-lg font-bold mb-2">{{ t('market.processing.title') }}</h3>
             <p class="text-text-muted text-sm">{{ t('market.processing.wait') }}</p>
-          </div>
-
-          <!-- Success State -->
-          <div v-else-if="processingStatus === 'success'" class="text-center">
-            <div class="w-16 h-16 mx-auto mb-4 bg-status-success/20 rounded-full flex items-center justify-center">
-              <svg class="w-8 h-8 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h3 class="text-lg font-bold text-status-success mb-2">{{ t('market.processing.success') }}</h3>
-            <p class="text-text-muted text-sm mb-4">{{ t('market.processing.purchaseComplete') }}</p>
-            <button
-              @click="closeProcessingModal"
-              class="w-full py-2.5 rounded-lg font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors"
-            >
-              {{ t('common.close') }}
-            </button>
           </div>
 
           <!-- Error State -->

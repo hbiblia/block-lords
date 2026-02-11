@@ -154,6 +154,13 @@ export const useToastStore = defineStore('toast', () => {
     });
   }
 
+  function giftReceived(rewardText: string) {
+    return show(rewardText, 'success', {
+      icon: '🎁',
+      duration: 5000,
+    });
+  }
+
   return {
     toasts,
     show,
@@ -170,5 +177,6 @@ export const useToastStore = defineStore('toast', () => {
     resourceLow,
     boostInstalled,
     boostExpired,
+    giftReceived,
   };
 });

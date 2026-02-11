@@ -3,7 +3,10 @@
     "allow": [
       "Bash(del \"d:\\\\software\\\\block-lords\\\\src\\\\pages\\\\LeaderboardPage.vue\")",
       "Bash(npx eslint:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(powershell -Command \"\\(Get-Content ''src/locales/es.ts'' -Raw\\) -replace \"\"''Total Crypto''\"\", \"\"''Total BLC''\"\" -replace \"\"''Comprar Crypto''\"\", \"\"''Comprar BLC''\"\" -replace \"\"''Error al comprar paquete de crypto''\"\", \"\"''Error al comprar paquete de BLC''\"\" -replace \"\"''Acreditando Crypto''\"\", \"\"''Acreditando BLC''\"\" -replace \"\"Pago con Crypto\\\\.''\"\", \"\"Pago con BLC.''\"\" -replace \"\"''Convierte tu crypto''\"\", \"\"''Convierte tu BLC''\"\" -replace \"\"''Tu Crypto''\"\", \"\"''Tu BLC''\"\" -replace \"\"''Crypto → GameCoin''\"\", \"\"''BLC → GameCoin''\"\" -replace \"\"''Crypto → RON''\"\", \"\"''BLC → RON''\"\" -replace \"\"''Cantidad de Crypto''\"\", \"\"''Cantidad de BLC''\"\" -replace \"\"''Crypto insuficiente''\"\", \"\"''BLC insuficiente''\"\" -replace \"\"Minimo \\\\{amount\\\\} crypto para RON\"\", \"\"Minimo {amount} BLC para RON\"\" -replace \"\"ganaste \\\\{reward\\\\} Crypto!\"\", \"\"ganaste {reward} BLC!\"\" -replace \"\"''Magnate Crypto''\"\", \"\"''Magnate BLC''\"\" -replace \"\"''\\\\+50% Crypto por bloque''\"\", \"\"''+50% BLC por bloque''\"\" -replace \"\"500 Crypto''\"\", \"\"500 BLC''\"\" -replace \"\"suficiente Crypto''\"\", \"\"suficiente BLC''\"\" -replace \"\"''Crypto Ganado''\"\", \"\"''BLC Ganado''\"\" -replace \"\"crypto: ''Crypto''\"\", \"\"crypto: ''BLC''\"\" -replace \"\"''Leyenda Crypto''\"\", \"\"''Leyenda BLC''\"\" -replace \"\"''\\\\+\\\\{amount\\\\} Crypto''\"\", \"\"''+{amount} BLC''\"\" -replace \"\"''Crypto evento''\"\", \"\"''BLC evento''\"\" -replace \"\"// Energy - Crypto\"\", \"\"// Energy - BLC\"\" -replace \"\"// Internet - Crypto\"\", \"\"// Internet - BLC\"\" | Set-Content ''src/locales/es.ts'' -NoNewline\")",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell -File:*)"
     ]
   }
 }

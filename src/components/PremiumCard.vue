@@ -160,7 +160,7 @@ async function confirmPurchase() {
           </div>
           <div>
             <p class="font-medium">{{ t('premium.benefits.blockBonus') }}</p>
-            <p class="text-xs text-text-muted">150 crypto vs 100 crypto</p>
+            <p class="text-xs text-text-muted">150 BLC vs 100 BLC</p>
           </div>
         </div>
 

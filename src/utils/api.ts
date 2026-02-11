@@ -1160,6 +1160,25 @@ export interface VerifyRoninPaymentResult {
 }
 
 // Verify a Ronin blockchain transaction for crypto package purchase
+// === GIFTS (REGALOS) ===
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPendingGifts(playerId: string): Promise<any> {
+  return rpcWithRetry('get_pending_gifts', {
+    p_player_id: playerId,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function claimGift(playerId: string, giftId: string): Promise<any> {
+  return rpcWithRetry('claim_gift', {
+    p_player_id: playerId,
+    p_gift_id: giftId,
+  }, { critical: true, maxRetries: 5 });
+}
+
+// === RONIN WALLET PAYMENTS ===
+
 export async function verifyRoninPayment(
   txHash: string,
   packageId: string,

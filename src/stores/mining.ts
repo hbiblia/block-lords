@@ -33,6 +33,9 @@ interface PlayerRig {
   hashrate_level?: number;
   efficiency_level?: number;
   thermal_level?: number;
+  hashrate_bonus?: number;
+  efficiency_bonus?: number;
+  thermal_bonus?: number;
   rig: Rig;
 }
 
@@ -57,6 +60,7 @@ interface Block {
   is_premium?: boolean;
   // Nuevo sistema de shares
   total_shares?: number;
+  total_distributed?: number;
   contributors_count?: number;
   top_contributor?: {
     username: string;
@@ -244,13 +248,16 @@ export const useMiningStore = defineStore('mining', () => {
   const totalEnergyConsumption = computed(() =>
     rigs.value
       .filter(r => r.is_active)
-      .reduce((sum, r) => sum + r.rig.power_consumption, 0)
+      .reduce((sum, r) => sum + getRigEffectivePower(r), 0)
   );
 
   const totalInternetConsumption = computed(() =>
     rigs.value
       .filter(r => r.is_active)
-      .reduce((sum, r) => sum + r.rig.internet_consumption, 0)
+      .reduce((sum, r) => {
+        const efficiencyBonus = r.efficiency_bonus ?? 0;
+        return sum + r.rig.internet_consumption * (1 - efficiencyBonus / 100);
+      }, 0)
   );
 
   const miningChance = computed(() => {
@@ -277,13 +284,18 @@ export const useMiningStore = defineStore('mining', () => {
   function getRigEffectiveHashrate(rig: PlayerRig): number {
     const temp = rig.temperature ?? 25;
     const condition = rig.condition ?? 100;
+    // Temperature penalty: matches backend (>50°C threshold)
     let tempPenalty = 1;
-    if (temp > 60) {
-      tempPenalty = Math.max(0.5, 1 - ((temp - 60) * 0.0125));
+    if (temp > 50) {
+      tempPenalty = Math.max(0.3, 1 - ((temp - 50) * 0.014));
     }
-    // Apply boost multiplier
-    const boostMultiplier = getRigBoostMultiplier(rig.id, 'hashrate');
-    return rig.rig.hashrate * (condition / 100) * tempPenalty * boostMultiplier;
+    // Condition penalty: no penalty >= 80%, gradual below
+    const conditionPenalty = condition >= 80 ? 1.0 : 0.3 + (condition / 80) * 0.7;
+    // Apply boost multiplier + hashrate upgrade bonus
+    let boostMultiplier = getRigBoostMultiplier(rig.id, 'hashrate');
+    const hashrateBonus = rig.hashrate_bonus ?? 0;
+    boostMultiplier *= (1 + hashrateBonus / 100);
+    return rig.rig.hashrate * conditionPenalty * tempPenalty * boostMultiplier;
   }
 
   function getRigHashrateBoostPercent(rig: PlayerRig): number {
@@ -293,22 +305,29 @@ export const useMiningStore = defineStore('mining', () => {
 
   function getRigPenaltyPercent(rig: PlayerRig): number {
     const effective = getRigEffectiveHashrate(rig);
-    const base = rig.rig.hashrate;
-    if (base === 0) return 0;
-    return Math.round(((base - effective) / base) * 100);
+    // Compare against theoretical max (upgrades + boosts, no condition/temp penalties)
+    const hashrateBonus = rig.hashrate_bonus ?? 0;
+    const boostMult = getRigBoostMultiplier(rig.id, 'hashrate');
+    const theoreticalMax = rig.rig.hashrate * (1 + hashrateBonus / 100) * boostMult;
+    if (theoreticalMax === 0) return 0;
+    return Math.max(0, Math.round(((theoreticalMax - effective) / theoreticalMax) * 100));
   }
 
   function getRigEffectivePower(rig: PlayerRig): number {
     const temp = rig.temperature ?? 25;
     const tempPenalty = 1 + Math.max(0, (temp - 40)) * 0.0083;
-    return rig.rig.power_consumption * tempPenalty;
+    // Apply efficiency upgrade bonus (reduces consumption)
+    const efficiencyBonus = rig.efficiency_bonus ?? 0;
+    return rig.rig.power_consumption * tempPenalty * (1 - efficiencyBonus / 100);
   }
 
   function getPowerPenaltyPercent(rig: PlayerRig): number {
     const effective = getRigEffectivePower(rig);
-    const base = rig.rig.power_consumption;
-    if (base === 0) return 0;
-    return Math.round(((effective - base) / base) * 100);
+    // Compare against efficiency-adjusted base to show temperature penalty only
+    const efficiencyBonus = rig.efficiency_bonus ?? 0;
+    const adjustedBase = rig.rig.power_consumption * (1 - efficiencyBonus / 100);
+    if (adjustedBase === 0) return 0;
+    return Math.round(((effective - adjustedBase) / adjustedBase) * 100);
   }
 
   // Cooling efficiency based on durability
@@ -824,11 +843,30 @@ export const useMiningStore = defineStore('mining', () => {
   const currentMiningBlock = ref<MiningBlockInfo | null>(null);
   const playerShares = ref<PlayerSharesInfo | null>(null);
 
+  async function loadRecentBlocks() {
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) return;
+    try {
+      const blocksData = await getRecentMiningBlocks(authStore.player.id, 10);
+      recentBlocks.value = blocksData ?? [];
+    } catch (e) {
+      console.error('Error loading recent blocks:', e);
+    }
+  }
+
   async function loadMiningBlockInfo() {
     try {
+      const wasActive = currentMiningBlock.value?.active;
+      const prevBlockNumber = currentMiningBlock.value?.block_number;
       const { data, error } = await supabase.rpc('get_current_mining_block_info');
       if (error) throw error;
       currentMiningBlock.value = data;
+
+      // Block just closed (was active, now inactive or different block number) → reload recent blocks
+      if (wasActive && (!data?.active || data?.block_number !== prevBlockNumber)) {
+        loadRecentBlocks();
+        loadPlayerShares();
+      }
     } catch (e) {
       console.error('Error loading mining block info:', e);
     }
@@ -865,11 +903,21 @@ export const useMiningStore = defineStore('mining', () => {
 
   const playerSharePercentage = computed(() => {
     if (!playerShares.value?.has_shares) return 0;
+    // Recalculate locally using latest block data (updates every second)
+    const totalShares = currentMiningBlock.value?.total_shares;
+    if (totalShares && totalShares > 0) {
+      return (playerShares.value.shares / totalShares) * 100;
+    }
     return playerShares.value.share_percentage;
   });
 
   const estimatedReward = computed(() => {
     if (!playerShares.value?.has_shares) return 0;
+    // Recalculate locally: player % of block reward (updates every second via block info)
+    const blockReward = currentMiningBlock.value?.reward;
+    if (blockReward && playerSharePercentage.value > 0) {
+      return blockReward * (playerSharePercentage.value / 100);
+    }
     return playerShares.value.estimated_reward;
   });
 
@@ -1032,6 +1080,7 @@ export const useMiningStore = defineStore('mining', () => {
     timeRemainingAlert,
     loadMiningBlockInfo,
     loadPlayerShares,
+    loadRecentBlocks,
     subscribeToMiningBlocks,
   };
 });

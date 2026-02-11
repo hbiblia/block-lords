@@ -309,11 +309,11 @@ async function handleLogout() {
           <span class="font-bold">{{ authStore.player?.gamecoin_balance?.toFixed(2) ?? '0.00' }}</span>
         </div>
 
-        <!-- Crypto -->
+        <!-- BLC -->
         <div class="flex items-center justify-between py-2 border-b border-border/30">
           <div class="flex items-center gap-2">
             <span class="text-accent-primary text-lg">💎</span>
-            <span class="text-text-muted text-sm">Crypto</span>
+            <span class="text-text-muted text-sm">BLC</span>
           </div>
           <span class="font-bold">{{ authStore.player?.crypto_balance?.toFixed(2) ?? '0.00' }}</span>
         </div>

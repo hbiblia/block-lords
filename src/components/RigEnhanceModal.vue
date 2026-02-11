@@ -150,7 +150,7 @@ const confirmAction = ref<{
 
 // Processing modal
 const showProcessingModal = ref(false);
-const processingStatus = ref<'processing' | 'success' | 'error'>('processing');
+const processingStatus = ref<'processing' | 'error'>('processing');
 const processingError = ref('');
 
 // Repair minigame
@@ -644,7 +644,6 @@ async function confirmUse() {
     }
 
     if (result?.success) {
-      processingStatus.value = 'success';
       playSound('success');
 
       const rigName = props.rig.rig?.name || 'Rig';
@@ -652,17 +651,16 @@ async function confirmUse() {
       // Handle delete separately - close modal immediately
       if (type === 'delete') {
         toastStore.success(`${rigName} eliminado`);
+        closeProcessingModal();
         await authStore.fetchPlayer();
         await miningStore.reloadRigs();
         emit('updated');
-        setTimeout(() => {
-          closeProcessingModal();
-          emit('close');
-        }, 1000);
+        emit('close');
         return;
       }
 
-      // For non-delete actions, reload data
+      // For non-delete actions, reload data and close modal
+      closeProcessingModal();
       dataLoaded.value = false; // Reset to force reload
       await loadData();
       await authStore.fetchPlayer();
@@ -1123,7 +1121,7 @@ function closeProcessingModal() {
               <!-- Upgrades available (shown even when rig is active, but buttons disabled) -->
               <template v-if="rigUpgrades">
                 <div class="text-center mb-4">
-                  <p class="text-text-muted text-sm">{{ t('rigManage.upgradeDescription', 'Mejora tu rig con crypto para aumentar su rendimiento') }}</p>
+                  <p class="text-text-muted text-sm">{{ t('rigManage.upgradeDescription', 'Mejora tu rig con BLC para aumentar su rendimiento') }}</p>
                   <p class="text-xs text-amber-400 mt-1">Max nivel: {{ rigUpgrades.max_level }}</p>
                 </div>
 
@@ -1219,7 +1217,7 @@ function closeProcessingModal() {
 
                 <!-- Current crypto balance -->
                 <div class="text-center text-sm text-text-muted mt-4">
-                  {{ t('rigManage.yourCrypto', 'Tu crypto') }}: <span class="text-amber-400 font-mono">💎 {{ formatCrypto(authStore.player?.crypto_balance ?? 0) }}</span>
+                  {{ t('rigManage.yourCrypto', 'Tu BLC') }}: <span class="text-amber-400 font-mono">💎 {{ formatCrypto(authStore.player?.crypto_balance ?? 0) }}</span>
                 </div>
               </template>
             </div>
@@ -1385,21 +1383,6 @@ function closeProcessingModal() {
           <div v-if="processingStatus === 'processing'" class="text-center">
             <div class="w-12 h-12 mx-auto mb-4 border-2 border-accent-primary border-t-transparent rounded-full animate-spin"></div>
             <p class="text-text-muted">{{ t('common.processing') }}</p>
-          </div>
-
-          <div v-else-if="processingStatus === 'success'" class="text-center">
-            <div class="w-12 h-12 mx-auto mb-4 bg-status-success/20 rounded-full flex items-center justify-center">
-              <svg class="w-6 h-6 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <p class="text-status-success font-medium mb-4">{{ t('common.success') }}</p>
-            <button
-              @click="closeProcessingModal"
-              class="w-full py-2 rounded-lg font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors"
-            >
-              {{ t('common.close') }}
-            </button>
           </div>
 
           <div v-else-if="processingStatus === 'error'" class="text-center">

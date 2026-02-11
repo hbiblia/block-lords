@@ -33,7 +33,7 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO missions (id, name, description, mission_type, target_value, reward_type, reward_amount, difficulty, icon)
 VALUES
   ('daily_mine_5', 'daily_mine_5', 'daily_mine_5', 'mine_blocks', 5, 'crypto', 50, 'medium', '⛏️'),
-  ('daily_mine_10', 'daily_mine_10', 'daily_mine_10', 'mine_blocks', 10, 'crypto', 150, 'medium', '🔨'),
+  ('daily_mine_8', 'daily_mine_8', 'daily_mine_8', 'mine_blocks', 8, 'crypto', 150, 'medium', '🔨'),
   ('daily_online_60', 'daily_online_60', 'daily_online_60', 'online_time', 60, 'energy', 25, 'medium', '⏰'),
   ('daily_online_120', 'daily_online_120', 'daily_online_120', 'online_time', 120, 'internet', 30, 'medium', '🏃'),
   ('daily_earn_1000', 'daily_earn_1000', 'daily_earn_1000', 'earn_crypto', 1000, 'gamecoin', 500, 'medium', '💵'),
@@ -54,14 +54,13 @@ ON CONFLICT (id) DO UPDATE SET
 -- =====================================================
 INSERT INTO missions (id, name, description, mission_type, target_value, reward_type, reward_amount, difficulty, icon)
 VALUES
-  ('daily_mine_20', 'daily_mine_20', 'daily_mine_20', 'mine_blocks', 20, 'crypto', 400, 'hard', '💎'),
-  ('daily_mine_35', 'daily_mine_35', 'daily_mine_35', 'mine_blocks', 35, 'crypto', 800, 'hard', '🏆'),
+  ('daily_mine_10', 'daily_mine_10', 'daily_mine_10', 'mine_blocks', 10, 'crypto', 400, 'hard', '💎'),
+  ('daily_mine_15', 'daily_mine_15', 'daily_mine_15', 'mine_blocks', 15, 'crypto', 800, 'hard', '🏆'),
   ('daily_online_240', 'daily_online_240', 'daily_online_240', 'online_time', 240, 'crypto', 200, 'hard', '🎖️'),
   ('daily_online_360', 'daily_online_360', 'daily_online_360', 'online_time', 360, 'crypto', 350, 'hard', '💪'),
   ('daily_earn_5000', 'daily_earn_5000', 'daily_earn_5000', 'earn_crypto', 5000, 'gamecoin', 1500, 'hard', '🤑'),
   ('daily_earn_10000', 'daily_earn_10000', 'daily_earn_10000', 'earn_crypto', 10000, 'energy', 50, 'hard', '🎰'),
-  ('daily_multi_rig', 'daily_multi_rig', 'daily_multi_rig', 'multi_rig', 2, 'crypto', 300, 'hard', '🖥️'),
-  ('daily_no_overheat', 'daily_no_overheat', 'daily_no_overheat', 'mine_no_overheat', 10, 'internet', 40, 'hard', '❄️')
+  ('daily_multi_rig', 'daily_multi_rig', 'daily_multi_rig', 'multi_rig', 2, 'crypto', 300, 'hard', '🖥️')
 ON CONFLICT (id) DO UPDATE SET
   mission_type = EXCLUDED.mission_type,
   target_value = EXCLUDED.target_value,
@@ -75,8 +74,8 @@ ON CONFLICT (id) DO UPDATE SET
 -- =====================================================
 INSERT INTO missions (id, name, description, mission_type, target_value, reward_type, reward_amount, difficulty, icon)
 VALUES
-  ('daily_mine_50', 'daily_mine_50', 'daily_mine_50', 'mine_blocks', 50, 'crypto', 1500, 'epic', '👑'),
-  ('daily_mine_100', 'daily_mine_100', 'daily_mine_100', 'mine_blocks', 100, 'crypto', 5000, 'epic', '🌟'),
+  ('daily_mine_20', 'daily_mine_20', 'daily_mine_20', 'mine_blocks', 20, 'crypto', 1500, 'epic', '👑'),
+  ('daily_mine_30', 'daily_mine_30', 'daily_mine_30', 'mine_blocks', 30, 'crypto', 5000, 'epic', '🌟'),
   ('daily_online_480', 'daily_online_480', 'daily_online_480', 'online_time', 480, 'crypto', 600, 'epic', '🔥'),
   ('daily_earn_25000', 'daily_earn_25000', 'daily_earn_25000', 'earn_crypto', 25000, 'crypto', 1000, 'epic', '💎'),
   ('daily_earn_50000', 'daily_earn_50000', 'daily_earn_50000', 'earn_crypto', 50000, 'crypto', 2500, 'epic', '🏛️'),
@@ -101,10 +100,10 @@ VALUES
   ('weekly_mine_75', 'weekly_mine_75', 'weekly_mine_75', 'mine_blocks_weekly', 75, 'crypto', 1500, 'medium', '⛏️'),
   ('weekly_earn_25000', 'weekly_earn_25000', 'weekly_earn_25000', 'earn_crypto_weekly', 25000, 'gamecoin', 3000, 'medium', '💰'),
   ('weekly_trades_5', 'weekly_trades_5', 'weekly_trades_5', 'market_trades_weekly', 5, 'crypto', 400, 'medium', '🏪'),
-  ('weekly_mine_200', 'weekly_mine_200', 'weekly_mine_200', 'mine_blocks_weekly', 200, 'crypto', 4000, 'hard', '🔨'),
+  ('weekly_mine_80', 'weekly_mine_80', 'weekly_mine_80', 'mine_blocks_weekly', 80, 'crypto', 4000, 'hard', '🔨'),
   ('weekly_earn_100000', 'weekly_earn_100000', 'weekly_earn_100000', 'earn_crypto_weekly', 100000, 'crypto', 5000, 'hard', '🤑'),
   ('weekly_login_7', 'weekly_login_7', 'weekly_login_7', 'daily_login', 7, 'crypto', 750, 'hard', '🏆'),
-  ('weekly_mine_500', 'weekly_mine_500', 'weekly_mine_500', 'mine_blocks_weekly', 500, 'crypto', 10000, 'epic', '👑'),
+  ('weekly_mine_150', 'weekly_mine_150', 'weekly_mine_150', 'mine_blocks_weekly', 150, 'crypto', 10000, 'epic', '👑'),
   ('weekly_perfect', 'weekly_perfect', 'weekly_perfect', 'perfect_week', 7, 'crypto', 7500, 'epic', '🌟')
 ON CONFLICT (id) DO UPDATE SET
   mission_type = EXCLUDED.mission_type,
@@ -162,6 +161,23 @@ VALUES
   ('event_weekend_warrior', 'event_weekend_warrior', 'event_weekend_warrior', 'event_blocks', 50, 'crypto', 2000, 'medium', '🎊'),
   ('event_double_xp', 'event_double_xp', 'event_double_xp', 'event_crypto', 50000, 'crypto', 5000, 'hard', '✨'),
   ('event_community', 'event_community', 'event_community', 'community_goal', 1, 'crypto', 10000, 'epic', '🌍')
+ON CONFLICT (id) DO UPDATE SET
+  mission_type = EXCLUDED.mission_type,
+  target_value = EXCLUDED.target_value,
+  reward_type = EXCLUDED.reward_type,
+  reward_amount = EXCLUDED.reward_amount,
+  difficulty = EXCLUDED.difficulty,
+  icon = EXCLUDED.icon;
+
+-- =====================================================
+-- ADDITIONAL MISSIONS
+-- =====================================================
+INSERT INTO missions (id, name, description, mission_type, target_value, reward_type, reward_amount, difficulty, icon)
+VALUES
+  ('repair_2_rigs', 'repair_2_rigs', 'repair_2_rigs', 'repair_rig', 2, 'gamecoin', 500, 'medium', '🔧'),
+  ('repair_3_rigs', 'repair_3_rigs', 'repair_3_rigs', 'repair_rig', 3, 'gamecoin', 600, 'hard', '🔧'),
+  ('use_boost_1', 'use_boost_1', 'use_boost_1', 'use_boost', 1, 'gamecoin', 300, 'medium', '🚀'),
+  ('use_cooling_2', 'use_cooling_2', 'use_cooling_2', 'install_cooling', 2, 'energy', 30, 'medium', '❄️')
 ON CONFLICT (id) DO UPDATE SET
   mission_type = EXCLUDED.mission_type,
   target_value = EXCLUDED.target_value,

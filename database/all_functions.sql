@@ -494,6 +494,9 @@ BEGIN
              COALESCE(pr.hashrate_level, 1) as hashrate_level,
              COALESCE(pr.efficiency_level, 1) as efficiency_level,
              COALESCE(pr.thermal_level, 1) as thermal_level,
+             COALESCE(uc_h.hashrate_bonus, 0) as hashrate_bonus,
+             COALESCE(uc_e.efficiency_bonus, 0) as efficiency_bonus,
+             COALESCE(uc_t.thermal_bonus, 0) as thermal_bonus,
              json_build_object(
                'id', r.id, 'name', r.name, 'description', r.description,
                'hashrate', r.hashrate, 'power_consumption', r.power_consumption,
@@ -504,6 +507,9 @@ BEGIN
              ) as rig
       FROM player_rigs pr
       JOIN rigs r ON r.id = pr.rig_id
+      LEFT JOIN upgrade_costs uc_h ON uc_h.level = COALESCE(pr.hashrate_level, 1)
+      LEFT JOIN upgrade_costs uc_e ON uc_e.level = COALESCE(pr.efficiency_level, 1)
+      LEFT JOIN upgrade_costs uc_t ON uc_t.level = COALESCE(pr.thermal_level, 1)
       WHERE pr.player_id = p_player_id
       ORDER BY pr.acquired_at DESC
     ) t
@@ -1704,14 +1710,14 @@ BEGIN
       FROM player_rigs WHERE player_id = v_player.id AND is_active = true;
 
       IF v_active_rig_count > 0 THEN
-        -- rig_active_time: 1 minuto por cada tick con al menos 1 rig activo
-        PERFORM update_mission_progress(v_player.id, 'rig_active_time', 1);
+        -- rig_active_time: 0.5 minutos (30 segundos) por cada tick con al menos 1 rig activo
+        PERFORM update_mission_progress(v_player.id, 'rig_active_time', 0.5);
 
         -- multi_rig: si tiene 2+ rigs activos simultáneamente
         IF v_active_rig_count >= 2 THEN
           PERFORM update_mission_progress(v_player.id, 'multi_rig', 1);
-          -- multi_rig_time: minutos con múltiples rigs activos
-          PERFORM update_mission_progress(v_player.id, 'multi_rig_time', 1);
+          -- multi_rig_time: minutos con múltiples rigs activos (0.5 = 30 segundos)
+          PERFORM update_mission_progress(v_player.id, 'multi_rig_time', 0.5);
         END IF;
       ELSE
         -- Sin rigs activos: resetear streak de minería
@@ -1724,8 +1730,9 @@ BEGIN
     -- Calcular nuevo nivel de energía e internet
     -- Ambos bajan proporcionalmente a su consumo real (mismo multiplicador)
     -- Los multiplicadores de boost ya fueron aplicados por rig en el loop anterior
-    v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.1));
-    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.1));
+    -- Multiplicador 0.05 = tick cada 30 segundos (antes 0.1 para ticks de 60 segundos)
+    v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.05));
+    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.05));
 
     -- Actualizar recursos del jugador
     UPDATE players
@@ -2037,6 +2044,7 @@ BEGIN
 
     -- Actualizar progreso de misiones de minado
     PERFORM update_mission_progress(v_winner_player_id, 'mine_blocks', 1);
+    PERFORM update_mission_progress(v_winner_player_id, 'mine_blocks_weekly', 1);
     PERFORM update_mission_progress(v_winner_player_id, 'first_block', 1);
     PERFORM update_mission_progress(v_winner_player_id, 'total_blocks', 1);
 
@@ -2503,6 +2511,8 @@ BEGIN
   -- Actualizar misiones de trading
   PERFORM update_mission_progress(v_buyer_id, 'market_trade', 1);
   PERFORM update_mission_progress(v_seller_id, 'market_trade', 1);
+  PERFORM update_mission_progress(v_buyer_id, 'market_trades_weekly', 1);
+  PERFORM update_mission_progress(v_seller_id, 'market_trades_weekly', 1);
   PERFORM update_mission_progress(v_buyer_id, 'first_trade', 1);
   PERFORM update_mission_progress(v_seller_id, 'first_trade', 1);
 END;
@@ -2860,6 +2870,9 @@ BEGIN
     -- Marcar el rig como modificado
     UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
 
+    -- Mission tracking
+    PERFORM update_mission_progress(p_player_id, 'install_cooling', 1);
+
     RETURN json_build_object(
       'success', true,
       'message', 'Durabilidad de refrigeración recargada',
@@ -2874,6 +2887,9 @@ BEGIN
 
     -- Marcar el rig como modificado (evita penalización por quick toggle)
     UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+    -- Mission tracking
+    PERFORM update_mission_progress(p_player_id, 'install_cooling', 1);
 
     RETURN json_build_object(
       'success', true,
@@ -3937,6 +3953,11 @@ BEGIN
   VALUES (p_player_id, 'mission_reward', v_mission.reward_amount, v_mission.reward_type,
           'Recompensa de misión: ' || v_mission.name);
 
+  -- Track complete_easy_missions: count easy missions completed today
+  IF v_mission.difficulty = 'easy' THEN
+    PERFORM update_mission_progress(p_player_id, 'complete_easy_missions', 1);
+  END IF;
+
   RETURN json_build_object(
     'success', true,
     'rewardType', v_mission.reward_type,
@@ -3989,6 +4010,7 @@ BEGIN
 
     -- Actualizar progreso de misiones de tiempo online
     PERFORM update_mission_progress(p_player_id, 'online_time', 1);
+    PERFORM update_mission_progress(p_player_id, 'online_time_weekly', 1);
 
     RETURN json_build_object('success', true, 'minutesOnline', 1, 'premiumExpired', v_premium_expired);
   END IF;
@@ -4013,6 +4035,7 @@ BEGIN
 
     -- Actualizar progreso de misiones de tiempo online
     PERFORM update_mission_progress(p_player_id, 'online_time', v_minutes_since_last);
+    PERFORM update_mission_progress(p_player_id, 'online_time_weekly', v_minutes_since_last);
 
     RETURN json_build_object('success', true, 'minutesOnline', v_new_minutes, 'added', v_minutes_since_last, 'premiumExpired', v_premium_expired);
   END IF;
@@ -4349,6 +4372,9 @@ BEGIN
     DELETE FROM player_boosts WHERE id = v_inventory.id;
   END IF;
 
+  -- Mission tracking
+  PERFORM update_mission_progress(p_player_id, 'use_boost', 1);
+
   RETURN json_build_object(
     'success', true,
     'boost', row_to_json(v_boost),
@@ -4501,6 +4527,9 @@ BEGIN
 
   -- Marcar el rig como modificado (evita penalización por quick toggle)
   UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+  -- Mission tracking
+  PERFORM update_mission_progress(p_player_id, 'use_boost', 1);
 
   RETURN json_build_object(
     'success', true,
@@ -5122,6 +5151,7 @@ BEGIN
   VALUES (p_player_id, 'block_claim', v_pending.reward, 'crypto', v_description);
   -- Actualizar misiones de ganar crypto
   PERFORM update_mission_progress(p_player_id, 'earn_crypto', v_pending.reward);
+  PERFORM update_mission_progress(p_player_id, 'earn_crypto_weekly', v_pending.reward);
   PERFORM update_mission_progress(p_player_id, 'total_crypto', v_pending.reward);
   RETURN json_build_object('success', true, 'reward', v_pending.reward, 'block_id', COALESCE(v_pending.block_id, v_pending.id));
 END;
@@ -5143,6 +5173,7 @@ BEGIN
   VALUES (p_player_id, 'block_claim_all', v_total_reward, 'crypto', 'Reclamados ' || v_count || ' bloques');
   -- Actualizar misiones de ganar crypto
   PERFORM update_mission_progress(p_player_id, 'earn_crypto', v_total_reward);
+  PERFORM update_mission_progress(p_player_id, 'earn_crypto_weekly', v_total_reward);
   PERFORM update_mission_progress(p_player_id, 'total_crypto', v_total_reward);
   RETURN json_build_object('success', true, 'total_reward', v_total_reward, 'blocks_claimed', v_count);
 END;
@@ -5475,6 +5506,20 @@ BEGIN
   -- Actualizar misiones de upgrade
   PERFORM update_mission_progress(p_player_id, 'upgrade_rig', 1);
   PERFORM update_mission_progress(p_player_id, 'first_upgrade', 1);
+
+  -- Check if upgrade reached max level
+  IF v_next_level = v_player_rig.max_upgrade_level THEN
+    PERFORM update_mission_progress(p_player_id, 'max_upgrade', 1);
+
+    -- Check if ALL upgrades on this rig are maxed
+    SELECT * INTO v_player_rig FROM player_rigs WHERE id = p_player_rig_id;
+    IF v_player_rig.hashrate_level >= v_player_rig.max_upgrade_level
+       AND v_player_rig.efficiency_level >= v_player_rig.max_upgrade_level
+       AND v_player_rig.thermal_level >= v_player_rig.max_upgrade_level THEN
+      PERFORM update_mission_progress(p_player_id, 'full_upgrades', 1);
+    END IF;
+  END IF;
+
   RETURN jsonb_build_object('success', true, 'upgrade_type', p_upgrade_type, 'new_level', v_next_level, 'crypto_spent', v_upgrade_cost.crypto_cost);
 END;
 $$;
@@ -6369,9 +6414,9 @@ BEGIN
 
     -- Verificar límite diario
     IF v_player_data.pity_blocks_today >= v_max_pity_per_day THEN
-      -- Solo incrementar streak, no dar más pity blocks hoy
+      -- Solo incrementar streak, no dar más pity blocks hoy (0.5 minutos = 30 segundos por tick)
       UPDATE players
-      SET mining_streak_minutes = COALESCE(mining_streak_minutes, 0) + 1
+      SET mining_streak_minutes = COALESCE(mining_streak_minutes, 0) + 0.5
       WHERE id = v_player_data.player_id;
       CONTINUE;
     END IF;
@@ -6379,16 +6424,16 @@ BEGIN
     -- Determinar threshold basado en premium
     v_threshold := CASE WHEN v_is_premium THEN v_base_threshold_premium ELSE v_base_threshold_free END;
 
-    -- Incrementar minutos acumulados y streak
+    -- Incrementar minutos acumulados y streak (0.5 minutos = 30 segundos por tick)
     UPDATE players
-    SET pity_minutes_accumulated = COALESCE(pity_minutes_accumulated, 0) + 1,
-        mining_streak_minutes = COALESCE(mining_streak_minutes, 0) + 1
+    SET pity_minutes_accumulated = COALESCE(pity_minutes_accumulated, 0) + 0.5,
+        mining_streak_minutes = COALESCE(mining_streak_minutes, 0) + 0.5
     WHERE id = v_player_data.player_id;
 
-    v_total_minutes_added := v_total_minutes_added + 1;
+    v_total_minutes_added := v_total_minutes_added + 0.5;
 
     -- Verificar si alcanzó el umbral para pity block
-    IF (v_player_data.pity_minutes_accumulated + 1) >= v_threshold THEN
+    IF (v_player_data.pity_minutes_accumulated + 0.5) >= v_threshold THEN
 
       -- Calcular bonus por hashrate (escala logarítmica para no favorecer demasiado a whales)
       -- 100 hashrate = 15%, 1000 = 25%, 10000 = 35%, 50000+ = 40%
@@ -6884,10 +6929,13 @@ DECLARE
   v_target_close_at TIMESTAMPTZ;
   v_block_type TEXT;
   v_random NUMERIC;
+  v_active_miners INTEGER;
+  v_bronze_prob NUMERIC;
+  v_silver_cutoff NUMERIC;
 BEGIN
   -- Obtener configuración actual
-  SELECT difficulty, target_shares_per_block
-  INTO v_difficulty, v_target_shares
+  SELECT difficulty, target_shares_per_block, COALESCE(active_miners, 0)
+  INTO v_difficulty, v_target_shares, v_active_miners
   FROM network_stats WHERE id = 'current';
 
   IF v_difficulty IS NULL THEN v_difficulty := 15000; END IF;
@@ -6896,21 +6944,33 @@ BEGIN
   -- Calcular número de bloque
   SELECT COALESCE(MAX(block_number), 0) + 1 INTO v_block_number FROM mining_blocks;
 
-  -- 🎲 Generar tipo de bloque aleatorio con probabilidades
-  -- Bronze: 60% (0.0 - 0.6)
-  -- Silver: 30% (0.6 - 0.9)
-  -- Gold: 10% (0.9 - 1.0)
+  -- 🎲 Probabilidades dinámicas según mineros activos
+  -- Más mineros = mejor chance de bloques Silver/Gold
+  IF v_active_miners <= 5 THEN
+    v_bronze_prob := 0.75;    -- Bronze 75%, Silver 20%, Gold 5%
+    v_silver_cutoff := 0.95;
+  ELSIF v_active_miners <= 15 THEN
+    v_bronze_prob := 0.65;    -- Bronze 65%, Silver 25%, Gold 10%
+    v_silver_cutoff := 0.90;
+  ELSIF v_active_miners <= 30 THEN
+    v_bronze_prob := 0.55;    -- Bronze 55%, Silver 30%, Gold 15%
+    v_silver_cutoff := 0.85;
+  ELSE
+    v_bronze_prob := 0.45;    -- Bronze 45%, Silver 35%, Gold 20%
+    v_silver_cutoff := 0.80;
+  END IF;
+
   v_random := RANDOM();
 
-  IF v_random < 0.6 THEN
+  IF v_random < v_bronze_prob THEN
     v_block_type := 'bronze';
-    v_reward := 1000;  -- 🥉 Bronze
-  ELSIF v_random < 0.9 THEN
+    v_reward := 2000;  -- 🥉 Bronze
+  ELSIF v_random < v_silver_cutoff THEN
     v_block_type := 'silver';
-    v_reward := 1500;  -- 🥈 Silver
+    v_reward := 3000;  -- 🥈 Silver
   ELSE
     v_block_type := 'gold';
-    v_reward := 2500;  -- 🥇 Gold (aumentado de 2000)
+    v_reward := 5000;  -- 🥇 Gold
   END IF;
 
   -- Calcular tiempo objetivo (30 minutos)
@@ -7030,9 +7090,12 @@ BEGIN
       v_temp_penalty := GREATEST(0.3, v_temp_penalty);
     END IF;
 
-    -- Penalización por condición (lineal: solo 100 = máximo)
-    -- 100 condition = 100% hashrate, 50 condition = 50% hashrate, etc.
-    v_condition_penalty := GREATEST(0.3, v_rig.condition / 100.0);
+    -- Penalización por condición: sin penalización >= 80%, gradual debajo
+    IF v_rig.condition >= 80 THEN
+      v_condition_penalty := 1.0;
+    ELSE
+      v_condition_penalty := 0.3 + (v_rig.condition / 80.0) * 0.7;
+    END IF;
 
     -- Calcular hashrate efectivo
     v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier *
@@ -7242,6 +7305,7 @@ BEGIN
 
     -- Actualizar progreso de misiones
     PERFORM update_mission_progress(v_participant.player_id, 'mine_blocks', 1);
+    PERFORM update_mission_progress(v_participant.player_id, 'mine_blocks_weekly', 1);
   END LOOP;
 
   -- Marcar como distribuido
@@ -7614,6 +7678,11 @@ BEGIN
       mb.total_shares,
       mb.reward,
       mb.closed_at as created_at,
+      -- Total real distribuido (incluye bonus premium)
+      (SELECT COALESCE(SUM(pb.reward), 0) FROM pending_blocks pb
+       WHERE pb.created_at >= mb.closed_at - INTERVAL '5 seconds'
+         AND pb.created_at <= mb.closed_at + INTERVAL '5 seconds'
+         AND pb.shares_contributed IS NOT NULL) as total_distributed,
       -- Contar contribuyentes únicos
       (SELECT COUNT(DISTINCT player_id) FROM pending_blocks
        WHERE created_at >= mb.closed_at - INTERVAL '5 seconds'
@@ -7684,3 +7753,253 @@ GRANT EXECUTE ON FUNCTION get_current_mining_block_info TO authenticated;
 GRANT EXECUTE ON FUNCTION get_player_shares_info TO authenticated;
 GRANT EXECUTE ON FUNCTION game_tick_share_system TO authenticated;
 GRANT EXECUTE ON FUNCTION get_recent_mining_blocks TO authenticated;
+
+-- =====================================================
+-- SISTEMA DE REGALOS (GIFTS)
+-- El admin crea regalos para jugadores específicos o todos.
+-- El jugador ve un regalo animado en pantalla y lo reclama.
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS player_gifts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT 'Gift',
+  description TEXT,
+  icon TEXT DEFAULT '🎁',
+  -- Reward fields (one or more can be set)
+  reward_gamecoin DECIMAL(10,2) DEFAULT 0,
+  reward_crypto DECIMAL(10,8) DEFAULT 0,
+  reward_energy DECIMAL DEFAULT 0,
+  reward_internet DECIMAL DEFAULT 0,
+  reward_item_type TEXT,          -- 'cooling', 'boost', 'rig', 'prepaid_card'
+  reward_item_id TEXT,            -- references the specific item id
+  reward_item_quantity INTEGER DEFAULT 1,
+  -- State
+  claimed BOOLEAN DEFAULT FALSE,
+  claimed_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,         -- NULL = no expiration
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_gifts_pending ON player_gifts(player_id, claimed);
+
+-- RLS
+ALTER TABLE player_gifts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS player_gifts_select ON player_gifts;
+CREATE POLICY player_gifts_select ON player_gifts FOR SELECT TO authenticated
+  USING (player_id = auth.uid());
+
+-- Obtener regalos pendientes de un jugador
+DROP FUNCTION IF EXISTS get_pending_gifts(UUID) CASCADE;
+CREATE OR REPLACE FUNCTION get_pending_gifts(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Limpiar regalos expirados
+  UPDATE player_gifts
+  SET claimed = true, claimed_at = NOW()
+  WHERE player_id = p_player_id
+    AND claimed = false
+    AND expires_at IS NOT NULL
+    AND expires_at <= NOW();
+
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.created_at ASC), '[]'::JSON)
+    FROM (
+      SELECT id, title, description, icon,
+             reward_gamecoin, reward_crypto, reward_energy, reward_internet,
+             reward_item_type, reward_item_id, reward_item_quantity,
+             expires_at, created_at
+      FROM player_gifts
+      WHERE player_id = p_player_id
+        AND claimed = false
+        AND (expires_at IS NULL OR expires_at > NOW())
+    ) t
+  );
+END;
+$$;
+
+-- Reclamar un regalo
+DROP FUNCTION IF EXISTS claim_gift(UUID, UUID) CASCADE;
+CREATE OR REPLACE FUNCTION claim_gift(p_player_id UUID, p_gift_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_gift player_gifts%ROWTYPE;
+  v_rewards JSON;
+  v_item_name TEXT;
+  v_effective_max_energy NUMERIC;
+  v_effective_max_internet NUMERIC;
+BEGIN
+  -- Obtener regalo
+  SELECT * INTO v_gift
+  FROM player_gifts
+  WHERE id = p_gift_id AND player_id = p_player_id AND claimed = false;
+
+  IF v_gift IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Regalo no encontrado o ya reclamado');
+  END IF;
+
+  -- Verificar expiración
+  IF v_gift.expires_at IS NOT NULL AND v_gift.expires_at <= NOW() THEN
+    UPDATE player_gifts SET claimed = true, claimed_at = NOW() WHERE id = p_gift_id;
+    RETURN json_build_object('success', false, 'error', 'Este regalo ha expirado');
+  END IF;
+
+  -- Marcar como reclamado
+  UPDATE player_gifts SET claimed = true, claimed_at = NOW() WHERE id = p_gift_id;
+
+  -- Obtener máximos efectivos de recursos
+  v_effective_max_energy := get_effective_max_energy(p_player_id);
+  v_effective_max_internet := get_effective_max_internet(p_player_id);
+
+  -- Acreditar recompensas de moneda/recursos
+  UPDATE players
+  SET gamecoin_balance = gamecoin_balance + COALESCE(v_gift.reward_gamecoin, 0),
+      crypto_balance = crypto_balance + COALESCE(v_gift.reward_crypto, 0),
+      total_crypto_earned = COALESCE(total_crypto_earned, 0) + COALESCE(v_gift.reward_crypto, 0),
+      energy = LEAST(v_effective_max_energy, energy + COALESCE(v_gift.reward_energy, 0)),
+      internet = LEAST(v_effective_max_internet, internet + COALESCE(v_gift.reward_internet, 0))
+  WHERE id = p_player_id;
+
+  -- Acreditar items si corresponde
+  IF v_gift.reward_item_type IS NOT NULL AND v_gift.reward_item_id IS NOT NULL THEN
+    IF v_gift.reward_item_type = 'prepaid_card' THEN
+      -- Dar tarjeta prepago
+      IF EXISTS (SELECT 1 FROM prepaid_cards WHERE id = v_gift.reward_item_id) THEN
+        FOR i IN 1..COALESCE(v_gift.reward_item_quantity, 1) LOOP
+          INSERT INTO player_cards (player_id, card_id, code)
+          VALUES (p_player_id, v_gift.reward_item_id, generate_card_code());
+        END LOOP;
+      END IF;
+    ELSIF v_gift.reward_item_type = 'cooling' THEN
+      IF EXISTS (SELECT 1 FROM cooling_items WHERE id = v_gift.reward_item_id) THEN
+        INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+        VALUES (p_player_id, 'cooling', v_gift.reward_item_id, COALESCE(v_gift.reward_item_quantity, 1))
+        ON CONFLICT (player_id, item_type, item_id)
+        DO UPDATE SET quantity = player_inventory.quantity + COALESCE(v_gift.reward_item_quantity, 1);
+      END IF;
+    ELSIF v_gift.reward_item_type = 'boost' THEN
+      IF EXISTS (SELECT 1 FROM boost_items WHERE id = v_gift.reward_item_id) THEN
+        INSERT INTO player_boosts (player_id, boost_id, quantity)
+        VALUES (p_player_id, v_gift.reward_item_id, COALESCE(v_gift.reward_item_quantity, 1))
+        ON CONFLICT (player_id, boost_id)
+        DO UPDATE SET quantity = player_boosts.quantity + COALESCE(v_gift.reward_item_quantity, 1);
+      END IF;
+    ELSIF v_gift.reward_item_type = 'rig' THEN
+      IF EXISTS (SELECT 1 FROM rigs WHERE id = v_gift.reward_item_id) THEN
+        INSERT INTO player_rig_inventory (player_id, rig_id, quantity)
+        VALUES (p_player_id, v_gift.reward_item_id, COALESCE(v_gift.reward_item_quantity, 1))
+        ON CONFLICT (player_id, rig_id)
+        DO UPDATE SET quantity = player_rig_inventory.quantity + COALESCE(v_gift.reward_item_quantity, 1);
+      END IF;
+    END IF;
+  END IF;
+
+  -- Registrar transacción
+  IF COALESCE(v_gift.reward_gamecoin, 0) > 0 THEN
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'gift_claimed', v_gift.reward_gamecoin, 'gamecoin', 'Regalo: ' || v_gift.title);
+  END IF;
+  IF COALESCE(v_gift.reward_crypto, 0) > 0 THEN
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'gift_claimed', v_gift.reward_crypto, 'crypto', 'Regalo: ' || v_gift.title);
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'title', v_gift.title,
+    'description', v_gift.description,
+    'icon', v_gift.icon,
+    'gamecoin', COALESCE(v_gift.reward_gamecoin, 0),
+    'crypto', COALESCE(v_gift.reward_crypto, 0),
+    'energy', COALESCE(v_gift.reward_energy, 0),
+    'internet', COALESCE(v_gift.reward_internet, 0),
+    'itemType', v_gift.reward_item_type,
+    'itemId', v_gift.reward_item_id,
+    'itemQuantity', COALESCE(v_gift.reward_item_quantity, 1)
+  );
+END;
+$$;
+
+-- Admin: Enviar regalo a un jugador específico
+DROP FUNCTION IF EXISTS send_gift_to_player(UUID, TEXT, TEXT, TEXT, DECIMAL, DECIMAL, DECIMAL, DECIMAL, TEXT, TEXT, INTEGER, TIMESTAMPTZ) CASCADE;
+CREATE OR REPLACE FUNCTION send_gift_to_player(
+  p_player_id UUID,
+  p_title TEXT DEFAULT 'Gift',
+  p_description TEXT DEFAULT NULL,
+  p_icon TEXT DEFAULT '🎁',
+  p_gamecoin DECIMAL DEFAULT 0,
+  p_crypto DECIMAL DEFAULT 0,
+  p_energy DECIMAL DEFAULT 0,
+  p_internet DECIMAL DEFAULT 0,
+  p_item_type TEXT DEFAULT NULL,
+  p_item_id TEXT DEFAULT NULL,
+  p_item_quantity INTEGER DEFAULT 1,
+  p_expires_at TIMESTAMPTZ DEFAULT NULL
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_gift_id UUID;
+BEGIN
+  INSERT INTO player_gifts (
+    player_id, title, description, icon,
+    reward_gamecoin, reward_crypto, reward_energy, reward_internet,
+    reward_item_type, reward_item_id, reward_item_quantity, expires_at
+  ) VALUES (
+    p_player_id, p_title, p_description, p_icon,
+    p_gamecoin, p_crypto, p_energy, p_internet,
+    p_item_type, p_item_id, p_item_quantity, p_expires_at
+  ) RETURNING id INTO v_gift_id;
+
+  RETURN v_gift_id;
+END;
+$$;
+
+-- Admin: Enviar regalo a todos los jugadores
+DROP FUNCTION IF EXISTS send_gift_to_all(TEXT, TEXT, TEXT, DECIMAL, DECIMAL, DECIMAL, DECIMAL, TEXT, TEXT, INTEGER, TIMESTAMPTZ) CASCADE;
+CREATE OR REPLACE FUNCTION send_gift_to_all(
+  p_title TEXT DEFAULT 'Gift',
+  p_description TEXT DEFAULT NULL,
+  p_icon TEXT DEFAULT '🎁',
+  p_gamecoin DECIMAL DEFAULT 0,
+  p_crypto DECIMAL DEFAULT 0,
+  p_energy DECIMAL DEFAULT 0,
+  p_internet DECIMAL DEFAULT 0,
+  p_item_type TEXT DEFAULT NULL,
+  p_item_id TEXT DEFAULT NULL,
+  p_item_quantity INTEGER DEFAULT 1,
+  p_expires_at TIMESTAMPTZ DEFAULT NULL
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  INSERT INTO player_gifts (
+    player_id, title, description, icon,
+    reward_gamecoin, reward_crypto, reward_energy, reward_internet,
+    reward_item_type, reward_item_id, reward_item_quantity, expires_at
+  )
+  SELECT
+    p.id, p_title, p_description, p_icon,
+    p_gamecoin, p_crypto, p_energy, p_internet,
+    p_item_type, p_item_id, p_item_quantity, p_expires_at
+  FROM players p;
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_pending_gifts TO authenticated;
+GRANT EXECUTE ON FUNCTION claim_gift TO authenticated;

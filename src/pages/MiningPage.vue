@@ -159,7 +159,7 @@ function getSlotCurrencyIcon(currency: string): string {
 
 function getSlotCurrencyName(currency: string): string {
   if (currency === 'ron') return 'RON';
-  if (currency === 'crypto') return 'Crypto';
+  if (currency === 'crypto') return 'BLC';
   return 'GC';
 }
 
@@ -328,43 +328,31 @@ function getRigName(id: string): string {
   return playerRig?.rig.name ?? id;
 }
 
-// Upgrade bonus lookup tables (matching database upgrade_costs)
-const UPGRADE_BONUSES = {
-  hashrate: { 1: 0, 2: 10, 3: 20, 4: 35, 5: 50 },    // % increase
-  efficiency: { 1: 0, 2: 5, 3: 10, 4: 15, 5: 20 },   // % decrease
-  thermal: { 1: 0, 2: 2, 3: 4, 4: 6, 5: 8 },         // °C decrease
-} as const;
-
-// Get upgraded hashrate (base * (1 + bonus%))
+// Get upgraded hashrate using bonus from backend (base * (1 + bonus%))
 function getUpgradedHashrate(playerRig: typeof miningStore.rigs[0]): number {
-  const level = playerRig.hashrate_level ?? 1;
-  const bonus = UPGRADE_BONUSES.hashrate[level as keyof typeof UPGRADE_BONUSES.hashrate] ?? 0;
+  const bonus = playerRig.hashrate_bonus ?? 0;
   return Math.round(playerRig.rig.hashrate * (1 + bonus / 100));
 }
 
-// Get upgraded power consumption (base * (1 - bonus%))
+// Get upgraded power consumption using bonus from backend (base * (1 - bonus%))
 function getUpgradedPower(playerRig: typeof miningStore.rigs[0]): number {
-  const level = playerRig.efficiency_level ?? 1;
-  const bonus = UPGRADE_BONUSES.efficiency[level as keyof typeof UPGRADE_BONUSES.efficiency] ?? 0;
+  const bonus = playerRig.efficiency_bonus ?? 0;
   return playerRig.rig.power_consumption * (1 - bonus / 100);
 }
 
-// Get thermal bonus (°C reduction)
+// Get thermal bonus (°C reduction) from backend
 function getThermalBonus(playerRig: typeof miningStore.rigs[0]): number {
-  const level = playerRig.thermal_level ?? 1;
-  return UPGRADE_BONUSES.thermal[level as keyof typeof UPGRADE_BONUSES.thermal] ?? 0;
+  return playerRig.thermal_bonus ?? 0;
 }
 
 // Get hashrate bonus percentage for display
 function getHashrateBonus(playerRig: typeof miningStore.rigs[0]): number {
-  const level = playerRig.hashrate_level ?? 1;
-  return UPGRADE_BONUSES.hashrate[level as keyof typeof UPGRADE_BONUSES.hashrate] ?? 0;
+  return playerRig.hashrate_bonus ?? 0;
 }
 
 // Get efficiency bonus percentage for display
 function getEfficiencyBonus(playerRig: typeof miningStore.rigs[0]): number {
-  const level = playerRig.efficiency_level ?? 1;
-  return UPGRADE_BONUSES.efficiency[level as keyof typeof UPGRADE_BONUSES.efficiency] ?? 0;
+  return playerRig.efficiency_bonus ?? 0;
 }
 
 function getTempColor(temp: number): string {
@@ -471,6 +459,11 @@ onMounted(() => {
     miningStore.loadMiningBlockInfo();
   }, 1000);
 
+  // Actualizar shares del jugador cada 30 segundos (respaldo por si realtime falla)
+  setInterval(() => {
+    miningStore.loadPlayerShares();
+  }, 30000);
+
   window.addEventListener('block-mined', handleBlockMined as EventListener);
 
   // Initialize AdSense
@@ -552,39 +545,45 @@ onUnmounted(() => {
               <div>
                 <div class="flex items-center gap-2">
                   <h2 class="text-lg font-semibold">
-                    <span v-if="currentMiningBlock?.active">Bloque Actual #{{ currentMiningBlock.block_number }}</span>
+                    <span v-if="currentMiningBlock?.active" v-tooltip="'Número secuencial del bloque que se está minando ahora. Cada bloque dura ~30 minutos.'" class="cursor-help">Bloque Actual #{{ currentMiningBlock.block_number }}</span>
                     <span v-else>Centro de Minería</span>
                   </h2>
                   <span v-if="isPremium"
-                    class="px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1">
+                    class="px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1 cursor-help"
+                    v-tooltip="'Como usuario Premium, recibes +50% extra en cada recompensa de bloque'">
                     <span>👑</span>
                     <span>+50% Bonus</span>
                   </span>
                   <!-- Tooltip educativo -->
                   <button
                     class="text-text-muted hover:text-accent-primary transition-colors"
-                    title="Sistema de minería por shares: Tu recompensa es proporcional a las shares que generas. Más hashrate = más shares = más recompensa."
+                    v-tooltip="'Sistema de minería por shares: Tu recompensa es proporcional a las shares que generas. Más hashrate = más shares = más recompensa.'"
                   >
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
                     </svg>
                   </button>
                 </div>
-                <p class="text-sm text-text-muted">
+                <p class="text-sm text-text-muted cursor-help"
+                  v-tooltip="totalHashrate > 0
+                    ? 'Tus rigs están activos generando shares que se convierten en recompensas al cierre del bloque'
+                    : 'Necesitas encender al menos un rig para empezar a minar y generar shares'">
                   {{ totalHashrate > 0 ? 'Generando shares' : 'Activa tus rigs para empezar' }}
                 </p>
               </div>
             </div>
 
-            <div class="text-right">
+            <div class="text-right cursor-help"
+              v-tooltip="effectiveHashrate < totalHashrate
+                ? `Tu hashrate real después de penalizaciones. Base: ${totalHashrate.toLocaleString()} H/s, reducido por temperatura o condición de tus rigs.`
+                : 'Tu hashrate total combinado de todos los rigs activos. Determina cuántas shares generas por minuto.'">
               <div class="text-3xl font-bold font-mono"
                 :class="effectiveHashrate > 0 ? 'gradient-text' : 'text-text-muted'">
                 {{ Math.round(effectiveHashrate).toLocaleString() }}
               </div>
               <div class="text-xs text-text-muted flex items-center justify-end gap-1">
                 <span>H/s efectivo</span>
-                <span v-if="effectiveHashrate < totalHashrate" class="text-status-danger"
-                  :title="`Base: ${totalHashrate.toLocaleString()} H/s - Reducido por temperatura/condición`">
+                <span v-if="effectiveHashrate < totalHashrate" class="text-status-danger">
                   (↓{{ Math.round(((totalHashrate - effectiveHashrate) / totalHashrate) * 100) }}%)
                 </span>
               </div>
@@ -636,7 +635,8 @@ onUnmounted(() => {
               }">
               <!-- Header con tiempo restante -->
               <div class="flex items-center justify-between mb-3">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 cursor-help"
+                  v-tooltip="'Tiempo restante para que este bloque se cierre y se repartan las recompensas. Cada bloque dura 30 minutos.'">
                   <span class="text-2xl">⏰</span>
                   <div>
                     <div class="text-sm text-text-muted">Cierre del Bloque</div>
@@ -676,10 +676,12 @@ onUnmounted(() => {
               <!-- Info secundaria: actividad de red -->
               <div class="flex items-center justify-between text-xs">
                 <div class="flex items-center gap-4">
-                  <span class="text-text-muted">
+                  <span class="text-text-muted cursor-help"
+                    v-tooltip="'Shares generadas por todos los mineros vs el objetivo del bloque. El objetivo es una meta de referencia para medir la actividad de la red.'">
                     📊 Actividad: <span class="font-mono text-text-secondary">{{ currentMiningBlock.total_shares.toFixed(0) }} / {{ currentMiningBlock.target_shares }}</span> shares ({{ sharesProgress.toFixed(0) }}%)
                   </span>
-                  <span class="text-text-muted">
+                  <span class="text-text-muted cursor-help"
+                    v-tooltip="'Velocidad a la que la red está generando shares. Alto = muchos mineros activos, Bajo = pocos mineros.'">
                     ⚡ Ritmo: <span class="font-mono"
                       :class="{
                         'text-status-success': sharesProgress > 90,
@@ -690,7 +692,8 @@ onUnmounted(() => {
                     </span>
                   </span>
                 </div>
-                <span class="text-text-muted">
+                <span class="text-text-muted cursor-help"
+                  v-tooltip="'Jugadores con al menos un rig encendido minando en este momento'">
                   👥 {{ networkStats.activeMiners }} mineros activos
                 </span>
               </div>
@@ -902,7 +905,9 @@ onUnmounted(() => {
                     miningStore.getPowerPenaltyPercent(playerRig) }}%)</span>
                 </span>
                 <span v-tooltip="t('mining.tooltips.internet')" class="flex items-center gap-1 cursor-help">
-                  <span class="text-accent-tertiary">📡</span>{{ playerRig.rig.internet_consumption }}/t
+                  <span class="text-accent-tertiary">📡</span>{{ (playerRig.rig.internet_consumption * (1 - (playerRig.efficiency_bonus ?? 0) / 100)).toFixed(0) }}/t
+                  <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">(-{{
+                    getEfficiencyBonus(playerRig) }}%)</span>
                 </span>
                 <span v-if="rigCooling[playerRig.id]?.length > 0 || getThermalBonus(playerRig) > 0"
                   v-tooltip="t('mining.tooltips.cooling')" class="flex items-center gap-1 cursor-help">
@@ -945,13 +950,15 @@ onUnmounted(() => {
                 <!-- Condition -->
                 <div v-tooltip="t('mining.tooltips.condition')" class="flex items-center gap-2 cursor-help">
                   <span class="text-xs text-text-muted w-6">🔧</span>
-                  <div class="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
+                  <div class="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden relative">
+                    <!-- 80% threshold marker -->
+                    <div class="absolute top-0 bottom-0 w-px bg-white/30 z-10" style="left: 80%"></div>
                     <div class="h-full rounded-full"
-                      :class="playerRig.condition > 50 ? 'bg-status-success' : playerRig.condition > 20 ? 'bg-status-warning' : 'bg-status-danger'"
+                      :class="playerRig.condition >= 80 ? 'bg-status-success' : playerRig.condition > 20 ? 'bg-status-warning' : 'bg-status-danger'"
                       :style="{ width: `${playerRig.condition}%` }"></div>
                   </div>
                   <span class="text-xs w-14 text-right"
-                    :class="playerRig.condition < 30 ? 'text-status-danger' : 'text-text-muted'">
+                    :class="playerRig.condition < 80 ? (playerRig.condition < 30 ? 'text-status-danger' : 'text-status-warning') : 'text-text-muted'">
                     {{ playerRig.condition }}%
                   </span>
                 </div>
@@ -1054,38 +1061,48 @@ onUnmounted(() => {
                 <!-- Row 1: Block number + Time -->
                 <div class="flex items-center justify-between mb-1">
                   <div class="flex items-center gap-1.5">
-                    <span v-if="index === 0" class="text-xs">🆕</span>
-                    <span v-if="block.player_participation?.participated" class="text-xs" title="Participaste">⭐</span>
-                    <span v-if="block.player_participation?.is_premium" class="text-xs" title="Premium">👑</span>
-                    <span class="font-mono text-sm font-medium"
-                      :class="block.player_participation?.participated ? 'text-status-success' : 'text-accent-primary'">#{{
-                      block.block_number || block.height }}</span>
+                    <span v-if="index === 0" class="text-xs" v-tooltip="'Bloque más reciente'">🆕</span>
+                    <span v-if="block.player_participation?.participated" class="text-xs cursor-help" v-tooltip="'Participaste en este bloque'">⭐</span>
+                    <span v-if="block.player_participation?.is_premium" class="text-xs cursor-help" v-tooltip="'Eras Premium - Recibiste +50% de bonus'">👑</span>
+                    <span class="text-sm font-medium cursor-help"
+                      :class="block.player_participation?.participated ? 'text-status-success' : 'text-accent-primary'"
+                      v-tooltip="block.player_participation?.participated
+                        ? 'Participaste en este bloque y recibiste recompensa proporcional a tus shares'
+                        : 'No participaste en este bloque. Mantén tus rigs encendidos para contribuir shares y ganar recompensas'">Bloque <span class="font-mono">#{{
+                      block.block_number || block.height }}</span></span>
                   </div>
-                  <span class="text-[10px] text-text-muted" :key="uptimeKey">{{ formatTimeAgo(block.created_at)
+                  <span class="text-[10px] text-text-muted cursor-help" :key="uptimeKey"
+                    v-tooltip="'Tiempo desde que se cerró este bloque y se distribuyeron las recompensas'">{{ formatTimeAgo(block.created_at)
                     }}</span>
                 </div>
 
                 <!-- Row 2: Si participaste -->
                 <div v-if="block.player_participation?.participated" class="space-y-0.5">
                   <div class="flex items-center justify-between text-xs">
-                    <span class="text-text-muted">Tu contribución</span>
-                    <span class="font-mono text-status-success">
+                    <span class="text-text-muted cursor-help" v-tooltip="'Tu porcentaje de shares respecto al total del bloque. Más shares = mayor recompensa'">Tu contribución</span>
+                    <span class="font-mono text-status-success cursor-help" v-tooltip="'Aportaste el ' + block.player_participation.percentage.toFixed(1) + '% de las shares totales del bloque'">
                       {{ block.player_participation.percentage.toFixed(1) }}%
                     </span>
                   </div>
                   <div class="flex items-center justify-between text-xs">
-                    <span class="text-text-muted">Tu recompensa</span>
-                    <span class="font-mono text-status-warning">
+                    <span class="text-text-muted cursor-help" v-tooltip="'El BLC que tú ganaste en este bloque, proporcional a tus shares'">Tu recompensa</span>
+                    <span class="font-mono text-status-warning cursor-help" v-tooltip="block.player_participation.reward.toFixed(6) + ' BLC ganados en este bloque'">
                       +{{ block.player_participation.reward.toFixed(3) }} ₿
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-text-muted cursor-help" v-tooltip="'Total de BLC distribuido a todos los participantes (incluye bonos premium)'">Total del bloque</span>
+                    <span class="font-mono text-text-secondary cursor-help" v-tooltip="(block.total_distributed || block.reward || 0).toFixed(3) + ' BLC repartidos entre ' + (block.contributors_count || 0) + ' participantes'">
+                      {{ (block.total_distributed || block.reward || 0).toFixed(1) }} ₿
                     </span>
                   </div>
                   <!-- Top contributor -->
                   <div v-if="block.top_contributor" class="flex items-center justify-between text-xs pt-0.5 border-t border-border/20">
-                    <span class="text-text-muted flex items-center gap-1">
+                    <span class="text-text-muted flex items-center gap-1 cursor-help" v-tooltip="'El jugador que más shares aportó a este bloque'">
                       <span>🥇</span>
                       <span>{{ block.top_contributor.username }}</span>
                     </span>
-                    <span class="font-mono text-amber-400">
+                    <span class="font-mono text-amber-400 cursor-help" v-tooltip="block.top_contributor.username + ' aportó el ' + block.top_contributor.percentage.toFixed(1) + '% de las shares totales'">
                       {{ block.top_contributor.percentage.toFixed(1) }}%
                     </span>
                   </div>
@@ -1094,22 +1111,22 @@ onUnmounted(() => {
                 <!-- Row 2: Si NO participaste -->
                 <div v-else class="space-y-0.5">
                   <div class="flex items-center justify-between text-xs">
-                    <span class="text-text-muted">Contribuyentes</span>
-                    <span class="font-mono">{{ block.contributors_count || 0 }}</span>
+                    <span class="text-text-muted cursor-help" v-tooltip="'Cantidad de jugadores que minaron y aportaron shares a este bloque'">Contribuyentes</span>
+                    <span class="font-mono" v-tooltip="(block.contributors_count || 0) + ' jugadores participaron en este bloque'">{{ block.contributors_count || 0 }}</span>
                   </div>
                   <div class="flex items-center justify-between text-xs">
-                    <span class="text-text-muted">Total distribuido</span>
-                    <span class="font-mono text-status-warning">
-                      {{ (block.reward || 0).toFixed(1) }} ₿
+                    <span class="text-text-muted cursor-help" v-tooltip="'Total de BLC repartido entre todos los participantes de este bloque (incluye bonos premium)'">Total distribuido</span>
+                    <span class="font-mono text-status-warning" v-tooltip="'Recompensa total: ' + (block.total_distributed || block.reward || 0).toFixed(3) + ' BLC'">
+                      {{ (block.total_distributed || block.reward || 0).toFixed(1) }} ₿
                     </span>
                   </div>
                   <!-- Top contributor -->
                   <div v-if="block.top_contributor" class="flex items-center justify-between text-xs pt-0.5 border-t border-border/20">
-                    <span class="text-text-muted flex items-center gap-1">
+                    <span class="text-text-muted flex items-center gap-1 cursor-help" v-tooltip="'El jugador que más shares aportó a este bloque'">
                       <span>🥇</span>
                       <span>{{ block.top_contributor.username }}</span>
                     </span>
-                    <span class="font-mono text-amber-400">
+                    <span class="font-mono text-amber-400 cursor-help" v-tooltip="block.top_contributor.username + ' aportó el ' + block.top_contributor.percentage.toFixed(1) + '% de las shares totales'">
                       {{ block.top_contributor.percentage.toFixed(1) }}%
                     </span>
                   </div>
@@ -1151,7 +1168,7 @@ onUnmounted(() => {
               <div class="text-center text-2xl font-bold">
                 <span>{{ slotInfo.next_upgrade.currency === 'crypto' ? '💎' : '🪙' }}</span>
                 {{ slotInfo.next_upgrade.price.toLocaleString() }}
-                <span class="text-sm">{{ slotInfo.next_upgrade.currency === 'crypto' ? 'Crypto' : 'GC' }}</span>
+                <span class="text-sm">{{ slotInfo.next_upgrade.currency === 'crypto' ? 'BLC' : 'GC' }}</span>
               </div>
             </div>
 

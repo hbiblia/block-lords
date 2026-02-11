@@ -99,7 +99,7 @@ function formatCurrency(value: number | undefined, decimals: number = 0): string
           <div class="text-2xl font-bold text-accent-tertiary">
             {{ formatCurrency(player?.crypto_balance, 2) }}
           </div>
-          <div class="text-xs text-text-muted mt-1">💎 Crypto</div>
+          <div class="text-xs text-text-muted mt-1">💎 BLC</div>
         </div>
         <div class="card py-4">
           <div class="text-2xl font-bold text-accent-primary">

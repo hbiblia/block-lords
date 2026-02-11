@@ -454,7 +454,7 @@ onUnmounted(() => {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <div class="text-sm text-text-muted">Crypto</div>
+              <div class="text-sm text-text-muted">BLC</div>
               <div class="text-2xl font-bold text-accent-primary">
                 💎 {{ formatCrypto(player?.crypto_balance) }}
               </div>
@@ -657,11 +657,11 @@ onUnmounted(() => {
                       </span>
                     </div>
                     <div class="flex justify-between items-center">
-                      <span class="text-xs text-text-muted">Total crypto emitido</span>
+                      <span class="text-xs text-text-muted">Total BLC emitido</span>
                       <span class="text-sm font-bold">💎 {{ formatCrypto(gameStatus.mining.totalCryptoMined) }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                      <span class="text-xs text-text-muted">Crypto por bloque</span>
+                      <span class="text-xs text-text-muted">BLC por bloque</span>
                       <span class="text-sm font-bold text-status-warning">{{ gameStatus.mining.totalBlocks > 0 ? formatCrypto(gameStatus.mining.totalCryptoMined / gameStatus.mining.totalBlocks) : 0 }}</span>
                     </div>
                   </div>

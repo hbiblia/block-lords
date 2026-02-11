@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onUnmounted, watch } from 'vue';
+import { ref, computed, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useInventoryStore } from '@/stores/inventory';
@@ -21,6 +21,26 @@ const emit = defineEmits<{
 }>();
 
 const using = ref(false);
+
+// Group cards by card_id (same type + same value)
+const groupedCards = computed(() => {
+  const groups = new Map<string, { card_id: string; card_type: 'energy' | 'internet'; amount: number; tier: string; codes: { id: string; code: string }[]; }>();
+  for (const card of inventoryStore.cardItems) {
+    const existing = groups.get(card.card_id);
+    if (existing) {
+      existing.codes.push({ id: card.id, code: card.code });
+    } else {
+      groups.set(card.card_id, {
+        card_id: card.card_id,
+        card_type: card.card_type,
+        amount: card.amount,
+        tier: card.tier,
+        codes: [{ id: card.id, code: card.code }],
+      });
+    }
+  }
+  return Array.from(groups.values());
+});
 
 // Bloquear scroll del body cuando el modal está abierto
 watch(() => props.show, (isOpen) => {
@@ -58,7 +78,7 @@ const confirmAction = ref<{
 
 // Processing modal state
 const showProcessingModal = ref(false);
-const processingStatus = ref<'processing' | 'success' | 'error'>('processing');
+const processingStatus = ref<'processing' | 'error'>('processing');
 const processingError = ref<string>('');
 
 function closeProcessingModal() {
@@ -67,14 +87,14 @@ function closeProcessingModal() {
   processingError.value = '';
 }
 
-function requestRedeemCard(card: { code: string; card_id: string; card_type: 'energy' | 'internet'; amount: number }) {
+function requestRedeemCard(group: { card_id: string; card_type: 'energy' | 'internet'; amount: number; codes: { id: string; code: string }[] }) {
   confirmAction.value = {
     type: 'redeem',
     data: {
-      cardCode: card.code,
-      cardName: getCardName(card.card_id),
-      cardType: card.card_type,
-      cardAmount: card.amount,
+      cardCode: group.codes[0].code,
+      cardName: getCardName(group.card_id),
+      cardType: group.card_type,
+      cardAmount: group.amount,
     },
   };
   showConfirm.value = true;
@@ -101,7 +121,7 @@ async function handleInstallRig(rigId: string) {
   const result = await inventoryStore.installRig(rigId);
 
   if (result.success) {
-    processingStatus.value = 'success';
+    closeProcessingModal();
     emit('used');
   } else {
     processingStatus.value = 'error';
@@ -123,7 +143,7 @@ async function handleRedeemCard(code: string) {
     if (result.success) {
       await inventoryStore.refresh();
       await authStore.fetchPlayer();
-      processingStatus.value = 'success';
+      closeProcessingModal();
       playSound('success');
       emit('used');
     } else {
@@ -394,7 +414,7 @@ function formatTimeRemaining(seconds: number): string {
               </div>
 
               <!-- Prepaid Cards Section -->
-              <div v-if="inventoryStore.cardItems.length > 0">
+              <div v-if="groupedCards.length > 0">
                 <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
                   <span>💳</span>
                   {{ t('inventory.tabs.cards', 'Tarjetas') }}
@@ -404,34 +424,39 @@ function formatTimeRemaining(seconds: number): string {
                 </h3>
                 <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
                   <div
-                    v-for="card in inventoryStore.cardItems"
-                    :key="card.id"
+                    v-for="group in groupedCards"
+                    :key="group.card_id"
                     class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
-                    :class="card.card_type === 'energy'
+                    :class="group.card_type === 'energy'
                       ? 'bg-amber-500/10 border-amber-500/30'
                       : 'bg-cyan-500/10 border-cyan-500/30'"
                   >
                     <div class="flex items-start justify-between mb-2 sm:mb-3">
                       <div class="min-w-0 flex-1">
-                        <h4 class="font-medium text-xs sm:text-sm truncate" :class="card.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">{{ getCardName(card.card_id) }}</h4>
-                        <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ card.tier }}</p>
+                        <h4 class="font-medium text-xs sm:text-sm truncate" :class="group.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">{{ getCardName(group.card_id) }}</h4>
+                        <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ group.tier }}</p>
                       </div>
-                      <span class="text-lg sm:text-2xl ml-1">{{ card.card_type === 'energy' ? '⚡' : '📡' }}</span>
+                      <span class="text-lg sm:text-2xl ml-1">{{ group.card_type === 'energy' ? '⚡' : '📡' }}</span>
                     </div>
 
-                    <div class="flex items-center justify-between mb-2 sm:mb-3">
-                      <span class="text-[10px] sm:text-xs text-text-muted font-mono truncate">{{ card.code }}</span>
-                      <span class="font-mono font-bold text-sm sm:text-lg ml-1" :class="card.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">
-                        +{{ card.amount }}%
+                    <div class="flex items-center justify-between mb-1 sm:mb-2">
+                      <span class="text-[10px] sm:text-xs text-text-muted">{{ group.card_type === 'energy' ? t('welcome.energy', 'Energía') : t('welcome.internet', 'Internet') }}</span>
+                      <span class="font-mono font-bold text-sm sm:text-lg" :class="group.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">
+                        +{{ group.amount }}%
                       </span>
+                    </div>
+
+                    <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
+                      <span>{{ group.card_type === 'energy' ? '⚡' : '📡' }} {{ t('inventory.tabs.cards', 'Tarjetas') }}</span>
+                      <span class="font-medium">x{{ group.codes.length }}</span>
                     </div>
 
                     <div class="mt-auto">
                       <button
-                        @click="requestRedeemCard(card)"
+                        @click="requestRedeemCard(group)"
                         :disabled="using"
                         class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
-                        :class="card.card_type === 'energy'
+                        :class="group.card_type === 'energy'
                           ? 'bg-amber-500 text-white hover:bg-amber-400'
                           : 'bg-cyan-500 text-white hover:bg-cyan-400'"
                       >
@@ -613,23 +638,6 @@ function formatTimeRemaining(seconds: number): string {
             </div>
             <h3 class="text-lg font-bold mb-2">{{ t('inventory.processing.title') }}</h3>
             <p class="text-text-muted text-sm">{{ t('inventory.processing.wait') }}</p>
-          </div>
-
-          <!-- Success State -->
-          <div v-else-if="processingStatus === 'success'" class="text-center">
-            <div class="w-16 h-16 mx-auto mb-4 bg-status-success/20 rounded-full flex items-center justify-center">
-              <svg class="w-8 h-8 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h3 class="text-lg font-bold text-status-success mb-2">{{ t('inventory.processing.success') }}</h3>
-            <p class="text-text-muted text-sm mb-4">{{ t('inventory.processing.actionComplete') }}</p>
-            <button
-              @click="closeProcessingModal"
-              class="w-full py-2.5 rounded-lg font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors"
-            >
-              {{ t('common.close') }}
-            </button>
           </div>
 
           <!-- Error State -->

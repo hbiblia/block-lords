@@ -130,7 +130,7 @@ function getRankName(score: number): string {
               <div class="w-10 h-10 rounded-xl bg-accent-tertiary/20 flex items-center justify-center text-xl">
                 ₿
               </div>
-              <span class="text-text-muted">CryptoCoin</span>
+              <span class="text-text-muted">BLC</span>
             </div>
             <div class="text-3xl font-bold text-accent-tertiary">
               {{ player?.crypto_balance?.toFixed(4) ?? '0.0000' }}

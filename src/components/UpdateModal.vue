@@ -2,7 +2,7 @@
 import { ref, onMounted, watch } from 'vue';
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '1.1.1';
+const CURRENT_VERSION = '1.2.0';
 const STORAGE_KEY = 'block-lords-last-seen-version';
 
 const showModal = ref(false);
@@ -57,76 +57,75 @@ function closeModal() {
 
         <!-- Contenido scrollable -->
         <div class="space-y-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- Sistema principal -->
-          <div class="p-3 bg-gradient-to-r from-accent-primary/20 to-purple-500/20 border border-accent-primary/30 rounded-lg">
+          <!-- Recompensas de bloques -->
+          <div class="p-3 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-lg">
             <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
-              ⏰ Nuevo Sistema de Minería por Tiempo
+              💰 Recompensas de Bloques Aumentadas
             </h3>
             <p class="text-text-secondary text-sm mb-2">
-              ¡El sistema de minería ha sido completamente renovado! Ahora la minería funciona con bloques de <strong class="text-accent-primary">30 minutos de duración fija</strong>.
+              Las recompensas por bloque han sido <strong class="text-amber-400">duplicadas</strong>:
             </p>
             <ul class="space-y-2 text-sm">
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-accent-primary mt-0.5">⭐</span>
-                <span><strong>Bloques garantizados:</strong> Cada 30 minutos se cierra un bloque sin importar la actividad</span>
+                <span class="text-amber-400 mt-0.5">🥉</span>
+                <span><strong>Bronze:</strong> 2,000 BLC</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-accent-primary mt-0.5">⭐</span>
-                <span><strong>Sistema de shares:</strong> Ganas shares proporcionalmente a tu hashrate mientras minas</span>
+                <span class="text-gray-300 mt-0.5">🥈</span>
+                <span><strong>Silver:</strong> 3,000 BLC</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-accent-primary mt-0.5">⭐</span>
-                <span><strong>Distribución justa:</strong> Las recompensas se reparten según tu porcentaje de shares en el bloque</span>
+                <span class="text-yellow-400 mt-0.5">🥇</span>
+                <span><strong>Gold:</strong> 5,000 BLC</span>
               </li>
             </ul>
+            <p class="text-text-secondary text-sm mt-3">
+              <strong class="text-accent-primary">Probabilidades dinámicas:</strong> Mientras más mineros activos haya en la red, mayor será la probabilidad de que aparezcan bloques Silver y Gold.
+            </p>
           </div>
 
-          <!-- Mejoras principales -->
+          <!-- Misiones -->
           <div>
             <h3 class="text-base font-semibold text-text-primary mb-2 flex items-center gap-2">
-              🎉 Nuevas Features
+              🎯 Correcciones de Misiones
             </h3>
             <ul class="space-y-2">
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Top Contributor:</strong> Ahora puedes ver quién quedó en primer lugar en cada bloque reciente</span>
+                <span><strong>Objetivos ajustados:</strong> Misiones de bloques adaptadas al sistema actual (máx 48 bloques/día)</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Estadísticas en tiempo real:</strong> El hashrate de la red y tu potencia se actualizan automáticamente</span>
+                <span><strong>Misiones semanales:</strong> Ahora se trackean correctamente (bloques, tiempo online, BLC, trades)</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Tipos de bloques:</strong> Bronze (1000), Silver (1500) y Gold (2500 BLC) con probabilidades diferentes</span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Progreso visible:</strong> Ve en tiempo real cuántas shares has generado y tu % del bloque actual</span>
+                <span><strong>Nuevas misiones:</strong> Reparar rigs, usar boosts, instalar cooling, mejora máxima y más</span>
               </li>
             </ul>
           </div>
 
-          <!-- Mejoras técnicas -->
+          <!-- Mejoras de Rigs -->
           <div>
             <h3 class="text-base font-semibold text-text-primary mb-2 flex items-center gap-2">
-              🔧 Mejoras del Sistema
+              ⬆️ Correcciones de Mejoras de Rigs
             </h3>
             <ul class="space-y-2">
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-blue-500 mt-1">•</span>
-                <span><strong>Acumulador fraccional:</strong> Generación de shares más suave incluso con baja actividad</span>
+                <span class="text-green-500 mt-1">✓</span>
+                <span><strong>Hashrate, Eficiencia y Térmica</strong> ahora se reflejan correctamente en la interfaz</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-blue-500 mt-1">•</span>
-                <span><strong>Recompensas proporcionales:</strong> Tu participación en el bloque es directamente proporcional a tu hashrate</span>
+                <span class="text-green-500 mt-1">✓</span>
+                <span><strong>Valores corregidos:</strong> Los bonus de mejora ahora coinciden con el servidor (ej: Lv5 = +100% hashrate)</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-blue-500 mt-1">•</span>
-                <span><strong>Condición lineal:</strong> Penalización más justa (50% condición = 50% hashrate)</span>
+                <span class="text-green-500 mt-1">✓</span>
+                <span><strong>Consumo real:</strong> Energía e internet ahora muestran la reducción por mejora de eficiencia</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-blue-500 mt-1">•</span>
-                <span><strong>Sin ajuste mid-block:</strong> La dificultad solo cambia entre bloques, nunca durante uno activo</span>
+                <span class="text-green-500 mt-1">✓</span>
+                <span><strong>Penalización de temperatura:</strong> Corregida para coincidir con el cálculo del servidor (>50°C)</span>
               </li>
             </ul>
           </div>

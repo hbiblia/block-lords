@@ -7,6 +7,9 @@ import { useStreakStore } from '@/stores/streak';
 import { useMissionsStore } from '@/stores/missions';
 import { usePendingBlocksStore } from '@/stores/pendingBlocks';
 import { useMiningStore } from '@/stores/mining';
+import { useGiftsStore } from '@/stores/gifts';
+import { useToastStore } from '@/stores/toast';
+import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 
@@ -36,6 +39,7 @@ import BlockClaimModal from '@/components/BlockClaimModal.vue';
 import MarketModal from '@/components/MarketModal.vue';
 import InventoryModal from '@/components/InventoryModal.vue';
 import ExchangeModal from '@/components/ExchangeModal.vue';
+import GiftModal from '@/components/GiftModal.vue';
 
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
@@ -43,6 +47,8 @@ const streakStore = useStreakStore();
 const missionsStore = useMissionsStore();
 const pendingBlocksStore = usePendingBlocksStore();
 const miningStore = useMiningStore();
+const giftsStore = useGiftsStore();
+const toastStore = useToastStore();
 
 // Handle purchase events - reload mining data
 async function handlePurchased() {
@@ -68,10 +74,18 @@ function handleBlockMined(event: CustomEvent) {
 }
 
 // Escuchar evento de bloque pendiente creado (incluye pity blocks)
-// Ahora los pity blocks crean bloques reales, así que block-mined maneja la notificación
-function handlePendingBlockCreated() {
-  // Solo actualizar lista de pending blocks (toast se maneja en block-mined)
+function handlePendingBlockCreated(event: CustomEvent) {
   pendingBlocksStore.fetchPendingBlocks();
+
+  // Mostrar toast con la recompensa del cierre de bloque
+  const { reward } = event.detail;
+  if (reward) {
+    playSound('block_mined');
+    toastStore.show(`+${Number(reward).toFixed(4)} ₿`, 'success', {
+      icon: '⛏️',
+      duration: 6000,
+    });
+  }
 }
 
 // Event handlers for modal opening from other pages
@@ -102,6 +116,9 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
     missionsStore.fetchMissions();
     missionsStore.startHeartbeat();
     pendingBlocksStore.fetchPendingBlocks();
+    // Cargar regalos pendientes y empezar polling
+    giftsStore.fetchGifts();
+    giftsStore.startPolling();
     // Iniciar verificación periódica de sesión
     authStore.startSessionCheck();
     // Inicializar AdSense cuando el usuario se autentica
@@ -115,12 +132,14 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
   } else {
     missionsStore.stopHeartbeat();
     authStore.stopSessionCheck();
+    giftsStore.stopPolling();
   }
 }, { immediate: true });
 
 onUnmounted(() => {
   missionsStore.stopHeartbeat();
   authStore.stopSessionCheck();
+  giftsStore.stopPolling();
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
   window.removeEventListener('pending-block-created', handlePendingBlockCreated as EventListener);
   window.removeEventListener('open-market', handleOpenMarketEvent);
@@ -235,6 +254,9 @@ async function handleConnectionClick() {
       @close="showInventory = false"
       @used="handleInventoryUsed"
     />
+
+    <!-- Gift Modal -->
+    <GiftModal />
 
     <!-- Exchange Modal -->
     <ExchangeModal
