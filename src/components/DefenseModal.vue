@@ -7,7 +7,7 @@ import { useCardBattle } from '@/composables/useCardBattle';
 import BattleLobby from './defense/BattleLobby.vue';
 import BattleArena from './defense/BattleArena.vue';
 
-defineProps<{
+const props = defineProps<{
   show: boolean;
 }>();
 
@@ -51,9 +51,9 @@ const {
   cleanup,
 } = useCardBattle();
 
-// Load lobby when modal opens
+// Load lobby when modal opens (watch the prop, not store)
 watch(
-  () => defenseStore.showModal,
+  () => props.show,
   async (open) => {
     if (open) {
       defenseStore.setView('lobby');
