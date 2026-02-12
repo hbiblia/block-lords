@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, ref, onUnmounted } from 'vue';
+import { watch, ref, onUnmounted, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useGiftsStore } from '@/stores/gifts';
 import { useToastStore } from '@/stores/toast';
@@ -49,6 +49,9 @@ watch(() => giftsStore.phase, (phase) => {
     document.body.style.overflow = 'hidden';
     if (phase === 'showing') {
       generateParticles();
+    }
+    if (phase === 'revealed') {
+      initAd();
     }
   } else {
     document.body.style.overflow = '';
@@ -135,6 +138,16 @@ function getItemName(type: string | null, id: string | null): string {
     prepaid_card: 'Prepaid Card',
   };
   return names[type] || id || 'Item';
+}
+
+function initAd() {
+  nextTick(() => {
+    try {
+      ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+    } catch (e) {
+      // AdSense may not be available
+    }
+  });
 }
 </script>
 
@@ -239,41 +252,51 @@ function getItemName(type: string | null, id: string | null): string {
     >
       <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
 
-      <div class="relative w-full max-w-xs animate-fade-in">
-        <div class="bg-bg-secondary border border-border/50 rounded-2xl p-4 text-center shadow-2xl">
+      <div class="relative w-full max-w-sm animate-fade-in">
+        <div class="bg-bg-secondary border border-border/50 rounded-2xl p-6 text-center shadow-2xl">
+          <!-- Title + Icon -->
+          <div class="mb-4">
+            <div class="text-5xl mb-3 gift-reveal-bounce">
+              {{ giftsStore.currentGift?.icon || '🎁' }}
+            </div>
+            <h2 class="text-xl font-display font-bold">
+              <span class="gradient-text">{{ t('gifts.received') }}</span>
+            </h2>
+            <p v-if="giftsStore.currentGift?.description" class="text-sm text-text-muted mt-1">
+              {{ giftsStore.currentGift.description }}
+            </p>
+          </div>
+
           <!-- Rewards -->
-          <div class="space-y-1.5 mb-3">
+          <div class="space-y-2 mb-5">
             <div
               v-for="(line, idx) in getRewardLines()"
               :key="idx"
-              class="flex items-center justify-center gap-2 px-3 py-2 bg-bg-tertiary rounded-lg reward-line-appear"
+              class="flex items-center justify-center gap-3 px-4 py-3 bg-bg-tertiary rounded-xl reward-line-appear"
               :style="{ animationDelay: `${idx * 0.15}s` }"
             >
-              <span class="text-lg">{{ line.emoji }}</span>
-              <span class="text-sm font-bold text-accent-primary">{{ line.text }}</span>
-            </div>
-          </div>
-
-          <!-- Title + Description + Icon -->
-          <div class="mb-3">
-            <h2 class="text-lg font-display font-bold">
-              <span class="gradient-text">{{ t('gifts.received') }}</span>
-            </h2>
-            <p v-if="giftsStore.currentGift?.description" class="text-xs text-text-muted mt-0.5">
-              {{ giftsStore.currentGift.description }}
-            </p>
-            <div class="text-3xl mt-1.5 gift-reveal-bounce">
-              {{ giftsStore.currentGift?.icon || '🎁' }}
+              <span class="text-2xl">{{ line.emoji }}</span>
+              <span class="text-base font-bold text-accent-primary">{{ line.text }}</span>
             </div>
           </div>
 
           <!-- Collect Button -->
           <button
             @click="handleCollect"
-            class="w-full py-2.5 rounded-xl bg-gradient-primary text-white font-bold text-base hover:opacity-90 transition-opacity"
+            class="w-full py-3 rounded-xl bg-gradient-primary text-white font-bold text-lg hover:opacity-90 transition-opacity"
           >
             {{ t('gifts.collect') }}
           </button>
+
+          <!-- AdSense Banner -->
+          <div class="mt-4 bg-bg-tertiary rounded-xl p-4 text-center max-h-28 h-28">
+            <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
+            <ins class="adsbygoogle"
+              style="display:block"
+              data-ad-format="autorelaxed"
+              data-ad-client="ca-pub-7500429866047477"
+              data-ad-slot="7767935377"></ins>
+          </div>
         </div>
       </div>
     </div>

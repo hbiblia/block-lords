@@ -1476,7 +1476,7 @@
     leaveLobby: 'Salir del Lobby',
     waitingPlayers: 'Esperando oponentes...',
     quickMatch: 'Buscar Partida',
-    quickMatchSearching: 'Buscando oponente...',
+    quickMatchSearching: 'Esperando oponente...',
     inLobby: 'en lobby',
     inBattle: 'en batalla',
     cancelQuickMatch: 'Cancelar Búsqueda',
@@ -1545,6 +1545,9 @@
       findAnother: 'Buscar otro oponente',
     },
     // Mano de cartas
+    deckCount: 'Mazo',
+    handCount: 'Mano',
+    discardCount: 'Descarte',
     yourHand: 'Tu Mano',
     queued: '{n} en cola',
     noCards: 'Sin cartas en mano',

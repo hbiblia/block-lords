@@ -1476,7 +1476,7 @@ export default {
     leaveLobby: 'Leave Lobby',
     waitingPlayers: 'Waiting for opponents...',
     quickMatch: 'Quick Match',
-    quickMatchSearching: 'Searching for opponent...',
+    quickMatchSearching: 'Waiting for opponent...',
     inLobby: 'in lobby',
     inBattle: 'in battle',
     cancelQuickMatch: 'Cancel Search',
@@ -1545,6 +1545,9 @@ export default {
       findAnother: 'Find another opponent',
     },
     // Card hand
+    deckCount: 'Deck',
+    handCount: 'Hand',
+    discardCount: 'Discard',
     yourHand: 'Your Hand',
     queued: '{n} queued',
     noCards: 'No cards in hand',
