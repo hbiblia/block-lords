@@ -88,6 +88,8 @@ function getEffectDescription(card: CardDefinition): string {
       return t('battle.detail.curePoison');
     case 'taunt':
       return t('battle.detail.taunt');
+    case 'recall':
+      return t('battle.detail.recall');
     default:
       return '';
   }

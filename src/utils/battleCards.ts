@@ -32,7 +32,8 @@ export type CardEffect =
   | { kind: 'execute'; amount: number; bonusAmount: number; threshold: number }
   | { kind: 'energy_drain'; amount: number }
   | { kind: 'cure_poison' }
-  | { kind: 'taunt' };
+  | { kind: 'taunt' }
+  | { kind: 'recall' };
 
 export interface BattleCard {
   uid: string; // unique instance id (for hand tracking)
@@ -293,6 +294,17 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
     description: 'Taunt your opponent!',
     descriptionKey: 'battle.cards.tauntDesc',
     effect: { kind: 'taunt' },
+  },
+  {
+    id: 'recall',
+    name: 'Recall',
+    nameKey: 'battle.cards.recall',
+    type: 'special',
+    cost: 2,
+    value: 1,
+    description: 'Retrieve a card from your discard pile',
+    descriptionKey: 'battle.cards.recallDesc',
+    effect: { kind: 'recall' },
   },
 ];
 

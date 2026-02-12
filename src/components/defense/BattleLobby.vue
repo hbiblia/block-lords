@@ -109,6 +109,20 @@ const { t } = useI18n();
           <p class="text-[9px] text-slate-500 text-center mt-1">{{ t('battle.info.deckInfo', '18 cards total. Both players get the same deck, shuffled randomly.') }}</p>
         </div>
 
+        <!-- Live stats -->
+        <div class="flex gap-4">
+          <div class="flex items-center gap-1.5 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-border/20">
+            <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <span class="text-xs text-slate-300 font-medium">{{ lobbyCount }}</span>
+            <span class="text-[10px] text-slate-500">{{ t('battle.inLobby', 'in lobby') }}</span>
+          </div>
+          <div class="flex items-center gap-1.5 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-border/20">
+            <span class="w-2 h-2 rounded-full bg-red-400" />
+            <span class="text-xs text-slate-300 font-medium">{{ playingCount }}</span>
+            <span class="text-[10px] text-slate-500">{{ t('battle.inBattle', 'in battle') }}</span>
+          </div>
+        </div>
+
         <!-- Quick Match button -->
         <button
           @click="emit('quickMatch')"

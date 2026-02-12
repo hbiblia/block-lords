@@ -1536,6 +1536,8 @@
     energyUsed: 'energía usada',
     noCardsQueued: 'Sin cartas en cola — juega cartas de tu mano',
     minimize: 'Minimizar (la batalla continúa)',
+    recallPickTitle: 'Selecciona una carta del descarte',
+    recallEmpty: 'No hay cartas en la pila de descarte',
     // Info del juego (lobby)
     gameSubtitle: 'Juego de Cartas PvP 1v1 por Turnos',
     info: {
@@ -1601,6 +1603,7 @@
       execute: 'Inflige {amount} de daño. Si el HP enemigo ≤ {threshold}, inflige {bonus}',
       curePoison: 'Elimina todo el veneno de ti mismo',
       taunt: '¡No hace nada... excepto molestar a tu oponente!',
+      recall: 'Recupera una carta de tu pila de descarte y la agrega a tu mano',
     },
     // Log de batalla
     log: {
@@ -1621,6 +1624,7 @@
       energyDrain: '{card}: drenó {amount} energía',
       curePoison: '{card}: ¡veneno curado!',
       taunt: '{card}: ¡se burla del oponente!',
+      recall: '{card}: ¡recuperó {target} del descarte!',
     },
     // Cartas
     cards: {
@@ -1666,6 +1670,8 @@
       antidoteDesc: 'Elimina todo el veneno',
       taunt: 'Burla',
       tauntDesc: '¡Burlate de tu oponente!',
+      recall: 'Recuperar',
+      recallDesc: 'Recupera una carta de tu pila de descarte',
     },
   },
 

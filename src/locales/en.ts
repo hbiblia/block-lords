@@ -1536,6 +1536,8 @@ export default {
     energyUsed: 'energy used',
     noCardsQueued: 'No cards queued — play cards from your hand',
     minimize: 'Minimize (battle continues)',
+    recallPickTitle: 'Select a card from discard',
+    recallEmpty: 'No cards in discard pile',
     // Game info (lobby)
     gameSubtitle: '1v1 PvP Turn-Based Card Game',
     info: {
@@ -1597,6 +1599,7 @@ export default {
       energyDrain: '{card}: drained {amount} energy',
       curePoison: '{card}: poison cured!',
       taunt: '{card}: taunts the opponent!',
+      recall: '{card}: retrieved {target} from discard!',
     },
     // Card detail overlay
     detail: {
@@ -1621,6 +1624,7 @@ export default {
       execute: 'Deals {amount} damage. If enemy HP ≤ {threshold}, deals {bonus} instead',
       curePoison: 'Removes all poison from yourself',
       taunt: 'Does nothing... except annoy your opponent!',
+      recall: 'Retrieve a card from your discard pile and add it to your hand',
     },
     // Cards
     cards: {
@@ -1666,6 +1670,8 @@ export default {
       antidoteDesc: 'Remove all poison',
       taunt: 'Taunt',
       tauntDesc: 'Taunt your opponent!',
+      recall: 'Recall',
+      recallDesc: 'Retrieve a card from your discard pile',
     },
   },
 

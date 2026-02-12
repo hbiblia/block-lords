@@ -106,6 +106,11 @@ function formatEntry(entry: LogEntry): string {
       if (entry.taunt) {
         return t('battle.log.taunt', { card: cardName });
       }
+      if (entry.recall) {
+        const targetCard = getCard(entry.recall);
+        const targetName = t(targetCard.nameKey, targetCard.name);
+        return t('battle.log.recall', { card: cardName, target: targetName });
+      }
       if (entry.damage) {
         return t('battle.log.execute', {
           card: cardName, dmg: entry.damage
@@ -217,6 +222,12 @@ function formatEntry(entry: LogEntry): string {
         class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 flex-shrink-0"
       >
         &#128540;
+      </span>
+      <span
+        v-else-if="entry.recall"
+        class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 flex-shrink-0"
+      >
+        &#128260;
       </span>
     </div>
 

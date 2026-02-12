@@ -110,6 +110,7 @@ export interface LogEntry {
   energyDrain?: number;
   curePoison?: boolean;
   taunt?: boolean;
+  recall?: string;
 }
 
 export function useCardBattle() {
@@ -150,6 +151,10 @@ export function useCardBattle() {
   const currentBetCurrency = ref('GC');
   const errorMessage = ref<string | null>(null);
 
+  // Recall card state
+  const showRecallPicker = ref(false);
+  const pendingRecallCardSlot = ref(-1);
+
   // Battle mission tracking
   const battleCardsPlayed = ref(0);
   let missionTracked = false;
@@ -187,8 +192,16 @@ export function useCardBattle() {
     return myHand.value.map((id) => id ? getCard(id) : null);
   });
 
+  const myDiscard = computed<string[]>(() => {
+    if (!session.value?.game_state) return [];
+    const state = session.value.game_state;
+    return isP1.value ? (state.player1Discard || []) : (state.player2Discard || []);
+  });
+
   const canPlayCard = computed(() => (card: CardDefinition) => {
-    return isMyTurn.value && !animatingEffects.value && myEnergy.value >= card.cost;
+    if (!isMyTurn.value || animatingEffects.value || myEnergy.value < card.cost) return false;
+    if (card.id === 'recall' && myDiscard.value.length === 0) return false;
+    return true;
   });
 
   // === Lobby Functions ===
@@ -671,7 +684,16 @@ export function useCardBattle() {
 
   function playCard(cardId: string) {
     const card = getCard(cardId);
-    if (!isMyTurn.value || animatingEffects.value || myEnergy.value < card.cost) return;
+    if (!canPlayCard.value(card)) return;
+
+    // Intercept recall card — show discard picker instead of playing immediately
+    if (card.id === 'recall') {
+      const idx = myHand.value.indexOf(cardId);
+      if (idx === -1) return;
+      pendingRecallCardSlot.value = idx;
+      showRecallPicker.value = true;
+      return;
+    }
 
     // Find card in slot and null it out (keep position)
     const idx = myHand.value.indexOf(cardId);
@@ -682,6 +704,24 @@ export function useCardBattle() {
     cardsPlayedThisTurn.value.push(cardId);
     undoStack.value.push({ cardId, slotIndex: idx });
     playBattleSound('card_play');
+  }
+
+  function selectRecallTarget(targetCardId: string) {
+    const idx = pendingRecallCardSlot.value;
+    if (idx === -1) return;
+    const card = getCard('recall');
+    myEnergy.value -= card.cost;
+    myHand.value[idx] = null;
+    cardsPlayedThisTurn.value.push(`recall:${targetCardId}`);
+    undoStack.value.push({ cardId: 'recall', slotIndex: idx });
+    showRecallPicker.value = false;
+    pendingRecallCardSlot.value = -1;
+    playBattleSound('card_play');
+  }
+
+  function cancelRecall() {
+    showRecallPicker.value = false;
+    pendingRecallCardSlot.value = -1;
   }
 
   function undoLastCard() {
@@ -946,6 +986,8 @@ export function useCardBattle() {
     result.value = null;
     battleCardsPlayed.value = 0;
     missionTracked = false;
+    showRecallPicker.value = false;
+    pendingRecallCardSlot.value = -1;
     battleLoading.value = false;
     animatingEffects.value = false;
     currentBetAmount.value = 0;
@@ -1031,5 +1073,10 @@ export function useCardBattle() {
     doForfeit,
     resetBattle,
     cleanup,
+    // Recall
+    myDiscard,
+    showRecallPicker,
+    selectRecallTarget,
+    cancelRecall,
   };
 }

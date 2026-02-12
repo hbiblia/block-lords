@@ -68,6 +68,11 @@ const {
   doForfeit,
   resetBattle,
   cleanup,
+  // Recall
+  myDiscard,
+  showRecallPicker,
+  selectRecallTarget,
+  cancelRecall,
 } = useCardBattle();
 
 // Lock body scroll when modal is open
@@ -323,11 +328,15 @@ function getEnemyUsername(): string {
           :cards-played="cardsPlayedThisTurn"
           :result="result"
           :loading="battleLoading"
+          :my-discard="myDiscard"
+          :show-recall-picker="showRecallPicker"
           @play-card="playCard"
           @end-turn="endTurn"
           @undo="undoLastCard"
           @forfeit="doForfeit"
           @result-close="handleResultClose"
+          @select-recall-target="selectRecallTarget"
+          @cancel-recall="cancelRecall"
         />
       </div>
     </div>

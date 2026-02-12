@@ -9983,7 +9983,7 @@ BEGIN
   END IF;
 
   -- Card IDs for deck building
-  v_all_cards := '["quick_strike","power_slash","fury_attack","double_hit","critical_blow","venom_strike","guard","fortify","counter","deflect","spike_armor","barrier","heal","weaken","drain","war_cry","recharge","execute","energy_siphon"]'::JSONB;
+  v_all_cards := '["quick_strike","power_slash","fury_attack","double_hit","critical_blow","venom_strike","guard","fortify","counter","deflect","spike_armor","barrier","heal","weaken","drain","war_cry","recharge","execute","energy_siphon","antidote","taunt","recall"]'::JSONB;
 
   -- Shuffle decks (using random ordering)
   SELECT jsonb_agg(card ORDER BY random()) INTO v_deck1
@@ -10098,6 +10098,7 @@ DECLARE
   v_new_deck JSONB;
   v_log_entries JSONB := '[]'::JSONB;
   v_total_cards INTEGER;
+  v_recall_target TEXT;
 BEGIN
   -- Lock session
   SELECT * INTO v_session
@@ -10164,6 +10165,13 @@ BEGIN
   -- Process each card played
   FOR v_card IN SELECT jsonb_array_elements_text(p_cards_played)
   LOOP
+    -- Parse recall target (format: "recall:target_card_id")
+    v_recall_target := NULL;
+    IF v_card LIKE 'recall:%' THEN
+      v_recall_target := substring(v_card from 8);
+      v_card := 'recall';
+    END IF;
+
     -- Determine card cost and type
     CASE v_card
       WHEN 'quick_strike' THEN v_card_cost := 1; v_card_type := 'attack';
@@ -10187,6 +10195,7 @@ BEGIN
       WHEN 'energy_siphon' THEN v_card_cost := 1; v_card_type := 'special';
       WHEN 'antidote' THEN v_card_cost := 1; v_card_type := 'special';
       WHEN 'taunt' THEN v_card_cost := 1; v_card_type := 'special';
+      WHEN 'recall' THEN v_card_cost := 2; v_card_type := 'special';
       ELSE
         RETURN json_build_object('success', false, 'error', 'Unknown card: ' || v_card);
     END CASE;
@@ -10375,6 +10384,23 @@ BEGIN
       WHEN 'taunt' THEN
         -- Does nothing, just taunts the opponent
         v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'taunt', true);
+
+      WHEN 'recall' THEN
+        -- Retrieve a card from discard pile and add to hand
+        IF v_recall_target IS NOT NULL AND v_my_discard @> to_jsonb(v_recall_target) THEN
+          -- Remove target from discard (first occurrence)
+          v_my_discard := v_my_discard - (
+            SELECT i::INTEGER FROM generate_series(0, jsonb_array_length(v_my_discard) - 1) i
+            WHERE v_my_discard->>i::INTEGER = v_recall_target
+            LIMIT 1
+          );
+          -- Add target to hand
+          v_my_hand := v_my_hand || to_jsonb(v_recall_target);
+          v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', 'recall', 'recall', v_recall_target);
+        ELSE
+          -- No valid target, recall fizzles
+          v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', 'recall', 'recall', null);
+        END IF;
     END CASE;
 
     -- Check win condition after each card

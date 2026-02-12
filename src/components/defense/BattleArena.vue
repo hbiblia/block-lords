@@ -6,7 +6,7 @@ import BattleLog from './BattleLog.vue';
 import CardHand from './CardHand.vue';
 import BattleResult from './BattleResult.vue';
 import type { CardDefinition } from '@/utils/battleCards';
-import { getCard } from '@/utils/battleCards';
+import { getCard, getCardTextClass, getCardBorderClass } from '@/utils/battleCards';
 import type { LogEntry } from '@/composables/useCardBattle';
 import { playBattleSound } from '@/utils/sounds';
 
@@ -32,6 +32,8 @@ const props = defineProps<{
   cardsPlayed: string[];
   result: { won: boolean; reward: number; betAmount: number; betCurrency: string } | null;
   loading: boolean;
+  myDiscard: string[];
+  showRecallPicker: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -40,12 +42,18 @@ const emit = defineEmits<{
   undo: [];
   forfeit: [];
   resultClose: [];
+  selectRecallTarget: [cardId: string];
+  cancelRecall: [];
 }>();
 
 const { t } = useI18n();
 
 const queuedCards = computed(() => {
-  return props.cardsPlayed.map((id) => getCard(id));
+  return props.cardsPlayed.map((id) => {
+    // Handle "recall:target_id" format
+    if (id.startsWith('recall:')) return getCard('recall');
+    return getCard(id);
+  });
 });
 
 const totalQueuedCost = computed(() => {
@@ -151,6 +159,10 @@ function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
         icon = '\uD83D\uDE1C';
         value = '!!!';
         color = 'text-orange-400';
+      } else if (entry.recall) {
+        icon = '\uD83D\uDD04';
+        value = '+1';
+        color = 'text-purple-400';
       } else if (entry.damage) {
         icon = '\u2728';
         value = `-${entry.damage}`;
@@ -452,6 +464,52 @@ onMounted(() => {
         <div class="mt-2 px-4 py-1.5 rounded-full bg-orange-500/20 border border-orange-500/40 backdrop-blur-sm">
           <span class="text-sm font-black text-orange-300 uppercase tracking-wider">{{ t('battle.cards.taunt', 'Taunt') }}!</span>
         </div>
+      </div>
+    </div>
+
+    <!-- Recall: Discard Picker Overlay -->
+    <div
+      v-if="showRecallPicker"
+      class="absolute inset-0 z-[30] flex flex-col items-center justify-center"
+    >
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="emit('cancelRecall')" />
+      <div class="relative z-10 bg-slate-900 border border-purple-500/40 rounded-xl p-4 mx-4 max-h-[60vh] overflow-y-auto w-[90%] max-w-sm shadow-2xl shadow-purple-500/10">
+        <h3 class="text-sm font-bold text-purple-300 mb-3 text-center">
+          {{ t('battle.recallPickTitle', 'Select a card from discard') }}
+        </h3>
+        <div v-if="myDiscard.length > 0" class="grid grid-cols-3 gap-2">
+          <button
+            v-for="(cardId, i) in myDiscard"
+            :key="i"
+            @click="emit('selectRecallTarget', cardId)"
+            class="flex flex-col items-center gap-1 p-2 rounded-lg border transition-all hover:scale-105 active:scale-95"
+            :class="[
+              getCardBorderClass(getCard(cardId).type),
+              'bg-slate-800/80 hover:bg-slate-700/80',
+            ]"
+          >
+            <span class="text-lg">
+              <span v-if="getCard(cardId).type === 'attack'">&#9876;</span>
+              <span v-else-if="getCard(cardId).type === 'defense'">&#128737;</span>
+              <span v-else>&#10024;</span>
+            </span>
+            <span class="text-[10px] font-bold text-center leading-tight" :class="getCardTextClass(getCard(cardId).type)">
+              {{ t(getCard(cardId).nameKey, getCard(cardId).name) }}
+            </span>
+            <span class="text-[9px] text-slate-500">
+              &#9889;{{ getCard(cardId).cost }}
+            </span>
+          </button>
+        </div>
+        <div v-else class="text-center text-xs text-slate-500 py-4">
+          {{ t('battle.recallEmpty', 'No cards in discard pile') }}
+        </div>
+        <button
+          @click="emit('cancelRecall')"
+          class="mt-3 w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg text-xs font-medium transition-colors border border-slate-700/50"
+        >
+          {{ t('common.cancel', 'Cancel') }}
+        </button>
       </div>
     </div>
 
