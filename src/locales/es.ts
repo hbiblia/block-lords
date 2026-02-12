@@ -1440,6 +1440,11 @@
     insufficientFunds: 'Fondos insuficientes',
     myChallenges: 'Mis Desafíos',
     waiting: 'Esperando',
+    pendingChallenges: 'Desafíos Entrantes',
+    challengesYou: '¡te desafía!',
+    betAmount: 'Apuesta',
+    accept: 'Aceptar',
+    reject: 'Rechazar',
     // Mano de cartas
     yourHand: 'Tu Mano',
     queued: '{n} en cola',

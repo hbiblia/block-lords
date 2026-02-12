@@ -1440,6 +1440,11 @@ export default {
     insufficientFunds: 'Insufficient funds',
     myChallenges: 'My Challenges',
     waiting: 'Waiting',
+    pendingChallenges: 'Incoming Challenges',
+    challengesYou: 'challenges you!',
+    betAmount: 'Bet',
+    accept: 'Accept',
+    reject: 'Reject',
     // Card hand
     yourHand: 'Your Hand',
     queued: '{n} queued',
