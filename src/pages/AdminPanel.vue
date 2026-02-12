@@ -71,6 +71,12 @@ const activeRigsCount = computed(() => {
   return selectedUserDetail.value.rigs.filter((rig: any) => rig.is_active).length;
 });
 
+const blcValueInRon = computed(() => {
+  const blc = Number(selectedUser.value?.crypto_balance || 0);
+  // Rate: 100,000 BLC = 1 RON
+  return blc / 100000;
+});
+
 const typeOptions = [
   { value: 'info', label: 'Info', color: 'text-accent-primary' },
   { value: 'warning', label: 'Warning', color: 'text-status-warning' },
@@ -1074,13 +1080,15 @@ onMounted(async () => {
       >
         <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeGiftModal"></div>
 
-        <div class="relative bg-bg-secondary rounded-xl p-6 max-w-lg w-full border border-yellow-400 animate-fade-in max-h-[90vh] overflow-y-auto">
-          <div class="text-center mb-6">
-            <div class="text-5xl mb-3">🎁</div>
-            <h3 class="text-xl font-bold mb-2">Enviar Regalo</h3>
-            <p class="text-sm text-text-muted">
-              Envía regalos a todos los jugadores o a uno específico.
-            </p>
+        <div class="relative bg-bg-secondary rounded-xl p-5 max-w-lg w-full border border-yellow-400 animate-fade-in max-h-[90vh] overflow-y-auto">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-2xl">🎁</span>
+            <div>
+              <h3 class="text-base font-bold leading-tight">Enviar Regalo</h3>
+              <p class="text-xs text-text-muted">
+                Envía regalos a todos los jugadores o a uno específico.
+              </p>
+            </div>
           </div>
 
           <!-- Success message -->
@@ -1115,47 +1123,6 @@ onMounted(async () => {
                 class="w-full px-3 py-2 bg-bg-primary border border-border rounded-lg focus:border-yellow-400 focus:outline-none"
                 placeholder="UUID del jugador..."
               />
-            </div>
-
-            <!-- Title -->
-            <div>
-              <label class="block text-sm font-medium mb-2">Título *</label>
-              <input
-                v-model="giftForm.title"
-                type="text"
-                class="w-full px-3 py-2 bg-bg-primary border border-border rounded-lg focus:border-yellow-400 focus:outline-none"
-                placeholder="Ej: Reward, Compensation, Event Prize..."
-              />
-            </div>
-
-            <!-- Description -->
-            <div>
-              <label class="block text-sm font-medium mb-2">Descripción</label>
-              <input
-                v-model="giftForm.description"
-                type="text"
-                class="w-full px-3 py-2 bg-bg-primary border border-border rounded-lg focus:border-yellow-400 focus:outline-none"
-                placeholder="Descripción opcional..."
-              />
-            </div>
-
-            <!-- Icon -->
-            <div>
-              <label class="block text-sm font-medium mb-2">Icono</label>
-              <div class="flex items-center gap-2">
-                <div class="text-2xl w-10 text-center">{{ giftForm.icon }}</div>
-                <div class="flex flex-wrap gap-1">
-                  <button
-                    v-for="icon in giftIconOptions"
-                    :key="icon"
-                    @click="giftForm.icon = icon"
-                    class="w-8 h-8 text-xl hover:bg-bg-tertiary rounded transition-colors"
-                    :class="giftForm.icon === icon ? 'bg-yellow-600/30 ring-1 ring-yellow-400' : ''"
-                  >
-                    {{ icon }}
-                  </button>
-                </div>
-              </div>
             </div>
 
             <!-- Rewards -->
@@ -1224,6 +1191,47 @@ onMounted(async () => {
                     {{ b.name }} ({{ b.boost_type }}, +{{ b.effect_value }}%, {{ b.duration_minutes }}min)
                   </option>
                 </select>
+              </div>
+            </div>
+
+            <!-- Title -->
+            <div>
+              <label class="block text-sm font-medium mb-2">Título *</label>
+              <input
+                v-model="giftForm.title"
+                type="text"
+                class="w-full px-3 py-2 bg-bg-primary border border-border rounded-lg focus:border-yellow-400 focus:outline-none"
+                placeholder="Ej: Reward, Compensation, Event Prize..."
+              />
+            </div>
+
+            <!-- Description -->
+            <div>
+              <label class="block text-sm font-medium mb-2">Descripción</label>
+              <input
+                v-model="giftForm.description"
+                type="text"
+                class="w-full px-3 py-2 bg-bg-primary border border-border rounded-lg focus:border-yellow-400 focus:outline-none"
+                placeholder="Descripción opcional..."
+              />
+            </div>
+
+            <!-- Icon -->
+            <div>
+              <label class="block text-sm font-medium mb-2">Icono</label>
+              <div class="flex items-center gap-2">
+                <div class="text-2xl w-10 text-center">{{ giftForm.icon }}</div>
+                <div class="flex flex-wrap gap-1">
+                  <button
+                    v-for="icon in giftIconOptions"
+                    :key="icon"
+                    @click="giftForm.icon = icon"
+                    class="w-8 h-8 text-xl hover:bg-bg-tertiary rounded transition-colors"
+                    :class="giftForm.icon === icon ? 'bg-yellow-600/30 ring-1 ring-yellow-400' : ''"
+                  >
+                    {{ icon }}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1323,11 +1331,22 @@ onMounted(async () => {
                 </div>
                 <div>
                   <span class="text-text-muted block text-xs">BLC Balance</span>
-                  <p class="font-medium text-accent-primary">{{ Number(selectedUser.crypto_balance).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }}</p>
+                  <p class="font-medium text-accent-primary">
+                    {{ Number(selectedUser.crypto_balance).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }}
+                    <span v-if="blcValueInRon > 0" class="text-text-muted text-xs font-normal">(~{{ blcValueInRon.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) }} RON)</span>
+                  </p>
                 </div>
                 <div>
                   <span class="text-text-muted block text-xs">RON Balance</span>
                   <p class="font-medium">{{ Number(selectedUser.ron_balance || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }}</p>
+                </div>
+                <div>
+                  <span class="text-text-muted block text-xs">RON Depositado</span>
+                  <p class="font-medium text-status-success">{{ Number(selectedUserDetail.ron_movements?.total_deposited || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }}</p>
+                </div>
+                <div>
+                  <span class="text-text-muted block text-xs">RON Retirado</span>
+                  <p class="font-medium text-purple-400">{{ Number(selectedUserDetail.ron_movements?.total_withdrawn || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }}</p>
                 </div>
                 <div>
                   <span class="text-text-muted block text-xs">Reputación</span>
@@ -1450,7 +1469,7 @@ onMounted(async () => {
             <div v-if="selectedUserDetail.pending_blocks && selectedUserDetail.pending_blocks.blocks && selectedUserDetail.pending_blocks.blocks.length > 0" class="card p-3">
               <h4 class="text-base font-semibold mb-3 text-accent-primary">
                 ⏳ Bloques Pendientes ({{ selectedUserDetail.pending_blocks.pending_count }})
-                <span class="text-xs text-text-muted ml-2">Total: {{ Number(selectedUserDetail.pending_blocks.total_reward || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} BLC</span>
+                <span class="text-xs text-text-muted ml-2">Total: {{ Number(selectedUserDetail.pending_blocks.total_reward || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} BLC (~{{ (Number(selectedUserDetail.pending_blocks.total_reward || 0) / 100000).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} RON)</span>
               </h4>
               <div
                 @scroll="handlePendingBlocksScroll"

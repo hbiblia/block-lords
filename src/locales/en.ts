@@ -894,6 +894,7 @@ export default {
   },
 
   connection: {
+    label: 'Offline',
     title: 'Connection Lost',
     description: 'Connection to the server has been lost. Your data may be out of sync.',
     reconnecting: 'Reconnecting...',
@@ -1733,6 +1734,7 @@ export default {
   },
 
   update: {
+    title: 'Update',
     available: 'Update Available',
     refreshPrompt: 'A new version is available. Please refresh to update.',
     later: 'Later',

@@ -44,6 +44,10 @@ watch(
   { immediate: true }
 );
 
+function handleRefresh() {
+  window.location.reload();
+}
+
 // Reintentar conexión
 async function handleRetry() {
   isRetrying.value = true;
@@ -111,50 +115,38 @@ async function handleRetry() {
   </div>
   </Transition>
 
-  <!-- Error de conexión overlay -->
-  <Transition name="fade">
-  <div v-if="!isSuperseded && (authStore.connectionError || !authStore.isServerOnline)" class="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="card p-8 max-w-md w-full text-center border border-border/50 shadow-2xl">
-      <!-- Icono de error -->
-      <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-red-500/10 flex items-center justify-center">
-        <svg class="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-      </div>
-
-      <!-- Título y mensaje -->
-      <h2 class="text-xl font-bold text-text-primary mb-2">{{ t('connection.error.title') }}</h2>
-      <p class="text-text-secondary mb-6">{{ t('connection.error.message') }}</p>
-
-      <!-- Detalles del error (colapsable) -->
-      <details v-if="authStore.connectionError" class="mb-6 text-left">
-        <summary class="text-sm text-text-muted cursor-pointer hover:text-text-secondary">
-          {{ t('connection.error.details') }}
-        </summary>
-        <pre class="mt-2 p-3 bg-bg-tertiary rounded-lg text-xs text-text-muted overflow-auto max-h-24">{{ authStore.connectionError }}</pre>
-      </details>
-
-      <!-- Botón de reintentar -->
-      <button
-        @click="handleRetry"
-        :disabled="isRetrying"
-        class="btn btn-primary w-full flex items-center justify-center gap-2"
+  <!-- Error de conexión toast -->
+  <Teleport to="body">
+    <Transition name="toast">
+      <div
+        v-if="!isSuperseded && (authStore.connectionError || !authStore.isServerOnline)"
+        class="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%-2rem)] max-w-sm"
       >
-        <svg v-if="isRetrying" class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        {{ isRetrying ? t('connection.error.retrying') : t('connection.error.retry') }}
-      </button>
+        <div class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-slate-900/95 border border-red-500/40 shadow-lg shadow-red-500/10 backdrop-blur-sm">
+          <span class="text-lg flex-shrink-0">&#9888;</span>
 
-      <!-- Sugerencias -->
-      <p class="text-xs text-text-muted mt-4">{{ t('connection.error.suggestions') }}</p>
-    </div>
-  </div>
-  </Transition>
+          <p class="flex-1 min-w-0 text-xs font-semibold text-red-300 truncate">
+            {{ t('connection.error.title') }}
+          </p>
+
+          <button
+            @click="handleRetry"
+            :disabled="isRetrying"
+            class="flex-shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+          >
+            {{ isRetrying ? t('connection.error.retrying') : t('connection.error.retry') }}
+          </button>
+
+          <button
+            @click="handleRefresh"
+            class="flex-shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-colors"
+          >
+            {{ t('connection.reloadPage') }}
+          </button>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 
   <!-- Duplicate tab overlay -->
   <Transition name="fade">
@@ -210,7 +202,7 @@ async function handleRetry() {
   opacity: 0;
 }
 
-/* Fade transition for connection error */
+/* Fade transition */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;
@@ -219,5 +211,24 @@ async function handleRetry() {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* Toast transition for connection error */
+.toast-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.toast-leave-active {
+  transition: all 0.2s ease-in;
+}
+
+.toast-enter-from {
+  opacity: 0;
+  transform: translate(-50%, 20px);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 20px);
 }
 </style>

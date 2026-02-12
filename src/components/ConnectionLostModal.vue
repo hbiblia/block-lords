@@ -2,67 +2,96 @@
 import { watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRealtimeStore } from '@/stores/realtime';
+import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 const realtimeStore = useRealtimeStore();
 
+watch(() => realtimeStore.showDisconnectedModal, (show) => {
+  if (show) playSound('warning');
+});
+
+function handleReconnect() {
+  realtimeStore.manualReconnect();
+}
+
 function handleRefresh() {
   window.location.reload();
 }
-
-// Auto-reload when modal appears - always reload, even if connection comes back
-watch(() => realtimeStore.showDisconnectedModal, (showModal) => {
-  if (showModal) {
-    setTimeout(() => {
-      window.location.reload();
-    }, 2000);
-  }
-});
 </script>
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="realtimeStore.showDisconnectedModal"
-      class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-    >
-      <!-- Overlay -->
-      <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+    <Transition name="toast">
+      <div
+        v-if="realtimeStore.showDisconnectedModal"
+        class="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] w-[calc(100%-2rem)] max-w-sm"
+      >
+        <div class="relative overflow-hidden rounded-xl bg-slate-900/95 border border-red-500/30 shadow-lg shadow-red-500/10 backdrop-blur-sm">
+          <!-- Barra de acento superior -->
+          <div class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-red-500 via-amber-500 to-red-500 animate-shimmer"></div>
 
-      <!-- Modal -->
-      <div class="relative w-full max-w-md card p-6 text-center animate-fade-in">
-        <!-- Icon -->
-        <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-status-danger/20 flex items-center justify-center">
-          <svg class="w-10 h-10 text-status-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
-          </svg>
+          <div class="flex items-center gap-3 px-4 py-3">
+            <!-- Icono con pulso -->
+            <div class="relative flex-shrink-0">
+              <span class="text-lg">&#9888;</span>
+              <span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
+            </div>
+
+            <!-- Mensaje -->
+            <div class="flex-1 min-w-0">
+              <p class="text-[11px] font-bold text-red-300/60 uppercase tracking-wider mb-0.5">{{ t('connection.label', 'Offline') }}</p>
+              <p class="text-xs font-semibold text-white/90 truncate">{{ t('connection.title') }}</p>
+            </div>
+
+            <!-- Botón reconectar -->
+            <button
+              @click="handleReconnect"
+              class="flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/20 hover:border-amber-500/40 transition-all"
+            >
+              {{ t('connection.reconnect', 'Reconnect') }}
+            </button>
+
+            <!-- Botón recargar -->
+            <button
+              @click="handleRefresh"
+              class="flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/20 hover:border-red-500/40 transition-all"
+            >
+              {{ t('connection.reloadPage') }}
+            </button>
+          </div>
         </div>
-
-        <!-- Title -->
-        <h2 class="text-xl font-display font-bold text-status-danger mb-2">
-          {{ t('connection.title') }}
-        </h2>
-
-        <!-- Message -->
-        <p class="text-text-muted mb-4">
-          {{ t('connection.description') }}
-        </p>
-
-        <!-- Auto-reload notice -->
-        <p class="text-sm text-accent-primary mb-6 flex items-center justify-center gap-2">
-          <span class="animate-spin w-4 h-4 border-2 border-accent-primary border-t-transparent rounded-full"></span>
-          Recargando automáticamente...
-        </p>
-
-        <!-- Actions -->
-        <button
-          @click="handleRefresh"
-          class="w-full py-3 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/80 transition-colors"
-        >
-          {{ t('connection.reloadPage') }}
-        </button>
       </div>
-    </div>
+    </Transition>
   </Teleport>
 </template>
+
+<style scoped>
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+.toast-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.toast-leave-active {
+  transition: all 0.2s ease-in;
+}
+
+.toast-enter-from {
+  opacity: 0;
+  transform: translate(-50%, 20px);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 20px);
+}
+</style>

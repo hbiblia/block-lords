@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { supabase } from '@/utils/supabase';
 import { useAuthStore } from './auth';
+import { useGiftsStore } from './gifts';
 import { isTabLocked } from '@/composables/useTabLock';
 import { updatePlayerHeartbeat } from '@/utils/api';
 
@@ -216,6 +217,9 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
     // Suscribirse a bloques pendientes (incluye pity blocks)
     subscribeToPendingBlocks(authStore.player.id);
+
+    // Suscribirse a regalos del jugador
+    subscribeToPlayerGifts(authStore.player.id);
 
     // Suscribirse a stats de la red
     subscribeToNetworkStats();
@@ -489,6 +493,34 @@ export const useRealtimeStore = defineStore('realtime', () => {
       });
 
     channels.value.set(`rig_cooling:${playerId}`, channel);
+  }
+
+  function subscribeToPlayerGifts(playerId: string) {
+    const channel = supabase
+      .channel(`player_gifts:${playerId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'player_gifts',
+          filter: `player_id=eq.${playerId}`,
+        },
+        () => {
+          const giftsStore = useGiftsStore();
+          giftsStore.fetchGifts();
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Suscrito a regalos del jugador');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Error en canal de gifts:', status);
+          handleChannelError();
+        }
+      });
+
+    channels.value.set(`player_gifts:${playerId}`, channel);
   }
 
   function subscribeToMarketOrders(itemType: string) {

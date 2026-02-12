@@ -417,6 +417,7 @@ onUnmounted(() => {
             <p class="text-text-muted text-sm truncate">{{ player?.email }}</p>
             <div class="flex items-center gap-4 mt-2 text-sm text-text-muted">
               <span>🌍 {{ player?.region ?? 'Global' }}</span>
+              <span>⭐ {{ player?.reputation_score ?? 0 }} {{ t('leaderboard.reputation', 'Reputation') }}</span>
               <span>📅 {{ memberSince }}</span>
             </div>
           </div>
@@ -504,6 +505,70 @@ onUnmounted(() => {
               class="flex-1 py-2 rounded-lg text-sm font-medium bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {{ player?.ron_wallet ? t('profile.withdraw.button', 'Retirar') : t('profile.withdraw.needWallet',
               'Configura wallet') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RON Wallet Section -->
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-bold flex items-center gap-2">
+            <span class="text-xl">👛</span>
+            {{ t('profile.wallet.title', 'RON Wallet') }}
+          </h3>
+          <button v-if="!editingWallet" @click="startEditWallet"
+            class="text-sm text-accent-primary hover:text-accent-primary/80 transition-colors">
+            {{ player?.ron_wallet ? t('common.edit', 'Editar') : t('profile.wallet.add', 'Agregar') }}
+          </button>
+        </div>
+
+        <!-- Display mode -->
+        <div v-if="!editingWallet">
+          <div v-if="player?.ron_wallet" class="flex items-center gap-3">
+            <div class="flex-1 bg-bg-tertiary rounded-lg px-4 py-3 font-mono text-sm">
+              {{ formattedWallet }}
+            </div>
+            <button @click="copyWallet"
+              class="p-2.5 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
+              :title="t('common.copy', 'Copiar')">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </button>
+          </div>
+          <p v-else class="text-text-muted text-sm">
+            {{ t('profile.wallet.noWallet', 'No tienes una wallet configurada. Agrega tu direccion RON para recibir pagos.') }}
+          </p>
+        </div>
+
+        <!-- Edit mode -->
+        <div v-else class="space-y-3">
+          <div>
+            <input v-model="walletInput" type="text" :placeholder="t('profile.wallet.placeholder', '0x...')"
+              class="w-full bg-bg-tertiary border border-border rounded-lg px-4 py-2.5 font-mono text-sm focus:outline-none focus:border-accent-primary transition-colors"
+              :disabled="savingWallet" />
+            <p class="text-xs text-text-muted mt-1.5">
+              {{ t('profile.wallet.hint', 'Ingresa una direccion de wallet valida (formato Ethereum/RON)') }}
+            </p>
+          </div>
+
+          <div v-if="walletError" class="p-3 rounded-lg bg-status-danger/20 border border-status-danger/30">
+            <p class="text-sm text-status-danger">{{ walletError }}</p>
+          </div>
+
+          <div class="flex gap-2">
+            <button @click="cancelEditWallet" :disabled="savingWallet"
+              class="flex-1 py-2 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
+              {{ t('common.cancel') }}
+            </button>
+            <button @click="saveWallet" :disabled="savingWallet"
+              class="flex-1 py-2 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/90 transition-colors disabled:opacity-50">
+              <span v-if="savingWallet" class="flex items-center justify-center gap-2">
+                <span class="animate-spin">⏳</span>
+              </span>
+              <span v-else>{{ t('common.save', 'Guardar') }}</span>
             </button>
           </div>
         </div>
@@ -783,70 +848,6 @@ onUnmounted(() => {
 
       <!-- Referral System -->
       <ReferralSection />
-
-      <!-- RON Wallet Section -->
-      <div class="card p-5">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-bold flex items-center gap-2">
-            <span class="text-xl">👛</span>
-            {{ t('profile.wallet.title', 'RON Wallet') }}
-          </h3>
-          <button v-if="!editingWallet" @click="startEditWallet"
-            class="text-sm text-accent-primary hover:text-accent-primary/80 transition-colors">
-            {{ player?.ron_wallet ? t('common.edit', 'Editar') : t('profile.wallet.add', 'Agregar') }}
-          </button>
-        </div>
-
-        <!-- Display mode -->
-        <div v-if="!editingWallet">
-          <div v-if="player?.ron_wallet" class="flex items-center gap-3">
-            <div class="flex-1 bg-bg-tertiary rounded-lg px-4 py-3 font-mono text-sm">
-              {{ formattedWallet }}
-            </div>
-            <button @click="copyWallet"
-              class="p-2.5 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
-              :title="t('common.copy', 'Copiar')">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </button>
-          </div>
-          <p v-else class="text-text-muted text-sm">
-            {{ t('profile.wallet.noWallet', 'No tienes una wallet configurada. Agrega tu direccion RON para recibir pagos.') }}
-          </p>
-        </div>
-
-        <!-- Edit mode -->
-        <div v-else class="space-y-3">
-          <div>
-            <input v-model="walletInput" type="text" :placeholder="t('profile.wallet.placeholder', '0x...')"
-              class="w-full bg-bg-tertiary border border-border rounded-lg px-4 py-2.5 font-mono text-sm focus:outline-none focus:border-accent-primary transition-colors"
-              :disabled="savingWallet" />
-            <p class="text-xs text-text-muted mt-1.5">
-              {{ t('profile.wallet.hint', 'Ingresa una direccion de wallet valida (formato Ethereum/RON)') }}
-            </p>
-          </div>
-
-          <div v-if="walletError" class="p-3 rounded-lg bg-status-danger/20 border border-status-danger/30">
-            <p class="text-sm text-status-danger">{{ walletError }}</p>
-          </div>
-
-          <div class="flex gap-2">
-            <button @click="cancelEditWallet" :disabled="savingWallet"
-              class="flex-1 py-2 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
-              {{ t('common.cancel') }}
-            </button>
-            <button @click="saveWallet" :disabled="savingWallet"
-              class="flex-1 py-2 rounded-lg font-medium bg-accent-primary text-white hover:bg-accent-primary/90 transition-colors disabled:opacity-50">
-              <span v-if="savingWallet" class="flex items-center justify-center gap-2">
-                <span class="animate-spin">⏳</span>
-              </span>
-              <span v-else>{{ t('common.save', 'Guardar') }}</span>
-            </button>
-          </div>
-        </div>
-      </div>
 
       <!-- Recent Transactions -->
       <div class="card p-5">

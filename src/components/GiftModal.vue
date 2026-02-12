@@ -165,7 +165,7 @@ function getItemName(type: string | null, id: string | null): string {
       <div class="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in"></div>
 
       <!-- Content -->
-      <div class="relative flex flex-col items-center gap-6 animate-fade-in">
+      <div class="relative flex flex-col items-center gap-3 animate-fade-in">
         <!-- Floating particles -->
         <div class="absolute inset-0 pointer-events-none">
           <div
@@ -184,10 +184,10 @@ function getItemName(type: string | null, id: string | null): string {
 
         <!-- Title -->
         <div class="text-center z-10">
-          <p class="text-lg text-amber-300 font-medium animate-pulse-slow">
+          <p class="text-sm text-amber-300 font-medium animate-pulse-slow">
             {{ t('gifts.surprise') }}
           </p>
-          <p v-if="giftsStore.currentGift?.title" class="text-sm text-text-muted mt-1">
+          <p v-if="giftsStore.currentGift?.title" class="text-[11px] text-text-muted mt-0.5">
             {{ giftsStore.currentGift.title }}
           </p>
         </div>
@@ -198,14 +198,14 @@ function getItemName(type: string | null, id: string | null): string {
           class="relative z-10 gift-box-btn focus:outline-none"
         >
           <div class="gift-box">
-            <span class="text-8xl gift-float gift-glow select-none">
+            <span class="text-5xl gift-float gift-glow select-none">
               {{ giftsStore.currentGift?.icon || '🎁' }}
             </span>
           </div>
         </button>
 
         <!-- Tap to open -->
-        <p class="text-sm text-text-muted z-10 animate-pulse-slow">
+        <p class="text-[11px] text-text-muted z-10 animate-pulse-slow">
           {{ t('gifts.tapToOpen') }}
         </p>
       </div>
@@ -218,15 +218,15 @@ function getItemName(type: string | null, id: string | null): string {
     >
       <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
 
-      <div class="relative flex flex-col items-center gap-4">
+      <div class="relative flex flex-col items-center gap-2">
         <!-- Shaking gift -->
         <div class="gift-shake">
-          <span class="text-8xl select-none">
+          <span class="text-6xl select-none">
             {{ giftsStore.currentGift?.icon || '🎁' }}
           </span>
         </div>
 
-        <p class="text-sm text-amber-300 z-10 animate-pulse">
+        <p class="text-xs text-amber-300 z-10 animate-pulse">
           {{ t('gifts.opening') }}
         </p>
       </div>
@@ -239,38 +239,38 @@ function getItemName(type: string | null, id: string | null): string {
     >
       <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
 
-      <div class="relative w-full max-w-sm animate-fade-in">
-        <div class="bg-bg-secondary border border-border/50 rounded-2xl p-6 text-center shadow-2xl">
-          <!-- Header -->
-          <div class="mb-4">
-            <div class="text-5xl mb-3 gift-reveal-bounce">
-              {{ giftsStore.currentGift?.icon || '🎁' }}
-            </div>
-            <h2 class="text-xl font-display font-bold">
-              <span class="gradient-text">{{ t('gifts.received') }}</span>
-            </h2>
-            <p v-if="giftsStore.currentGift?.description" class="text-sm text-text-muted mt-1">
-              {{ giftsStore.currentGift.description }}
-            </p>
-          </div>
-
+      <div class="relative w-full max-w-xs animate-fade-in">
+        <div class="bg-bg-secondary border border-border/50 rounded-2xl p-4 text-center shadow-2xl">
           <!-- Rewards -->
-          <div class="space-y-3 mb-6">
+          <div class="space-y-1.5 mb-3">
             <div
               v-for="(line, idx) in getRewardLines()"
               :key="idx"
-              class="flex items-center justify-center gap-3 p-3 bg-bg-tertiary rounded-xl reward-line-appear"
+              class="flex items-center justify-center gap-2 px-3 py-2 bg-bg-tertiary rounded-lg reward-line-appear"
               :style="{ animationDelay: `${idx * 0.15}s` }"
             >
-              <span class="text-2xl">{{ line.emoji }}</span>
-              <span class="text-lg font-bold text-accent-primary">{{ line.text }}</span>
+              <span class="text-lg">{{ line.emoji }}</span>
+              <span class="text-sm font-bold text-accent-primary">{{ line.text }}</span>
+            </div>
+          </div>
+
+          <!-- Title + Description + Icon -->
+          <div class="mb-3">
+            <h2 class="text-lg font-display font-bold">
+              <span class="gradient-text">{{ t('gifts.received') }}</span>
+            </h2>
+            <p v-if="giftsStore.currentGift?.description" class="text-xs text-text-muted mt-0.5">
+              {{ giftsStore.currentGift.description }}
+            </p>
+            <div class="text-3xl mt-1.5 gift-reveal-bounce">
+              {{ giftsStore.currentGift?.icon || '🎁' }}
             </div>
           </div>
 
           <!-- Collect Button -->
           <button
             @click="handleCollect"
-            class="w-full py-3 rounded-xl bg-gradient-primary text-white font-bold text-lg hover:opacity-90 transition-opacity"
+            class="w-full py-2.5 rounded-xl bg-gradient-primary text-white font-bold text-base hover:opacity-90 transition-opacity"
           >
             {{ t('gifts.collect') }}
           </button>

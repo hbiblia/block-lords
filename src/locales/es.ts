@@ -894,6 +894,7 @@
   },
 
   connection: {
+    label: 'Sin conexión',
     title: 'Conexión Perdida',
     description: 'Se ha perdido la conexión con el servidor. Tus datos pueden no estar sincronizados.',
     reconnecting: 'Reconectando...',
@@ -1733,6 +1734,7 @@
   },
 
   update: {
+    title: 'Actualización',
     available: 'Actualización Disponible',
     refreshPrompt: 'Una nueva versión está disponible. Por favor actualiza la página.',
     later: 'Más Tarde',
