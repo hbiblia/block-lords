@@ -1553,7 +1553,7 @@
       attack: 'Ataque',
       defense: 'Defensa',
       special: 'Especial',
-      deckInfo: '20 cartas en total. Ambos jugadores reciben el mismo mazo, barajado al azar.',
+      deckInfo: '22 cartas en total. Ambos jugadores reciben el mismo mazo, barajado al azar.',
     },
     // Pantalla de intro
     intro: {

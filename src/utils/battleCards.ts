@@ -56,7 +56,7 @@ export interface GameState {
   lastAction: string | null;
 }
 
-// === Card Definitions (20 cards total) ===
+// === Card Definitions (22 cards total) ===
 
 export const CARD_DEFINITIONS: CardDefinition[] = [
   // ATTACK CARDS (6) - Red

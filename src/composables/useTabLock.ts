@@ -6,7 +6,7 @@ export const isTabLocked = ref(false);
 const TAB_KEY = 'bl_active_tab';
 const TAB_HEARTBEAT_KEY = 'bl_tab_heartbeat';
 const HEARTBEAT_INTERVAL = 3000; // 3s
-const HEARTBEAT_TIMEOUT = 8000;  // 8s — no heartbeat = tab is dead
+const HEARTBEAT_TIMEOUT = 6000;  // 6s — no heartbeat = tab is dead
 
 // Fresh random ID on every page load — this is intentional.
 // sessionStorage is cloned when duplicating a tab, so we can't use it.
@@ -29,6 +29,9 @@ export function useTabLock() {
     const activeId = localStorage.getItem(TAB_KEY);
     if (!activeId) return false;
 
+    // If the stored ID is our own from a previous load (stale), ignore it
+    if (activeId === MY_TAB_ID) return false;
+
     try {
       const hb = localStorage.getItem(TAB_HEARTBEAT_KEY);
       if (hb) {
@@ -45,6 +48,7 @@ export function useTabLock() {
   function releaseTab() {
     if (localStorage.getItem(TAB_KEY) === MY_TAB_ID) {
       localStorage.removeItem(TAB_KEY);
+      localStorage.removeItem(TAB_HEARTBEAT_KEY);
     }
   }
 
@@ -100,7 +104,9 @@ export function useTabLock() {
 
     window.addEventListener('storage', handleStorageChange);
     // Release claim on page close/refresh so new tabs don't see a stale claim
+    // pagehide is more reliable than beforeunload on mobile and bfcache scenarios
     window.addEventListener('beforeunload', releaseTab);
+    window.addEventListener('pagehide', releaseTab);
   });
 
   onUnmounted(() => {
@@ -108,6 +114,7 @@ export function useTabLock() {
     if (supersededCheckTimer) clearInterval(supersededCheckTimer);
     window.removeEventListener('storage', handleStorageChange);
     window.removeEventListener('beforeunload', releaseTab);
+    window.removeEventListener('pagehide', releaseTab);
     releaseTab();
   });
 

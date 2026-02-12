@@ -1553,7 +1553,7 @@ export default {
       attack: 'Attack',
       defense: 'Defense',
       special: 'Special',
-      deckInfo: '20 cards total. Both players get the same deck, shuffled randomly.',
+      deckInfo: '22 cards total. Both players get the same deck, shuffled randomly.',
     },
     // Intro screen
     intro: {
