@@ -38,6 +38,9 @@ function formatEntry(entry: LogEntry): string {
   if (entry.type === 'storm') {
     return t('battle.log.bloodStorm', { dmg: entry.stormDamage });
   }
+  if (entry.type === 'timeout') {
+    return t('battle.log.turnSkipped', 'Turn skipped (timeout)');
+  }
   const card = getCard(entry.card);
   const cardName = t(card.nameKey, card.name);
 
@@ -141,6 +144,7 @@ function formatEntry(entry: LogEntry): string {
         'bg-blue-500/8 border-l-2 border-blue-500/40': entry.type === 'defense',
         'bg-purple-500/8 border-l-2 border-purple-500/40': entry.type === 'special',
         'bg-red-500/15 border-l-2 border-red-600/50': entry.type === 'storm',
+        'bg-yellow-500/8 border-l-2 border-yellow-500/40': entry.type === 'timeout',
       }"
     >
       <!-- Type icon -->
@@ -151,11 +155,13 @@ function formatEntry(entry: LogEntry): string {
           'bg-blue-500/20 text-blue-400': entry.type === 'defense',
           'bg-purple-500/20 text-purple-400': entry.type === 'special',
           'bg-red-600/20 text-red-500': entry.type === 'storm',
+          'bg-yellow-500/20 text-yellow-400': entry.type === 'timeout',
         }"
       >
         <span v-if="entry.type === 'attack'">&#9876;</span>
         <span v-else-if="entry.type === 'defense'">&#128737;</span>
         <span v-else-if="entry.type === 'storm'">&#9760;</span>
+        <span v-else-if="entry.type === 'timeout'">&#9200;</span>
         <span v-else>&#10024;</span>
       </span>
 
@@ -167,6 +173,7 @@ function formatEntry(entry: LogEntry): string {
           'text-blue-300/90': entry.type === 'defense',
           'text-purple-300/90': entry.type === 'special',
           'text-red-400/90': entry.type === 'storm',
+          'text-yellow-300/90': entry.type === 'timeout',
         }"
       >
         {{ formatEntry(entry) }}

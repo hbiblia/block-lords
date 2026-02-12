@@ -1642,6 +1642,7 @@
       taunt: '{card}: ¡se burla del oponente!',
       recall: '{card}: ¡recuperó {target} del descarte!',
       bloodStorm: 'Tormenta de Sangre: -{dmg} HP a TODOS',
+      turnSkipped: 'Turno saltado (tiempo agotado)',
     },
     // Cartas
     cards: {

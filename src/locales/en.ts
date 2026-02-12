@@ -1617,6 +1617,7 @@ export default {
       taunt: '{card}: taunts the opponent!',
       recall: '{card}: retrieved {target} from discard!',
       bloodStorm: 'Blood Storm: -{dmg} HP to ALL',
+      turnSkipped: 'Turn skipped (timeout)',
     },
     // Card detail overlay
     detail: {
