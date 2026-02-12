@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { MAX_HP, MAX_ENERGY, TURN_DURATION } from '@/utils/battleCards';
+import { MAX_HP, MAX_ENERGY, TURN_DURATION, CARD_DEFINITIONS } from '@/utils/battleCards';
+
+const attackCount = CARD_DEFINITIONS.filter(c => c.type === 'attack').length;
+const defenseCount = CARD_DEFINITIONS.filter(c => c.type === 'defense').length;
+const specialCount = CARD_DEFINITIONS.filter(c => c.type === 'special').length;
+const totalCards = CARD_DEFINITIONS.length;
 
 defineProps<{
   loading: boolean;
@@ -95,18 +100,18 @@ const { t } = useI18n();
           <div class="flex gap-3 justify-center">
             <div class="flex items-center gap-1">
               <span class="w-2 h-2 rounded-full bg-red-500" />
-              <span class="text-[10px] text-red-400 font-medium">{{ t('battle.info.attack', 'Attack') }} (6)</span>
+              <span class="text-[10px] text-red-400 font-medium">{{ t('battle.info.attack', 'Attack') }} ({{ attackCount }})</span>
             </div>
             <div class="flex items-center gap-1">
               <span class="w-2 h-2 rounded-full bg-blue-500" />
-              <span class="text-[10px] text-blue-400 font-medium">{{ t('battle.info.defense', 'Defense') }} (6)</span>
+              <span class="text-[10px] text-blue-400 font-medium">{{ t('battle.info.defense', 'Defense') }} ({{ defenseCount }})</span>
             </div>
             <div class="flex items-center gap-1">
               <span class="w-2 h-2 rounded-full bg-purple-500" />
-              <span class="text-[10px] text-purple-400 font-medium">{{ t('battle.info.special', 'Special') }} (6)</span>
+              <span class="text-[10px] text-purple-400 font-medium">{{ t('battle.info.special', 'Special') }} ({{ specialCount }})</span>
             </div>
           </div>
-          <p class="text-[9px] text-slate-500 text-center mt-1">{{ t('battle.info.deckInfo', '18 cards total. Both players get the same deck, shuffled randomly.') }}</p>
+          <p class="text-[9px] text-slate-500 text-center mt-1">{{ t('battle.info.deckInfo', { count: totalCards }, `${totalCards} cards total. Both players get the same deck, shuffled randomly.`) }}</p>
         </div>
 
         <!-- Live stats -->

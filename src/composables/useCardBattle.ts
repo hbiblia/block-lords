@@ -86,6 +86,13 @@ export interface BattleSession {
     player2Boosted: boolean;
     player1Poison: number;
     player2Poison: number;
+    player1HandCount: number;
+    player2HandCount: number;
+    player1DeckCount: number;
+    player2DeckCount: number;
+    player1DiscardCount: number;
+    player2DiscardCount: number;
+    totalCards: number;
     lastAction: LogEntry[] | null;
   };
   status: string;
@@ -141,6 +148,11 @@ export function useCardBattle() {
   const enemyBoosted = ref(false);
   const myPoison = ref(0);
   const enemyPoison = ref(0);
+  const myDeckCount = ref(0);
+  const myDiscardCount = ref(0);
+  const enemyDeckCount = ref(0);
+  const enemyDiscardCount = ref(0);
+  const enemyHandCount = ref(0);
   const turnTimer = ref(TURN_DURATION);
   const battleLog = ref<LogEntry[]>([]);
   const cardsPlayedThisTurn = ref<string[]>([]);
@@ -605,6 +617,11 @@ export function useCardBattle() {
     enemyBoosted.value = amP1 ? (state.player2Boosted || false) : (state.player1Boosted || false);
     myPoison.value = amP1 ? (state.player1Poison || 0) : (state.player2Poison || 0);
     enemyPoison.value = amP1 ? (state.player2Poison || 0) : (state.player1Poison || 0);
+    myDeckCount.value = amP1 ? (state.player1DeckCount || 0) : (state.player2DeckCount || 0);
+    myDiscardCount.value = amP1 ? (state.player1DiscardCount || 0) : (state.player2DiscardCount || 0);
+    enemyDeckCount.value = amP1 ? (state.player2DeckCount || 0) : (state.player1DeckCount || 0);
+    enemyDiscardCount.value = amP1 ? (state.player2DiscardCount || 0) : (state.player1DiscardCount || 0);
+    enemyHandCount.value = amP1 ? (state.player2HandCount || 0) : (state.player1HandCount || 0);
     cardsPlayedThisTurn.value = [];
     undoStack.value = [];
     result.value = null;
@@ -652,6 +669,11 @@ export function useCardBattle() {
     enemyBoosted.value = amP1 ? (state.player2Boosted || false) : (state.player1Boosted || false);
     myPoison.value = amP1 ? (state.player1Poison || 0) : (state.player2Poison || 0);
     enemyPoison.value = amP1 ? (state.player2Poison || 0) : (state.player1Poison || 0);
+    myDeckCount.value = amP1 ? (state.player1DeckCount || 0) : (state.player2DeckCount || 0);
+    myDiscardCount.value = amP1 ? (state.player1DiscardCount || 0) : (state.player2DiscardCount || 0);
+    enemyDeckCount.value = amP1 ? (state.player2DeckCount || 0) : (state.player1DeckCount || 0);
+    enemyDiscardCount.value = amP1 ? (state.player2DiscardCount || 0) : (state.player1DiscardCount || 0);
+    enemyHandCount.value = amP1 ? (state.player2HandCount || 0) : (state.player1HandCount || 0);
     cardsPlayedThisTurn.value = [];
     undoStack.value = [];
 
@@ -980,6 +1002,11 @@ export function useCardBattle() {
     enemyBoosted.value = false;
     myPoison.value = 0;
     enemyPoison.value = 0;
+    myDeckCount.value = 0;
+    myDiscardCount.value = 0;
+    enemyDeckCount.value = 0;
+    enemyDiscardCount.value = 0;
+    enemyHandCount.value = 0;
     turnTimer.value = TURN_DURATION;
     battleLog.value = [];
     cardsPlayedThisTurn.value = [];
@@ -1057,6 +1084,11 @@ export function useCardBattle() {
     enemyBoosted,
     myPoison,
     enemyPoison,
+    myDeckCount,
+    myDiscardCount,
+    enemyDeckCount,
+    enemyDiscardCount,
+    enemyHandCount,
     turnTimer,
     battleLog,
     cardsPlayedThisTurn,

@@ -54,6 +54,11 @@ const {
   enemyBoosted,
   myPoison,
   enemyPoison,
+  myDeckCount,
+  myDiscardCount,
+  enemyDeckCount,
+  enemyDiscardCount,
+  enemyHandCount,
   turnTimer,
   handCards,
   battleLog,
@@ -322,6 +327,11 @@ function getEnemyUsername(): string {
           :enemy-boosted="enemyBoosted"
           :my-poison="myPoison"
           :enemy-poison="enemyPoison"
+          :my-deck-count="myDeckCount"
+          :my-discard-count="myDiscardCount"
+          :enemy-deck-count="enemyDeckCount"
+          :enemy-discard-count="enemyDiscardCount"
+          :enemy-hand-count="enemyHandCount"
           :turn-timer="turnTimer"
           :hand-cards="handCards"
           :battle-log="battleLog"

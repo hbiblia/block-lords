@@ -26,6 +26,11 @@ const props = defineProps<{
   enemyBoosted?: boolean;
   myPoison?: number;
   enemyPoison?: number;
+  myDeckCount?: number;
+  myDiscardCount?: number;
+  enemyDeckCount?: number;
+  enemyDiscardCount?: number;
+  enemyHandCount?: number;
   turnTimer: number;
   handCards: (CardDefinition | null)[];
   battleLog: LogEntry[];
@@ -261,6 +266,9 @@ onMounted(() => {
       :weakened="enemyWeakened"
       :boosted="enemyBoosted"
       :poison="enemyPoison"
+      :deck-count="enemyDeckCount"
+      :discard-count="enemyDiscardCount"
+      :hand-count="enemyHandCount"
     />
 
     <!-- Battle log with VS overlay -->
@@ -328,6 +336,9 @@ onMounted(() => {
       :weakened="myWeakened"
       :boosted="myBoosted"
       :poison="myPoison"
+      :deck-count="myDeckCount"
+      :discard-count="myDiscardCount"
+      :hand-count="handCards.filter(c => c !== null).length"
     />
 
     <!-- Card hand + Action buttons -->

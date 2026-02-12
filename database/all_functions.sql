@@ -10028,6 +10028,13 @@ BEGIN
     'player2Boosted', false,
     'player1Poison', 0,
     'player2Poison', 0,
+    'player1HandCount', jsonb_array_length(v_hand1),
+    'player2HandCount', jsonb_array_length(v_hand2),
+    'player1DeckCount', jsonb_array_length(COALESCE(v_remaining1, '[]'::JSONB)),
+    'player2DeckCount', jsonb_array_length(COALESCE(v_remaining2, '[]'::JSONB)),
+    'player1DiscardCount', 0,
+    'player2DiscardCount', 0,
+    'totalCards', jsonb_array_length(v_all_cards),
     'lastAction', null
   );
 
@@ -10460,6 +10467,13 @@ BEGIN
       'player2Boosted', false,
       'player1Poison', v_my_poison,
       'player2Poison', v_opp_poison,
+      'player1HandCount', jsonb_array_length(COALESCE(v_my_hand, '[]'::JSONB)),
+      'player2HandCount', jsonb_array_length(COALESCE(v_opp_hand, '[]'::JSONB)),
+      'player1DeckCount', jsonb_array_length(COALESCE(v_my_deck, '[]'::JSONB)),
+      'player2DeckCount', jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)),
+      'player1DiscardCount', jsonb_array_length(COALESCE(v_my_discard, '[]'::JSONB)),
+      'player2DiscardCount', 0,
+      'totalCards', 22,
       'lastAction', v_log_entries
     );
   ELSE
@@ -10478,6 +10492,13 @@ BEGIN
       'player2Boosted', v_boosted,
       'player1Poison', v_opp_poison,
       'player2Poison', v_my_poison,
+      'player1HandCount', jsonb_array_length(COALESCE(v_opp_hand, '[]'::JSONB)),
+      'player2HandCount', jsonb_array_length(COALESCE(v_my_hand, '[]'::JSONB)),
+      'player1DeckCount', jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)),
+      'player2DeckCount', jsonb_array_length(COALESCE(v_my_deck, '[]'::JSONB)),
+      'player1DiscardCount', 0,
+      'player2DiscardCount', jsonb_array_length(COALESCE(v_my_discard, '[]'::JSONB)),
+      'totalCards', 22,
       'lastAction', v_log_entries
     );
   END IF;

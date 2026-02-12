@@ -14,6 +14,9 @@ const props = defineProps<{
   weakened?: boolean;
   boosted?: boolean;
   poison?: number;
+  deckCount?: number;
+  discardCount?: number;
+  handCount?: number;
 }>();
 
 const { t } = useI18n();
@@ -222,6 +225,19 @@ watch(() => props.boosted, (newVal, oldVal) => {
               : 'bg-slate-800 text-slate-500'"
           >{{ energy }}</span>
         </div>
+      </div>
+
+      <!-- Card counts row -->
+      <div v-if="deckCount !== undefined" class="flex items-center gap-3 mb-1.5 text-[9px] font-bold">
+        <span class="flex items-center gap-0.5 text-amber-400/80" :title="t('battle.deckCount', 'Deck')">
+          &#127183; {{ deckCount }}
+        </span>
+        <span class="flex items-center gap-0.5 text-cyan-400/80" :title="t('battle.handCount', 'Hand')">
+          &#9995; {{ handCount ?? 0 }}
+        </span>
+        <span class="flex items-center gap-0.5 text-slate-400/80" :title="t('battle.discardCount', 'Discard')">
+          &#128465; {{ discardCount ?? 0 }}
+        </span>
       </div>
 
       <!-- Row 2: HP bar -->
