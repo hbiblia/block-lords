@@ -212,6 +212,26 @@ BEGIN
 END;
 $$;
 
+-- Función ligera para actualizar heartbeat del jugador
+-- Se llama periódicamente para mantener al jugador como "online"
+-- y prevenir desconexión cuando el tab pierde foco
+CREATE OR REPLACE FUNCTION update_player_heartbeat(p_player_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE players
+  SET is_online = true,
+      last_seen = NOW()
+  WHERE id = p_player_id;
+
+  RETURN FOUND;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION update_player_heartbeat TO authenticated;
+
 -- Regeneración pasiva de recursos (se aplica al login)
 -- Energía: +1 cada 10 minutos offline
 -- Internet: +1 cada 15 minutos offline
@@ -1456,6 +1476,10 @@ DECLARE
   -- Upgrade bonuses
   v_efficiency_bonus NUMERIC;
   v_thermal_bonus NUMERIC;
+  -- Hashrate calculation variables
+  v_temp_penalty NUMERIC;
+  v_condition_penalty NUMERIC;
+  v_hashrate_ratio NUMERIC;
 BEGIN
   -- Procesar jugadores que están ONLINE o tienen rigs con autonomous mining boost
   FOR v_player IN
@@ -1534,24 +1558,19 @@ BEGIN
 
       -- Calcular hashrate efectivo para determinar generación de calor
       -- Solo genera calor si está minando efectivamente
-      DECLARE
-        v_temp_penalty NUMERIC;
-        v_condition_penalty NUMERIC;
-        v_hashrate_ratio NUMERIC;
-      BEGIN
-        -- Penalización por temperatura (misma lógica que generate_shares_tick)
-        IF v_rig.temperature <= 50 THEN
-          v_temp_penalty := 1;
-        ELSE
-          v_temp_penalty := GREATEST(0.3, 1 - ((v_rig.temperature - 50) * 0.014));
-        END IF;
 
-        -- Penalización por condición
-        v_condition_penalty := v_rig.condition / 100.0;
+      -- Penalización por temperatura (misma lógica que generate_shares_tick)
+      IF v_rig.temperature <= 50 THEN
+        v_temp_penalty := 1;
+      ELSE
+        v_temp_penalty := GREATEST(0.3, 1 - ((v_rig.temperature - 50) * 0.014));
+      END IF;
 
-        -- Ratio de trabajo real (0 a 1): cuánto está trabajando el rig realmente
-        v_hashrate_ratio := v_temp_penalty * v_condition_penalty;
-      END;
+      -- Penalización por condición
+      v_condition_penalty := v_rig.condition / 100.0;
+
+      -- Ratio de trabajo real (0 a 1): cuánto está trabajando el rig realmente
+      v_hashrate_ratio := v_temp_penalty * v_condition_penalty;
 
       -- Calcular aumento de temperatura basado en hashrate efectivo
       -- Solo se calienta si está trabajando (hashrate_ratio > 0)
@@ -1635,9 +1654,13 @@ BEGIN
       END IF;
 
       -- Aplicar deterioro y actualizar temperatura
+      -- El bot (BalanceBot) nunca pierde condición
       UPDATE player_rigs
       SET temperature = v_new_temp,
-          condition = GREATEST(0, condition - v_deterioration)
+          condition = CASE
+            WHEN v_player.id = '00000000-0000-0000-0000-000000000001' THEN 100  -- Bot siempre al 100%
+            ELSE GREATEST(0, condition - v_deterioration)
+          END
       WHERE id = v_rig.id;
 
       -- Consumir durabilidad de la refrigeración instalada en este rig
@@ -1707,8 +1730,16 @@ BEGIN
     -- Los multiplicadores de boost ya fueron aplicados por rig en el loop anterior
     -- Multiplicador 0.05 = tick cada 30 segundos (antes 0.1 para ticks de 60 segundos)
     -- Premium: -20% consumo (multiplicador 0.8)
-    v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.05 * CASE WHEN v_player.is_premium THEN 0.8 ELSE 1.0 END));
-    v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.05 * CASE WHEN v_player.is_premium THEN 0.8 ELSE 1.0 END));
+    -- El bot (BalanceBot) nunca consume recursos
+    IF v_player.id = '00000000-0000-0000-0000-000000000001' THEN
+      -- Bot: mantener recursos infinitos
+      v_new_energy := 999999;
+      v_new_internet := 999999;
+    ELSE
+      -- Jugadores normales: consumir recursos
+      v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.05 * CASE WHEN v_player.is_premium THEN 0.8 ELSE 1.0 END));
+      v_new_internet := GREATEST(0, v_player.internet - (v_total_internet * 0.05 * CASE WHEN v_player.is_premium THEN 0.8 ELSE 1.0 END));
+    END IF;
 
     -- Actualizar recursos del jugador
     UPDATE players
@@ -7153,60 +7184,9 @@ BEGIN
     v_players_processed := v_players_processed + 1;
   END LOOP;
 
-  -- 🤖 BOT DE BALANCEO: Sistema escalonado según número de mineros
-  DECLARE
-    v_active_miners INTEGER;
-    v_total_hashrate NUMERIC;
-    v_bot_hashrate NUMERIC;
-    v_bot_shares_probability NUMERIC;
-    v_bot_shares NUMERIC;
-    v_bot_percentage NUMERIC;
-    v_bot_player_id UUID := '00000000-0000-0000-0000-000000000001'; -- ID fijo del bot
-  BEGIN
-    -- Contar mineros activos (excluyendo el bot)
-    SELECT COUNT(DISTINCT pr.player_id) INTO v_active_miners
-    FROM player_rigs pr
-    JOIN players p ON p.id = pr.player_id
-    WHERE pr.is_active = true
-      AND p.energy > 0
-      AND p.internet > 0
-      AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
-      AND NOT is_player_in_mining_cooldown(pr.player_id)
-      AND p.id != v_bot_player_id;  -- No contar al bot
-
-    -- Sistema escalonado:
-    -- < 3 mineros: Bot al 45% del hashrate (competencia fuerte)
-    -- >= 3 mineros: Bot al 10% del hashrate (competencia de fondo)
-    IF v_active_miners < 3 THEN
-      v_bot_percentage := 0.45;  -- 45% cuando hay poca gente
-    ELSE
-      v_bot_percentage := 0.10;  -- 10% cuando hay 3+ usuarios
-    END IF;
-
-    -- Calcular hashrate total de la red
-    SELECT COALESCE(hashrate, 0) INTO v_total_hashrate
-    FROM network_stats WHERE id = 'current';
-
-    -- El bot tiene un porcentaje variable del hashrate total
-    v_bot_hashrate := v_total_hashrate * v_bot_percentage;
-
-    -- Calcular shares del bot (misma fórmula que jugadores reales)
-    v_bot_shares_probability := (v_bot_hashrate / v_difficulty) * v_tick_duration;
-    v_bot_shares := FLOOR(v_bot_shares_probability);
-
-    -- Registrar shares del bot (sin acumulador fraccional)
-    IF v_bot_shares > 0 THEN
-      INSERT INTO player_shares (mining_block_id, player_id, shares_count, fractional_accumulator, last_share_at)
-      VALUES (v_mining_block_id, v_bot_player_id, v_bot_shares, 0, NOW())
-      ON CONFLICT (mining_block_id, player_id)
-      DO UPDATE SET
-        shares_count = player_shares.shares_count + v_bot_shares,
-        last_share_at = NOW();
-
-      -- Agregar las shares del bot al total
-      v_total_shares_generated := v_total_shares_generated + v_bot_shares;
-    END IF;
-  END;
+  -- ✅ El bot ahora se procesa como cualquier jugador en el loop principal
+  -- Su rig S9 (1000 hashrate) se incluye automáticamente en el procesamiento
+  -- NO necesita lógica especial para generar shares
 
   -- Actualizar total de shares del bloque
   UPDATE mining_blocks
@@ -7214,6 +7194,7 @@ BEGIN
   WHERE id = v_mining_block_id;
 
   -- 🌐 Actualizar estadísticas de red (hashrate y mineros activos) en tiempo real
+  -- ✅ Incluye al bot en el cálculo (ya no se procesa por separado)
   UPDATE network_stats
   SET
     hashrate = (
@@ -7244,6 +7225,7 @@ BEGIN
         AND p.internet > 0
         AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
         AND NOT is_player_in_mining_cooldown(pr.player_id)
+        -- ✅ Incluye al bot (con su rig S9 de 1000 hashrate)
     ),
     active_miners = (
       SELECT COUNT(DISTINCT pr.player_id)
@@ -7254,6 +7236,7 @@ BEGIN
         AND p.internet > 0
         AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
         AND NOT is_player_in_mining_cooldown(pr.player_id)
+        -- ✅ Incluye al bot en el conteo de mineros activos
     ),
     updated_at = NOW()
   WHERE id = 'current';
@@ -7283,7 +7266,6 @@ DECLARE
   v_rewards_distributed NUMERIC := 0;
   v_total_effective_shares NUMERIC := 0;
   v_effective_shares NUMERIC;
-  v_bot_player_id UUID := '00000000-0000-0000-0000-000000000001';
 BEGIN
   -- Obtener bloque de minería
   SELECT * INTO v_mining_block FROM mining_blocks WHERE id = p_mining_block_id;
@@ -7323,7 +7305,6 @@ BEGIN
       SELECT player_id, shares_count
       FROM player_shares
       WHERE mining_block_id = p_mining_block_id
-        AND player_id != v_bot_player_id  -- 🤖 Excluir bot del cálculo de shares efectivas
     LOOP
       -- Shares efectivas: multiplicar por 1.5 si es premium
       IF is_player_premium(v_participant.player_id) THEN
@@ -7339,7 +7320,6 @@ BEGIN
     SELECT player_id, shares_count
     FROM player_shares
     WHERE mining_block_id = p_mining_block_id
-      AND player_id != v_bot_player_id  -- 🤖 Excluir bot de recibir recompensas
     ORDER BY shares_count DESC
   LOOP
     v_participants_count := v_participants_count + 1;
@@ -7709,7 +7689,7 @@ BEGIN
     UPDATE players
     SET is_online = false
     WHERE is_online = true
-      AND last_seen < NOW() - INTERVAL '5 minutes'
+      AND last_seen < NOW() - INTERVAL '10 minutes'  -- ✅ Aumentado de 5 a 10 minutos
     RETURNING id
   )
   SELECT COUNT(*) INTO v_inactive_marked FROM inactive_players;
@@ -7722,8 +7702,8 @@ BEGIN
     WHERE player_id IN (
       SELECT id FROM players
       WHERE is_online = false
-        AND last_seen < NOW() - INTERVAL '5 minutes'
-        AND last_seen > NOW() - INTERVAL '6 minutes'
+        AND last_seen < NOW() - INTERVAL '10 minutes'  -- ✅ Aumentado de 5 a 10 minutos
+        AND last_seen > NOW() - INTERVAL '11 minutes'  -- ✅ Ajustado (era 6 minutos)
     ) AND is_active = true
     AND NOT rig_has_autonomous_boost(id);
     GET DIAGNOSTICS v_rigs_shutdown = ROW_COUNT;

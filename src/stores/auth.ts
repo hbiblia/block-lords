@@ -1,10 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { supabase } from '@/utils/supabase';
-import { createPlayerProfile, getPlayerProfile, applyPassiveRegeneration, applyReferralCode, connectionState, pingApi } from '@/utils/api';
+import { createPlayerProfile, getPlayerProfile, applyPassiveRegeneration, applyReferralCode, connectionState, pingApi, updatePlayerHeartbeat } from '@/utils/api';
 import { useNotificationsStore } from './notifications';
 import { useInventoryStore } from './inventory';
-import { useCraftingStore } from './crafting';
 import type { User, Session } from '@supabase/supabase-js';
 
 // Timeout para inicialización (10 segundos)
@@ -348,10 +347,6 @@ export const useAuthStore = defineStore('auth', () => {
       const inventoryStore = useInventoryStore();
       inventoryStore.clear();
 
-      // Clear crafting data
-      const craftingStore = useCraftingStore();
-      craftingStore.clear();
-
     }
   }
 
@@ -572,11 +567,25 @@ export const useAuthStore = defineStore('auth', () => {
       pingLatency.value = success ? latency : null;
     });
 
+    // Heartbeat inmediato
+    if (player.value?.id) {
+      updatePlayerHeartbeat(player.value.id).catch(err => {
+        console.warn('Initial heartbeat failed:', err);
+      });
+    }
+
     // Configurar ping periódico
     apiPingInterval.value = setInterval(async () => {
       if (isAuthenticated.value) {
         const { success, latency } = await pingApi();
         pingLatency.value = success ? latency : null;
+
+        // ✅ Actualizar heartbeat del jugador cada 30s
+        if (player.value?.id) {
+          updatePlayerHeartbeat(player.value.id).catch(err => {
+            console.warn('Periodic heartbeat failed:', err);
+          });
+        }
       }
     }, API_PING_INTERVAL);
   }

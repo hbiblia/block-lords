@@ -223,6 +223,29 @@ export async function getPlayerProfile(playerId: string): Promise<any> {
   }, { critical: true });
 }
 
+/**
+ * Update player heartbeat to keep them online
+ * Lightweight function that only updates last_seen and is_online
+ * Called periodically and when tab regains focus
+ */
+export async function updatePlayerHeartbeat(playerId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('update_player_heartbeat', {
+      p_player_id: playerId,
+    });
+
+    if (error) {
+      console.warn('Heartbeat failed:', error.message);
+      return false;
+    }
+
+    return data === true;
+  } catch (error) {
+    console.warn('Heartbeat error:', error);
+    return false;
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getPlayerRigs(playerId: string): Promise<any> {
   // Critical: rig data is essential for mining

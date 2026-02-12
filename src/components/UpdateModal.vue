@@ -3,7 +3,7 @@ import { ref, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '1.2.0';
+const CURRENT_VERSION = '1.3.0';
 const STORAGE_KEY = 'block-lords-last-seen-version';
 
 const route = useRoute();
@@ -69,75 +69,75 @@ function closeModal() {
 
         <!-- Contenido scrollable -->
         <div class="space-y-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- Recompensas de bloques -->
-          <div class="p-3 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-lg">
+          <!-- Nuevas Ventajas Premium -->
+          <div class="p-3 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-lg">
             <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
-              💰 Recompensas de Bloques Aumentadas
+              👑 Nuevas Ventajas Premium
             </h3>
             <p class="text-text-secondary text-sm mb-2">
-              Las recompensas por bloque han sido <strong class="text-amber-400">duplicadas</strong>:
+              Los usuarios <strong class="text-purple-400">Premium</strong> ahora disfrutan de beneficios exclusivos:
             </p>
             <ul class="space-y-2 text-sm">
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-amber-400 mt-0.5">🥉</span>
-                <span><strong>Bronze:</strong> 2,000 BLC</span>
+                <span class="text-purple-400 mt-0.5">⚡</span>
+                <span><strong>Boost de Hashrate:</strong> +15% de velocidad de minado</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-gray-300 mt-0.5">🥈</span>
-                <span><strong>Silver:</strong> 3,000 BLC</span>
+                <span class="text-purple-400 mt-0.5">💎</span>
+                <span><strong>Probabilidad mejorada:</strong> Mayor chance de encontrar bloques Gold y Silver</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-yellow-400 mt-0.5">🥇</span>
-                <span><strong>Gold:</strong> 5,000 BLC</span>
+                <span class="text-purple-400 mt-0.5">🔧</span>
+                <span><strong>Desgaste reducido:</strong> Tus rigs se desgastan más lentamente</span>
               </li>
             </ul>
-            <p class="text-text-secondary text-sm mt-3">
-              <strong class="text-accent-primary">Probabilidades dinámicas:</strong> Mientras más mineros activos haya en la red, mayor será la probabilidad de que aparezcan bloques Silver y Gold.
+          </div>
+
+          <!-- Mini-juego de Cartas -->
+          <div class="p-3 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 rounded-lg">
+            <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
+              🃏 Nuevo Mini-Juego: Battle Defense
+            </h3>
+            <p class="text-text-secondary text-sm mb-2">
+              ¡Defiende tu base en emocionantes batallas estratégicas por turnos!
             </p>
-          </div>
-
-          <!-- Misiones -->
-          <div>
-            <h3 class="text-base font-semibold text-text-primary mb-2 flex items-center gap-2">
-              🎯 Correcciones de Misiones
-            </h3>
-            <ul class="space-y-2">
+            <ul class="space-y-2 text-sm">
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Objetivos ajustados:</strong> Misiones de bloques adaptadas al sistema actual (máx 48 bloques/día)</span>
+                <span class="text-blue-400 mt-0.5">⚔️</span>
+                <span><strong>Sistema de cartas:</strong> Colecciona y mejora cartas de ataque y defensa</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Misiones semanales:</strong> Ahora se trackean correctamente (bloques, tiempo online, BLC, trades)</span>
+                <span class="text-blue-400 mt-0.5">🎮</span>
+                <span><strong>Modo PvP:</strong> Enfrenta a otros jugadores en batallas estratégicas</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Nuevas misiones:</strong> Reparar rigs, usar boosts, instalar cooling, mejora máxima y más</span>
+                <span class="text-blue-400 mt-0.5">🏆</span>
+                <span><strong>Recompensas:</strong> Gana BLC y recursos exclusivos al vencer</span>
               </li>
             </ul>
           </div>
 
-          <!-- Mejoras de Rigs -->
+          <!-- Correcciones y Mejoras -->
           <div>
             <h3 class="text-base font-semibold text-text-primary mb-2 flex items-center gap-2">
-              ⬆️ Correcciones de Mejoras de Rigs
+              🔧 Correcciones y Mejoras
             </h3>
             <ul class="space-y-2">
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Hashrate, Eficiencia y Térmica</strong> ahora se reflejan correctamente en la interfaz</span>
+                <span><strong>Optimización de rendimiento:</strong> Carga más rápida y menor consumo de recursos</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Valores corregidos:</strong> Los bonus de mejora ahora coinciden con el servidor (ej: Lv5 = +100% hashrate)</span>
+                <span><strong>Interfaz mejorada:</strong> Mejor visualización de estadísticas y tooltips más claros</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Consumo real:</strong> Energía e internet ahora muestran la reducción por mejora de eficiencia</span>
+                <span><strong>Balance general:</strong> Ajustes en costos de crafteo y recompensas de misiones</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Penalización de temperatura:</strong> Corregida para coincidir con el cálculo del servidor (>50°C)</span>
+                <span><strong>Corrección de bugs:</strong> Solucionados varios errores menores reportados por la comunidad</span>
               </li>
             </ul>
           </div>

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { supabase } from '@/utils/supabase';
 import { useAuthStore } from './auth';
 import { isTabLocked } from '@/composables/useTabLock';
+import { updatePlayerHeartbeat } from '@/utils/api';
 
 export const useRealtimeStore = defineStore('realtime', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -65,6 +66,15 @@ export const useRealtimeStore = defineStore('realtime', () => {
     visibilityHandler = () => {
       if (isTabLocked.value) return;
       if (document.visibilityState === 'visible') {
+        const authStore = useAuthStore();
+
+        // ✅ Actualizar heartbeat inmediatamente al recuperar foco
+        if (authStore.player?.id) {
+          updatePlayerHeartbeat(authStore.player.id).catch(err => {
+            console.warn('Failed to update heartbeat on visibility change:', err);
+          });
+        }
+
         // Si estábamos conectados pero ya no lo estamos, reconectar
         if (wasConnected.value && !connected.value) {
           manualReconnect();
@@ -114,6 +124,16 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
     focusHandler = () => {
       if (isTabLocked.value) return;
+
+      const authStore = useAuthStore();
+
+      // ✅ Actualizar heartbeat inmediatamente al recuperar foco
+      if (authStore.player?.id) {
+        updatePlayerHeartbeat(authStore.player.id).catch(err => {
+          console.warn('Failed to update heartbeat on focus:', err);
+        });
+      }
+
       // Verificar inmediatamente el estado de los canales
       if (wasConnected.value) {
         let needsReconnect = false;
