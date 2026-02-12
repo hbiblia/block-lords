@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useCardBattle } from '@/composables/useCardBattle';
 import { useBattleSound } from '@/composables/useSound';
 import BattleLobby from './defense/BattleLobby.vue';
+import BattleReadyRoom from './defense/BattleReadyRoom.vue';
 import BattleIntro from './defense/BattleIntro.vue';
 import BattleArena from './defense/BattleArena.vue';
 
@@ -26,11 +27,20 @@ const {
   lobbyEntries,
   inLobby,
   lobbyLoading,
+  myBalances,
+  myChallenges,
+  pendingChallenges,
+  readyRoom,
   loadLobby,
   enterLobby,
   exitLobby,
   challengePlayer,
+  acceptChallenge,
+  rejectChallenge,
   subscribeToLobby,
+  // Ready Room
+  setReady,
+  cancelReadyRoom,
   // Quick match
   quickMatchSearching,
   quickMatch,
@@ -126,9 +136,43 @@ async function handleLeaveLobby() {
   await authStore.refreshPlayer();
 }
 
-async function handleChallenge(lobbyId: string) {
+async function handleChallenge(lobbyId: string, betAmount: number, betCurrency: string) {
   try {
-    await challengePlayer(lobbyId);
+    await challengePlayer(lobbyId, betAmount, betCurrency);
+  } catch {
+    // error handled in composable
+  }
+}
+
+async function handleAcceptChallenge(challengerId: string) {
+  try {
+    await acceptChallenge(challengerId);
+    await authStore.refreshPlayer();
+  } catch {
+    // error handled in composable
+  }
+}
+
+async function handleRejectChallenge(challengerId: string) {
+  try {
+    await rejectChallenge(challengerId);
+  } catch {
+    // error handled in composable
+  }
+}
+
+async function handleSetReady() {
+  try {
+    await setReady();
+  } catch {
+    // error handled in composable
+  }
+}
+
+async function handleCancelReadyRoom() {
+  try {
+    await cancelReadyRoom();
+    await authStore.refreshPlayer(); // Refund the bet
   } catch {
     // error handled in composable
   }
@@ -260,9 +304,19 @@ function getEnemyUsername(): string {
           </div>
         </div>
 
+        <!-- Ready Room View -->
+        <BattleReadyRoom
+          v-if="defenseStore.gameView === 'lobby' && readyRoom"
+          :ready-room="readyRoom"
+          :my-player-id="authStore.player?.id || ''"
+          :loading="battleLoading"
+          @set-ready="handleSetReady"
+          @cancel="handleCancelReadyRoom"
+        />
+
         <!-- Lobby View -->
         <BattleLobby
-          v-if="defenseStore.gameView === 'lobby'"
+          v-else-if="defenseStore.gameView === 'lobby'"
           :entries="lobbyEntries"
           :in-lobby="inLobby"
           :loading="lobbyLoading"
@@ -270,9 +324,14 @@ function getEnemyUsername(): string {
           :quick-match-searching="quickMatchSearching"
           :leaderboard="leaderboard"
           :leaderboard-loading="leaderboardLoading"
+          :my-balances="myBalances"
+          :pending-challenges="pendingChallenges"
+          :my-challenges="myChallenges"
           @enter="handleEnterLobby"
           @leave="handleLeaveLobby"
           @challenge="handleChallenge"
+          @accept-challenge="handleAcceptChallenge"
+          @reject-challenge="handleRejectChallenge"
           @quick-match="handleQuickMatch"
           @cancel-quick-match="handleCancelQuickMatch"
         />

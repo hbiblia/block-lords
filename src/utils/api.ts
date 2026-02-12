@@ -1417,10 +1417,9 @@ export async function abandonCraftingSession(playerId: string, sessionId: string
 // === CARD BATTLE PVP ===
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function joinBattleLobby(playerId: string, betAmount: number = 20): Promise<any> {
+export async function joinBattleLobby(playerId: string): Promise<any> {
   return rpcWithRetry('join_battle_lobby', {
     p_player_id: playerId,
-    p_bet_amount: betAmount,
   });
 }
 
@@ -1432,10 +1431,47 @@ export async function leaveBattleLobby(playerId: string): Promise<any> {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function acceptBattleChallenge(playerId: string, opponentLobbyId: string): Promise<any> {
+export async function proposeBattleChallenge(
+  challengerId: string,
+  opponentLobbyId: string,
+  betAmount: number,
+  betCurrency: 'GC' | 'BLC' | 'RON'
+): Promise<any> {
+  return rpcWithRetry('propose_battle_challenge', {
+    p_challenger_id: challengerId,
+    p_opponent_lobby_id: opponentLobbyId,
+    p_bet_amount: betAmount,
+    p_bet_currency: betCurrency,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function acceptBattleChallenge(playerId: string, challengerId: string): Promise<any> {
   return rpcWithRetry('accept_battle_challenge', {
     p_player_id: playerId,
-    p_opponent_lobby_id: opponentLobbyId,
+    p_challenger_id: challengerId,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function rejectBattleChallenge(playerId: string, challengerId: string): Promise<any> {
+  return rpcWithRetry('reject_battle_challenge', {
+    p_player_id: playerId,
+    p_challenger_id: challengerId,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function setPlayerReady(playerId: string): Promise<any> {
+  return rpcWithRetry('set_player_ready', {
+    p_player_id: playerId,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function startBattleFromReadyRoom(roomId: string): Promise<any> {
+  return rpcWithRetry('start_battle_from_ready_room', {
+    p_room_id: roomId,
   });
 }
 

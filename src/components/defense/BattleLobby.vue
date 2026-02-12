@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { LobbyEntry, LeaderboardEntry } from '@/composables/useCardBattle';
-import { BET_OPTIONS, type BetAmount, MAX_HP, MAX_ENERGY, TURN_DURATION } from '@/utils/battleCards';
+import { BET_OPTIONS, type BetOption, MAX_HP, MAX_ENERGY, TURN_DURATION } from '@/utils/battleCards';
 
 defineProps<{
   entries: LobbyEntry[];
@@ -12,19 +12,43 @@ defineProps<{
   quickMatchSearching: boolean;
   leaderboard: LeaderboardEntry[];
   leaderboardLoading: boolean;
+  myBalances?: { gamecoin: number; blockcoin: number; ronin: number };
+  pendingChallenges?: any[];
+  myChallenges?: any[];
 }>();
 
 const emit = defineEmits<{
-  enter: [betAmount: BetAmount];
+  enter: [];
   leave: [];
-  challenge: [lobbyId: string];
-  quickMatch: [betAmount: BetAmount];
+  challenge: [lobbyId: string, betAmount: number, betCurrency: string];
+  acceptChallenge: [challengerId: string];
+  rejectChallenge: [challengerId: string];
+  quickMatch: [];
   cancelQuickMatch: [];
 }>();
 
 const { t } = useI18n();
 
-const selectedBet = ref<BetAmount>(BET_OPTIONS[0]);
+const selectedBet = ref<BetOption>(BET_OPTIONS[0]);
+const selectedOpponent = ref<LobbyEntry | null>(null);
+const showBetModal = ref(false);
+
+function openBetModal(opponent: LobbyEntry) {
+  selectedOpponent.value = opponent;
+  showBetModal.value = true;
+}
+
+function closeBetModal() {
+  selectedOpponent.value = null;
+  showBetModal.value = false;
+}
+
+function challengeWithBet(bet: { amount: number; currency: string; enabled: boolean }) {
+  if (selectedOpponent.value) {
+    emit('challenge', selectedOpponent.value.id, bet.amount, bet.currency);
+    closeBetModal();
+  }
+}
 </script>
 
 <template>
@@ -32,7 +56,7 @@ const selectedBet = ref<BetAmount>(BET_OPTIONS[0]);
     <!-- Info banner -->
     <div class="px-3 py-2 bg-purple-500/10 border-b border-border/30">
       <p class="text-[11px] text-slate-300">
-        {{ t('battle.lobbyInfo', { amount: selectedBet }) }}
+        {{ t('battle.lobbyInfo', 'Challenge players to a card battle and win their bet!') }}
       </p>
     </div>
 
@@ -70,7 +94,7 @@ const selectedBet = ref<BetAmount>(BET_OPTIONS[0]);
           </div>
           <div class="bg-slate-800/40 rounded-lg p-2 border border-border/20">
             <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-0.5">{{ t('battle.info.prize', 'Prize') }}</div>
-            <div class="text-sm font-bold text-green-400">{{ selectedBet * 2 }} GC</div>
+            <div class="text-sm font-bold text-green-400">{{ selectedBet.amount * 2 }} {{ selectedBet.currency }}</div>
             <div class="text-[9px] text-slate-500">{{ t('battle.info.prizeDesc', 'Winner takes all') }}</div>
           </div>
         </div>
@@ -95,29 +119,11 @@ const selectedBet = ref<BetAmount>(BET_OPTIONS[0]);
           <p class="text-[9px] text-slate-500 text-center mt-1">{{ t('battle.info.deckInfo', '18 cards total. Both players get the same deck, shuffled randomly.') }}</p>
         </div>
 
-        <!-- Bet selection -->
-        <div class="w-full bg-slate-800/30 rounded-lg p-2.5 border border-border/20">
-          <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">{{ t('battle.selectBet', 'Select Bet') }}</div>
-          <div class="flex gap-1.5 justify-center flex-wrap">
-            <button
-              v-for="amount in BET_OPTIONS"
-              :key="amount"
-              @click="selectedBet = amount"
-              class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border"
-              :class="selectedBet === amount
-                ? 'bg-green-500/20 border-green-500/60 text-green-400 shadow-sm shadow-green-500/10'
-                : 'bg-slate-800/50 border-border/30 text-slate-400 hover:border-slate-500/50 hover:text-slate-300'"
-            >
-              {{ amount }} GC
-            </button>
-          </div>
-        </div>
-
         <!-- Action buttons -->
         <div class="w-full flex items-center gap-2">
           <!-- Quick Match button (primary) -->
           <button
-            @click="emit('quickMatch', selectedBet)"
+            @click="emit('quickMatch')"
             :disabled="loading"
             class="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-lg font-bold text-sm transition-all disabled:opacity-50 shadow-lg shadow-green-500/20"
           >
@@ -126,13 +132,13 @@ const selectedBet = ref<BetAmount>(BET_OPTIONS[0]);
               {{ t('common.loading') }}
             </span>
             <span v-else class="flex items-center justify-center gap-2">
-              &#9876; {{ t('battle.quickMatch', 'Quick Match') }} ({{ selectedBet }} GC)
+              &#9876; {{ t('battle.quickMatch', 'Quick Match') }}
             </span>
           </button>
 
           <!-- Enter Lobby button (secondary) -->
           <button
-            @click="emit('enter', selectedBet)"
+            @click="emit('enter')"
             :disabled="loading"
             class="py-3 px-3 bg-slate-700/50 hover:bg-slate-600/50 text-slate-400 rounded-lg font-medium text-[10px] transition-colors disabled:opacity-50 border border-border/30 whitespace-nowrap"
           >
@@ -147,6 +153,85 @@ const selectedBet = ref<BetAmount>(BET_OPTIONS[0]);
       </div>
 
       <template v-else>
+        <!-- Pending Challenges (incoming) -->
+        <div v-if="pendingChallenges && pendingChallenges.length > 0" class="mb-2">
+          <div class="text-[10px] text-yellow-400 uppercase tracking-wider font-semibold mb-1.5 flex items-center gap-1">
+            &#9888; {{ t('battle.pendingChallenges', 'Incoming Challenges') }}
+          </div>
+
+          <div
+            v-for="challenge in pendingChallenges"
+            :key="challenge.challenger_id"
+            class="bg-yellow-500/10 border border-yellow-500/40 rounded-lg p-3 mb-2"
+          >
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-xs font-bold text-white">
+                  {{ challenge.challenger_username?.charAt(0).toUpperCase() }}
+                </div>
+                <div>
+                  <div class="text-sm font-semibold text-yellow-300">{{ challenge.challenger_username }}</div>
+                  <div class="text-[10px] text-slate-400">{{ t('battle.challengesYou', 'challenges you!') }}</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="text-lg font-bold text-yellow-400">{{ challenge.proposed_bet }} {{ challenge.proposed_currency }}</div>
+                <div class="text-[9px] text-slate-500">{{ t('battle.betAmount', 'Bet') }}</div>
+              </div>
+            </div>
+
+            <div class="flex gap-2">
+              <button
+                @click="emit('acceptChallenge', challenge.challenger_id)"
+                :disabled="loading"
+                class="flex-1 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/60 text-green-400 rounded-lg text-sm font-bold transition-all disabled:opacity-50"
+              >
+                &#10003; {{ t('battle.accept', 'Accept') }}
+              </button>
+              <button
+                @click="emit('rejectChallenge', challenge.challenger_id)"
+                :disabled="loading"
+                class="flex-1 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/60 text-red-400 rounded-lg text-sm font-bold transition-all disabled:opacity-50"
+              >
+                &#10005; {{ t('battle.reject', 'Reject') }}
+              </button>
+            </div>
+
+            <div class="mt-2 text-center text-[9px] text-slate-500">
+              {{ t('battle.winPot', 'Win') }}: {{ challenge.proposed_bet * 2 }} {{ challenge.proposed_currency }}
+            </div>
+          </div>
+        </div>
+
+        <!-- My Outgoing Challenges -->
+        <div v-if="myChallenges && myChallenges.length > 0" class="mb-2">
+          <div class="text-[10px] text-blue-400 uppercase tracking-wider font-semibold mb-1.5 flex items-center gap-1">
+            &#128228; {{ t('battle.myChallenges', 'Challenges Sent') }}
+          </div>
+
+          <div
+            v-for="challenge in myChallenges"
+            :key="challenge.opponent_id"
+            class="bg-blue-500/10 border border-blue-500/40 rounded-lg p-2.5 mb-2"
+          >
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-[10px] font-bold text-white">
+                  {{ challenge.opponent_username?.charAt(0).toUpperCase() }}
+                </div>
+                <div>
+                  <div class="text-xs font-semibold text-blue-300">{{ challenge.opponent_username }}</div>
+                  <div class="text-[9px] text-slate-500">{{ challenge.proposed_bet }} {{ challenge.proposed_currency }}</div>
+                </div>
+              </div>
+              <div class="text-[10px] text-yellow-400 flex items-center gap-1">
+                <span class="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></span>
+                {{ t('battle.waiting', 'Waiting...') }}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Leaderboard (top) -->
         <div class="mb-2">
           <div class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5 flex items-center gap-1">
@@ -203,7 +288,7 @@ const selectedBet = ref<BetAmount>(BET_OPTIONS[0]);
         <button
           v-for="entry in entries"
           :key="entry.id"
-          @click="emit('challenge', entry.id)"
+          @click="openBetModal(entry)"
           :disabled="loading"
           class="w-full flex items-center justify-between p-3 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg border border-border/30 transition-colors disabled:opacity-50"
         >
@@ -214,9 +299,7 @@ const selectedBet = ref<BetAmount>(BET_OPTIONS[0]);
             <div class="text-left">
               <div class="text-sm font-semibold text-slate-200">{{ entry.username }}</div>
               <div class="text-[10px] text-slate-500">
-                {{ entry.bet_amount }} GC
-                <span v-if="entry.wins !== undefined" class="ml-1">
-                  &middot;
+                <span v-if="entry.wins !== undefined">
                   <span class="text-green-400">{{ entry.wins }}W</span>
                   <span class="text-slate-600">/</span>
                   <span class="text-red-400">{{ entry.losses }}L</span>
@@ -246,8 +329,66 @@ const selectedBet = ref<BetAmount>(BET_OPTIONS[0]);
         :disabled="loading"
         class="w-full py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
       >
-        {{ t('battle.leaveLobby', 'Leave Lobby') }} (+{{ selectedBet }} GC)
+        {{ t('battle.leaveLobby', 'Leave Lobby') }}
       </button>
+    </div>
+
+    <!-- Bet Selection Modal -->
+    <div
+      v-if="showBetModal && selectedOpponent"
+      class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      @click.self="closeBetModal"
+    >
+      <div class="bg-slate-900 rounded-xl border border-border/40 p-4 max-w-sm w-full">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-lg font-bold text-slate-100">{{ t('battle.selectBet', 'Select Bet') }}</h3>
+          <button
+            @click="closeBetModal"
+            class="text-slate-400 hover:text-slate-300 text-xl leading-none"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div class="mb-3">
+          <p class="text-sm text-slate-400">
+            {{ t('battle.challengeOpponent', 'Challenge') }}
+            <span class="font-semibold text-slate-200">{{ selectedOpponent.username }}</span>
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <button
+            v-for="bet in selectedOpponent.available_bets"
+            :key="`${bet.amount}-${bet.currency}`"
+            @click="challengeWithBet(bet)"
+            :disabled="!bet.enabled || loading"
+            class="w-full px-4 py-3 rounded-lg text-sm font-bold transition-all border"
+            :class="bet.enabled
+              ? 'bg-green-500/20 border-green-500/60 text-green-400 hover:bg-green-500/30 shadow-sm shadow-green-500/10'
+              : 'bg-slate-800/50 border-border/30 text-slate-600 cursor-not-allowed opacity-50'"
+          >
+            <div class="flex items-center justify-between">
+              <span>{{ bet.amount }} {{ bet.currency }}</span>
+              <span v-if="!bet.enabled" class="text-[10px] text-red-400">
+                {{ t('battle.insufficientFunds', 'Insufficient funds') }}
+              </span>
+              <span v-else class="text-[10px] text-green-400">
+                {{ t('battle.winPot', 'Win') }} {{ bet.amount * 2 }} {{ bet.currency }}
+              </span>
+            </div>
+          </button>
+        </div>
+
+        <div class="mt-3 text-center">
+          <button
+            @click="closeBetModal"
+            class="text-xs text-slate-500 hover:text-slate-400"
+          >
+            {{ t('common.cancel', 'Cancel') }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>

@@ -328,6 +328,24 @@ export const CARDS_PER_DRAW = 3;
 export const TURN_DURATION = 45;
 export const BET_AMOUNT = 20; // default, kept for backward compat
 
+// Currency type
+export type Currency = 'GC' | 'BLC' | 'RON';
+
+// Bet option interface
+export interface BetOption {
+  amount: number;
+  currency: Currency;
+  label: string; // Display label like "100 GC"
+}
+
 // Predefined bet amounts players can choose from
-export const BET_OPTIONS = [20, 50, 100, 250, 500] as const;
-export type BetAmount = (typeof BET_OPTIONS)[number];
+export const BET_OPTIONS: readonly BetOption[] = [
+  { amount: 100, currency: 'GC', label: '100 GC' },
+  { amount: 2500, currency: 'GC', label: '2500 GC' },
+  { amount: 1000, currency: 'BLC', label: '1000 BLC' },
+  { amount: 2500, currency: 'BLC', label: '2500 BLC' },
+  { amount: 0.2, currency: 'RON', label: '0.2 RON' },
+  { amount: 1, currency: 'RON', label: '1 RON' },
+] as const;
+
+export type BetAmount = typeof BET_OPTIONS[number];

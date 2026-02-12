@@ -1732,9 +1732,9 @@ BEGIN
     -- Premium: -20% consumo (multiplicador 0.8)
     -- El bot (BalanceBot) nunca consume recursos
     IF v_player.id = '00000000-0000-0000-0000-000000000001' THEN
-      -- Bot: mantener recursos infinitos
-      v_new_energy := 999999;
-      v_new_internet := 999999;
+      -- Bot: mantener recursos infinitos (999.99 es el máximo para DECIMAL(5,2))
+      v_new_energy := 999.99;
+      v_new_internet := 999.99;
     ELSE
       -- Jugadores normales: consumir recursos
       v_new_energy := GREATEST(0, v_player.energy - (v_total_power * 0.05 * CASE WHEN v_player.is_premium THEN 0.8 ELSE 1.0 END));
@@ -4641,6 +4641,21 @@ CREATE TABLE IF NOT EXISTS announcements (
 );
 
 CREATE INDEX IF NOT EXISTS idx_announcements_active ON announcements(is_active, starts_at, ends_at);
+
+-- Actualizar constraint para incluir 'update' (para bases de datos existentes)
+DO $$
+BEGIN
+  -- Eliminar constraint viejo si existe
+  ALTER TABLE announcements DROP CONSTRAINT IF EXISTS announcements_type_check;
+
+  -- Agregar constraint actualizado con 'update' incluido
+  ALTER TABLE announcements ADD CONSTRAINT announcements_type_check
+    CHECK (type IN ('info', 'warning', 'success', 'error', 'maintenance', 'update'));
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Ignorar si hay errores (constraint ya correcto)
+    NULL;
+END $$;
 
 -- Función para obtener anuncios activos
 CREATE OR REPLACE FUNCTION get_active_announcements()
@@ -7683,31 +7698,38 @@ DECLARE
   v_resources_result INTEGER;
   v_inactive_marked INTEGER := 0;
   v_rigs_shutdown INTEGER := 0;
+  v_bot_id UUID := '00000000-0000-0000-0000-000000000001';
 BEGIN
+  -- ✅ MANTENER AL BOT SIEMPRE ONLINE
+  UPDATE players
+  SET is_online = true, last_seen = NOW()
+  WHERE id = v_bot_id;
+
   -- 1. Marcar jugadores offline y apagar rigs (cada tick)
   WITH inactive_players AS (
     UPDATE players
     SET is_online = false
     WHERE is_online = true
       AND last_seen < NOW() - INTERVAL '10 minutes'  -- ✅ Aumentado de 5 a 10 minutos
+      AND id != v_bot_id  -- ✅ EXCLUIR AL BOT
     RETURNING id
   )
   SELECT COUNT(*) INTO v_inactive_marked FROM inactive_players;
 
-  IF v_inactive_marked > 0 THEN
-    UPDATE player_rigs
-    SET is_active = false,
-        deactivated_at = NOW(),
-        activated_at = NULL
-    WHERE player_id IN (
-      SELECT id FROM players
-      WHERE is_online = false
-        AND last_seen < NOW() - INTERVAL '10 minutes'  -- ✅ Aumentado de 5 a 10 minutos
-        AND last_seen > NOW() - INTERVAL '11 minutes'  -- ✅ Ajustado (era 6 minutos)
-    ) AND is_active = true
-    AND NOT rig_has_autonomous_boost(id);
-    GET DIAGNOSTICS v_rigs_shutdown = ROW_COUNT;
-  END IF;
+  -- Apagar rigs de jugadores offline (sin ventana de tiempo)
+  UPDATE player_rigs
+  SET is_active = false,
+      deactivated_at = NOW(),
+      activated_at = NULL
+  WHERE player_id IN (
+    SELECT id FROM players
+    WHERE is_online = false
+      AND last_seen < NOW() - INTERVAL '10 minutes'
+      AND id != v_bot_id  -- ✅ EXCLUIR AL BOT
+  )
+  AND is_active = true
+  AND NOT rig_has_autonomous_boost(id);
+  GET DIAGNOSTICS v_rigs_shutdown = ROW_COUNT;
 
   -- 2. Procesar decay de recursos (cada tick)
   v_resources_result := process_resource_decay();
@@ -8879,7 +8901,7 @@ GRANT EXECUTE ON FUNCTION abandon_crafting_session TO authenticated;
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS player_defense_progress (
-  player_id UUID PRIMARY KEY REFERENCES si(id) ON DELETE CASCADE,
+  player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
   max_level_completed INTEGER DEFAULT 0,
   total_games INTEGER DEFAULT 0,
   total_wins INTEGER DEFAULT 0,
@@ -9182,19 +9204,43 @@ CREATE TABLE IF NOT EXISTS battle_lobby (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   username TEXT NOT NULL,
-  bet_amount INTEGER NOT NULL DEFAULT 20,
-  status TEXT DEFAULT 'waiting' CHECK (status IN ('waiting', 'matched', 'cancelled')),
+  bet_amount NUMERIC, -- Nullable - set only when both players agree
+  bet_currency TEXT CHECK (bet_currency IN ('GC', 'BLC', 'RON')), -- Currency type
+  proposed_bet NUMERIC, -- Proposed bet amount for current challenge
+  proposed_currency TEXT CHECK (proposed_currency IN ('GC', 'BLC', 'RON')), -- Proposed currency type
+  challenged_by UUID REFERENCES players(id), -- Who proposed the current challenge
+  challenger_username TEXT, -- Username of the challenger
+  challenge_expires_at TIMESTAMPTZ, -- When the challenge expires
+  status TEXT DEFAULT 'waiting' CHECK (status IN ('waiting', 'matched', 'cancelled', 'challenged')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_battle_lobby_status ON battle_lobby(status);
 CREATE INDEX IF NOT EXISTS idx_battle_lobby_player ON battle_lobby(player_id);
 
+-- Ready Room: Both players accepted, waiting for both to press "Start"
+CREATE TABLE IF NOT EXISTS battle_ready_rooms (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player1_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  player2_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  player1_username TEXT NOT NULL,
+  player2_username TEXT NOT NULL,
+  bet_amount NUMERIC NOT NULL,
+  bet_currency TEXT NOT NULL CHECK (bet_currency IN ('GC', 'BLC', 'RON')),
+  player1_ready BOOLEAN DEFAULT false,
+  player2_ready BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '5 minutes'
+);
+
+CREATE INDEX IF NOT EXISTS idx_ready_rooms_players ON battle_ready_rooms(player1_id, player2_id);
+
 CREATE TABLE IF NOT EXISTS battle_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   player1_id UUID NOT NULL REFERENCES players(id),
   player2_id UUID NOT NULL REFERENCES players(id),
-  bet_amount INTEGER NOT NULL DEFAULT 20,
+  bet_amount NUMERIC NOT NULL,
+  bet_currency TEXT NOT NULL CHECK (bet_currency IN ('GC', 'BLC', 'RON')),
   current_turn UUID NOT NULL,
   turn_number INTEGER DEFAULT 1,
   turn_deadline TIMESTAMPTZ,
@@ -9244,27 +9290,21 @@ CREATE POLICY "battle_sessions_select" ON battle_sessions FOR SELECT
 -- CARD BATTLE PVP - FUNCTIONS
 -- =====================================================
 
--- 1) Join battle lobby
-CREATE OR REPLACE FUNCTION join_battle_lobby(p_player_id UUID, p_bet_amount INTEGER DEFAULT 20)
+-- 1) Join battle lobby (no bet required - negotiated later)
+CREATE OR REPLACE FUNCTION join_battle_lobby(p_player_id UUID, p_bet_amount INTEGER DEFAULT NULL)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_balance NUMERIC;
   v_username TEXT;
   v_existing UUID;
   v_lobby_id UUID;
 BEGIN
-  -- Validate predefined bet amount
-  IF p_bet_amount NOT IN (20, 50, 100, 250, 500) THEN
-    RETURN json_build_object('success', false, 'error', 'Invalid bet amount');
-  END IF;
-
   -- Check not already in lobby
   SELECT id INTO v_existing
   FROM battle_lobby
-  WHERE player_id = p_player_id AND status = 'waiting';
+  WHERE player_id = p_player_id AND status IN ('waiting', 'challenged');
 
   IF v_existing IS NOT NULL THEN
     RETURN json_build_object('success', false, 'error', 'Already in lobby', 'lobby_id', v_existing);
@@ -9279,20 +9319,13 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Already in a battle', 'session_id', v_existing);
   END IF;
 
-  -- Check balance
-  SELECT gamecoin_balance, username INTO v_balance, v_username
+  -- Get username
+  SELECT username INTO v_username
   FROM players WHERE id = p_player_id;
 
-  IF v_balance < p_bet_amount THEN
-    RETURN json_build_object('success', false, 'error', 'Insufficient balance');
-  END IF;
-
-  -- Deduct bet
-  UPDATE players SET gamecoin_balance = gamecoin_balance - p_bet_amount WHERE id = p_player_id;
-
-  -- Insert into lobby
-  INSERT INTO battle_lobby (player_id, username, bet_amount, status)
-  VALUES (p_player_id, v_username, p_bet_amount, 'waiting')
+  -- Insert into lobby (no money deducted yet)
+  INSERT INTO battle_lobby (player_id, username, status)
+  VALUES (p_player_id, v_username, 'waiting')
   RETURNING id INTO v_lobby_id;
 
   RETURN json_build_object('success', true, 'lobby_id', v_lobby_id);
@@ -9310,24 +9343,27 @@ DECLARE
 BEGIN
   SELECT * INTO v_lobby
   FROM battle_lobby
-  WHERE player_id = p_player_id AND status = 'waiting';
+  WHERE player_id = p_player_id AND status IN ('waiting', 'challenged');
 
   IF v_lobby.id IS NULL THEN
     RETURN json_build_object('success', false, 'error', 'Not in lobby');
   END IF;
 
-  -- Refund bet
-  UPDATE players SET gamecoin_balance = gamecoin_balance + v_lobby.bet_amount WHERE id = p_player_id;
+  -- Clear any challenges to this player
+  UPDATE battle_lobby
+  SET status = 'waiting', challenged_by = NULL, proposed_bet = NULL,
+      proposed_currency = NULL, challenge_expires_at = NULL, challenger_username = NULL
+  WHERE challenged_by = p_player_id;
 
-  -- Remove from lobby
+  -- Remove from lobby (no refund needed since no bet was deducted)
   DELETE FROM battle_lobby WHERE id = v_lobby.id;
 
-  RETURN json_build_object('success', true, 'refunded', v_lobby.bet_amount);
+  RETURN json_build_object('success', true);
 END;
 $$;
 
--- 3) Accept battle challenge
-CREATE OR REPLACE FUNCTION accept_battle_challenge(p_player_id UUID, p_opponent_lobby_id UUID)
+-- 3) Propose battle challenge with bet amount
+CREATE OR REPLACE FUNCTION propose_battle_challenge(p_challenger_id UUID, p_opponent_lobby_id UUID, p_bet_amount NUMERIC, p_bet_currency TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -9335,7 +9371,248 @@ AS $$
 DECLARE
   v_opponent battle_lobby%ROWTYPE;
   v_my_lobby battle_lobby%ROWTYPE;
-  v_balance NUMERIC;
+  v_my_balance NUMERIC;
+  v_opp_balance NUMERIC;
+  v_my_username TEXT;
+BEGIN
+  -- Validate bet amount and currency combination
+  IF NOT (
+    (p_bet_amount = 100 AND p_bet_currency = 'GC') OR
+    (p_bet_amount = 2500 AND p_bet_currency = 'GC') OR
+    (p_bet_amount = 1000 AND p_bet_currency = 'BLC') OR
+    (p_bet_amount = 2500 AND p_bet_currency = 'BLC') OR
+    (p_bet_amount = 0.2 AND p_bet_currency = 'RON') OR
+    (p_bet_amount = 1 AND p_bet_currency = 'RON')
+  ) THEN
+    RETURN json_build_object('success', false, 'error', 'Invalid bet. Valid options: 100GC, 2500GC, 1000BLC, 2500BLC, 0.2RON, 1RON');
+  END IF;
+
+  -- Check I'm in lobby
+  SELECT * INTO v_my_lobby
+  FROM battle_lobby
+  WHERE player_id = p_challenger_id AND status = 'waiting';
+
+  IF v_my_lobby.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'You must be in the lobby first');
+  END IF;
+
+  -- Get opponent lobby entry
+  SELECT * INTO v_opponent
+  FROM battle_lobby
+  WHERE id = p_opponent_lobby_id AND status = 'waiting'
+  FOR UPDATE;
+
+  IF v_opponent.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Opponent is not available');
+  END IF;
+
+  IF v_opponent.player_id = p_challenger_id THEN
+    RETURN json_build_object('success', false, 'error', 'Cannot challenge yourself');
+  END IF;
+
+  -- Check both players have enough balance based on currency type
+  IF p_bet_currency = 'GC' THEN
+    SELECT gamecoin_balance, username INTO v_my_balance, v_my_username FROM players WHERE id = p_challenger_id;
+    SELECT gamecoin_balance INTO v_opp_balance FROM players WHERE id = v_opponent.player_id;
+  ELSIF p_bet_currency = 'BLC' THEN
+    SELECT blockcoin_balance, username INTO v_my_balance, v_my_username FROM players WHERE id = p_challenger_id;
+    SELECT blockcoin_balance INTO v_opp_balance FROM players WHERE id = v_opponent.player_id;
+  ELSIF p_bet_currency = 'RON' THEN
+    SELECT ronin_balance, username INTO v_my_balance, v_my_username FROM players WHERE id = p_challenger_id;
+    SELECT ronin_balance INTO v_opp_balance FROM players WHERE id = v_opponent.player_id;
+  END IF;
+
+  IF v_my_balance < p_bet_amount THEN
+    RETURN json_build_object('success', false, 'error', 'You have insufficient ' || p_bet_currency || ' balance for this bet');
+  END IF;
+
+  IF v_opp_balance < p_bet_amount THEN
+    RETURN json_build_object('success', false, 'error', 'Opponent has insufficient ' || p_bet_currency || ' balance for this bet');
+  END IF;
+
+  -- Update opponent's lobby entry with the challenge
+  UPDATE battle_lobby
+  SET status = 'challenged',
+      challenged_by = p_challenger_id,
+      challenger_username = v_my_username,
+      proposed_bet = p_bet_amount,
+      proposed_currency = p_bet_currency,
+      challenge_expires_at = NOW() + INTERVAL '2 minutes'
+  WHERE id = p_opponent_lobby_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'message', 'Challenge sent',
+    'opponent_id', v_opponent.player_id,
+    'bet_amount', p_bet_amount,
+    'bet_currency', p_bet_currency,
+    'expires_at', NOW() + INTERVAL '2 minutes'
+  );
+END;
+$$;
+
+-- 5) Accept battle challenge (deducts bet from both players when accepted)
+CREATE OR REPLACE FUNCTION accept_battle_challenge(p_player_id UUID, p_challenger_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_challenger_lobby battle_lobby%ROWTYPE;
+  v_my_lobby battle_lobby%ROWTYPE;
+  v_my_balance NUMERIC;
+  v_challenger_balance NUMERIC;
+  v_session_id UUID;
+  v_first_turn UUID;
+  v_deck1 JSONB;
+  v_deck2 JSONB;
+  v_hand1 JSONB;
+  v_hand2 JSONB;
+  v_remaining1 JSONB;
+  v_remaining2 JSONB;
+  v_all_cards JSONB;
+  v_game_state JSONB;
+  v_bet_amount NUMERIC;
+  v_bet_currency TEXT;
+BEGIN
+  -- Lock my lobby entry (the one being challenged)
+  SELECT * INTO v_my_lobby
+  FROM battle_lobby
+  WHERE player_id = p_player_id AND status = 'challenged' AND challenged_by = p_challenger_id
+  FOR UPDATE;
+
+  IF v_my_lobby.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'No active challenge from this player');
+  END IF;
+
+  -- Check challenge hasn't expired
+  IF v_my_lobby.challenge_expires_at < NOW() THEN
+    UPDATE battle_lobby SET status = 'waiting', challenged_by = NULL, proposed_bet = NULL,
+                             proposed_currency = NULL, challenge_expires_at = NULL, challenger_username = NULL
+    WHERE id = v_my_lobby.id;
+    RETURN json_build_object('success', false, 'error', 'Challenge has expired');
+  END IF;
+
+  v_bet_amount := v_my_lobby.proposed_bet;
+  v_bet_currency := v_my_lobby.proposed_currency;
+
+  -- Lock challenger lobby entry
+  SELECT * INTO v_challenger_lobby
+  FROM battle_lobby
+  WHERE player_id = p_challenger_id AND status = 'waiting'
+  FOR UPDATE;
+
+  IF v_challenger_lobby.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Challenger is no longer in the lobby');
+  END IF;
+
+  -- Check both players still have enough balance based on currency type
+  IF v_bet_currency = 'GC' THEN
+    SELECT gamecoin_balance INTO v_my_balance FROM players WHERE id = p_player_id;
+    SELECT gamecoin_balance INTO v_challenger_balance FROM players WHERE id = p_challenger_id;
+  ELSIF v_bet_currency = 'BLC' THEN
+    SELECT blockcoin_balance INTO v_my_balance FROM players WHERE id = p_player_id;
+    SELECT blockcoin_balance INTO v_challenger_balance FROM players WHERE id = p_challenger_id;
+  ELSIF v_bet_currency = 'RON' THEN
+    SELECT ronin_balance INTO v_my_balance FROM players WHERE id = p_player_id;
+    SELECT ronin_balance INTO v_challenger_balance FROM players WHERE id = p_challenger_id;
+  END IF;
+
+  IF v_my_balance < v_bet_amount THEN
+    RETURN json_build_object('success', false, 'error', 'You have insufficient ' || v_bet_currency || ' balance');
+  END IF;
+
+  IF v_challenger_balance < v_bet_amount THEN
+    RETURN json_build_object('success', false, 'error', 'Challenger has insufficient ' || v_bet_currency || ' balance');
+  END IF;
+
+  -- Deduct bet from BOTH players now that they've agreed
+  IF v_bet_currency = 'GC' THEN
+    UPDATE players SET gamecoin_balance = gamecoin_balance - v_bet_amount WHERE id = p_player_id;
+    UPDATE players SET gamecoin_balance = gamecoin_balance - v_bet_amount WHERE id = p_challenger_id;
+  ELSIF v_bet_currency = 'BLC' THEN
+    UPDATE players SET blockcoin_balance = blockcoin_balance - v_bet_amount WHERE id = p_player_id;
+    UPDATE players SET blockcoin_balance = blockcoin_balance - v_bet_amount WHERE id = p_challenger_id;
+  ELSIF v_bet_currency = 'RON' THEN
+    UPDATE players SET ronin_balance = ronin_balance - v_bet_amount WHERE id = p_player_id;
+    UPDATE players SET ronin_balance = ronin_balance - v_bet_amount WHERE id = p_challenger_id;
+  END IF;
+
+  -- Create Ready Room (both players must press "Start" to begin)
+  INSERT INTO battle_ready_rooms (
+    player1_id, player2_id, player1_username, player2_username, bet_amount, bet_currency
+  ) VALUES (
+    p_challenger_id, p_player_id, v_challenger_lobby.username, v_my_lobby.username, v_bet_amount, v_bet_currency
+  ) RETURNING id INTO v_session_id;
+
+  -- Mark both lobby entries as matched
+  UPDATE battle_lobby SET status = 'matched' WHERE id = v_my_lobby.id;
+  UPDATE battle_lobby SET status = 'matched' WHERE id = v_challenger_lobby.id;
+
+  RETURN json_build_object(
+    'success', true,
+    'ready_room_id', v_session_id,
+    'player1_id', p_challenger_id,
+    'player2_id', p_player_id,
+    'bet_amount', v_bet_amount,
+    'bet_currency', v_bet_currency,
+    'message', 'Challenge accepted! Both players must press Start to begin.'
+  );
+END;
+$$;
+
+-- 4) Set player ready in ready room
+CREATE OR REPLACE FUNCTION set_player_ready(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_room battle_ready_rooms%ROWTYPE;
+  v_is_p1 BOOLEAN;
+BEGIN
+  -- Get ready room for this player
+  SELECT * INTO v_room
+  FROM battle_ready_rooms
+  WHERE (player1_id = p_player_id OR player2_id = p_player_id)
+    AND expires_at > NOW()
+  FOR UPDATE;
+
+  IF v_room.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'No active ready room found');
+  END IF;
+
+  -- Determine if player1 or player2
+  v_is_p1 := (v_room.player1_id = p_player_id);
+
+  -- Mark player as ready
+  IF v_is_p1 THEN
+    UPDATE battle_ready_rooms SET player1_ready = true WHERE id = v_room.id;
+  ELSE
+    UPDATE battle_ready_rooms SET player2_ready = true WHERE id = v_room.id;
+  END IF;
+
+  -- Get updated room status
+  SELECT * INTO v_room FROM battle_ready_rooms WHERE id = v_room.id;
+
+  RETURN json_build_object(
+    'success', true,
+    'ready_room_id', v_room.id,
+    'player1_ready', v_room.player1_ready,
+    'player2_ready', v_room.player2_ready,
+    'both_ready', v_room.player1_ready AND v_room.player2_ready
+  );
+END;
+$$;
+
+-- 5) Start battle from ready room (when both players are ready)
+CREATE OR REPLACE FUNCTION start_battle_from_ready_room(p_room_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_room battle_ready_rooms%ROWTYPE;
   v_session_id UUID;
   v_first_turn UUID;
   v_deck1 JSONB;
@@ -9347,28 +9624,19 @@ DECLARE
   v_all_cards JSONB;
   v_game_state JSONB;
 BEGIN
-  -- Lock opponent lobby entry
-  SELECT * INTO v_opponent
-  FROM battle_lobby
-  WHERE id = p_opponent_lobby_id AND status = 'waiting'
+  -- Get and lock ready room
+  SELECT * INTO v_room
+  FROM battle_ready_rooms
+  WHERE id = p_room_id
   FOR UPDATE;
 
-  IF v_opponent.id IS NULL THEN
-    RETURN json_build_object('success', false, 'error', 'Opponent no longer available');
+  IF v_room.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Ready room not found');
   END IF;
 
-  IF v_opponent.player_id = p_player_id THEN
-    RETURN json_build_object('success', false, 'error', 'Cannot challenge yourself');
-  END IF;
-
-  -- Lock my lobby entry
-  SELECT * INTO v_my_lobby
-  FROM battle_lobby
-  WHERE player_id = p_player_id AND status = 'waiting'
-  FOR UPDATE;
-
-  IF v_my_lobby.id IS NULL THEN
-    RETURN json_build_object('success', false, 'error', 'You must be in the lobby first');
+  -- Verify both players are ready
+  IF NOT (v_room.player1_ready AND v_room.player2_ready) THEN
+    RETURN json_build_object('success', false, 'error', 'Both players must be ready');
   END IF;
 
   -- Card IDs for deck building
@@ -9396,9 +9664,9 @@ BEGIN
 
   -- Coin flip for first turn
   IF random() < 0.5 THEN
-    v_first_turn := v_my_lobby.player_id;
+    v_first_turn := v_room.player1_id;
   ELSE
-    v_first_turn := v_opponent.player_id;
+    v_first_turn := v_room.player2_id;
   END IF;
 
   -- Build game state
@@ -9418,29 +9686,30 @@ BEGIN
     'lastAction', null
   );
 
-  -- Create session (challenger = player1, opponent = player2)
+  -- Create battle session
   INSERT INTO battle_sessions (
-    player1_id, player2_id, bet_amount, current_turn, turn_deadline, player1_hp, player2_hp, player1_shield, player2_shield, game_state
+    player1_id, player2_id, bet_amount, bet_currency, current_turn, turn_deadline, player1_hp, player2_hp, player1_shield, player2_shield, game_state
   ) VALUES (
-    p_player_id, v_opponent.player_id, v_opponent.bet_amount,
+    v_room.player1_id, v_room.player2_id, v_room.bet_amount, v_room.bet_currency,
     v_first_turn, NOW() + INTERVAL '45 seconds', 200, 200, 0, 0, v_game_state
   ) RETURNING id INTO v_session_id;
 
-  -- Mark both lobby entries as matched
-  UPDATE battle_lobby SET status = 'matched' WHERE id = v_my_lobby.id;
-  UPDATE battle_lobby SET status = 'matched' WHERE id = v_opponent.id;
+  -- Delete ready room
+  DELETE FROM battle_ready_rooms WHERE id = p_room_id;
 
   RETURN json_build_object(
     'success', true,
     'session_id', v_session_id,
     'first_turn', v_first_turn,
-    'player1_id', p_player_id,
-    'player2_id', v_opponent.player_id
+    'player1_id', v_room.player1_id,
+    'player2_id', v_room.player2_id,
+    'bet_amount', v_room.bet_amount,
+    'bet_currency', v_room.bet_currency
   );
 END;
 $$;
 
--- 4) Play battle turn
+-- 6) Play battle turn
 CREATE OR REPLACE FUNCTION play_battle_turn(p_player_id UUID, p_session_id UUID, p_cards_played JSONB)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -9842,10 +10111,16 @@ BEGIN
     WHERE id = p_session_id;
   END IF;
 
-  -- Award pot to winner
+  -- Award pot to winner in the correct currency
   IF v_winner_id IS NOT NULL THEN
     v_pot := v_session.bet_amount * 2;
-    UPDATE players SET gamecoin_balance = gamecoin_balance + v_pot WHERE id = v_winner_id;
+    IF v_session.bet_currency = 'GC' THEN
+      UPDATE players SET gamecoin_balance = gamecoin_balance + v_pot WHERE id = v_winner_id;
+    ELSIF v_session.bet_currency = 'BLC' THEN
+      UPDATE players SET blockcoin_balance = blockcoin_balance + v_pot WHERE id = v_winner_id;
+    ELSIF v_session.bet_currency = 'RON' THEN
+      UPDATE players SET ronin_balance = ronin_balance + v_pot WHERE id = v_winner_id;
+    END IF;
   END IF;
 
   RETURN json_build_object(
@@ -9870,7 +10145,7 @@ AS $$
 DECLARE
   v_session battle_sessions%ROWTYPE;
   v_winner_id UUID;
-  v_pot INTEGER;
+  v_pot NUMERIC;
 BEGIN
   SELECT * INTO v_session
   FROM battle_sessions
@@ -9900,9 +10175,16 @@ BEGIN
     completed_at = NOW()
   WHERE id = p_session_id;
 
-  UPDATE players SET gamecoin_balance = gamecoin_balance + v_pot WHERE id = v_winner_id;
+  -- Pay winner in the correct currency
+  IF v_session.bet_currency = 'GC' THEN
+    UPDATE players SET gamecoin_balance = gamecoin_balance + v_pot WHERE id = v_winner_id;
+  ELSIF v_session.bet_currency = 'BLC' THEN
+    UPDATE players SET blockcoin_balance = blockcoin_balance + v_pot WHERE id = v_winner_id;
+  ELSIF v_session.bet_currency = 'RON' THEN
+    UPDATE players SET ronin_balance = ronin_balance + v_pot WHERE id = v_winner_id;
+  END IF;
 
-  RETURN json_build_object('success', true, 'winner_id', v_winner_id, 'pot', v_pot);
+  RETURN json_build_object('success', true, 'winner_id', v_winner_id, 'pot', v_pot, 'currency', v_session.bet_currency);
 END;
 $$;
 
@@ -9915,18 +10197,46 @@ AS $$
 DECLARE
   v_lobby JSONB;
   v_active_session JSONB;
+  v_ready_room JSONB;
+  v_my_challenges JSONB;
+  v_pending_challenges JSONB;
+  v_my_status TEXT;
+  v_my_gc_balance NUMERIC;
+  v_my_blc_balance NUMERIC;
+  v_my_ron_balance NUMERIC;
 BEGIN
-  -- Get waiting lobby entries (exclude self) with battle stats
+  -- Get my balances
+  SELECT gamecoin_balance, blockcoin_balance, ronin_balance
+  INTO v_my_gc_balance, v_my_blc_balance, v_my_ron_balance
+  FROM players WHERE id = p_player_id;
+  -- Get waiting lobby entries (exclude self) with battle stats, challenge info, and balances
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
     'id', bl.id,
     'player_id', bl.player_id,
     'username', bl.username,
-    'bet_amount', bl.bet_amount,
+    'status', bl.status,
+    'challenged_by', bl.challenged_by,
+    'challenger_username', bl.challenger_username,
+    'proposed_bet', bl.proposed_bet,
+    'proposed_currency', bl.proposed_currency,
+    'challenge_expires_at', bl.challenge_expires_at,
     'created_at', bl.created_at,
     'wins', COALESCE(stats.wins, 0),
-    'losses', COALESCE(stats.losses, 0)
+    'losses', COALESCE(stats.losses, 0),
+    'gamecoin_balance', p.gamecoin_balance,
+    'blockcoin_balance', p.blockcoin_balance,
+    'ronin_balance', p.ronin_balance,
+    'available_bets', jsonb_build_array(
+      jsonb_build_object('amount', 100, 'currency', 'GC', 'enabled', v_my_gc_balance >= 100 AND p.gamecoin_balance >= 100),
+      jsonb_build_object('amount', 2500, 'currency', 'GC', 'enabled', v_my_gc_balance >= 2500 AND p.gamecoin_balance >= 2500),
+      jsonb_build_object('amount', 1000, 'currency', 'BLC', 'enabled', v_my_blc_balance >= 1000 AND p.blockcoin_balance >= 1000),
+      jsonb_build_object('amount', 2500, 'currency', 'BLC', 'enabled', v_my_blc_balance >= 2500 AND p.blockcoin_balance >= 2500),
+      jsonb_build_object('amount', 0.2, 'currency', 'RON', 'enabled', v_my_ron_balance >= 0.2 AND p.ronin_balance >= 0.2),
+      jsonb_build_object('amount', 1, 'currency', 'RON', 'enabled', v_my_ron_balance >= 1 AND p.ronin_balance >= 1)
+    )
   )), '[]'::JSONB) INTO v_lobby
   FROM battle_lobby bl
+  LEFT JOIN players p ON p.id = bl.player_id
   LEFT JOIN LATERAL (
     SELECT
       COUNT(*) FILTER (WHERE bs.winner_id = bl.player_id) AS wins,
@@ -9939,7 +10249,35 @@ BEGIN
     WHERE (bs.player1_id = bl.player_id OR bs.player2_id = bl.player_id)
       AND bs.status IN ('completed', 'forfeited')
   ) stats ON true
-  WHERE bl.status = 'waiting' AND bl.player_id != p_player_id;
+  WHERE bl.player_id != p_player_id AND bl.status IN ('waiting', 'challenged');
+
+  -- Get my outgoing challenges (challenges I sent)
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'opponent_id', bl.player_id,
+    'opponent_username', bl.username,
+    'proposed_bet', bl.proposed_bet,
+    'proposed_currency', bl.proposed_currency,
+    'expires_at', bl.challenge_expires_at
+  )), '[]'::JSONB) INTO v_my_challenges
+  FROM battle_lobby bl
+  WHERE bl.challenged_by = p_player_id AND bl.status = 'challenged';
+
+  -- Get challenges to me (incoming challenges)
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'challenger_id', bl.challenged_by,
+    'challenger_username', bl.challenger_username,
+    'proposed_bet', bl.proposed_bet,
+    'proposed_currency', bl.proposed_currency,
+    'expires_at', bl.challenge_expires_at
+  )), '[]'::JSONB) INTO v_pending_challenges
+  FROM battle_lobby bl
+  WHERE bl.player_id = p_player_id AND bl.status = 'challenged';
+
+  -- Get my lobby status
+  SELECT status INTO v_my_status
+  FROM battle_lobby
+  WHERE player_id = p_player_id
+  LIMIT 1;
 
   -- Check for active session
   SELECT jsonb_build_object(
@@ -9956,26 +10294,115 @@ BEGIN
     'game_state', game_state,
     'status', status,
     'winner_id', winner_id,
-    'bet_amount', bet_amount
+    'bet_amount', bet_amount,
+    'bet_currency', bet_currency
   ) INTO v_active_session
   FROM battle_sessions
   WHERE (player1_id = p_player_id OR player2_id = p_player_id) AND status = 'active'
   ORDER BY started_at DESC
   LIMIT 1;
 
+  -- Check for ready room
+  SELECT jsonb_build_object(
+    'id', id,
+    'player1_id', player1_id,
+    'player2_id', player2_id,
+    'player1_username', player1_username,
+    'player2_username', player2_username,
+    'player1_ready', player1_ready,
+    'player2_ready', player2_ready,
+    'bet_amount', bet_amount,
+    'bet_currency', bet_currency,
+    'expires_at', expires_at
+  ) INTO v_ready_room
+  FROM battle_ready_rooms
+  WHERE (player1_id = p_player_id OR player2_id = p_player_id) AND expires_at > NOW()
+  ORDER BY created_at DESC
+  LIMIT 1;
+
   RETURN json_build_object(
     'success', true,
     'lobby', v_lobby,
     'active_session', v_active_session,
-    'in_lobby', EXISTS(SELECT 1 FROM battle_lobby WHERE player_id = p_player_id AND status = 'waiting')
+    'ready_room', v_ready_room,
+    'my_challenges', v_my_challenges,
+    'pending_challenges', v_pending_challenges,
+    'in_lobby', EXISTS(SELECT 1 FROM battle_lobby WHERE player_id = p_player_id),
+    'my_status', v_my_status,
+    'my_balances', json_build_object(
+      'gamecoin', v_my_gc_balance,
+      'blockcoin', v_my_blc_balance,
+      'ronin', v_my_ron_balance
+    )
   );
+END;
+$$;
+
+-- 6) Reject battle challenge
+CREATE OR REPLACE FUNCTION reject_battle_challenge(p_player_id UUID, p_challenger_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_my_lobby battle_lobby%ROWTYPE;
+BEGIN
+  -- Get my lobby entry
+  SELECT * INTO v_my_lobby
+  FROM battle_lobby
+  WHERE player_id = p_player_id AND status = 'challenged' AND challenged_by = p_challenger_id;
+
+  IF v_my_lobby.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'No active challenge from this player');
+  END IF;
+
+  -- Clear the challenge
+  UPDATE battle_lobby
+  SET status = 'waiting',
+      challenged_by = NULL,
+      proposed_bet = NULL,
+      proposed_currency = NULL,
+      challenge_expires_at = NULL,
+      challenger_username = NULL
+  WHERE id = v_my_lobby.id;
+
+  RETURN json_build_object('success', true, 'message', 'Challenge rejected');
+END;
+$$;
+
+-- 7) Cleanup expired challenges (called by cron or periodically)
+CREATE OR REPLACE FUNCTION cleanup_expired_battle_challenges()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_cleaned INTEGER;
+BEGIN
+  UPDATE battle_lobby
+  SET status = 'waiting',
+      challenged_by = NULL,
+      proposed_bet = NULL,
+      proposed_currency = NULL,
+      challenge_expires_at = NULL,
+      challenger_username = NULL
+  WHERE status = 'challenged'
+    AND challenge_expires_at < NOW();
+
+  GET DIAGNOSTICS v_cleaned = ROW_COUNT;
+
+  RETURN json_build_object('success', true, 'cleaned', v_cleaned);
 END;
 $$;
 
 -- Grants
 GRANT EXECUTE ON FUNCTION join_battle_lobby TO authenticated;
 GRANT EXECUTE ON FUNCTION leave_battle_lobby TO authenticated;
+GRANT EXECUTE ON FUNCTION propose_battle_challenge TO authenticated;
 GRANT EXECUTE ON FUNCTION accept_battle_challenge TO authenticated;
+GRANT EXECUTE ON FUNCTION reject_battle_challenge TO authenticated;
+GRANT EXECUTE ON FUNCTION set_player_ready TO authenticated;
+GRANT EXECUTE ON FUNCTION start_battle_from_ready_room TO authenticated;
 GRANT EXECUTE ON FUNCTION play_battle_turn TO authenticated;
 GRANT EXECUTE ON FUNCTION forfeit_battle TO authenticated;
 GRANT EXECUTE ON FUNCTION get_battle_lobby TO authenticated;
