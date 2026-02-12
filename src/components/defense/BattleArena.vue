@@ -4,9 +4,10 @@ import { useI18n } from 'vue-i18n';
 import PlayerStatus from './PlayerStatus.vue';
 import BattleLog from './BattleLog.vue';
 import CardHand from './CardHand.vue';
+import BattleCard from './BattleCard.vue';
 import BattleResult from './BattleResult.vue';
 import type { CardDefinition } from '@/utils/battleCards';
-import { getCard, getCardTextClass, getCardBorderClass } from '@/utils/battleCards';
+import { getCard } from '@/utils/battleCards';
 import type { LogEntry } from '@/composables/useCardBattle';
 import { playBattleSound } from '@/utils/sounds';
 
@@ -85,6 +86,10 @@ let effectCounter = 0;
 
 // Taunt overlay
 const showTaunt = ref(false);
+
+// Blood Storm overlay
+const showBloodStorm = ref(false);
+const bloodStormDamage = ref(0);
 
 // Screen flash for big hits
 const screenFlash = ref<'red' | 'green' | null>(null);
@@ -174,6 +179,11 @@ function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
         color = 'text-purple-400';
       }
       break;
+    case 'storm':
+      icon = '\u2620';
+      value = `-${entry.stormDamage}`;
+      color = 'text-red-500';
+      break;
   }
 
   if (!icon) return;
@@ -191,6 +201,14 @@ function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
     setTimeout(() => { showTaunt.value = false; }, 2000);
   }
 
+  // Show Blood Storm overlay
+  if (entry.type === 'storm' && entry.stormDamage) {
+    bloodStormDamage.value = entry.stormDamage;
+    showBloodStorm.value = true;
+    playBattleSound('card_attack');
+    setTimeout(() => { showBloodStorm.value = false; }, 2500);
+  }
+
   // Determine if effect targets the opponent (offensive) or self (defensive)
   let isOffensive = false;
   switch (entry.type) {
@@ -202,6 +220,9 @@ function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
       break;
     case 'special':
       isOffensive = !!(entry.damage || entry.weaken || entry.energyDrain || entry.taunt);
+      break;
+    case 'storm':
+      isOffensive = true;
       break;
   }
 
@@ -427,6 +448,7 @@ onMounted(() => {
               'bg-gradient-to-b from-red-950/90 to-slate-950/90 border-red-500/50 shadow-red-500/20': fx.type === 'attack',
               'bg-gradient-to-b from-blue-950/90 to-slate-950/90 border-blue-500/50 shadow-blue-500/20': fx.type === 'defense',
               'bg-gradient-to-b from-purple-950/90 to-slate-950/90 border-purple-500/50 shadow-purple-500/20': fx.type === 'special',
+              'bg-gradient-to-b from-red-900/90 to-red-950/90 border-red-600/60 shadow-red-600/30': fx.type === 'storm',
             }"
           >
             <!-- Top glow line -->
@@ -436,6 +458,7 @@ onMounted(() => {
                 'bg-gradient-to-r from-transparent via-red-400 to-transparent': fx.type === 'attack',
                 'bg-gradient-to-r from-transparent via-blue-400 to-transparent': fx.type === 'defense',
                 'bg-gradient-to-r from-transparent via-purple-400 to-transparent': fx.type === 'special',
+                'bg-gradient-to-r from-transparent via-red-500 to-transparent': fx.type === 'storm',
               }"
             />
             <!-- Player label -->
@@ -478,6 +501,28 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Blood Storm overlay (hits all players after turn 10) -->
+    <div
+      v-if="showBloodStorm"
+      class="absolute inset-0 z-[25] flex items-center justify-center pointer-events-none"
+    >
+      <div class="absolute inset-0 bg-red-950/30 storm-bg-pulse" />
+      <div class="absolute inset-0 storm-rain opacity-40" />
+      <div class="storm-animation flex flex-col items-center">
+        <span class="text-6xl storm-icon-pulse">&#9760;</span>
+        <div class="mt-2 px-5 py-2 rounded-full bg-red-500/20 border border-red-500/50 backdrop-blur-sm shadow-lg shadow-red-500/20">
+          <span class="text-sm font-black text-red-300 uppercase tracking-wider">
+            {{ t('battle.bloodStorm', 'Blood Storm') }}
+          </span>
+        </div>
+        <div class="mt-1.5 px-3 py-1 rounded-lg bg-red-950/60 border border-red-500/30">
+          <span class="text-lg font-black text-red-400">
+            -{{ bloodStormDamage }} HP
+          </span>
+        </div>
+      </div>
+    </div>
+
     <!-- Recall: Discard Picker Overlay -->
     <div
       v-if="showRecallPicker"
@@ -489,28 +534,16 @@ onMounted(() => {
           {{ t('battle.recallPickTitle', 'Select a card from discard') }}
         </h3>
         <div v-if="myDiscard.length > 0" class="grid grid-cols-3 gap-2">
-          <button
+          <div
             v-for="(cardId, i) in myDiscard"
             :key="i"
-            @click="emit('selectRecallTarget', cardId)"
-            class="flex flex-col items-center gap-1 p-2 rounded-lg border transition-all hover:scale-105 active:scale-95"
-            :class="[
-              getCardBorderClass(getCard(cardId).type),
-              'bg-slate-800/80 hover:bg-slate-700/80',
-            ]"
+            class="min-h-[110px]"
           >
-            <span class="text-lg">
-              <span v-if="getCard(cardId).type === 'attack'">&#9876;</span>
-              <span v-else-if="getCard(cardId).type === 'defense'">&#128737;</span>
-              <span v-else>&#10024;</span>
-            </span>
-            <span class="text-[10px] font-bold text-center leading-tight" :class="getCardTextClass(getCard(cardId).type)">
-              {{ t(getCard(cardId).nameKey, getCard(cardId).name) }}
-            </span>
-            <span class="text-[9px] text-slate-500">
-              &#9889;{{ getCard(cardId).cost }}
-            </span>
-          </button>
+            <BattleCard
+              :card="getCard(cardId)"
+              @play="emit('selectRecallTarget', $event)"
+            />
+          </div>
         </div>
         <div v-else class="text-center text-xs text-slate-500 py-4">
           {{ t('battle.recallEmpty', 'No cards in discard pile') }}
@@ -667,5 +700,49 @@ onMounted(() => {
 @keyframes taunt-bounce {
   0% { transform: scale(1) rotate(-5deg); }
   100% { transform: scale(1.15) rotate(5deg); }
+}
+
+/* Blood Storm overlay */
+.storm-animation {
+  animation: storm-in 400ms ease-out forwards, storm-out 500ms ease-in 2000ms forwards;
+}
+@keyframes storm-in {
+  0% { opacity: 0; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes storm-out {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9) translateY(10px); }
+}
+.storm-bg-pulse {
+  animation: storm-bg 2500ms ease-in-out forwards;
+}
+@keyframes storm-bg {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.storm-icon-pulse {
+  animation: storm-pulse 600ms ease-in-out infinite alternate;
+}
+@keyframes storm-pulse {
+  0% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6)); }
+  100% { transform: scale(1.15); filter: drop-shadow(0 0 16px rgba(239, 68, 68, 0.9)); }
+}
+.storm-rain {
+  background: repeating-linear-gradient(
+    transparent,
+    transparent 4px,
+    rgba(239, 68, 68, 0.15) 4px,
+    rgba(239, 68, 68, 0.15) 5px
+  );
+  background-size: 3px 20px;
+  animation: storm-rain-fall 400ms linear infinite;
+}
+@keyframes storm-rain-fall {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 20px; }
 }
 </style>

@@ -382,7 +382,6 @@ export default {
         hashrate: 'Increases mining speed',
         energy_saver: 'Reduces energy consumption',
         bandwidth_optimizer: 'Reduces internet consumption',
-        lucky_charm: 'Increases block mining chance',
         overclock: 'More hashrate at the cost of more energy',
         coolant_injection: 'Rig heats up slower',
         durability_shield: 'Rig wears out slower',
@@ -496,10 +495,6 @@ export default {
         bandwidth_small: { name: 'Data Optimizer', description: '-15% internet consumption for 1 minute' },
         bandwidth_medium: { name: 'Network Boost', description: '-25% internet consumption for 3 minutes' },
         bandwidth_large: { name: 'Fiber Mode', description: '-40% internet consumption for 5 minutes' },
-        // Lucky Charms
-        lucky_small: { name: 'Lucky Coin', description: '+5% block probability for 1 minute' },
-        lucky_medium: { name: 'Fortune Token', description: '+10% block probability for 3 minutes' },
-        lucky_large: { name: 'Jackpot Charm', description: '+20% block probability for 5 minutes' },
         // Overclock
         overclock_small: { name: 'Overclock Lite', description: '+25% hashrate, +15% energy for 1 minute' },
         overclock_medium: { name: 'Overclock Pro', description: '+40% hashrate, +25% energy for 3 minutes' },
@@ -1444,6 +1439,25 @@ export default {
     energy: '+{amount} Energy',
     internet: '+{amount} Internet',
     item: '{name} x{quantity}',
+    admin: {
+      sendGift: 'Send Gift',
+      title: 'Send Gift',
+      subtitle: 'Send gifts to all players or a specific one.',
+      targetAll: 'All players',
+      targetSpecific: 'Specific player',
+      giftTitle: 'Title',
+      description: 'Description',
+      rewards: 'Rewards',
+      preview: 'Preview',
+      sending: 'Sending...',
+      send: 'Send Gift',
+      sentAll: 'Gift sent to all players',
+      sentPlayer: 'Gift sent to player {target}',
+      errorNoTarget: 'You must specify a player or select @everyone',
+      errorNoTitle: 'Gift title is required',
+      errorNoReward: 'Gift must include at least one reward',
+      errorSending: 'Error sending gift',
+    },
   },
 
   defense: {
@@ -1476,6 +1490,7 @@ export default {
     waitingTurn: 'Waiting for opponent...',
     endTurn: 'End Turn',
     enemyTurn: 'Enemy Turn',
+    bloodStorm: 'Blood Storm',
     undo: 'Undo',
     forfeit: 'Forfeit',
     victory: 'Victory!',
@@ -1601,6 +1616,7 @@ export default {
       curePoison: '{card}: poison cured!',
       taunt: '{card}: taunts the opponent!',
       recall: '{card}: retrieved {target} from discard!',
+      bloodStorm: 'Blood Storm: -{dmg} HP to ALL',
     },
     // Card detail overlay
     detail: {

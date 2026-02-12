@@ -382,7 +382,6 @@
         hashrate: 'Aumenta la velocidad de minado',
         energy_saver: 'Reduce el consumo de energía',
         bandwidth_optimizer: 'Reduce el consumo de internet',
-        lucky_charm: 'Aumenta probabilidad de minar bloque',
         overclock: 'Más hashrate a cambio de más energía',
         coolant_injection: 'El rig se calienta menos',
         durability_shield: 'El rig se desgasta menos',
@@ -496,10 +495,6 @@
         bandwidth_small: { name: 'Optimizador Datos', description: '-15% consumo de internet por 1 minuto' },
         bandwidth_medium: { name: 'Boost Red', description: '-25% consumo de internet por 3 minutos' },
         bandwidth_large: { name: 'Modo Fibra', description: '-40% consumo de internet por 5 minutos' },
-        // Lucky Charms
-        lucky_small: { name: 'Moneda Suerte', description: '+5% probabilidad de bloque por 1 minuto' },
-        lucky_medium: { name: 'Token Fortuna', description: '+10% probabilidad de bloque por 3 minutos' },
-        lucky_large: { name: 'Amuleto Jackpot', description: '+20% probabilidad de bloque por 5 minutos' },
         // Overclock
         overclock_small: { name: 'Overclock Lite', description: '+25% hashrate, +15% energía por 1 minuto' },
         overclock_medium: { name: 'Overclock Pro', description: '+40% hashrate, +25% energía por 3 minutos' },
@@ -1444,6 +1439,25 @@
     energy: '+{amount} Energía',
     internet: '+{amount} Internet',
     item: '{name} x{quantity}',
+    admin: {
+      sendGift: 'Enviar Regalo',
+      title: 'Enviar Regalo',
+      subtitle: 'Envía regalos a todos los jugadores o a uno específico.',
+      targetAll: 'Todos los jugadores',
+      targetSpecific: 'Jugador específico',
+      giftTitle: 'Título',
+      description: 'Descripción',
+      rewards: 'Recompensas',
+      preview: 'Vista previa',
+      sending: 'Enviando...',
+      send: 'Enviar Regalo',
+      sentAll: 'Regalo enviado a todos los jugadores',
+      sentPlayer: 'Regalo enviado al jugador {target}',
+      errorNoTarget: 'Debes especificar un jugador o seleccionar @everyone',
+      errorNoTitle: 'El título del regalo es requerido',
+      errorNoReward: 'El regalo debe incluir al menos una recompensa',
+      errorSending: 'Error al enviar regalo',
+    },
   },
 
   defense: {
@@ -1476,6 +1490,7 @@
     waitingTurn: 'Esperando al oponente...',
     endTurn: 'Terminar Turno',
     enemyTurn: 'Turno Enemigo',
+    bloodStorm: 'Tormenta de Sangre',
     undo: 'Deshacer',
     forfeit: 'Rendirse',
     victory: '¡Victoria!',
@@ -1626,6 +1641,7 @@
       curePoison: '{card}: ¡veneno curado!',
       taunt: '{card}: ¡se burla del oponente!',
       recall: '{card}: ¡recuperó {target} del descarte!',
+      bloodStorm: 'Tormenta de Sangre: -{dmg} HP a TODOS',
     },
     // Cartas
     cards: {

@@ -118,6 +118,7 @@ export interface LogEntry {
   curePoison?: boolean;
   taunt?: boolean;
   recall?: string;
+  stormDamage?: number;
 }
 
 export function useCardBattle() {

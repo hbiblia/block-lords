@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 import {
@@ -10,7 +10,10 @@ import {
   adminCreateUpdateAnnouncement,
   adminGetPlayers,
   adminGetPlayerDetail,
-  type CreateAnnouncementParams
+  adminSendGift,
+  getBoostItems,
+  type CreateAnnouncementParams,
+  type AdminSendGiftParams
 } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 
@@ -111,6 +114,7 @@ function openCreateModal() {
     ends_at: '',
   };
   showModal.value = true;
+  document.body.style.overflow = 'hidden';
   playSound('click');
 }
 
@@ -129,12 +133,14 @@ function openEditModal(announcement: Announcement) {
     ends_at: announcement.ends_at ? new Date(announcement.ends_at).toISOString().slice(0, 16) : '',
   };
   showModal.value = true;
+  document.body.style.overflow = 'hidden';
   playSound('click');
 }
 
 function closeModal() {
   showModal.value = false;
   editingAnnouncement.value = null;
+  document.body.style.overflow = '';
   playSound('click');
 }
 
@@ -223,12 +229,14 @@ function openUpdateModal() {
   const now = new Date();
   updateVersion.value = `v${now.getFullYear()}.${now.getMonth() + 1}.${now.getDate()}`;
   showUpdateModal.value = true;
+  document.body.style.overflow = 'hidden';
   playSound('click');
 }
 
 function closeUpdateModal() {
   showUpdateModal.value = false;
   updateVersion.value = '';
+  document.body.style.overflow = '';
   playSound('click');
 }
 
@@ -256,6 +264,185 @@ async function createUpdateAnnouncement() {
   }
 }
 
+// Gift sending
+const showGiftModal = ref(false);
+const sendingGift = ref(false);
+const giftSuccess = ref('');
+const giftForm = ref({
+  target: '@everyone',
+  customTarget: '',
+  title: '',
+  description: '',
+  icon: '🎁',
+});
+
+const giftRewards = ref<Array<{ type: string; amount: number; itemId?: string }>>([]);
+const newRewardType = ref('gamecoin');
+const newRewardAmount = ref<number>(0);
+
+// Boost items para regalo de booster
+const boostItems = ref<Array<any>>([]);
+const selectedBoostId = ref('');
+
+const rewardTypeOptions = [
+  { value: 'gamecoin', label: '💰 GameCoin', unit: 'GC', color: 'text-yellow-400', step: '1', defaultTitle: 'Bonus GameCoin', defaultDesc: 'Disfruta de este bono de GameCoin para tu aventura', defaultIcon: '💰' },
+  { value: 'crypto', label: '💎 BLC (Crypto)', unit: 'BLC', color: 'text-purple-400', step: '0.0001', defaultTitle: 'Bonus BLC', defaultDesc: 'Has recibido un bono de BLC. ¡Úsalo sabiamente!', defaultIcon: '💎' },
+  { value: 'energy', label: '⚡ Energía', unit: '', color: 'text-green-400', step: '1', defaultTitle: 'Recarga de Energía', defaultDesc: 'Recarga de energía para mantener tus rigs activos', defaultIcon: '⚡' },
+  { value: 'internet', label: '🌐 Internet', unit: '', color: 'text-blue-400', step: '1', defaultTitle: 'Recarga de Internet', defaultDesc: 'Recarga de internet para tus operaciones de minería', defaultIcon: '🌐' },
+  { value: 'premium', label: '👑 Premium', unit: 'días', color: 'text-amber-300', step: '1', defaultTitle: 'Premium Gratis', defaultDesc: '¡Disfruta de los beneficios Premium! +50% recompensas, menos fees y más', defaultIcon: '👑' },
+  { value: 'booster', label: '🚀 Booster', unit: 'stacks', color: 'text-orange-400', step: '1', defaultTitle: 'Boost de Regalo', defaultDesc: 'Se instalará automáticamente en todos tus rigs', defaultIcon: '🚀' },
+];
+
+const giftIconOptions = [
+  '🎁', '🎉', '🎊', '💰', '⚡', '🌐', '👑', '🏆', '⭐', '💎', '🔥', '🎮'
+];
+
+const currentRewardStep = computed(() => {
+  return rewardTypeOptions.find(o => o.value === newRewardType.value)?.step || '1';
+});
+
+watch(newRewardType, (val) => {
+  const option = rewardTypeOptions.find(o => o.value === val);
+  if (!option) return;
+  const isDefault = (t: string) => !t || rewardTypeOptions.some(o => o.defaultTitle === t);
+  const isDefaultDesc = (d: string) => !d || rewardTypeOptions.some(o => o.defaultDesc === d);
+  if (isDefault(giftForm.value.title)) {
+    giftForm.value.title = option.defaultTitle;
+  }
+  if (isDefaultDesc(giftForm.value.description)) {
+    giftForm.value.description = option.defaultDesc;
+  }
+  if (giftForm.value.icon === '🎁' || rewardTypeOptions.some(o => o.defaultIcon === giftForm.value.icon)) {
+    giftForm.value.icon = option.defaultIcon;
+  }
+});
+
+function addReward() {
+  if (newRewardAmount.value <= 0) return;
+  if (newRewardType.value === 'booster' && !selectedBoostId.value) return;
+  const option = rewardTypeOptions.find(o => o.value === newRewardType.value);
+  const itemId = newRewardType.value === 'booster' ? selectedBoostId.value : undefined;
+  const existing = giftRewards.value.find(r => r.type === newRewardType.value && r.itemId === itemId);
+  if (existing) {
+    existing.amount = newRewardAmount.value;
+  } else {
+    giftRewards.value.push({ type: newRewardType.value, amount: newRewardAmount.value, itemId });
+  }
+  // Auto-fill title, description and icon if empty
+  if (option && !giftForm.value.title) {
+    giftForm.value.title = option.defaultTitle;
+  }
+  if (option && !giftForm.value.description) {
+    giftForm.value.description = option.defaultDesc;
+  }
+  if (option && giftForm.value.icon === '🎁') {
+    giftForm.value.icon = option.defaultIcon;
+  }
+  newRewardAmount.value = 0;
+  playSound('click');
+}
+
+function removeReward(index: number) {
+  giftRewards.value.splice(index, 1);
+  playSound('click');
+}
+
+function getRewardOption(type: string) {
+  return rewardTypeOptions.find(o => o.value === type);
+}
+
+function openGiftModal() {
+  giftForm.value = {
+    target: '@everyone',
+    customTarget: '',
+    title: '',
+    description: '',
+    icon: '🎁',
+  };
+  giftRewards.value = [];
+  newRewardType.value = 'gamecoin';
+  newRewardAmount.value = 0;
+  selectedBoostId.value = '';
+  giftSuccess.value = '';
+  showGiftModal.value = true;
+  document.body.style.overflow = 'hidden';
+  playSound('click');
+  // Cargar boost items si no se han cargado
+  if (boostItems.value.length === 0) {
+    getBoostItems().then((data: any) => { boostItems.value = data || []; }).catch(() => {});
+  }
+}
+
+function closeGiftModal() {
+  showGiftModal.value = false;
+  giftSuccess.value = '';
+  document.body.style.overflow = '';
+  playSound('click');
+}
+
+async function sendGift() {
+  const target = giftForm.value.target === 'specific'
+    ? giftForm.value.customTarget.trim()
+    : '@everyone';
+
+  if (!target) {
+    error.value = 'Debes especificar un jugador o seleccionar @everyone';
+    return;
+  }
+
+  if (!giftForm.value.title) {
+    error.value = 'El título del regalo es requerido';
+    return;
+  }
+
+  if (giftRewards.value.length === 0) {
+    error.value = 'El regalo debe incluir al menos una recompensa';
+    return;
+  }
+
+  try {
+    sendingGift.value = true;
+    error.value = '';
+
+    const params: AdminSendGiftParams = {
+      target,
+      title: giftForm.value.title,
+      description: giftForm.value.description || undefined,
+      icon: giftForm.value.icon,
+    };
+
+    for (const reward of giftRewards.value) {
+      switch (reward.type) {
+        case 'gamecoin': params.gamecoin = reward.amount; break;
+        case 'crypto': params.crypto = reward.amount; break;
+        case 'energy': params.energy = reward.amount; break;
+        case 'internet': params.internet = reward.amount; break;
+        case 'premium':
+          params.item_type = 'premium';
+          params.item_quantity = reward.amount;
+          break;
+        case 'booster':
+          params.item_type = 'boost';
+          params.item_id = reward.itemId;
+          params.item_quantity = reward.amount;
+          break;
+      }
+    }
+
+    await adminSendGift(params);
+    playSound('success');
+    giftSuccess.value = target === '@everyone'
+      ? `Regalo enviado a todos los jugadores`
+      : `Regalo enviado al jugador ${target}`;
+  } catch (e: any) {
+    console.error('Error sending gift:', e);
+    error.value = e.message || 'Error al enviar regalo';
+    playSound('error');
+  } finally {
+    sendingGift.value = false;
+  }
+}
+
 // Users management
 const showUserDetailModal = ref(false);
 const users = ref<any[]>([]);
@@ -270,10 +457,16 @@ const pendingBlocksToShow = ref(10);
 const claimedBlocksToShow = ref(10);
 const BLOCKS_PER_PAGE = 10;
 
+function copyUUID(uuid: string) {
+  navigator.clipboard.writeText(uuid);
+  playSound('click');
+}
+
 function openUserDetail(user: any) {
   selectedUser.value = user;
   selectedUserDetail.value = null;
   showUserDetailModal.value = true;
+  document.body.style.overflow = 'hidden';
   playSound('click');
   loadUserDetail(user.id);
 }
@@ -282,6 +475,7 @@ function closeUserDetail() {
   showUserDetailModal.value = false;
   selectedUser.value = null;
   selectedUserDetail.value = null;
+  document.body.style.overflow = '';
   // Reset infinite scroll
   pendingBlocksToShow.value = BLOCKS_PER_PAGE;
   claimedBlocksToShow.value = BLOCKS_PER_PAGE;
@@ -414,6 +608,14 @@ onMounted(async () => {
         <span class="text-xl">🔄</span>
         Activar Actualización
       </button>
+
+      <button
+        @click="openGiftModal"
+        class="px-6 py-3 rounded-xl font-medium bg-yellow-600 hover:bg-yellow-700 transition-colors flex items-center gap-2 border border-yellow-400"
+      >
+        <span class="text-xl">🎁</span>
+        Enviar Regalo
+      </button>
     </div>
 
     <!-- Users Management Section -->
@@ -503,12 +705,21 @@ onMounted(async () => {
               </td>
               <td class="px-4 py-3 text-right font-mono text-sm">{{ Number(user.total_hashrate || 0).toLocaleString() }} H/s</td>
               <td class="px-4 py-3 text-center">
-                <button
-                  @click="openUserDetail(user)"
-                  class="px-3 py-1.5 rounded-lg font-medium bg-purple-600 hover:bg-purple-700 transition-colors text-sm"
-                >
-                  Ver Detalles
-                </button>
+                <div class="flex items-center justify-center gap-1.5">
+                  <button
+                    @click="copyUUID(user.id)"
+                    class="px-2 py-1.5 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors text-sm"
+                    title="Copiar UUID"
+                  >
+                    📋
+                  </button>
+                  <button
+                    @click="openUserDetail(user)"
+                    class="px-3 py-1.5 rounded-lg font-medium bg-purple-600 hover:bg-purple-700 transition-colors text-sm"
+                  >
+                    Ver Detalles
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -849,6 +1060,213 @@ onMounted(async () => {
               class="flex-1 py-2.5 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
               {{ creatingUpdate ? 'Activando...' : '✓ Activar' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Send Gift Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showGiftModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeGiftModal"></div>
+
+        <div class="relative bg-bg-secondary rounded-xl p-6 max-w-lg w-full border border-yellow-400 animate-fade-in max-h-[90vh] overflow-y-auto">
+          <div class="text-center mb-6">
+            <div class="text-5xl mb-3">🎁</div>
+            <h3 class="text-xl font-bold mb-2">Enviar Regalo</h3>
+            <p class="text-sm text-text-muted">
+              Envía regalos a todos los jugadores o a uno específico.
+            </p>
+          </div>
+
+          <!-- Success message -->
+          <div v-if="giftSuccess" class="mb-4 p-4 bg-status-success/10 border border-status-success/30 rounded-lg text-status-success text-center">
+            {{ giftSuccess }}
+          </div>
+
+          <div class="space-y-4">
+            <!-- Target -->
+            <div>
+              <label class="block text-sm font-medium mb-2">Destinatario *</label>
+              <div class="flex gap-2 mb-2">
+                <button
+                  @click="giftForm.target = '@everyone'"
+                  class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors border"
+                  :class="giftForm.target === '@everyone' ? 'bg-yellow-600 border-yellow-400 text-white' : 'bg-bg-tertiary border-border hover:bg-bg-tertiary/80'"
+                >
+                  👥 Todos los jugadores
+                </button>
+                <button
+                  @click="giftForm.target = 'specific'"
+                  class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors border"
+                  :class="giftForm.target === 'specific' ? 'bg-yellow-600 border-yellow-400 text-white' : 'bg-bg-tertiary border-border hover:bg-bg-tertiary/80'"
+                >
+                  👤 Jugador específico
+                </button>
+              </div>
+              <input
+                v-if="giftForm.target === 'specific'"
+                v-model="giftForm.customTarget"
+                type="text"
+                class="w-full px-3 py-2 bg-bg-primary border border-border rounded-lg focus:border-yellow-400 focus:outline-none"
+                placeholder="UUID del jugador..."
+              />
+            </div>
+
+            <!-- Title -->
+            <div>
+              <label class="block text-sm font-medium mb-2">Título *</label>
+              <input
+                v-model="giftForm.title"
+                type="text"
+                class="w-full px-3 py-2 bg-bg-primary border border-border rounded-lg focus:border-yellow-400 focus:outline-none"
+                placeholder="Ej: Reward, Compensation, Event Prize..."
+              />
+            </div>
+
+            <!-- Description -->
+            <div>
+              <label class="block text-sm font-medium mb-2">Descripción</label>
+              <input
+                v-model="giftForm.description"
+                type="text"
+                class="w-full px-3 py-2 bg-bg-primary border border-border rounded-lg focus:border-yellow-400 focus:outline-none"
+                placeholder="Descripción opcional..."
+              />
+            </div>
+
+            <!-- Icon -->
+            <div>
+              <label class="block text-sm font-medium mb-2">Icono</label>
+              <div class="flex items-center gap-2">
+                <div class="text-2xl w-10 text-center">{{ giftForm.icon }}</div>
+                <div class="flex flex-wrap gap-1">
+                  <button
+                    v-for="icon in giftIconOptions"
+                    :key="icon"
+                    @click="giftForm.icon = icon"
+                    class="w-8 h-8 text-xl hover:bg-bg-tertiary rounded transition-colors"
+                    :class="giftForm.icon === icon ? 'bg-yellow-600/30 ring-1 ring-yellow-400' : ''"
+                  >
+                    {{ icon }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Rewards -->
+            <div>
+              <label class="block text-sm font-medium mb-2">Recompensas *</label>
+
+              <!-- Added rewards list -->
+              <div v-if="giftRewards.length > 0" class="flex flex-wrap gap-2 mb-3">
+                <span
+                  v-for="(reward, idx) in giftRewards"
+                  :key="idx"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border"
+                  :class="getRewardOption(reward.type)?.color"
+                  style="background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1);"
+                >
+                  {{ getRewardOption(reward.type)?.label }}:
+                  <template v-if="reward.itemId">{{ boostItems.find((b: any) => b.id === reward.itemId)?.name || reward.itemId }} x</template>
+                  <strong>{{ reward.amount }}</strong>
+                  <span class="text-xs opacity-70">{{ getRewardOption(reward.type)?.unit }}</span>
+                  <button
+                    @click="removeReward(idx)"
+                    class="ml-1 text-status-danger hover:text-red-300 text-xs"
+                  >✕</button>
+                </span>
+              </div>
+              <div v-else class="mb-3 text-xs text-text-muted">
+                Agrega al menos una recompensa
+              </div>
+
+              <!-- Add reward row -->
+              <div class="flex flex-col gap-2">
+                <div class="flex gap-2">
+                  <select
+                    v-model="newRewardType"
+                    class="flex-1 px-3 py-2 bg-bg-primary border border-border rounded-lg focus:border-yellow-400 focus:outline-none text-sm"
+                  >
+                    <option v-for="opt in rewardTypeOptions" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                  <input
+                    v-model.number="newRewardAmount"
+                    type="number"
+                    min="0"
+                    :step="currentRewardStep"
+                    :placeholder="newRewardType === 'premium' ? 'Días' : newRewardType === 'booster' ? 'Stacks' : 'Cantidad'"
+                    class="w-28 px-3 py-2 bg-bg-primary border border-border rounded-lg focus:border-yellow-400 focus:outline-none text-sm"
+                    @keyup.enter="addReward"
+                  />
+                  <button
+                    @click="addReward"
+                    :disabled="!newRewardAmount || newRewardAmount <= 0 || (newRewardType === 'booster' && !selectedBoostId)"
+                    class="px-4 py-2 rounded-lg font-medium bg-yellow-600 hover:bg-yellow-700 transition-colors disabled:opacity-30 text-sm"
+                  >
+                    +
+                  </button>
+                </div>
+                <!-- Boost item selector -->
+                <select
+                  v-if="newRewardType === 'booster'"
+                  v-model="selectedBoostId"
+                  class="w-full px-3 py-2 bg-bg-primary border border-orange-400/50 rounded-lg focus:border-orange-400 focus:outline-none text-sm"
+                >
+                  <option value="" disabled>Selecciona un booster...</option>
+                  <option v-for="b in boostItems" :key="b.id" :value="b.id">
+                    {{ b.name }} ({{ b.boost_type }}, +{{ b.effect_value }}%, {{ b.duration_minutes }}min)
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Preview -->
+            <div class="p-3 bg-bg-primary rounded-lg border border-yellow-400/30">
+              <p class="text-xs text-text-muted mb-2">Vista previa:</p>
+              <div class="flex items-center gap-3">
+                <span class="text-3xl">{{ giftForm.icon }}</span>
+                <div>
+                  <p class="font-medium">{{ giftForm.title || 'Sin título' }}</p>
+                  <div class="flex flex-wrap gap-2 text-xs mt-1">
+                    <span
+                      v-for="(reward, idx) in giftRewards"
+                      :key="idx"
+                      :class="getRewardOption(reward.type)?.color"
+                    >
+                      {{ getRewardOption(reward.type)?.label.split(' ')[0] }} {{ reward.amount }} {{ getRewardOption(reward.type)?.unit }}
+                    </span>
+                    <span v-if="giftRewards.length === 0" class="text-text-muted">Sin recompensas</span>
+                  </div>
+                </div>
+              </div>
+              <p class="text-xs text-text-muted mt-2">
+                📤 {{ giftForm.target === '@everyone' ? 'Todos los jugadores' : giftForm.customTarget || 'Jugador específico' }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Modal Actions -->
+          <div class="flex gap-3 mt-6">
+            <button
+              @click="closeGiftModal"
+              :disabled="sendingGift"
+              class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              @click="sendGift"
+              :disabled="sendingGift || !giftForm.title || giftRewards.length === 0"
+              class="flex-1 py-2.5 rounded-lg font-medium bg-yellow-600 hover:bg-yellow-700 transition-colors disabled:opacity-50"
+            >
+              {{ sendingGift ? 'Enviando...' : '🎁 Enviar Regalo' }}
             </button>
           </div>
         </div>

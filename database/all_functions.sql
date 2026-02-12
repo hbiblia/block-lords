@@ -3762,8 +3762,23 @@ BEGIN
     WHERE table_name = 'boost_items' AND constraint_type = 'CHECK'
   ) THEN
     ALTER TABLE boost_items DROP CONSTRAINT IF EXISTS boost_items_boost_type_check;
+
+    -- Clean up rows with old boost_type values before adding the new constraint
+    DELETE FROM rig_boosts WHERE boost_item_id IN (SELECT id FROM boost_items WHERE boost_type NOT IN (
+      'hashrate', 'energy_saver', 'bandwidth_optimizer',
+      'overclock', 'coolant_injection', 'durability_shield', 'autonomous_mining'
+    ));
+    DELETE FROM player_boosts WHERE boost_id IN (SELECT id FROM boost_items WHERE boost_type NOT IN (
+      'hashrate', 'energy_saver', 'bandwidth_optimizer',
+      'overclock', 'coolant_injection', 'durability_shield', 'autonomous_mining'
+    ));
+    DELETE FROM boost_items WHERE boost_type NOT IN (
+      'hashrate', 'energy_saver', 'bandwidth_optimizer',
+      'overclock', 'coolant_injection', 'durability_shield', 'autonomous_mining'
+    );
+
     ALTER TABLE boost_items ADD CONSTRAINT boost_items_boost_type_check CHECK (boost_type IN (
-      'hashrate', 'energy_saver', 'bandwidth_optimizer', 'lucky_charm',
+      'hashrate', 'energy_saver', 'bandwidth_optimizer',
       'overclock', 'coolant_injection', 'durability_shield', 'autonomous_mining'
     ));
 
@@ -3782,7 +3797,6 @@ CREATE TABLE IF NOT EXISTS boost_items (
     'hashrate',           -- +X% hashrate
     'energy_saver',       -- -X% energy consumption
     'bandwidth_optimizer',-- -X% internet consumption
-    'lucky_charm',        -- +X% block probability
     'overclock',          -- +X% hashrate, +Y% energy consumption
     'coolant_injection',  -- -X% temperature gain
     'durability_shield',  -- -X% condition deterioration
@@ -3851,11 +3865,6 @@ INSERT INTO boost_items (id, name, description, boost_type, effect_value, second
 ('bandwidth_medium', 'Network Boost', '-35% internet consumption for 12 hours', 'bandwidth_optimizer', 35, 0, 720, 1200, 'crypto', 'standard', false, 1),
 ('bandwidth_large', 'Fiber Mode', '-50% internet consumption for 24 hours', 'bandwidth_optimizer', 50, 0, 1440, 3500, 'crypto', 'elite', false, 1),
 
--- Lucky Charms (crypto - more expensive, affects block probability)
-('lucky_small', 'Lucky Coin', '+8% block probability for 1 hour', 'lucky_charm', 8, 0, 60, 800, 'crypto', 'basic', false, 1),
-('lucky_medium', 'Fortune Token', '+15% block probability for 12 hours', 'lucky_charm', 15, 0, 720, 2500, 'crypto', 'standard', false, 1),
-('lucky_large', 'Jackpot Charm', '+25% block probability for 24 hours', 'lucky_charm', 25, 0, 1440, 7000, 'crypto', 'elite', false, 1),
-
 -- Overclock Mode (crypto - hashrate boost + energy penalty)
 ('overclock_small', 'Overclock Lite', '+30% hashrate, +15% energy for 1 hour', 'overclock', 30, 15, 60, 600, 'crypto', 'basic', false, 1),
 ('overclock_medium', 'Overclock Pro', '+50% hashrate, +25% energy for 12 hours', 'overclock', 50, 25, 720, 1800, 'crypto', 'standard', false, 1),
@@ -3885,6 +3894,11 @@ ON CONFLICT (id) DO UPDATE SET
   base_price = EXCLUDED.base_price,
   currency = EXCLUDED.currency,
   tier = EXCLUDED.tier;
+
+-- Limpiar lucky_charm (ya no se usa)
+DELETE FROM rig_boosts WHERE boost_item_id IN ('lucky_small', 'lucky_medium', 'lucky_large');
+DELETE FROM player_boosts WHERE boost_id IN ('lucky_small', 'lucky_medium', 'lucky_large');
+DELETE FROM boost_items WHERE id IN ('lucky_small', 'lucky_medium', 'lucky_large');
 
 -- Obtener todos los boost items disponibles
 
@@ -4117,8 +4131,6 @@ BEGIN
         v_energy_mult := v_energy_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
       WHEN 'bandwidth_optimizer' THEN
         v_internet_mult := v_internet_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
-      WHEN 'lucky_charm' THEN
-        v_luck_mult := v_luck_mult + (v_boost.effect_value / 100.0) * v_boost.stack_count;
       WHEN 'overclock' THEN
         v_hashrate_mult := v_hashrate_mult + (v_boost.effect_value / 100.0) * v_boost.stack_count;
         v_energy_mult := v_energy_mult + (v_boost.secondary_value / 100.0) * v_boost.stack_count;
@@ -4292,8 +4304,6 @@ BEGIN
         v_energy_mult := v_energy_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
       WHEN 'bandwidth_optimizer' THEN
         v_internet_mult := v_internet_mult - (v_boost.effect_value / 100.0) * v_boost.stack_count;
-      WHEN 'lucky_charm' THEN
-        v_luck_mult := v_luck_mult + (v_boost.effect_value / 100.0) * v_boost.stack_count;
       WHEN 'overclock' THEN
         v_hashrate_mult := v_hashrate_mult + (v_boost.effect_value / 100.0) * v_boost.stack_count;
         v_energy_mult := v_energy_mult + (v_boost.secondary_value / 100.0) * v_boost.stack_count;
@@ -7922,6 +7932,8 @@ DECLARE
   v_item_name TEXT;
   v_effective_max_energy NUMERIC;
   v_effective_max_internet NUMERIC;
+  v_boost_duration INTEGER;
+  v_rig_record RECORD;
 BEGIN
   -- Obtener regalo
   SELECT * INTO v_gift
@@ -7973,10 +7985,18 @@ BEGIN
       END IF;
     ELSIF v_gift.reward_item_type = 'boost' THEN
       IF EXISTS (SELECT 1 FROM boost_items WHERE id = v_gift.reward_item_id) THEN
-        INSERT INTO player_boosts (player_id, boost_id, quantity)
-        VALUES (p_player_id, v_gift.reward_item_id, COALESCE(v_gift.reward_item_quantity, 1))
-        ON CONFLICT (player_id, boost_id)
-        DO UPDATE SET quantity = player_boosts.quantity + COALESCE(v_gift.reward_item_quantity, 1);
+        -- Auto-instalar boost en TODOS los rigs del jugador
+        SELECT duration_minutes INTO v_boost_duration FROM boost_items WHERE id = v_gift.reward_item_id;
+
+        FOR v_rig_record IN SELECT id FROM player_rigs WHERE player_id = p_player_id
+        LOOP
+          INSERT INTO rig_boosts (player_rig_id, boost_item_id, remaining_seconds, stack_count)
+          VALUES (v_rig_record.id, v_gift.reward_item_id, v_boost_duration * 60 * COALESCE(v_gift.reward_item_quantity, 1), COALESCE(v_gift.reward_item_quantity, 1))
+          ON CONFLICT (player_rig_id, boost_item_id)
+          DO UPDATE SET
+            remaining_seconds = rig_boosts.remaining_seconds + v_boost_duration * 60 * COALESCE(v_gift.reward_item_quantity, 1),
+            stack_count = rig_boosts.stack_count + COALESCE(v_gift.reward_item_quantity, 1);
+        END LOOP;
       END IF;
     ELSIF v_gift.reward_item_type = 'rig' THEN
       IF EXISTS (SELECT 1 FROM rigs WHERE id = v_gift.reward_item_id) THEN
@@ -7985,6 +8005,21 @@ BEGIN
         ON CONFLICT (player_id, rig_id)
         DO UPDATE SET quantity = player_rig_inventory.quantity + COALESCE(v_gift.reward_item_quantity, 1);
       END IF;
+    ELSIF v_gift.reward_item_type = 'premium' THEN
+      -- Otorgar premium por X días (item_quantity = días)
+      UPDATE players SET
+        premium_until = CASE
+          WHEN premium_until IS NOT NULL AND premium_until > NOW()
+          THEN premium_until + (COALESCE(v_gift.reward_item_quantity, 30) || ' days')::INTERVAL
+          ELSE NOW() + (COALESCE(v_gift.reward_item_quantity, 30) || ' days')::INTERVAL
+        END,
+        max_energy = 1000,
+        max_internet = 1000,
+        energy = GREATEST(energy, 1000),
+        internet = GREATEST(internet, 1000)
+      WHERE id = p_player_id;
+      INSERT INTO transactions (player_id, type, amount, currency, description)
+      VALUES (p_player_id, 'gift_claimed', 0, 'gamecoin', 'Regalo Premium: ' || COALESCE(v_gift.reward_item_quantity, 30) || ' días');
     END IF;
   END IF;
 
@@ -8039,7 +8074,7 @@ DECLARE
   v_player_id UUID;
 BEGIN
   IF LOWER(TRIM(p_target)) = '@everyone' THEN
-    -- Enviar a todos los jugadores
+    -- Enviar a todos los jugadores (si es premium, solo a los que NO tienen premium activo)
     INSERT INTO player_gifts (
       player_id, title, description, icon,
       reward_gamecoin, reward_crypto, reward_energy, reward_internet,
@@ -8049,7 +8084,11 @@ BEGIN
       p.id, p_title, p_description, p_icon,
       p_gamecoin, p_crypto, p_energy, p_internet,
       p_item_type, p_item_id, p_item_quantity, p_expires_at
-    FROM players p;
+    FROM players p
+    WHERE CASE
+      WHEN p_item_type = 'premium' THEN (p.premium_until IS NULL OR p.premium_until <= NOW())
+      ELSE true
+    END;
 
     GET DIAGNOSTICS v_count = ROW_COUNT;
     RETURN json_build_object('success', true, 'target', '@everyone', 'count', v_count);
@@ -8063,6 +8102,13 @@ BEGIN
 
     IF NOT EXISTS (SELECT 1 FROM players WHERE id = v_player_id) THEN
       RETURN json_build_object('success', false, 'error', 'Player not found');
+    END IF;
+
+    -- Si es premium, verificar que el jugador no tenga premium activo
+    IF p_item_type = 'premium' AND EXISTS (
+      SELECT 1 FROM players WHERE id = v_player_id AND premium_until IS NOT NULL AND premium_until > NOW()
+    ) THEN
+      RETURN json_build_object('success', false, 'error', 'El jugador ya tiene Premium activo');
     END IF;
 
     INSERT INTO player_gifts (
@@ -9303,6 +9349,10 @@ ALTER TABLE battle_ready_rooms DROP CONSTRAINT IF EXISTS battle_ready_rooms_bet_
 ALTER TABLE battle_ready_rooms ADD CONSTRAINT battle_ready_rooms_bet_currency_check
   CHECK (bet_currency IN ('GC', 'BLC', 'RON'));
 
+-- Timeout tracking columns (for disconnect detection)
+ALTER TABLE battle_sessions ADD COLUMN IF NOT EXISTS player1_timeouts INTEGER DEFAULT 0;
+ALTER TABLE battle_sessions ADD COLUMN IF NOT EXISTS player2_timeouts INTEGER DEFAULT 0;
+
 -- Per-player bet columns for independent bet selection
 ALTER TABLE battle_ready_rooms ADD COLUMN IF NOT EXISTS player1_bet_amount NUMERIC DEFAULT 0;
 ALTER TABLE battle_ready_rooms ADD COLUMN IF NOT EXISTS player1_bet_currency TEXT DEFAULT 'GC';
@@ -10105,6 +10155,7 @@ DECLARE
   v_log_entries JSONB := '[]'::JSONB;
   v_total_cards INTEGER;
   v_recall_target TEXT;
+  v_storm_damage INTEGER := 0;
 BEGIN
   -- Lock session
   SELECT * INTO v_session
@@ -10441,6 +10492,16 @@ BEGIN
     v_opp_deck := v_new_deck;
   END IF;
 
+  -- Blood Storm: after turn 10, both players take escalating damage (ignores shield)
+  IF v_session.turn_number >= 10 THEN
+    v_storm_damage := CEIL((v_session.turn_number - 10 + 1)::NUMERIC / 2) * 10;
+    v_my_hp := GREATEST(v_my_hp - v_storm_damage, 0);
+    v_opp_hp := GREATEST(v_opp_hp - v_storm_damage, 0);
+    v_log_entries := v_log_entries || jsonb_build_array(
+      jsonb_build_object('type', 'storm', 'card', 'blood_storm', 'stormDamage', v_storm_damage)
+    );
+  END IF;
+
   -- Build new game state
   IF v_is_p1 THEN
     v_state := jsonb_build_object(
@@ -10517,7 +10578,8 @@ BEGIN
       game_state = v_state,
       status = CASE WHEN v_winner_id IS NOT NULL THEN 'completed' ELSE 'active' END,
       winner_id = v_winner_id,
-      completed_at = CASE WHEN v_winner_id IS NOT NULL THEN NOW() ELSE NULL END
+      completed_at = CASE WHEN v_winner_id IS NOT NULL THEN NOW() ELSE NULL END,
+      player1_timeouts = 0
     WHERE id = p_session_id;
   ELSE
     UPDATE battle_sessions SET
@@ -10531,7 +10593,8 @@ BEGIN
       game_state = v_state,
       status = CASE WHEN v_winner_id IS NOT NULL THEN 'completed' ELSE 'active' END,
       winner_id = v_winner_id,
-      completed_at = CASE WHEN v_winner_id IS NOT NULL THEN NOW() ELSE NULL END
+      completed_at = CASE WHEN v_winner_id IS NOT NULL THEN NOW() ELSE NULL END,
+      player2_timeouts = 0
     WHERE id = p_session_id;
   END IF;
 
@@ -10569,7 +10632,284 @@ BEGIN
 END;
 $$;
 
--- 5) Forfeit battle
+-- 5) Check battle timeout (auto-forfeit after 2 consecutive missed turns)
+CREATE OR REPLACE FUNCTION check_battle_timeout(p_session_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_session battle_sessions%ROWTYPE;
+  v_state JSONB;
+  v_timeout_player_id UUID;
+  v_winner_id UUID;
+  v_pot NUMERIC;
+  v_is_p1_turn BOOLEAN;
+  v_current_timeouts INTEGER;
+  -- Variables for skipping turn
+  v_opp_hand JSONB;
+  v_opp_deck JSONB;
+  v_opp_discard JSONB;
+  v_opp_hp INTEGER;
+  v_opp_shield INTEGER;
+  v_opp_energy INTEGER;
+  v_my_hp INTEGER;
+  v_my_poison INTEGER;
+  v_opp_poison INTEGER;
+  v_draw_count INTEGER;
+  v_cards_to_draw JSONB;
+  v_new_deck JSONB;
+  v_storm_damage INTEGER := 0;
+  v_log_entries JSONB := '[]'::JSONB;
+BEGIN
+  -- Lock session
+  SELECT * INTO v_session
+  FROM battle_sessions
+  WHERE id = p_session_id AND status = 'active'
+  FOR UPDATE;
+
+  IF v_session.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Session not found or already ended');
+  END IF;
+
+  -- Check if turn_deadline has actually passed
+  IF v_session.turn_deadline >= NOW() THEN
+    RETURN json_build_object('success', false, 'error', 'Turn deadline has not passed yet');
+  END IF;
+
+  v_timeout_player_id := v_session.current_turn;
+  v_is_p1_turn := (v_timeout_player_id = v_session.player1_id);
+  v_state := v_session.game_state;
+
+  -- Increment timeout counter for the player who missed their turn
+  IF v_is_p1_turn THEN
+    v_current_timeouts := COALESCE(v_session.player1_timeouts, 0) + 1;
+  ELSE
+    v_current_timeouts := COALESCE(v_session.player2_timeouts, 0) + 1;
+  END IF;
+
+  -- If 2+ consecutive timeouts: auto-forfeit
+  IF v_current_timeouts >= 2 THEN
+    IF v_is_p1_turn THEN
+      v_winner_id := v_session.player2_id;
+    ELSE
+      v_winner_id := v_session.player1_id;
+    END IF;
+
+    v_pot := v_session.bet_amount * 2;
+
+    UPDATE battle_sessions SET
+      status = 'forfeited',
+      winner_id = v_winner_id,
+      completed_at = NOW(),
+      player1_timeouts = CASE WHEN v_is_p1_turn THEN v_current_timeouts ELSE player1_timeouts END,
+      player2_timeouts = CASE WHEN NOT v_is_p1_turn THEN v_current_timeouts ELSE player2_timeouts END
+    WHERE id = p_session_id;
+
+    -- Pay winner in the correct currency
+    IF v_session.bet_currency = 'GC' THEN
+      UPDATE players SET gamecoin_balance = gamecoin_balance + v_pot WHERE id = v_winner_id;
+    ELSIF v_session.bet_currency = 'BLC' THEN
+      UPDATE players SET crypto_balance = crypto_balance + v_pot WHERE id = v_winner_id;
+    ELSIF v_session.bet_currency = 'RON' THEN
+      UPDATE players SET ron_balance = ron_balance + v_pot WHERE id = v_winner_id;
+    END IF;
+
+    -- Track battle missions
+    PERFORM update_mission_progress(v_winner_id, 'battle_win', 1);
+    PERFORM update_mission_progress(v_winner_id, 'battle_play', 1);
+    PERFORM update_mission_progress(v_timeout_player_id, 'battle_play', 1);
+
+    RETURN json_build_object('success', true, 'action', 'auto_forfeit', 'winner_id', v_winner_id, 'pot', v_pot, 'currency', v_session.bet_currency, 'timeouts', v_current_timeouts);
+  END IF;
+
+  -- Otherwise: skip turn (1st timeout) - simulate a turn where no cards are played
+  -- Load state variables based on whose turn it is
+  IF v_is_p1_turn THEN
+    v_my_hp := v_session.player1_hp;
+    v_my_poison := COALESCE((v_state->>'player1Poison')::INTEGER, 0);
+    v_opp_hp := v_session.player2_hp;
+    v_opp_shield := v_session.player2_shield;
+    v_opp_poison := COALESCE((v_state->>'player2Poison')::INTEGER, 0);
+    v_opp_hand := COALESCE(v_state->'player2Hand', '[]'::JSONB);
+    v_opp_deck := COALESCE(v_state->'player2Deck', '[]'::JSONB);
+    v_opp_discard := COALESCE(v_state->'player2Discard', '[]'::JSONB);
+    v_opp_energy := COALESCE((v_state->>'player2Energy')::INTEGER, 0);
+  ELSE
+    v_my_hp := v_session.player2_hp;
+    v_my_poison := COALESCE((v_state->>'player2Poison')::INTEGER, 0);
+    v_opp_hp := v_session.player1_hp;
+    v_opp_shield := v_session.player1_shield;
+    v_opp_poison := COALESCE((v_state->>'player1Poison')::INTEGER, 0);
+    v_opp_hand := COALESCE(v_state->'player1Hand', '[]'::JSONB);
+    v_opp_deck := COALESCE(v_state->'player1Deck', '[]'::JSONB);
+    v_opp_discard := COALESCE(v_state->'player1Discard', '[]'::JSONB);
+    v_opp_energy := COALESCE((v_state->>'player1Energy')::INTEGER, 0);
+  END IF;
+
+  -- Apply poison tick to the timeout player (same as normal turn start)
+  IF v_my_poison > 0 THEN
+    v_my_hp := GREATEST(v_my_hp - 3, 0);
+    v_my_poison := v_my_poison - 1;
+    v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', 'venom_strike', 'poisonTick', 3);
+  END IF;
+
+  -- No cards played (skipped turn)
+  v_log_entries := v_log_entries || jsonb_build_object('type', 'timeout', 'card', 'turn_skipped', 'timeouts', v_current_timeouts);
+
+  -- Reset opponent's shield (same as normal turn end)
+  v_opp_shield := 0;
+
+  -- Draw cards for opponent's next turn (up to hand size 6)
+  v_draw_count := 6 - jsonb_array_length(COALESCE(v_opp_hand, '[]'::JSONB));
+  IF jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)) < v_draw_count THEN
+    v_opp_deck := COALESCE(v_opp_deck, '[]'::JSONB);
+    SELECT jsonb_agg(card ORDER BY random()) INTO v_opp_deck
+    FROM jsonb_array_elements(v_opp_deck || COALESCE(v_opp_discard, '[]'::JSONB)) AS card;
+    v_opp_deck := COALESCE(v_opp_deck, '[]'::JSONB);
+    v_opp_discard := '[]'::JSONB;
+  END IF;
+  IF v_draw_count > 0 AND jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)) > 0 THEN
+    v_draw_count := LEAST(v_draw_count, jsonb_array_length(v_opp_deck));
+    SELECT jsonb_agg(c) INTO v_cards_to_draw
+    FROM (SELECT c FROM jsonb_array_elements(v_opp_deck) c LIMIT v_draw_count) sub;
+    v_opp_hand := COALESCE(v_opp_hand, '[]'::JSONB) || COALESCE(v_cards_to_draw, '[]'::JSONB);
+    SELECT COALESCE(jsonb_agg(c), '[]'::JSONB) INTO v_new_deck
+    FROM (SELECT c FROM jsonb_array_elements(v_opp_deck) c OFFSET v_draw_count) sub;
+    v_opp_deck := v_new_deck;
+  END IF;
+
+  -- Blood Storm: after turn 10
+  IF v_session.turn_number >= 10 THEN
+    v_storm_damage := CEIL((v_session.turn_number - 10 + 1)::NUMERIC / 2) * 10;
+    v_my_hp := GREATEST(v_my_hp - v_storm_damage, 0);
+    v_opp_hp := GREATEST(v_opp_hp - v_storm_damage, 0);
+    v_log_entries := v_log_entries || jsonb_build_array(
+      jsonb_build_object('type', 'storm', 'card', 'blood_storm', 'stormDamage', v_storm_damage)
+    );
+  END IF;
+
+  -- Build updated game state
+  IF v_is_p1_turn THEN
+    v_state := jsonb_build_object(
+      'player1Hand', COALESCE(v_state->'player1Hand', '[]'::JSONB),
+      'player2Hand', COALESCE(v_opp_hand, '[]'::JSONB),
+      'player1Deck', COALESCE(v_state->'player1Deck', '[]'::JSONB),
+      'player2Deck', COALESCE(v_opp_deck, '[]'::JSONB),
+      'player1Discard', COALESCE(v_state->'player1Discard', '[]'::JSONB),
+      'player2Discard', COALESCE(v_opp_discard, '[]'::JSONB),
+      'player1Energy', COALESCE((v_state->>'player1Energy')::INTEGER, 0),
+      'player2Energy', v_opp_energy + CASE WHEN v_opp_energy <= 1 THEN 3 WHEN v_opp_energy <= 3 THEN 2 ELSE 1 END,
+      'player1Weakened', COALESCE((v_state->>'player1Weakened')::BOOLEAN, false),
+      'player2Weakened', COALESCE((v_state->>'player2Weakened')::BOOLEAN, false),
+      'player1Boosted', COALESCE((v_state->>'player1Boosted')::BOOLEAN, false),
+      'player2Boosted', false,
+      'player1Poison', v_my_poison,
+      'player2Poison', v_opp_poison,
+      'player1HandCount', jsonb_array_length(COALESCE(v_state->'player1Hand', '[]'::JSONB)),
+      'player2HandCount', jsonb_array_length(COALESCE(v_opp_hand, '[]'::JSONB)),
+      'player1DeckCount', jsonb_array_length(COALESCE(v_state->'player1Deck', '[]'::JSONB)),
+      'player2DeckCount', jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)),
+      'player1DiscardCount', jsonb_array_length(COALESCE(v_state->'player1Discard', '[]'::JSONB)),
+      'player2DiscardCount', jsonb_array_length(COALESCE(v_opp_discard, '[]'::JSONB)),
+      'totalCards', 22,
+      'lastAction', v_log_entries
+    );
+  ELSE
+    v_state := jsonb_build_object(
+      'player1Hand', COALESCE(v_opp_hand, '[]'::JSONB),
+      'player2Hand', COALESCE(v_state->'player2Hand', '[]'::JSONB),
+      'player1Deck', COALESCE(v_opp_deck, '[]'::JSONB),
+      'player2Deck', COALESCE(v_state->'player2Deck', '[]'::JSONB),
+      'player1Discard', COALESCE(v_opp_discard, '[]'::JSONB),
+      'player2Discard', COALESCE(v_state->'player2Discard', '[]'::JSONB),
+      'player1Energy', v_opp_energy + CASE WHEN v_opp_energy <= 1 THEN 3 WHEN v_opp_energy <= 3 THEN 2 ELSE 1 END,
+      'player2Energy', COALESCE((v_state->>'player2Energy')::INTEGER, 0),
+      'player1Weakened', COALESCE((v_state->>'player1Weakened')::BOOLEAN, false),
+      'player2Weakened', COALESCE((v_state->>'player2Weakened')::BOOLEAN, false),
+      'player1Boosted', false,
+      'player2Boosted', COALESCE((v_state->>'player2Boosted')::BOOLEAN, false),
+      'player1Poison', v_opp_poison,
+      'player2Poison', v_my_poison,
+      'player1HandCount', jsonb_array_length(COALESCE(v_opp_hand, '[]'::JSONB)),
+      'player2HandCount', jsonb_array_length(COALESCE(v_state->'player2Hand', '[]'::JSONB)),
+      'player1DeckCount', jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)),
+      'player2DeckCount', jsonb_array_length(COALESCE(v_state->'player2Deck', '[]'::JSONB)),
+      'player1DiscardCount', jsonb_array_length(COALESCE(v_opp_discard, '[]'::JSONB)),
+      'player2DiscardCount', jsonb_array_length(COALESCE(v_state->'player2Discard', '[]'::JSONB)),
+      'totalCards', 22,
+      'lastAction', v_log_entries
+    );
+  END IF;
+
+  -- Check if anyone died from poison or storm
+  v_winner_id := NULL;
+  IF v_opp_hp <= 0 AND v_my_hp <= 0 THEN
+    -- Both dead from storm: timeout player loses
+    v_winner_id := CASE WHEN v_is_p1_turn THEN v_session.player2_id ELSE v_session.player1_id END;
+  ELSIF v_my_hp <= 0 THEN
+    v_winner_id := CASE WHEN v_is_p1_turn THEN v_session.player2_id ELSE v_session.player1_id END;
+  ELSIF v_opp_hp <= 0 THEN
+    v_winner_id := v_timeout_player_id;
+  END IF;
+
+  -- Update session: skip turn, increment timeout counter
+  IF v_is_p1_turn THEN
+    UPDATE battle_sessions SET
+      player1_hp = v_my_hp,
+      player2_hp = v_opp_hp,
+      player2_shield = v_opp_shield,
+      current_turn = CASE WHEN v_winner_id IS NULL THEN v_session.player2_id ELSE current_turn END,
+      turn_number = turn_number + 1,
+      turn_deadline = CASE WHEN v_winner_id IS NULL THEN NOW() + INTERVAL '45 seconds' ELSE turn_deadline END,
+      game_state = v_state,
+      status = CASE WHEN v_winner_id IS NOT NULL THEN 'completed' ELSE 'active' END,
+      winner_id = v_winner_id,
+      completed_at = CASE WHEN v_winner_id IS NOT NULL THEN NOW() ELSE NULL END,
+      player1_timeouts = v_current_timeouts
+    WHERE id = p_session_id;
+  ELSE
+    UPDATE battle_sessions SET
+      player1_hp = v_opp_hp,
+      player2_hp = v_my_hp,
+      player1_shield = v_opp_shield,
+      current_turn = CASE WHEN v_winner_id IS NULL THEN v_session.player1_id ELSE current_turn END,
+      turn_number = turn_number + 1,
+      turn_deadline = CASE WHEN v_winner_id IS NULL THEN NOW() + INTERVAL '45 seconds' ELSE turn_deadline END,
+      game_state = v_state,
+      status = CASE WHEN v_winner_id IS NOT NULL THEN 'completed' ELSE 'active' END,
+      winner_id = v_winner_id,
+      completed_at = CASE WHEN v_winner_id IS NOT NULL THEN NOW() ELSE NULL END,
+      player2_timeouts = v_current_timeouts
+    WHERE id = p_session_id;
+  END IF;
+
+  -- If someone died from poison/storm during skipped turn, pay the winner
+  IF v_winner_id IS NOT NULL THEN
+    v_pot := v_session.bet_amount * 2;
+    IF v_session.bet_currency = 'GC' THEN
+      UPDATE players SET gamecoin_balance = gamecoin_balance + v_pot WHERE id = v_winner_id;
+    ELSIF v_session.bet_currency = 'BLC' THEN
+      UPDATE players SET crypto_balance = crypto_balance + v_pot WHERE id = v_winner_id;
+    ELSIF v_session.bet_currency = 'RON' THEN
+      UPDATE players SET ron_balance = ron_balance + v_pot WHERE id = v_winner_id;
+    END IF;
+    PERFORM update_mission_progress(v_winner_id, 'battle_win', 1);
+    PERFORM update_mission_progress(v_winner_id, 'battle_play', 1);
+    PERFORM update_mission_progress(v_timeout_player_id, 'battle_play', 1);
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'action', 'turn_skipped',
+    'timeout_player', v_timeout_player_id,
+    'timeouts', v_current_timeouts,
+    'winner_id', v_winner_id
+  );
+END;
+$$;
+
+-- 6) Forfeit battle
 CREATE OR REPLACE FUNCTION forfeit_battle(p_player_id UUID, p_session_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -10697,6 +11037,20 @@ DECLARE
 BEGIN
   -- Cleanup expired challenges and orphaned entries first
   PERFORM cleanup_expired_battle_challenges();
+
+  -- Auto-check timeout for any active battle this player is in
+  IF EXISTS (
+    SELECT 1 FROM battle_sessions
+    WHERE (player1_id = p_player_id OR player2_id = p_player_id)
+      AND status = 'active' AND turn_deadline < NOW()
+  ) THEN
+    PERFORM check_battle_timeout((
+      SELECT id FROM battle_sessions
+      WHERE (player1_id = p_player_id OR player2_id = p_player_id)
+        AND status = 'active' AND turn_deadline < NOW()
+      LIMIT 1
+    ));
+  END IF;
 
   -- Get my balances
   SELECT gamecoin_balance, crypto_balance, ron_balance
@@ -10889,6 +11243,7 @@ GRANT EXECUTE ON FUNCTION select_battle_bet TO authenticated;
 GRANT EXECUTE ON FUNCTION cancel_battle_ready_room TO authenticated;
 GRANT EXECUTE ON FUNCTION start_battle_from_ready_room TO authenticated;
 GRANT EXECUTE ON FUNCTION play_battle_turn TO authenticated;
+GRANT EXECUTE ON FUNCTION check_battle_timeout TO authenticated;
 GRANT EXECUTE ON FUNCTION forfeit_battle TO authenticated;
 GRANT EXECUTE ON FUNCTION get_battle_lobby TO authenticated;
 GRANT EXECUTE ON FUNCTION cleanup_expired_battle_challenges TO authenticated;

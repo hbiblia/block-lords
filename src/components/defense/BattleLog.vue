@@ -35,6 +35,9 @@ watch(
 );
 
 function formatEntry(entry: LogEntry): string {
+  if (entry.type === 'storm') {
+    return t('battle.log.bloodStorm', { dmg: entry.stormDamage });
+  }
   const card = getCard(entry.card);
   const cardName = t(card.nameKey, card.name);
 
@@ -137,6 +140,7 @@ function formatEntry(entry: LogEntry): string {
         'bg-red-500/8 border-l-2 border-red-500/40': entry.type === 'attack',
         'bg-blue-500/8 border-l-2 border-blue-500/40': entry.type === 'defense',
         'bg-purple-500/8 border-l-2 border-purple-500/40': entry.type === 'special',
+        'bg-red-500/15 border-l-2 border-red-600/50': entry.type === 'storm',
       }"
     >
       <!-- Type icon -->
@@ -146,10 +150,12 @@ function formatEntry(entry: LogEntry): string {
           'bg-red-500/20 text-red-400': entry.type === 'attack',
           'bg-blue-500/20 text-blue-400': entry.type === 'defense',
           'bg-purple-500/20 text-purple-400': entry.type === 'special',
+          'bg-red-600/20 text-red-500': entry.type === 'storm',
         }"
       >
         <span v-if="entry.type === 'attack'">&#9876;</span>
         <span v-else-if="entry.type === 'defense'">&#128737;</span>
+        <span v-else-if="entry.type === 'storm'">&#9760;</span>
         <span v-else>&#10024;</span>
       </span>
 
@@ -160,6 +166,7 @@ function formatEntry(entry: LogEntry): string {
           'text-red-300/90': entry.type === 'attack',
           'text-blue-300/90': entry.type === 'defense',
           'text-purple-300/90': entry.type === 'special',
+          'text-red-400/90': entry.type === 'storm',
         }"
       >
         {{ formatEntry(entry) }}
@@ -228,6 +235,12 @@ function formatEntry(entry: LogEntry): string {
         class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 flex-shrink-0"
       >
         &#128260;
+      </span>
+      <span
+        v-else-if="entry.stormDamage"
+        class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-red-600/20 text-red-300 flex-shrink-0"
+      >
+        -{{ entry.stormDamage }}
       </span>
     </div>
 

@@ -423,7 +423,6 @@ function getBoostIcon(type: string): string {
     hashrate: '⚡',
     energy_saver: '🔋',
     bandwidth_optimizer: '📡',
-    lucky_charm: '🍀',
     overclock: '🔥',
     coolant_injection: '❄️',
     durability_shield: '🛡️',

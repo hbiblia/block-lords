@@ -913,6 +913,42 @@ export async function adminCreateUpdateAnnouncement(version: string, message?: s
   return data;
 }
 
+// Admin: Enviar regalo
+export interface AdminSendGiftParams {
+  target: string;           // '@everyone' or player UUID
+  title?: string;
+  description?: string;
+  icon?: string;
+  gamecoin?: number;
+  crypto?: number;
+  energy?: number;
+  internet?: number;
+  item_type?: string;
+  item_id?: string;
+  item_quantity?: number;
+  expires_at?: string;
+}
+
+export async function adminSendGift(params: AdminSendGiftParams) {
+  const { data, error } = await supabase.rpc('send_gift', {
+    p_target: params.target,
+    p_title: params.title || 'Gift',
+    p_description: params.description || null,
+    p_icon: params.icon || '🎁',
+    p_gamecoin: params.gamecoin || 0,
+    p_crypto: params.crypto || 0,
+    p_energy: params.energy || 0,
+    p_internet: params.internet || 0,
+    p_item_type: params.item_type || null,
+    p_item_id: params.item_id || null,
+    p_item_quantity: params.item_quantity || 1,
+    p_expires_at: params.expires_at || null,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 // Admin: Obtener información de usuarios
 export async function adminGetPlayers(search?: string, limit = 50, offset = 0) {
   const { data, error } = await supabase.rpc('admin_get_players', {

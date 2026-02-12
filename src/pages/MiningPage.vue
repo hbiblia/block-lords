@@ -220,7 +220,6 @@ function getBoostIcon(boostType: string): string {
     case 'hashrate': return '⚡';
     case 'energy_saver': return '🔋';
     case 'bandwidth_optimizer': return '📶';
-    case 'lucky_charm': return '🍀';
     case 'overclock': return '🚀';
     case 'coolant_injection': return '❄️';
     case 'durability_shield': return '🛡️';
