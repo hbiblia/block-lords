@@ -365,15 +365,16 @@ async function handleConnectionClick() {
           </button>
 
           <!-- Battle (distinctive) -->
-          <button @click="openDefense" class="mobile-battle-btn">
+          <button @click="openDefense" class="mobile-battle-btn relative">
             <div class="relative">
               <span class="text-xl leading-none">&#9876;</span>
-              <span
-                v-if="defenseStore.lobbyCount > 0"
-                class="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] px-0.5 text-[9px] font-bold text-white bg-green-500 rounded-full flex items-center justify-center shadow-sm"
-              >{{ defenseStore.lobbyCount }}</span>
             </div>
             <span class="mobile-action-label text-red-400/80">{{ t('defense.short', 'Battle') }}</span>
+            <!-- Bubble badge -->
+            <span
+              v-if="defenseStore.lobbyCount > 0"
+              class="lobby-bubble"
+            >{{ t('defense.lobbyBubble', 'Someone wants to battle!') }}</span>
           </button>
 
           <!-- Exchange -->
@@ -404,7 +405,7 @@ async function handleConnectionClick() {
         <!-- Defense Button -->
         <button
           @click="openDefense"
-          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group overflow-hidden"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
         >
           <div class="absolute left-0 top-0 bottom-0 w-[3px] bg-red-500"></div>
           <div class="w-8 h-8 rounded-md flex items-center justify-center">
@@ -414,12 +415,11 @@ async function handleConnectionClick() {
             <div class="text-xs font-semibold text-slate-200">{{ t('defense.title', 'Block Defense') }}</div>
             <div class="text-[10px] text-slate-400">{{ t('defense.subtitle', 'Tower Defense') }}</div>
           </div>
-          <div
+          <!-- Bubble badge -->
+          <span
             v-if="defenseStore.lobbyCount > 0"
-            class="ml-auto px-1.5 py-0.5 bg-green-500 text-white text-[10px] font-bold rounded-full animate-pulse"
-          >
-            {{ defenseStore.lobbyCount }}
-          </div>
+            class="lobby-bubble lobby-bubble--desktop"
+          >{{ t('defense.lobbyBubble', 'Someone wants to battle!') }}</span>
         </button>
 
         <!-- Market Button -->
@@ -678,6 +678,58 @@ async function handleConnectionClick() {
   }
   50% {
     box-shadow: 0 0 8px 2px rgba(34, 197, 94, 0.6);
+  }
+}
+
+/* Speech-bubble badge for lobby waiting */
+.lobby-bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 140px;
+  text-align: center;
+  padding: 4px 8px;
+  font-size: 0.6rem;
+  line-height: 1.3;
+  font-weight: 600;
+  color: white;
+  background: #16a34a;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  animation: bubble-bounce 2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Triangle pointer */
+.lobby-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #16a34a;
+}
+
+/* Desktop variant — above the button, aligned to center */
+.lobby-bubble--desktop {
+  bottom: calc(100% + 8px);
+  left: 50%;
+  right: auto;
+  top: auto;
+  transform: translateX(-50%);
+  max-width: 160px;
+}
+
+@keyframes bubble-bounce {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-3px);
   }
 }
 </style>

@@ -9597,9 +9597,8 @@ BEGIN
     p_challenger_id, p_player_id, v_challenger_lobby.username, v_my_lobby.username, v_bet_amount, v_bet_currency
   ) RETURNING id INTO v_session_id;
 
-  -- Mark both lobby entries as matched
-  UPDATE battle_lobby SET status = 'matched' WHERE id = v_my_lobby.id;
-  UPDATE battle_lobby SET status = 'matched' WHERE id = v_challenger_lobby.id;
+  -- Remove both from lobby so no one else can pair with them
+  DELETE FROM battle_lobby WHERE id IN (v_my_lobby.id, v_challenger_lobby.id);
 
   RETURN json_build_object(
     'success', true,
@@ -9732,9 +9731,8 @@ BEGIN
   )
   RETURNING id INTO v_room_id;
 
-  -- Mark both as matched
-  UPDATE battle_lobby SET status = 'matched' WHERE player_id = p_player_id;
-  UPDATE battle_lobby SET status = 'matched' WHERE player_id = v_opponent.player_id;
+  -- Remove both from lobby so no one else can pair with them
+  DELETE FROM battle_lobby WHERE player_id IN (p_player_id, v_opponent.player_id);
 
   RETURN json_build_object(
     'success', true,
@@ -10701,7 +10699,8 @@ BEGIN
     WHERE (bs.player1_id = bl.player_id OR bs.player2_id = bl.player_id)
       AND bs.status IN ('completed', 'forfeited')
   ) stats ON true
-  WHERE bl.player_id != p_player_id AND bl.status IN ('waiting', 'challenged');
+  WHERE bl.player_id != p_player_id AND bl.status IN ('waiting', 'challenged')
+  ORDER BY bl.created_at ASC;
 
   -- Get my outgoing challenges (challenges I sent)
   SELECT COALESCE(jsonb_agg(jsonb_build_object(

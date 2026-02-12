@@ -931,7 +931,7 @@ export function useCardBattle() {
     // Polling fallback: refresh lobby every 5s in case realtime misses events
     if (!lobbyPollInterval) {
       lobbyPollInterval = setInterval(() => {
-        if ((inLobby.value || quickMatchSearching.value) && !session.value) {
+        if ((inLobby.value || quickMatchSearching.value || readyRoom.value) && !session.value) {
           loadLobby(true);
         }
       }, 5000);

@@ -1450,6 +1450,7 @@
     title: 'Batalla de Cartas',
     subtitle: 'Arena PvP',
     short: 'Batalla',
+    lobbyBubble: 'Alguien quiere batalla!',
   },
 
   battle: {

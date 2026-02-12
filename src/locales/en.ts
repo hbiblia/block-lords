@@ -1450,6 +1450,7 @@ export default {
     title: 'Card Battle',
     subtitle: 'PvP Arena',
     short: 'Battle',
+    lobbyBubble: 'Someone wants to battle!',
   },
 
   battle: {
