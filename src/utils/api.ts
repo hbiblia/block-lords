@@ -1505,3 +1505,27 @@ export async function getBattleLeaderboard(limit = 10): Promise<any> {
     p_limit: limit,
   });
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function quickMatchPair(playerId: string, opponentLobbyId: string): Promise<any> {
+  return rpcWithRetry('quick_match_pair', {
+    p_player_id: playerId,
+    p_opponent_lobby_id: opponentLobbyId,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function selectBattleBet(playerId: string, betAmount: number, betCurrency: 'GC' | 'BLC' | 'RON'): Promise<any> {
+  return rpcWithRetry('select_battle_bet', {
+    p_player_id: playerId,
+    p_bet_amount: betAmount,
+    p_bet_currency: betCurrency,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function cancelBattleReadyRoom(playerId: string): Promise<any> {
+  return rpcWithRetry('cancel_battle_ready_room', {
+    p_player_id: playerId,
+  });
+}

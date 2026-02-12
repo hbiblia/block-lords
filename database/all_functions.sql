@@ -7380,6 +7380,8 @@ BEGIN
     -- Actualizar progreso de misiones
     PERFORM update_mission_progress(v_participant.player_id, 'mine_blocks', 1);
     PERFORM update_mission_progress(v_participant.player_id, 'mine_blocks_weekly', 1);
+    PERFORM update_mission_progress(v_participant.player_id, 'total_blocks', 1);
+    PERFORM update_mission_progress(v_participant.player_id, 'first_block', 1);
   END LOOP;
 
   -- Marcar como distribuido
@@ -9301,6 +9303,12 @@ ALTER TABLE battle_ready_rooms DROP CONSTRAINT IF EXISTS battle_ready_rooms_bet_
 ALTER TABLE battle_ready_rooms ADD CONSTRAINT battle_ready_rooms_bet_currency_check
   CHECK (bet_currency IN ('GC', 'BLC', 'RON'));
 
+-- Per-player bet columns for independent bet selection
+ALTER TABLE battle_ready_rooms ADD COLUMN IF NOT EXISTS player1_bet_amount NUMERIC DEFAULT 0;
+ALTER TABLE battle_ready_rooms ADD COLUMN IF NOT EXISTS player1_bet_currency TEXT DEFAULT 'GC';
+ALTER TABLE battle_ready_rooms ADD COLUMN IF NOT EXISTS player2_bet_amount NUMERIC DEFAULT 0;
+ALTER TABLE battle_ready_rooms ADD COLUMN IF NOT EXISTS player2_bet_currency TEXT DEFAULT 'GC';
+
 -- RLS
 ALTER TABLE battle_lobby ENABLE ROW LEVEL SECURITY;
 ALTER TABLE battle_sessions ENABLE ROW LEVEL SECURITY;
@@ -9379,37 +9387,50 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_lobby battle_lobby%ROWTYPE;
-  v_has_active_battle BOOLEAN;
+  v_room battle_ready_rooms%ROWTYPE;
 BEGIN
   SELECT * INTO v_lobby
   FROM battle_lobby
   WHERE player_id = p_player_id;
 
   IF v_lobby.id IS NULL THEN
-    RETURN json_build_object('success', false, 'error', 'Not in lobby');
+    RETURN json_build_object('success', true);
   END IF;
 
-  -- Check if player has active battle or ready room (can't leave if in active game)
-  SELECT EXISTS (
-    SELECT 1 FROM battle_sessions
-    WHERE (player1_id = p_player_id OR player2_id = p_player_id) AND status = 'active'
-    UNION ALL
-    SELECT 1 FROM battle_ready_rooms
-    WHERE (player1_id = p_player_id OR player2_id = p_player_id) AND expires_at > NOW()
-  ) INTO v_has_active_battle;
+  -- Clean up any active ready room (with refund if needed)
+  SELECT * INTO v_room
+  FROM battle_ready_rooms
+  WHERE (player1_id = p_player_id OR player2_id = p_player_id)
+    AND expires_at > NOW()
+  FOR UPDATE;
 
-  IF v_has_active_battle THEN
-    RETURN json_build_object('success', false, 'error', 'Cannot leave while in active battle or ready room');
+  IF v_room.id IS NOT NULL THEN
+    -- Refund bets if both were ready
+    IF v_room.player1_ready AND v_room.player2_ready AND v_room.bet_amount > 0 THEN
+      IF v_room.bet_currency = 'GC' THEN
+        UPDATE players SET gamecoin_balance = gamecoin_balance + v_room.bet_amount WHERE id = v_room.player1_id;
+        UPDATE players SET gamecoin_balance = gamecoin_balance + v_room.bet_amount WHERE id = v_room.player2_id;
+      ELSIF v_room.bet_currency = 'BLC' THEN
+        UPDATE players SET crypto_balance = crypto_balance + v_room.bet_amount WHERE id = v_room.player1_id;
+        UPDATE players SET crypto_balance = crypto_balance + v_room.bet_amount WHERE id = v_room.player2_id;
+      ELSIF v_room.bet_currency = 'RON' THEN
+        UPDATE players SET ron_balance = ron_balance + v_room.bet_amount WHERE id = v_room.player1_id;
+        UPDATE players SET ron_balance = ron_balance + v_room.bet_amount WHERE id = v_room.player2_id;
+      END IF;
+    END IF;
+    DELETE FROM battle_ready_rooms WHERE id = v_room.id;
+    -- Also remove the other player from lobby
+    DELETE FROM battle_lobby WHERE player_id IN (v_room.player1_id, v_room.player2_id);
   END IF;
 
-  -- Clear any challenges to this player
+  -- Clear any challenges from this player
   UPDATE battle_lobby
   SET status = 'waiting', challenged_by = NULL, proposed_bet = NULL,
       proposed_currency = NULL, challenge_expires_at = NULL, challenger_username = NULL
   WHERE challenged_by = p_player_id;
 
   -- Remove from lobby
-  DELETE FROM battle_lobby WHERE id = v_lobby.id;
+  DELETE FROM battle_lobby WHERE player_id = p_player_id;
 
   RETURN json_build_object('success', true);
 END;
@@ -9655,6 +9676,280 @@ BEGIN
     'player2_ready', v_room.player2_ready,
     'both_ready', v_room.player1_ready AND v_room.player2_ready
   );
+END;
+$$;
+
+-- Quick Match Pair: Directly create a ready room for two lobby players
+CREATE OR REPLACE FUNCTION quick_match_pair(p_player_id UUID, p_opponent_lobby_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_opponent battle_lobby%ROWTYPE;
+  v_my_lobby battle_lobby%ROWTYPE;
+  v_room_id UUID;
+  v_my_username TEXT;
+  v_opp_username TEXT;
+BEGIN
+  -- Check I'm in lobby
+  SELECT * INTO v_my_lobby
+  FROM battle_lobby
+  WHERE player_id = p_player_id AND status = 'waiting'
+  FOR UPDATE;
+
+  IF v_my_lobby.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'You must be in the lobby first');
+  END IF;
+
+  -- Get opponent lobby entry
+  SELECT * INTO v_opponent
+  FROM battle_lobby
+  WHERE id = p_opponent_lobby_id AND status = 'waiting'
+  FOR UPDATE;
+
+  IF v_opponent.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Opponent is not available');
+  END IF;
+
+  IF v_opponent.player_id = p_player_id THEN
+    RETURN json_build_object('success', false, 'error', 'Cannot match with yourself');
+  END IF;
+
+  -- Get usernames
+  SELECT username INTO v_my_username FROM players WHERE id = p_player_id;
+  SELECT username INTO v_opp_username FROM players WHERE id = v_opponent.player_id;
+
+  -- Create ready room with all bets=0 (each player selects independently)
+  INSERT INTO battle_ready_rooms (
+    player1_id, player2_id, player1_username, player2_username,
+    bet_amount, bet_currency,
+    player1_bet_amount, player1_bet_currency,
+    player2_bet_amount, player2_bet_currency,
+    expires_at
+  )
+  VALUES (
+    p_player_id, v_opponent.player_id, v_my_username, v_opp_username,
+    0, 'GC',
+    0, 'GC',
+    0, 'GC',
+    NOW() + INTERVAL '5 minutes'
+  )
+  RETURNING id INTO v_room_id;
+
+  -- Mark both as matched
+  UPDATE battle_lobby SET status = 'matched' WHERE player_id = p_player_id;
+  UPDATE battle_lobby SET status = 'matched' WHERE player_id = v_opponent.player_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'ready_room_id', v_room_id
+  );
+END;
+$$;
+
+-- Select Battle Bet: Player picks their bet independently
+-- If both players pick the same bet → both auto-ready + money deducted
+CREATE OR REPLACE FUNCTION select_battle_bet(p_player_id UUID, p_bet_amount NUMERIC, p_bet_currency TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_room battle_ready_rooms%ROWTYPE;
+  v_is_p1 BOOLEAN;
+  v_my_balance NUMERIC;
+  v_opponent_bet_amount NUMERIC;
+  v_opponent_bet_currency TEXT;
+  v_bets_match BOOLEAN;
+BEGIN
+  -- Get ready room
+  SELECT * INTO v_room
+  FROM battle_ready_rooms
+  WHERE (player1_id = p_player_id OR player2_id = p_player_id)
+    AND expires_at > NOW()
+  FOR UPDATE;
+
+  IF v_room.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'No active ready room found');
+  END IF;
+
+  v_is_p1 := (v_room.player1_id = p_player_id);
+
+  -- Don't allow re-selection if already ready (bets matched)
+  IF (v_is_p1 AND v_room.player1_ready) OR (NOT v_is_p1 AND v_room.player2_ready) THEN
+    RETURN json_build_object('success', false, 'error', 'Already ready, bets matched');
+  END IF;
+
+  -- Validate bet amount and currency
+  IF NOT (
+    (p_bet_amount = 100 AND p_bet_currency = 'GC') OR
+    (p_bet_amount = 2500 AND p_bet_currency = 'GC') OR
+    (p_bet_amount = 1000 AND p_bet_currency = 'BLC') OR
+    (p_bet_amount = 2500 AND p_bet_currency = 'BLC') OR
+    (p_bet_amount = 0.2 AND p_bet_currency = 'RON') OR
+    (p_bet_amount = 1 AND p_bet_currency = 'RON')
+  ) THEN
+    RETURN json_build_object('success', false, 'error', 'Invalid bet');
+  END IF;
+
+  -- Check balance
+  IF p_bet_currency = 'GC' THEN
+    SELECT gamecoin_balance INTO v_my_balance FROM players WHERE id = p_player_id;
+  ELSIF p_bet_currency = 'BLC' THEN
+    SELECT crypto_balance INTO v_my_balance FROM players WHERE id = p_player_id;
+  ELSIF p_bet_currency = 'RON' THEN
+    SELECT ron_balance INTO v_my_balance FROM players WHERE id = p_player_id;
+  END IF;
+
+  IF v_my_balance < p_bet_amount THEN
+    RETURN json_build_object('success', false, 'error', 'Insufficient ' || p_bet_currency || ' balance');
+  END IF;
+
+  -- Store my bet choice
+  IF v_is_p1 THEN
+    UPDATE battle_ready_rooms
+    SET player1_bet_amount = p_bet_amount, player1_bet_currency = p_bet_currency
+    WHERE id = v_room.id;
+    -- Get opponent's bet
+    v_opponent_bet_amount := v_room.player2_bet_amount;
+    v_opponent_bet_currency := v_room.player2_bet_currency;
+  ELSE
+    UPDATE battle_ready_rooms
+    SET player2_bet_amount = p_bet_amount, player2_bet_currency = p_bet_currency
+    WHERE id = v_room.id;
+    -- Get opponent's bet
+    v_opponent_bet_amount := v_room.player1_bet_amount;
+    v_opponent_bet_currency := v_room.player1_bet_currency;
+  END IF;
+
+  -- Check if bets match (opponent must have selected a bet too, i.e. amount > 0)
+  v_bets_match := (v_opponent_bet_amount > 0
+    AND p_bet_amount = v_opponent_bet_amount
+    AND p_bet_currency = v_opponent_bet_currency);
+
+  IF v_bets_match THEN
+    -- Both selected the same bet! Deduct from both players and mark both ready.
+
+    -- Deduct from me
+    IF p_bet_currency = 'GC' THEN
+      UPDATE players SET gamecoin_balance = gamecoin_balance - p_bet_amount WHERE id = p_player_id;
+    ELSIF p_bet_currency = 'BLC' THEN
+      UPDATE players SET crypto_balance = crypto_balance - p_bet_amount WHERE id = p_player_id;
+    ELSIF p_bet_currency = 'RON' THEN
+      UPDATE players SET ron_balance = ron_balance - p_bet_amount WHERE id = p_player_id;
+    END IF;
+
+    -- Deduct from opponent
+    DECLARE
+      v_opponent_id UUID;
+      v_opp_balance NUMERIC;
+    BEGIN
+      v_opponent_id := CASE WHEN v_is_p1 THEN v_room.player2_id ELSE v_room.player1_id END;
+
+      -- Check opponent still has balance
+      IF p_bet_currency = 'GC' THEN
+        SELECT gamecoin_balance INTO v_opp_balance FROM players WHERE id = v_opponent_id;
+      ELSIF p_bet_currency = 'BLC' THEN
+        SELECT crypto_balance INTO v_opp_balance FROM players WHERE id = v_opponent_id;
+      ELSIF p_bet_currency = 'RON' THEN
+        SELECT ron_balance INTO v_opp_balance FROM players WHERE id = v_opponent_id;
+      END IF;
+
+      IF v_opp_balance < p_bet_amount THEN
+        -- Opponent no longer has funds, can't match
+        RETURN json_build_object('success', true, 'bet_selected', true, 'bets_match', false,
+          'message', 'Opponent no longer has sufficient funds');
+      END IF;
+
+      IF p_bet_currency = 'GC' THEN
+        UPDATE players SET gamecoin_balance = gamecoin_balance - p_bet_amount WHERE id = v_opponent_id;
+      ELSIF p_bet_currency = 'BLC' THEN
+        UPDATE players SET crypto_balance = crypto_balance - p_bet_amount WHERE id = v_opponent_id;
+      ELSIF p_bet_currency = 'RON' THEN
+        UPDATE players SET ron_balance = ron_balance - p_bet_amount WHERE id = v_opponent_id;
+      END IF;
+    END;
+
+    -- Mark both ready and set the final bet
+    UPDATE battle_ready_rooms
+    SET player1_ready = true,
+        player2_ready = true,
+        bet_amount = p_bet_amount,
+        bet_currency = p_bet_currency
+    WHERE id = v_room.id;
+
+    RETURN json_build_object(
+      'success', true,
+      'bet_selected', true,
+      'bets_match', true,
+      'both_ready', true,
+      'bet_amount', p_bet_amount,
+      'bet_currency', p_bet_currency
+    );
+  ELSE
+    -- Bets don't match (yet). Just stored the selection.
+    RETURN json_build_object(
+      'success', true,
+      'bet_selected', true,
+      'bets_match', false,
+      'both_ready', false,
+      'my_bet_amount', p_bet_amount,
+      'my_bet_currency', p_bet_currency
+    );
+  END IF;
+END;
+$$;
+
+-- Cancel Battle Ready Room: Cancel with refund (for per-player bets)
+CREATE OR REPLACE FUNCTION cancel_battle_ready_room(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_room battle_ready_rooms%ROWTYPE;
+BEGIN
+  -- Get ready room
+  SELECT * INTO v_room
+  FROM battle_ready_rooms
+  WHERE (player1_id = p_player_id OR player2_id = p_player_id)
+    AND expires_at > NOW()
+  FOR UPDATE;
+
+  IF v_room.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'No active ready room found');
+  END IF;
+
+  -- Refund bets only if both were ready (money was actually deducted)
+  IF v_room.player1_ready AND v_room.player2_ready AND v_room.bet_amount > 0 THEN
+    -- Refund player 1
+    IF v_room.bet_currency = 'GC' THEN
+      UPDATE players SET gamecoin_balance = gamecoin_balance + v_room.bet_amount WHERE id = v_room.player1_id;
+    ELSIF v_room.bet_currency = 'BLC' THEN
+      UPDATE players SET crypto_balance = crypto_balance + v_room.bet_amount WHERE id = v_room.player1_id;
+    ELSIF v_room.bet_currency = 'RON' THEN
+      UPDATE players SET ron_balance = ron_balance + v_room.bet_amount WHERE id = v_room.player1_id;
+    END IF;
+
+    -- Refund player 2
+    IF v_room.bet_currency = 'GC' THEN
+      UPDATE players SET gamecoin_balance = gamecoin_balance + v_room.bet_amount WHERE id = v_room.player2_id;
+    ELSIF v_room.bet_currency = 'BLC' THEN
+      UPDATE players SET crypto_balance = crypto_balance + v_room.bet_amount WHERE id = v_room.player2_id;
+    ELSIF v_room.bet_currency = 'RON' THEN
+      UPDATE players SET ron_balance = ron_balance + v_room.bet_amount WHERE id = v_room.player2_id;
+    END IF;
+  END IF;
+
+  -- Delete the ready room
+  DELETE FROM battle_ready_rooms WHERE id = v_room.id;
+
+  -- Remove both players from lobby (they must press Quick Match again to re-enter)
+  DELETE FROM battle_lobby
+  WHERE player_id IN (v_room.player1_id, v_room.player2_id);
+
+  RETURN json_build_object('success', true);
 END;
 $$;
 
@@ -10362,7 +10657,7 @@ BEGIN
   ORDER BY started_at DESC
   LIMIT 1;
 
-  -- Check for ready room
+  -- Check for ready room (includes per-player bet selections)
   SELECT jsonb_build_object(
     'id', id,
     'player1_id', player1_id,
@@ -10373,6 +10668,10 @@ BEGIN
     'player2_ready', player2_ready,
     'bet_amount', bet_amount,
     'bet_currency', bet_currency,
+    'player1_bet_amount', COALESCE(player1_bet_amount, 0),
+    'player1_bet_currency', COALESCE(player1_bet_currency, 'GC'),
+    'player2_bet_amount', COALESCE(player2_bet_amount, 0),
+    'player2_bet_currency', COALESCE(player2_bet_currency, 'GC'),
     'expires_at', expires_at
   ) INTO v_ready_room
   FROM battle_ready_rooms
@@ -10493,6 +10792,9 @@ GRANT EXECUTE ON FUNCTION propose_battle_challenge TO authenticated;
 GRANT EXECUTE ON FUNCTION accept_battle_challenge TO authenticated;
 GRANT EXECUTE ON FUNCTION reject_battle_challenge TO authenticated;
 GRANT EXECUTE ON FUNCTION set_player_ready TO authenticated;
+GRANT EXECUTE ON FUNCTION quick_match_pair TO authenticated;
+GRANT EXECUTE ON FUNCTION select_battle_bet TO authenticated;
+GRANT EXECUTE ON FUNCTION cancel_battle_ready_room TO authenticated;
 GRANT EXECUTE ON FUNCTION start_battle_from_ready_room TO authenticated;
 GRANT EXECUTE ON FUNCTION play_battle_turn TO authenticated;
 GRANT EXECUTE ON FUNCTION forfeit_battle TO authenticated;

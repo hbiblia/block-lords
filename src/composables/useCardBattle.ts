@@ -4,15 +4,13 @@ import { useAuthStore } from '@/stores/auth';
 import {
   joinBattleLobby,
   leaveBattleLobby,
-  proposeBattleChallenge,
-  acceptBattleChallenge,
-  rejectBattleChallenge,
-  setPlayerReady as apiSetPlayerReady,
   startBattleFromReadyRoom as apiStartBattleFromReadyRoom,
   playBattleTurn,
   forfeitBattle,
   getBattleLobby,
-  getBattleLeaderboard,
+  quickMatchPair as apiQuickMatchPair,
+  selectBattleBet as apiSelectBattleBet,
+  cancelBattleReadyRoom as apiCancelBattleReadyRoom,
 } from '@/utils/api';
 import { getCard, type CardDefinition, TURN_DURATION, MAX_ENERGY, MAX_HP, BET_OPTIONS, type BetOption } from '@/utils/battleCards';
 import { playBattleSound } from '@/utils/sounds';
@@ -44,15 +42,6 @@ export interface LobbyEntry {
   available_bets: AvailableBet[];
 }
 
-export interface LeaderboardEntry {
-  playerId: string;
-  username: string;
-  totalBattles: number;
-  wins: number;
-  losses: number;
-  winRate: number;
-}
-
 export interface ReadyRoom {
   id: string;
   player1_id: string;
@@ -63,6 +52,10 @@ export interface ReadyRoom {
   player2_ready: boolean;
   bet_amount: number;
   bet_currency: string;
+  player1_bet_amount: number;
+  player1_bet_currency: string;
+  player2_bet_amount: number;
+  player2_bet_currency: string;
   expires_at: string;
 }
 
@@ -119,8 +112,6 @@ export function useCardBattle() {
   const inLobby = ref(false);
   const lobbyLoading = ref(false);
   const myBalances = ref<{ gamecoin: number; blockcoin: number; ronin: number }>({ gamecoin: 0, blockcoin: 0, ronin: 0 });
-  const myChallenges = ref<any[]>([]);
-  const pendingChallenges = ref<any[]>([]);
   const readyRoom = ref<ReadyRoom | null>(null);
 
   // Battle state
@@ -146,13 +137,15 @@ export function useCardBattle() {
   // Bet selection state
   const selectedBetAmount = ref<BetOption>(BET_OPTIONS[0]);
 
+  // Cached enemy username (persists through battle, not cleared by polling)
+  const enemyUsername = ref<string>('');
+
   // Quick match state
   const quickMatchMode = ref(false);
   const quickMatchSearching = ref(false);
-
-  // Leaderboard state
-  const leaderboard = ref<LeaderboardEntry[]>([]);
-  const leaderboardLoading = ref(false);
+  const quickMatchPairing = ref(false);
+  const excludedOpponentId = ref<string | null>(null);
+  const cancelingReadyRoom = ref(false);
 
   // Internal
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -164,6 +157,7 @@ export function useCardBattle() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let battleChannel: any = null;
   let timerInterval: number | null = null;
+  let lobbyPollInterval: ReturnType<typeof setInterval> | null = null;
 
   const playerId = computed(() => authStore.player?.id);
   const isP1 = computed(() => session.value?.player1_id === playerId.value);
@@ -178,19 +172,30 @@ export function useCardBattle() {
 
   // === Lobby Functions ===
 
-  async function loadLobby() {
+  async function loadLobby(silent = false) {
     if (!playerId.value) return;
-    lobbyLoading.value = true;
-    errorMessage.value = null;
+    if (!silent) {
+      lobbyLoading.value = true;
+      errorMessage.value = null;
+    }
     try {
       const data = await getBattleLobby(playerId.value);
       if (data?.success) {
         lobbyEntries.value = data.lobby || [];
         inLobby.value = data.in_lobby || false;
         myBalances.value = data.my_balances || { gamecoin: 0, blockcoin: 0, ronin: 0 };
-        myChallenges.value = data.my_challenges || [];
-        pendingChallenges.value = data.pending_challenges || [];
-        readyRoom.value = data.ready_room || null;
+        // Map ready room with defaults for per-player bet fields
+        // Skip if a cancel operation is in progress to avoid race conditions
+        if (!cancelingReadyRoom.value) {
+          const rr = data.ready_room || null;
+          if (rr) {
+            rr.player1_bet_amount = rr.player1_bet_amount ?? 0;
+            rr.player1_bet_currency = rr.player1_bet_currency ?? 'GC';
+            rr.player2_bet_amount = rr.player2_bet_amount ?? 0;
+            rr.player2_bet_currency = rr.player2_bet_currency ?? 'GC';
+          }
+          readyRoom.value = rr;
+        }
 
         // If both players are ready in ready room, start the battle
         if (readyRoom.value && readyRoom.value.player1_ready && readyRoom.value.player2_ready) {
@@ -202,54 +207,22 @@ export function useCardBattle() {
           startBattle(data.active_session);
         }
 
-        // Auto-match if in quick match mode
-        if (quickMatchMode.value && inLobby.value && !data.active_session && !readyRoom.value) {
-          setTimeout(() => tryAutoMatch(), 100);
+        // Auto-pair when in quick match mode and opponent found (excluding recently left opponent)
+        if (quickMatchMode.value && inLobby.value && !data.active_session && !readyRoom.value && !quickMatchPairing.value && lobbyEntries.value.some(e => e.player_id !== excludedOpponentId.value)) {
+          quickMatchPairing.value = true;
+          autoQuickMatchPair().finally(() => { quickMatchPairing.value = false; });
         }
-      } else {
+      } else if (!silent) {
         errorMessage.value = data?.error || 'Error loading lobby';
       }
     } catch (e) {
-      errorMessage.value = String(e);
-    } finally {
-      lobbyLoading.value = false;
-    }
-  }
-
-  async function loadLeaderboard() {
-    leaderboardLoading.value = true;
-    try {
-      const data = await getBattleLeaderboard(10);
-      if (Array.isArray(data)) {
-        leaderboard.value = data;
+      if (!silent) {
+        errorMessage.value = String(e);
       }
-    } catch {
-      // silently fail
     } finally {
-      leaderboardLoading.value = false;
-    }
-  }
-
-  async function enterLobby() {
-    if (!playerId.value) return;
-    lobbyLoading.value = true;
-    errorMessage.value = null;
-    try {
-      const data = await joinBattleLobby(playerId.value);
-      if (data?.success) {
-        inLobby.value = true;
-        playBattleSound('click');
-        await loadLobby();
-      } else {
-        playBattleSound('error');
-        errorMessage.value = data?.error || 'Failed to join lobby';
-        throw new Error(errorMessage.value ?? 'Failed to join lobby');
+      if (!silent) {
+        lobbyLoading.value = false;
       }
-    } catch (e) {
-      if (!errorMessage.value) errorMessage.value = String(e);
-      throw e;
-    } finally {
-      lobbyLoading.value = false;
     }
   }
 
@@ -257,110 +230,132 @@ export function useCardBattle() {
     if (!playerId.value) return;
     lobbyLoading.value = true;
     errorMessage.value = null;
+
+    // Stop polling to prevent it from overriding inLobby after we leave
+    if (lobbyPollInterval) {
+      clearInterval(lobbyPollInterval);
+      lobbyPollInterval = null;
+    }
+
     try {
       const data = await leaveBattleLobby(playerId.value);
-      if (data?.success) {
+      if (data?.success || data?.error === 'Not in lobby') {
         inLobby.value = false;
         playBattleSound('click');
+      } else {
+        errorMessage.value = data?.error || 'Failed to leave lobby';
       }
-    } catch (e) {
-      errorMessage.value = String(e);
+    } catch {
+      // Network error - force leave locally
+      inLobby.value = false;
     } finally {
       lobbyLoading.value = false;
     }
   }
 
-  async function challengePlayer(opponentLobbyId: string, betAmount: number, betCurrency: string) {
-    if (!playerId.value) return;
-    battleLoading.value = true;
-    errorMessage.value = null;
-    try {
-      const data = await proposeBattleChallenge(playerId.value, opponentLobbyId, betAmount, betCurrency as 'GC' | 'BLC' | 'RON');
-      if (data?.success) {
-        playBattleSound('success');
-        // Reload lobby to show updated state
-        await loadLobby();
-      } else {
-        playBattleSound('error');
-        errorMessage.value = data?.error || 'Challenge failed';
-        throw new Error(errorMessage.value ?? 'Challenge failed');
-      }
-    } catch (e) {
-      if (!errorMessage.value) errorMessage.value = String(e);
-      throw e;
-    } finally {
-      battleLoading.value = false;
-    }
-  }
-
-  async function acceptChallenge(challengerId: string) {
-    if (!playerId.value) return;
-    battleLoading.value = true;
-    errorMessage.value = null;
-    try {
-      const data = await acceptBattleChallenge(playerId.value, challengerId);
-      if (data?.success) {
-        playBattleSound('success');
-        // Load lobby to find active session and start battle
-        await loadLobby();
-      } else {
-        playBattleSound('error');
-        errorMessage.value = data?.error || 'Failed to accept challenge';
-        throw new Error(errorMessage.value ?? 'Failed to accept challenge');
-      }
-    } catch (e) {
-      if (!errorMessage.value) errorMessage.value = String(e);
-      throw e;
-    } finally {
-      battleLoading.value = false;
-    }
-  }
-
-  async function rejectChallenge(challengerId: string) {
-    if (!playerId.value) return;
-    try {
-      await rejectBattleChallenge(playerId.value, challengerId);
-      await loadLobby();
-    } catch {
-      // silently fail
-    }
-  }
-
   // === Ready Room Functions ===
 
-  async function setReady() {
-    if (!playerId.value) return;
-    battleLoading.value = true;
-    errorMessage.value = null;
-    try {
-      const data = await apiSetPlayerReady(playerId.value);
-      if (data?.success) {
-        playBattleSound('success');
-        // Reload lobby to get updated ready room state
-        await loadLobby();
-      } else {
-        playBattleSound('error');
-        errorMessage.value = data?.error || 'Failed to set ready';
-        throw new Error(errorMessage.value ?? 'Failed to set ready');
-      }
-    } catch (e) {
-      if (!errorMessage.value) errorMessage.value = String(e);
-      throw e;
-    } finally {
-      battleLoading.value = false;
-    }
-  }
-
+  // Cancel ready room and exit lobby entirely
   async function cancelReadyRoom() {
     if (!playerId.value) return;
     battleLoading.value = true;
     errorMessage.value = null;
+    excludedOpponentId.value = null;
+    // Stop polling and guard against race conditions BEFORE the API call
+    cancelingReadyRoom.value = true;
+    if (lobbyPollInterval) {
+      clearInterval(lobbyPollInterval);
+      lobbyPollInterval = null;
+    }
+    readyRoom.value = null;
     try {
-      // Leave lobby which will also clean up ready room
-      await exitLobby();
-      readyRoom.value = null;
+      const data = await apiCancelBattleReadyRoom(playerId.value);
+      if (data?.success || data?.error === 'No active ready room found') {
+        playBattleSound('click');
+        quickMatchMode.value = false;
+        quickMatchSearching.value = false;
+        inLobby.value = false;
+      } else {
+        errorMessage.value = data?.error || 'Failed to cancel ready room';
+      }
     } catch (e) {
       if (!errorMessage.value) errorMessage.value = String(e);
+    } finally {
+      cancelingReadyRoom.value = false;
+      battleLoading.value = false;
+    }
+  }
+
+  // Cancel ready room but re-join lobby to find another opponent
+  async function cancelReadyRoomAndSearch() {
+    if (!playerId.value) return;
+    battleLoading.value = true;
+    errorMessage.value = null;
+    // Exclude the opponent we just left (capture before clearing)
+    if (readyRoom.value) {
+      const amP1 = readyRoom.value.player1_id === playerId.value;
+      excludedOpponentId.value = amP1 ? readyRoom.value.player2_id : readyRoom.value.player1_id;
+    }
+    // Stop polling and guard against race conditions BEFORE the API call
+    cancelingReadyRoom.value = true;
+    if (lobbyPollInterval) {
+      clearInterval(lobbyPollInterval);
+      lobbyPollInterval = null;
+    }
+    readyRoom.value = null;
+    try {
+      const data = await apiCancelBattleReadyRoom(playerId.value);
+      if (data?.success || data?.error === 'No active ready room found') {
+        playBattleSound('click');
+        // SQL removed both from lobby, re-join and search
+        cancelingReadyRoom.value = false;
+        const joinData = await joinBattleLobby(playerId.value!);
+        if (joinData?.success) {
+          inLobby.value = true;
+        }
+        quickMatchMode.value = true;
+        quickMatchSearching.value = true;
+        quickMatchPairing.value = false;
+        await loadLobby(true);
+        // Re-start polling via subscribeToLobby if needed
+        subscribeToLobby();
+        // If no other opponents available, go back to start
+        const available = lobbyEntries.value.filter(e => e.player_id !== excludedOpponentId.value);
+        if (available.length === 0) {
+          quickMatchMode.value = false;
+          quickMatchSearching.value = false;
+          excludedOpponentId.value = null;
+          await exitLobby();
+        }
+        // Otherwise polling will auto-pair with next opponent
+      } else {
+        errorMessage.value = data?.error || 'Failed to cancel ready room';
+      }
+    } catch (e) {
+      if (!errorMessage.value) errorMessage.value = String(e);
+    } finally {
+      cancelingReadyRoom.value = false;
+      battleLoading.value = false;
+    }
+  }
+
+  async function selectBattleBet(betAmount: number, betCurrency: 'GC' | 'BLC' | 'RON') {
+    if (!playerId.value) return;
+    battleLoading.value = true;
+    errorMessage.value = null;
+    try {
+      const data = await apiSelectBattleBet(playerId.value, betAmount, betCurrency);
+      if (data?.success) {
+        playBattleSound('success');
+        await loadLobby(true);
+      } else {
+        playBattleSound('error');
+        errorMessage.value = data?.error || 'Failed to select bet';
+        throw new Error(errorMessage.value ?? 'Failed to select bet');
+      }
+    } catch (e) {
+      if (!errorMessage.value) errorMessage.value = String(e);
+      throw e;
     } finally {
       battleLoading.value = false;
     }
@@ -374,7 +369,6 @@ export function useCardBattle() {
       const data = await apiStartBattleFromReadyRoom(readyRoom.value.id);
       if (data?.success && data.session) {
         playBattleSound('battle_start');
-        readyRoom.value = null;
         startBattle(data.session);
       } else {
         playBattleSound('error');
@@ -397,12 +391,18 @@ export function useCardBattle() {
     quickMatchMode.value = true;
     quickMatchSearching.value = true;
     errorMessage.value = null;
+    excludedOpponentId.value = null;
 
     try {
       if (!inLobby.value) {
-        await enterLobby();
+        const data = await joinBattleLobby(playerId.value);
+        if (data?.success) {
+          inLobby.value = true;
+          await loadLobby();
+        } else {
+          throw new Error(data?.error || 'Failed to join lobby');
+        }
       }
-      await tryAutoMatch();
     } catch (e) {
       quickMatchMode.value = false;
       quickMatchSearching.value = false;
@@ -410,30 +410,27 @@ export function useCardBattle() {
     }
   }
 
-  async function tryAutoMatch() {
-    if (!quickMatchMode.value || !playerId.value) return;
-
-    const available = lobbyEntries.value.filter(
-      (entry) => entry.player_id !== playerId.value && entry.status === 'waiting'
-    );
-
-    if (available.length > 0) {
-      try {
-        // Use first available bet option that both players can afford
-        const affordableBet = available[0].available_bets?.find(bet => bet.enabled);
-        if (affordableBet) {
-          await challengePlayer(available[0].id, affordableBet.amount, affordableBet.currency);
-        }
+  async function autoQuickMatchPair() {
+    const opponent = lobbyEntries.value.find(e => e.player_id !== excludedOpponentId.value);
+    if (!opponent || !playerId.value) return;
+    try {
+      const data = await apiQuickMatchPair(playerId.value, opponent.id);
+      if (data?.success) {
         quickMatchSearching.value = false;
-      } catch {
-        await loadLobby();
+        excludedOpponentId.value = null;
+        await loadLobby(true);
       }
+    } catch {
+      // Opponent might have been taken, keep searching
     }
   }
 
-  function cancelQuickMatch() {
+  async function cancelQuickMatch() {
     quickMatchMode.value = false;
     quickMatchSearching.value = false;
+    quickMatchPairing.value = false;
+    excludedOpponentId.value = null;
+    await exitLobby();
   }
 
   // === Battle Functions ===
@@ -442,6 +439,12 @@ export function useCardBattle() {
     session.value = sessionData;
     const state = sessionData.game_state;
     const amP1 = sessionData.player1_id === playerId.value;
+
+    // Cache enemy username from readyRoom if not already set
+    if (!enemyUsername.value && readyRoom.value) {
+      const amP1RR = readyRoom.value.player1_id === playerId.value;
+      enemyUsername.value = amP1RR ? readyRoom.value.player2_username : readyRoom.value.player1_username;
+    }
 
     myHp.value = amP1 ? sessionData.player1_hp : sessionData.player2_hp;
     myShield.value = amP1 ? sessionData.player1_shield : sessionData.player2_shield;
@@ -628,7 +631,7 @@ export function useCardBattle() {
           table: 'battle_lobby',
         },
         () => {
-          loadLobby();
+          loadLobby(true);
         }
       )
       .subscribe();
@@ -644,7 +647,7 @@ export function useCardBattle() {
           table: 'battle_ready_rooms',
         },
         () => {
-          loadLobby();
+          loadLobby(true);
         }
       )
       .subscribe();
@@ -673,6 +676,15 @@ export function useCardBattle() {
         }
       )
       .subscribe();
+
+    // Polling fallback: refresh lobby every 5s in case realtime misses events
+    if (!lobbyPollInterval) {
+      lobbyPollInterval = setInterval(() => {
+        if (inLobby.value && !session.value) {
+          loadLobby(true);
+        }
+      }, 5000);
+    }
   }
 
   function subscribeToBattle(sessionId: string) {
@@ -715,6 +727,10 @@ export function useCardBattle() {
       supabase.removeChannel(battleChannel);
       battleChannel = null;
     }
+    if (lobbyPollInterval) {
+      clearInterval(lobbyPollInterval);
+      lobbyPollInterval = null;
+    }
     stopTurnTimer();
   }
 
@@ -739,6 +755,9 @@ export function useCardBattle() {
     battleLoading.value = false;
     quickMatchMode.value = false;
     quickMatchSearching.value = false;
+    quickMatchPairing.value = false;
+    excludedOpponentId.value = null;
+    enemyUsername.value = '';
     selectedBetAmount.value = BET_OPTIONS[0];
 
     if (battleChannel) {
@@ -767,35 +786,21 @@ export function useCardBattle() {
 
   return {
     // Lobby
-    lobbyEntries,
-    inLobby,
     lobbyLoading,
     errorMessage,
-    selectedBetAmount,
     myBalances,
-    myChallenges,
-    pendingChallenges,
     readyRoom,
     loadLobby,
-    enterLobby,
-    exitLobby,
-    challengePlayer,
-    acceptChallenge,
-    rejectChallenge,
     subscribeToLobby,
     // Ready Room
-    setReady,
+    selectBattleBet,
     cancelReadyRoom,
+    cancelReadyRoomAndSearch,
+    enemyUsername,
     // Quick match
-    quickMatchMode,
     quickMatchSearching,
     quickMatch,
     cancelQuickMatch,
-    // Leaderboard
-    leaderboard,
-    leaderboardLoading,
-    loadLeaderboard,
-
     // Battle
     session,
     myHand,

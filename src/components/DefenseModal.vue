@@ -24,32 +24,22 @@ const authStore = useAuthStore();
 const { battleSoundEnabled, toggle: toggleBattleSound } = useBattleSound();
 
 const {
-  lobbyEntries,
-  inLobby,
   lobbyLoading,
   myBalances,
-  myChallenges,
-  pendingChallenges,
   readyRoom,
   loadLobby,
-  enterLobby,
-  exitLobby,
-  challengePlayer,
-  acceptChallenge,
-  rejectChallenge,
   subscribeToLobby,
   // Ready Room
-  setReady,
+  selectBattleBet,
   cancelReadyRoom,
+  cancelReadyRoomAndSearch,
+  enemyUsername,
   // Quick match
   quickMatchSearching,
   quickMatch,
   cancelQuickMatch,
-  // Leaderboard
-  leaderboard,
-  leaderboardLoading,
-  loadLeaderboard,
   // Battle
+  errorMessage,
   myHp,
   myShield,
   myEnergy,
@@ -66,7 +56,6 @@ const {
   cardsPlayedThisTurn,
   result,
   battleLoading,
-  errorMessage,
   session,
   playCard,
   undoLastCard,
@@ -96,7 +85,6 @@ watch(
     if (open) {
       defenseStore.setView('lobby');
       await loadLobby();
-      loadLeaderboard();
       subscribeToLobby();
     } else {
       cleanup();
@@ -121,49 +109,10 @@ function handleClose() {
   emit('close');
 }
 
-async function handleEnterLobby() {
+async function handleSelectBet(betAmount: number, betCurrency: string) {
   try {
-    await enterLobby();
-    // Refresh balance
+    await selectBattleBet(betAmount, betCurrency as 'GC' | 'BLC' | 'RON');
     await authStore.refreshPlayer();
-  } catch {
-    // error handled in composable
-  }
-}
-
-async function handleLeaveLobby() {
-  await exitLobby();
-  await authStore.refreshPlayer();
-}
-
-async function handleChallenge(lobbyId: string, betAmount: number, betCurrency: string) {
-  try {
-    await challengePlayer(lobbyId, betAmount, betCurrency);
-  } catch {
-    // error handled in composable
-  }
-}
-
-async function handleAcceptChallenge(challengerId: string) {
-  try {
-    await acceptChallenge(challengerId);
-    await authStore.refreshPlayer();
-  } catch {
-    // error handled in composable
-  }
-}
-
-async function handleRejectChallenge(challengerId: string) {
-  try {
-    await rejectChallenge(challengerId);
-  } catch {
-    // error handled in composable
-  }
-}
-
-async function handleSetReady() {
-  try {
-    await setReady();
   } catch {
     // error handled in composable
   }
@@ -178,6 +127,15 @@ async function handleCancelReadyRoom() {
   }
 }
 
+async function handleFindAnother() {
+  try {
+    await cancelReadyRoomAndSearch();
+    await authStore.refreshPlayer();
+  } catch {
+    // error handled in composable
+  }
+}
+
 async function handleQuickMatch() {
   try {
     await quickMatch();
@@ -187,8 +145,9 @@ async function handleQuickMatch() {
   }
 }
 
-function handleCancelQuickMatch() {
-  cancelQuickMatch();
+async function handleCancelQuickMatch() {
+  await cancelQuickMatch();
+  await authStore.refreshPlayer();
 }
 
 function handleIntroDone() {
@@ -202,14 +161,10 @@ function handleResultClose() {
   authStore.refreshPlayer();
 }
 
-// Get enemy username from lobby entries or session
+// Get enemy username (cached in composable when battle starts)
 function getEnemyUsername(): string {
-  if (!session.value || !authStore.player) return '???';
-  const isP1 = session.value.player1_id === authStore.player.id;
-  // Try to find from lobby entries
-  const enemyId = isP1 ? session.value.player2_id : session.value.player1_id;
-  const entry = lobbyEntries.value.find((e) => e.player_id === enemyId);
-  return entry?.username || 'Opponent';
+  if (enemyUsername.value) return enemyUsername.value;
+  return 'Opponent';
 }
 </script>
 
@@ -310,28 +265,19 @@ function getEnemyUsername(): string {
           :ready-room="readyRoom"
           :my-player-id="authStore.player?.id || ''"
           :loading="battleLoading"
-          @set-ready="handleSetReady"
+          :my-balances="myBalances"
+          :error="errorMessage"
+          @select-bet="handleSelectBet"
           @cancel="handleCancelReadyRoom"
+          @find-another="handleFindAnother"
         />
 
         <!-- Lobby View -->
         <BattleLobby
           v-else-if="defenseStore.gameView === 'lobby'"
-          :entries="lobbyEntries"
-          :in-lobby="inLobby"
           :loading="lobbyLoading"
           :error="errorMessage"
           :quick-match-searching="quickMatchSearching"
-          :leaderboard="leaderboard"
-          :leaderboard-loading="leaderboardLoading"
-          :my-balances="myBalances"
-          :pending-challenges="pendingChallenges"
-          :my-challenges="myChallenges"
-          @enter="handleEnterLobby"
-          @leave="handleLeaveLobby"
-          @challenge="handleChallenge"
-          @accept-challenge="handleAcceptChallenge"
-          @reject-challenge="handleRejectChallenge"
           @quick-match="handleQuickMatch"
           @cancel-quick-match="handleCancelQuickMatch"
         />

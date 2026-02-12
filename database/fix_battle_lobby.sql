@@ -180,7 +180,7 @@ BEGIN
   ORDER BY started_at DESC
   LIMIT 1;
 
-  -- Check for ready room
+  -- Check for ready room (includes per-player bet selections)
   SELECT jsonb_build_object(
     'id', id,
     'player1_id', player1_id,
@@ -191,6 +191,10 @@ BEGIN
     'player2_ready', player2_ready,
     'bet_amount', bet_amount,
     'bet_currency', bet_currency,
+    'player1_bet_amount', COALESCE(player1_bet_amount, 0),
+    'player1_bet_currency', COALESCE(player1_bet_currency, 'GC'),
+    'player2_bet_amount', COALESCE(player2_bet_amount, 0),
+    'player2_bet_currency', COALESCE(player2_bet_currency, 'GC'),
     'expires_at', expires_at
   ) INTO v_ready_room
   FROM battle_ready_rooms

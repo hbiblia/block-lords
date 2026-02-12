@@ -20,25 +20,25 @@ const phase = ref<'enter' | 'vs' | 'fight' | 'exit'>('enter');
 onMounted(() => {
   playBattleSound('battle_start');
 
-  // Phase 1: Players slide in (0 -> 800ms)
+  // Phase 1: Players slide in (0 -> 1200ms)
   setTimeout(() => {
     phase.value = 'vs';
-  }, 800);
+  }, 1200);
 
-  // Phase 2: VS appears (800ms -> 1800ms)
+  // Phase 2: VS appears (1200ms -> 3200ms)
   setTimeout(() => {
     phase.value = 'fight';
-  }, 1800);
-
-  // Phase 3: FIGHT! flash (1800ms -> 3200ms)
-  setTimeout(() => {
-    phase.value = 'exit';
   }, 3200);
 
-  // Phase 4: Exit and start battle (3200ms -> 3800ms)
+  // Phase 3: FIGHT! flash (3200ms -> 5200ms)
+  setTimeout(() => {
+    phase.value = 'exit';
+  }, 5200);
+
+  // Phase 4: Exit and start battle (5200ms -> 6000ms)
   setTimeout(() => {
     emit('done');
-  }, 3800);
+  }, 6000);
 });
 </script>
 
@@ -135,12 +135,12 @@ onMounted(() => {
   width: 200%;
   left: -50%;
   background: linear-gradient(90deg, transparent, rgba(239, 68, 68, 0.2), transparent);
-  animation: intro-line-sweep 2s ease-in-out;
+  animation: intro-line-sweep 3s ease-in-out;
 }
 
-.intro-bg-line-1 { top: 30%; animation-delay: 0.2s; }
-.intro-bg-line-2 { top: 50%; animation-delay: 0.5s; }
-.intro-bg-line-3 { top: 70%; animation-delay: 0.8s; }
+.intro-bg-line-1 { top: 30%; animation-delay: 0.3s; }
+.intro-bg-line-2 { top: 50%; animation-delay: 0.8s; }
+.intro-bg-line-3 { top: 70%; animation-delay: 1.3s; }
 
 @keyframes intro-line-sweep {
   0% { transform: translateX(-50%); opacity: 0; }

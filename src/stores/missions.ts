@@ -15,7 +15,7 @@ export interface Mission {
   isClaimed: boolean;
   rewardType: string;
   rewardAmount: number;
-  difficulty: 'easy' | 'medium' | 'hard';
+  difficulty: 'easy' | 'medium' | 'hard' | 'epic';
   icon: string;
   progressPercent: number;
 }
@@ -36,6 +36,7 @@ export const useMissionsStore = defineStore('missions', () => {
   const easyMissions = computed(() => missions.value.filter(m => m.difficulty === 'easy'));
   const mediumMissions = computed(() => missions.value.filter(m => m.difficulty === 'medium'));
   const hardMissions = computed(() => missions.value.filter(m => m.difficulty === 'hard'));
+  const epicMissions = computed(() => missions.value.filter(m => m.difficulty === 'epic'));
 
   async function fetchMissions(silent = false) {
     const authStore = useAuthStore();
@@ -144,6 +145,7 @@ export const useMissionsStore = defineStore('missions', () => {
       case 'easy': return 'text-status-success';
       case 'medium': return 'text-status-warning';
       case 'hard': return 'text-status-danger';
+      case 'epic': return 'text-purple-400';
       default: return 'text-text-muted';
     }
   }
@@ -153,6 +155,7 @@ export const useMissionsStore = defineStore('missions', () => {
       case 'easy': return 'bg-status-success/20';
       case 'medium': return 'bg-status-warning/20';
       case 'hard': return 'bg-status-danger/20';
+      case 'epic': return 'bg-purple-500/20';
       default: return 'bg-bg-tertiary';
     }
   }
@@ -180,6 +183,7 @@ export const useMissionsStore = defineStore('missions', () => {
     easyMissions,
     mediumMissions,
     hardMissions,
+    epicMissions,
     fetchMissions,
     claimReward,
     sendHeartbeat,
