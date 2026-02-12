@@ -52,12 +52,15 @@ const {
   myBoosted,
   enemyWeakened,
   enemyBoosted,
+  myPoison,
+  enemyPoison,
   turnTimer,
   handCards,
   battleLog,
   cardsPlayedThisTurn,
   result,
   battleLoading,
+  animatingEffects,
   session,
   playCard,
   undoLastCard,
@@ -291,6 +294,8 @@ function getEnemyUsername(): string {
           v-else-if="defenseStore.gameView === 'intro'"
           :my-username="authStore.player?.username || '???'"
           :enemy-username="getEnemyUsername()"
+          :bet-amount="session?.bet_amount || 0"
+          :bet-currency="session?.bet_currency || 'GC'"
           @done="handleIntroDone"
         />
 
@@ -305,10 +310,13 @@ function getEnemyUsername(): string {
           :enemy-hp="enemyHp"
           :enemy-shield="enemyShield"
           :is-my-turn="isMyTurn"
+          :animating-effects="animatingEffects"
           :my-weakened="myWeakened"
           :my-boosted="myBoosted"
           :enemy-weakened="enemyWeakened"
           :enemy-boosted="enemyBoosted"
+          :my-poison="myPoison"
+          :enemy-poison="enemyPoison"
           :turn-timer="turnTimer"
           :hand-cards="handCards"
           :battle-log="battleLog"

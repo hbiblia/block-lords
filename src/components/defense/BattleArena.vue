@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import PlayerStatus from './PlayerStatus.vue';
 import BattleLog from './BattleLog.vue';
@@ -19,15 +19,18 @@ const props = defineProps<{
   enemyHp: number;
   enemyShield: number;
   isMyTurn: boolean;
+  animatingEffects: boolean;
   myWeakened?: boolean;
   myBoosted?: boolean;
   enemyWeakened?: boolean;
   enemyBoosted?: boolean;
+  myPoison?: number;
+  enemyPoison?: number;
   turnTimer: number;
-  handCards: CardDefinition[];
+  handCards: (CardDefinition | null)[];
   battleLog: LogEntry[];
   cardsPlayed: string[];
-  result: { won: boolean; reward: number } | null;
+  result: { won: boolean; reward: number; betAmount: number; betCurrency: string } | null;
   loading: boolean;
 }>();
 
@@ -60,10 +63,15 @@ interface CombatEffect {
   color: string;
   fromEnemy: boolean;
   label: string;
+  cardName: string;
+  xPos: number; // horizontal position in %
 }
 
 const combatEffects = ref<CombatEffect[]>([]);
 let effectCounter = 0;
+
+// Taunt overlay
+const showTaunt = ref(false);
 
 // Screen flash for big hits
 const screenFlash = ref<'red' | 'green' | null>(null);
@@ -97,9 +105,9 @@ function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
 
   switch (entry.type) {
     case 'attack':
-      icon = '\u2694';
+      icon = entry.poison ? '\u2620' : '\u2694';
       value = `-${entry.damage}`;
-      color = 'text-red-400';
+      color = entry.poison ? 'text-green-400' : 'text-red-400';
       break;
     case 'defense':
       icon = '\uD83D\uDEE1';
@@ -107,7 +115,11 @@ function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
       color = 'text-blue-400';
       break;
     case 'special':
-      if (entry.boost) {
+      if (entry.poisonTick) {
+        icon = '\u2620';
+        value = `-${entry.poisonTick}`;
+        color = 'text-green-400';
+      } else if (entry.boost) {
         icon = '\u2B06';
         value = `+${entry.boost}`;
         color = 'text-yellow-400';
@@ -127,6 +139,18 @@ function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
         icon = '\u2B07';
         value = `-${entry.weaken}`;
         color = 'text-purple-400';
+      } else if (entry.energyDrain) {
+        icon = '\u26A1';
+        value = `-${entry.energyDrain}`;
+        color = 'text-yellow-400';
+      } else if (entry.curePoison) {
+        icon = '\uD83E\uDDEA';
+        value = '\u2713';
+        color = 'text-emerald-400';
+      } else if (entry.taunt) {
+        icon = '\uD83D\uDE1C';
+        value = '!!!';
+        color = 'text-orange-400';
       } else if (entry.damage) {
         icon = '\u2728';
         value = `-${entry.damage}`;
@@ -144,12 +168,39 @@ function spawnEffect(entry: LogEntry, fromEnemy: boolean) {
     case 'special': entry.heal ? playBattleSound('card_heal') : playBattleSound('card_special'); break;
   }
 
-  const label = fromEnemy
-    ? props.enemyUsername
-    : props.myUsername;
+  // Show big taunt overlay when opponent taunts you
+  if (entry.taunt && fromEnemy) {
+    showTaunt.value = true;
+    setTimeout(() => { showTaunt.value = false; }, 2000);
+  }
+
+  // Determine if effect targets the opponent (offensive) or self (defensive)
+  let isOffensive = false;
+  switch (entry.type) {
+    case 'attack':
+      isOffensive = true;
+      break;
+    case 'defense':
+      isOffensive = false;
+      break;
+    case 'special':
+      isOffensive = !!(entry.damage || entry.weaken || entry.energyDrain || entry.taunt);
+      break;
+  }
+
+  // Offensive → show target's name; Self → show caster's name
+  const label = isOffensive
+    ? (fromEnemy ? props.myUsername : props.enemyUsername)
+    : (fromEnemy ? props.enemyUsername : props.myUsername);
+
+  const cardDef = entry.card ? getCard(entry.card) : null;
+  const cardName = cardDef ? t(cardDef.nameKey, cardDef.name) : '';
 
   const id = ++effectCounter;
-  combatEffects.value.push({ id, type: entry.type, icon, value, color, fromEnemy, label });
+  // Cycle through horizontal positions so effects don't stack
+  const positions = [30, 50, 70, 20, 80];
+  const xPos = positions[id % positions.length];
+  combatEffects.value.push({ id, type: entry.type, icon, value, color, fromEnemy, label, cardName, xPos });
   setTimeout(() => {
     combatEffects.value = combatEffects.value.filter((e) => e.id !== id);
   }, 3000);
@@ -166,6 +217,24 @@ watch(
     }
   }
 );
+
+// Clear combat effects when battle result appears
+watch(
+  () => props.result,
+  (res) => {
+    if (res) {
+      combatEffects.value = [];
+    }
+  }
+);
+
+// Game title splash on mount
+const showSplash = ref(true);
+onMounted(() => {
+  setTimeout(() => {
+    showSplash.value = false;
+  }, 2200);
+});
 </script>
 
 <template>
@@ -179,6 +248,7 @@ watch(
       :is-enemy="true"
       :weakened="enemyWeakened"
       :boosted="enemyBoosted"
+      :poison="enemyPoison"
     />
 
     <!-- Battle log with VS overlay -->
@@ -245,6 +315,7 @@ watch(
       :is-current-turn="isMyTurn"
       :weakened="myWeakened"
       :boosted="myBoosted"
+      :poison="myPoison"
     />
 
     <!-- Card hand + Action buttons -->
@@ -254,6 +325,7 @@ watch(
           :cards="handCards"
           :energy="myEnergy"
           :is-my-turn="isMyTurn"
+          :animating-effects="animatingEffects"
           :cards-played-count="cardsPlayed.length"
           @play="emit('playCard', $event)"
         />
@@ -274,7 +346,7 @@ watch(
           <!-- End Turn / Waiting -->
           <button
             @click="emit('endTurn')"
-            :disabled="!isMyTurn || loading"
+            :disabled="!isMyTurn || animatingEffects || loading"
             class="flex-1 py-2.5 rounded-xl font-bold text-sm transition-all disabled:opacity-40 border"
             :class="isMyTurn
               ? 'bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-500 hover:to-emerald-400 text-white shadow-lg shadow-green-500/25 border-green-400/30'
@@ -321,26 +393,79 @@ watch(
         <div
           v-for="fx in combatEffects"
           :key="fx.id"
-          class="absolute left-1/2 -translate-x-1/2 flex flex-col items-center"
+          class="absolute -translate-x-1/2 flex flex-col items-center"
           :class="fx.fromEnemy ? 'bottom-[45%] combat-effect-up' : 'top-[15%] combat-effect-down'"
+          :style="{ left: fx.xPos + '%' }"
         >
-          <!-- Label -->
-          <span
-            class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full mb-1"
-            :class="fx.fromEnemy
-              ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'"
+          <!-- Card-styled effect -->
+          <div
+            class="flex flex-col items-center rounded-xl border px-3 py-2 min-w-[80px] backdrop-blur-sm shadow-lg"
+            :class="{
+              'bg-gradient-to-b from-red-950/90 to-slate-950/90 border-red-500/50 shadow-red-500/20': fx.type === 'attack',
+              'bg-gradient-to-b from-blue-950/90 to-slate-950/90 border-blue-500/50 shadow-blue-500/20': fx.type === 'defense',
+              'bg-gradient-to-b from-purple-950/90 to-slate-950/90 border-purple-500/50 shadow-purple-500/20': fx.type === 'special',
+            }"
           >
-            {{ fx.label }}
-          </span>
-          <span class="text-4xl drop-shadow-[0_0_12px_currentColor]" :class="fx.color">
-            {{ fx.icon }}
-          </span>
-          <span class="text-2xl font-black drop-shadow-[0_0_8px_currentColor] mt-1" :class="fx.color">
-            {{ fx.value }}
-          </span>
+            <!-- Top glow line -->
+            <div
+              class="absolute top-0 left-2 right-2 h-[2px] rounded-full"
+              :class="{
+                'bg-gradient-to-r from-transparent via-red-400 to-transparent': fx.type === 'attack',
+                'bg-gradient-to-r from-transparent via-blue-400 to-transparent': fx.type === 'defense',
+                'bg-gradient-to-r from-transparent via-purple-400 to-transparent': fx.type === 'special',
+              }"
+            />
+            <!-- Player label -->
+            <span
+              class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded mb-1"
+              :class="fx.fromEnemy
+                ? 'bg-red-500/20 text-red-300'
+                : 'bg-emerald-500/20 text-emerald-300'"
+            >
+              {{ fx.label }}
+            </span>
+            <!-- Icon -->
+            <span class="text-2xl drop-shadow-[0_0_8px_currentColor]" :class="fx.color">
+              {{ fx.icon }}
+            </span>
+            <!-- Card name -->
+            <span v-if="fx.cardName" class="text-[9px] font-bold text-slate-300 mt-0.5 text-center leading-tight">
+              {{ fx.cardName }}
+            </span>
+            <!-- Value -->
+            <span class="text-xl font-black drop-shadow-[0_0_6px_currentColor] mt-0.5" :class="fx.color">
+              {{ fx.value }}
+            </span>
+          </div>
         </div>
       </TransitionGroup>
+    </div>
+
+    <!-- Taunt overlay (when opponent taunts you) -->
+    <div
+      v-if="showTaunt"
+      class="absolute inset-0 z-[25] flex items-center justify-center pointer-events-none"
+    >
+      <div class="absolute inset-0 bg-orange-950/20" />
+      <div class="taunt-animation flex flex-col items-center">
+        <span class="text-7xl taunt-bounce">&#128540;</span>
+        <div class="mt-2 px-4 py-1.5 rounded-full bg-orange-500/20 border border-orange-500/40 backdrop-blur-sm">
+          <span class="text-sm font-black text-orange-300 uppercase tracking-wider">{{ t('battle.cards.taunt', 'Taunt') }}!</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game title splash -->
+    <div
+      v-if="showSplash"
+      class="absolute inset-0 z-[50] flex items-center justify-center pointer-events-none"
+    >
+      <div class="absolute inset-0 bg-slate-950/90 backdrop-blur-sm splash-bg" />
+      <div class="relative flex flex-col items-center splash-content">
+        <span class="text-5xl block mb-2">&#9876;</span>
+        <h1 class="text-2xl font-bold text-slate-100">{{ t('battle.title', 'Card Battle') }}</h1>
+        <p class="text-xs text-slate-400 mt-1">{{ t('battle.gameSubtitle', '1v1 PvP Turn-Based Card Game') }}</p>
+      </div>
     </div>
 
     <!-- Result overlay -->
@@ -348,6 +473,8 @@ watch(
       v-if="result"
       :won="result.won"
       :reward="result.reward"
+      :bet-amount="result.betAmount"
+      :bet-currency="result.betCurrency"
       @close="emit('resultClose')"
     />
   </div>
@@ -426,5 +553,50 @@ watch(
 }
 .screen-flash {
   animation: screen-flash 300ms ease-out forwards;
+}
+
+/* Game title splash */
+.splash-content {
+  animation: splash-in 400ms ease-out forwards, splash-out 400ms ease-in 1800ms forwards;
+}
+.splash-bg {
+  animation: splash-bg-in 300ms ease-out forwards, splash-bg-out 300ms ease-in 1900ms forwards;
+}
+@keyframes splash-in {
+  0% { opacity: 0; transform: scale(0.7); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes splash-out {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.1); }
+}
+@keyframes splash-bg-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes splash-bg-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Taunt overlay */
+.taunt-animation {
+  animation: taunt-in 300ms ease-out forwards, taunt-out 400ms ease-in 1600ms forwards;
+}
+@keyframes taunt-in {
+  0% { opacity: 0; transform: scale(0.3) rotate(-10deg); }
+  60% { opacity: 1; transform: scale(1.15) rotate(3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes taunt-out {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.5) rotate(10deg); }
+}
+.taunt-bounce {
+  animation: taunt-bounce 400ms ease-in-out infinite alternate;
+}
+@keyframes taunt-bounce {
+  0% { transform: scale(1) rotate(-5deg); }
+  100% { transform: scale(1.15) rotate(5deg); }
 }
 </style>

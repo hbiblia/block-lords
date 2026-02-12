@@ -2,11 +2,12 @@
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { playBattleSound } from '@/utils/sounds';
-import { BET_AMOUNT } from '@/utils/battleCards';
 
 defineProps<{
   myUsername: string;
   enemyUsername: string;
+  betAmount: number;
+  betCurrency: string;
 }>();
 
 const emit = defineEmits<{
@@ -57,7 +58,7 @@ onMounted(() => {
       :class="phase === 'enter' ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'"
     >
       <div class="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">{{ t('battle.intro.prizePool', 'Prize Pool') }}</div>
-      <div class="text-lg font-black text-yellow-400">{{ BET_AMOUNT * 2 }} GC</div>
+      <div class="text-lg font-black text-yellow-400">{{ betAmount * 2 }} {{ betCurrency }}</div>
     </div>
 
     <!-- Player 1 (You) - slides from left -->

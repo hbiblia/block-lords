@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { BET_AMOUNT } from '@/utils/battleCards';
 
 defineProps<{
   won: boolean;
   reward: number;
+  betAmount: number;
+  betCurrency: string;
 }>();
 
 const emit = defineEmits<{
@@ -80,7 +81,7 @@ const { t } = useI18n();
           class="text-2xl font-black mb-0.5"
           :class="won ? 'text-green-400' : 'text-red-400/80'"
         >
-          {{ won ? '+' : '-' }}{{ won ? reward : BET_AMOUNT }} GC
+          {{ won ? '+' : '-' }}{{ won ? reward : betAmount }} {{ betCurrency }}
         </div>
         <div class="text-[10px] font-medium" :class="won ? 'text-yellow-400/60' : 'text-red-400/40'">
           {{ won ? t('battle.netGain', 'Net gain') : t('battle.entryFeeLost', 'Entry fee lost') }}

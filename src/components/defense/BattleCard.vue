@@ -57,7 +57,7 @@ function typeLabel(type: string): string {
     @click="handleClick"
     @contextmenu="handleShowDetail"
     :disabled="disabled || played"
-    class="group relative flex flex-col items-center rounded-xl border transition-all duration-200 w-full overflow-hidden"
+    class="group relative flex flex-col items-center rounded-xl border transition-all duration-200 w-full h-full overflow-hidden"
     :class="[
       disabled || played
         ? 'opacity-35 grayscale cursor-not-allowed border-slate-700/50'

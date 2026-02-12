@@ -5,7 +5,37 @@ import { useMissionsStore } from '@/stores/missions';
 import { useStreakStore } from '@/stores/streak';
 import { playSound } from '@/utils/sounds';
 
-const { t } = useI18n();
+const { t, te } = useI18n();
+
+function missionName(missionId: string): string {
+  const key = `missions.items.${missionId}.name`;
+  if (te(key)) return t(key);
+  console.warn(`[MISSIONS] Falta traducción para: "${missionId}" — agregar a missions.items en locales`);
+  return missionId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function missionDesc(missionId: string): string {
+  const key = `missions.items.${missionId}.desc`;
+  if (te(key)) return t(key);
+  return '';
+}
+
+function missionCategory(missionId: string): string {
+  if (missionId.startsWith('weekly_')) return 'weekly';
+  if (missionId.startsWith('achievement_')) return 'achievement';
+  if (missionId.startsWith('tutorial_') || missionId.startsWith('referral_') || missionId.startsWith('event_')) return 'event';
+  return 'daily';
+}
+
+function categoryColor(cat: string): string {
+  switch (cat) {
+    case 'daily': return 'bg-blue-500/20 text-blue-400';
+    case 'weekly': return 'bg-purple-500/20 text-purple-400';
+    case 'achievement': return 'bg-amber-500/20 text-amber-400';
+    case 'event': return 'bg-pink-500/20 text-pink-400';
+    default: return 'bg-bg-tertiary text-text-muted';
+  }
+}
 const missionsStore = useMissionsStore();
 const streakStore = useStreakStore();
 
@@ -364,16 +394,24 @@ function handleClose() {
                 <div class="flex items-center gap-2">
                   <span class="text-2xl">{{ mission.icon }}</span>
                   <div>
-                    <h3 class="font-medium">{{ t(`missions.items.${mission.missionId}.name`) }}</h3>
-                    <p class="text-xs text-text-muted">{{ t(`missions.items.${mission.missionId}.desc`) }}</p>
+                    <h3 class="font-medium">{{ missionName(mission.missionId) }}</h3>
+                    <p class="text-xs text-text-muted">{{ missionDesc(mission.missionId) }}</p>
                   </div>
                 </div>
-                <span
-                  class="text-xs px-2 py-0.5 rounded-full font-medium"
-                  :class="missionsStore.getDifficultyBg(mission.difficulty) + ' ' + missionsStore.getDifficultyColor(mission.difficulty)"
-                >
-                  {{ t(`missions.difficulty.${mission.difficulty}`) }}
-                </span>
+                <div class="flex items-center gap-1.5">
+                  <span
+                    class="text-xs px-2 py-0.5 rounded-full font-medium"
+                    :class="categoryColor(missionCategory(mission.missionId))"
+                  >
+                    {{ t(`missions.category.${missionCategory(mission.missionId)}`) }}
+                  </span>
+                  <span
+                    class="text-xs px-2 py-0.5 rounded-full font-medium"
+                    :class="missionsStore.getDifficultyBg(mission.difficulty) + ' ' + missionsStore.getDifficultyColor(mission.difficulty)"
+                  >
+                    {{ t(`missions.difficulty.${mission.difficulty}`) }}
+                  </span>
+                </div>
               </div>
 
               <!-- Progress Bar -->

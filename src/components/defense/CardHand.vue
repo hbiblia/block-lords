@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { CardDefinition } from '@/utils/battleCards';
 import BattleCard from './BattleCard.vue';
 
-defineProps<{
-  cards: CardDefinition[];
+const props = defineProps<{
+  cards: (CardDefinition | null)[];
   energy: number;
   isMyTurn: boolean;
+  animatingEffects: boolean;
   cardsPlayedCount?: number;
 }>();
 
@@ -17,6 +18,32 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const selectedCard = ref<CardDefinition | null>(null);
+
+// Track which slots just got a new card for the appear animation
+const newCardSlots = ref<Set<number>>(new Set());
+let prevCards: (string | null)[] = props.cards.map((c) => c?.id ?? null);
+
+watch(
+  () => props.cards,
+  (cards) => {
+    const fresh = new Set<number>();
+    cards.forEach((card, i) => {
+      // Slot went from null → card
+      if (card && !prevCards[i]) {
+        fresh.add(i);
+      }
+    });
+    prevCards = cards.map((c) => c?.id ?? null);
+    if (fresh.size > 0) {
+      newCardSlots.value = fresh;
+      // Clear after animations finish (stagger 120ms * slots + 400ms anim)
+      setTimeout(() => {
+        newCardSlots.value = new Set();
+      }, fresh.size * 120 + 500);
+    }
+  },
+  { deep: true }
+);
 
 function handlePlay(cardId: string) {
   emit('play', cardId);
@@ -41,6 +68,8 @@ function getEffectDescription(card: CardDefinition): string {
       return t('battle.detail.doubleHit', { amount: e.amount, total: e.amount * 2 });
     case 'damage_self':
       return t('battle.detail.damageSelf', { amount: e.amount, self: e.selfDamage });
+    case 'damage_poison':
+      return t('battle.detail.damagePoison', { amount: e.amount, poisonDamage: e.poisonDamage, poisonTurns: e.poisonTurns });
     case 'shield':
       return t('battle.detail.shield', { amount: e.amount });
     case 'shield_counter':
@@ -53,6 +82,12 @@ function getEffectDescription(card: CardDefinition): string {
       return t('battle.detail.weaken', { reduction: e.reduction });
     case 'drain':
       return t('battle.detail.drain', { damage: e.damage, heal: e.heal });
+    case 'energy_drain':
+      return t('battle.detail.energyDrain', { amount: e.amount });
+    case 'cure_poison':
+      return t('battle.detail.curePoison');
+    case 'taunt':
+      return t('battle.detail.taunt');
     default:
       return '';
   }
@@ -61,26 +96,31 @@ function getEffectDescription(card: CardDefinition): string {
 
 <template>
   <div class="p-2 relative">
-    <!-- Hand info -->
-    <div class="flex items-center justify-between mb-1.5 px-1">
-      <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-        {{ t('battle.yourHand', 'Your Hand') }} ({{ cards.length }})
-      </span>
-      <span v-if="cardsPlayedCount && cardsPlayedCount > 0" class="text-[10px] text-yellow-400">
-        {{ t('battle.queued', { n: cardsPlayedCount }) }}
-      </span>
-    </div>
-
-    <!-- Cards grid -->
-    <div v-if="cards.length > 0" class="grid grid-cols-3 gap-1.5">
-      <BattleCard
-        v-for="(card, index) in cards"
-        :key="`${card.id}-${index}`"
-        :card="card"
-        :disabled="!isMyTurn || energy < card.cost"
-        @play="handlePlay"
-        @show-detail="showCardDetail"
-      />
+    <!-- Cards grid (fixed slots) -->
+    <div v-if="cards.length > 0" class="grid grid-cols-3 auto-rows-fr gap-1.5">
+      <template v-for="(card, index) in cards" :key="index">
+        <!-- Card present -->
+        <div
+          v-if="card"
+          class="min-h-[110px]"
+          :class="{ 'card-appear': newCardSlots.has(index) }"
+          :style="newCardSlots.has(index) ? { animationDelay: ([...newCardSlots].indexOf(index) * 120) + 'ms' } : {}"
+        >
+          <BattleCard
+            :card="card"
+            :disabled="!isMyTurn || animatingEffects || energy < card.cost"
+            @play="handlePlay"
+            @show-detail="showCardDetail"
+          />
+        </div>
+        <!-- Empty slot placeholder -->
+        <div
+          v-else
+          class="rounded-xl border border-dashed border-slate-700/40 bg-slate-900/20 flex items-center justify-center min-h-[110px]"
+        >
+          <span class="text-slate-700 text-lg">&#xb7;</span>
+        </div>
+      </template>
     </div>
 
     <!-- Empty hand -->
@@ -202,3 +242,23 @@ function getEffectDescription(card: CardDefinition): string {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+@keyframes card-appear {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(20px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.08) translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.card-appear {
+  animation: card-appear 400ms ease-out both;
+}
+</style>

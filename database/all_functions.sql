@@ -9983,7 +9983,7 @@ BEGIN
   END IF;
 
   -- Card IDs for deck building
-  v_all_cards := '["quick_strike","power_slash","fury_attack","double_hit","critical_blow","venom_strike","guard","fortify","counter","deflect","spike_armor","barrier","heal","weaken","drain","war_cry","recharge","execute"]'::JSONB;
+  v_all_cards := '["quick_strike","power_slash","fury_attack","double_hit","critical_blow","venom_strike","guard","fortify","counter","deflect","spike_armor","barrier","heal","weaken","drain","war_cry","recharge","execute","energy_siphon"]'::JSONB;
 
   -- Shuffle decks (using random ordering)
   SELECT jsonb_agg(card ORDER BY random()) INTO v_deck1
@@ -10026,6 +10026,8 @@ BEGIN
     'player2Weakened', false,
     'player1Boosted', false,
     'player2Boosted', false,
+    'player1Poison', 0,
+    'player2Poison', 0,
     'lastAction', null
   );
 
@@ -10076,9 +10078,12 @@ DECLARE
   v_my_shield INTEGER;
   v_opp_hp INTEGER;
   v_opp_shield INTEGER;
+  v_opp_energy INTEGER;
   v_weakened BOOLEAN;
   v_opp_weakened BOOLEAN;
   v_boosted BOOLEAN;
+  v_my_poison INTEGER;
+  v_opp_poison INTEGER;
   v_card TEXT;
   v_card_cost INTEGER;
   v_card_type TEXT;
@@ -10120,6 +10125,7 @@ BEGIN
     v_opp_hand := v_state->'player2Hand';
     v_opp_deck := v_state->'player2Deck';
     v_energy := (v_state->>'player1Energy')::INTEGER;
+    v_opp_energy := (v_state->>'player2Energy')::INTEGER;
     v_my_hp := v_session.player1_hp;
     v_my_shield := v_session.player1_shield;
     v_opp_hp := v_session.player2_hp;
@@ -10127,6 +10133,8 @@ BEGIN
     v_weakened := (v_state->>'player1Weakened')::BOOLEAN;
     v_opp_weakened := (v_state->>'player2Weakened')::BOOLEAN;
     v_boosted := COALESCE((v_state->>'player1Boosted')::BOOLEAN, false);
+    v_my_poison := COALESCE((v_state->>'player1Poison')::INTEGER, 0);
+    v_opp_poison := COALESCE((v_state->>'player2Poison')::INTEGER, 0);
   ELSE
     v_my_hand := v_state->'player2Hand';
     v_my_deck := v_state->'player2Deck';
@@ -10134,6 +10142,7 @@ BEGIN
     v_opp_hand := v_state->'player1Hand';
     v_opp_deck := v_state->'player1Deck';
     v_energy := (v_state->>'player2Energy')::INTEGER;
+    v_opp_energy := (v_state->>'player1Energy')::INTEGER;
     v_my_hp := v_session.player2_hp;
     v_my_shield := v_session.player2_shield;
     v_opp_hp := v_session.player1_hp;
@@ -10141,6 +10150,15 @@ BEGIN
     v_weakened := (v_state->>'player2Weakened')::BOOLEAN;
     v_opp_weakened := (v_state->>'player1Weakened')::BOOLEAN;
     v_boosted := COALESCE((v_state->>'player2Boosted')::BOOLEAN, false);
+    v_my_poison := COALESCE((v_state->>'player2Poison')::INTEGER, 0);
+    v_opp_poison := COALESCE((v_state->>'player1Poison')::INTEGER, 0);
+  END IF;
+
+  -- Apply poison tick at start of turn (damages current player, ignores shield)
+  IF v_my_poison > 0 THEN
+    v_my_hp := GREATEST(v_my_hp - 3, 0);
+    v_my_poison := v_my_poison - 1;
+    v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', 'venom_strike', 'poisonTick', 3);
   END IF;
 
   -- Process each card played
@@ -10166,6 +10184,9 @@ BEGIN
       WHEN 'war_cry' THEN v_card_cost := 1; v_card_type := 'special';
       WHEN 'recharge' THEN v_card_cost := 1; v_card_type := 'special';
       WHEN 'execute' THEN v_card_cost := 2; v_card_type := 'special';
+      WHEN 'energy_siphon' THEN v_card_cost := 1; v_card_type := 'special';
+      WHEN 'antidote' THEN v_card_cost := 1; v_card_type := 'special';
+      WHEN 'taunt' THEN v_card_cost := 1; v_card_type := 'special';
       ELSE
         RETURN json_build_object('success', false, 'error', 'Unknown card: ' || v_card);
     END CASE;
@@ -10245,16 +10266,16 @@ BEGIN
         v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage, 'selfDamage', 5);
 
       WHEN 'venom_strike' THEN
-        -- 8 normal damage + 5 piercing (direct to HP)
+        -- 8 damage + apply poison (3 turns, 3 dmg/turn)
         v_damage := 8;
         IF v_boosted THEN v_damage := v_damage + 10; v_boosted := false; END IF;
         IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
         v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
         v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
         v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
-        -- Pierce: 5 damage directly to HP ignoring shield
-        v_opp_hp := GREATEST(v_opp_hp - 5, 0);
-        v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage, 'pierce', 5);
+        -- Apply poison (stacks with existing)
+        v_opp_poison := v_opp_poison + 3;
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage, 'poison', 3);
 
       WHEN 'guard' THEN
         v_my_shield := v_my_shield + 12;
@@ -10340,6 +10361,20 @@ BEGIN
         v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
         v_my_hp := LEAST(v_my_hp + 6, 200);
         v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'damage', v_damage, 'heal', 6);
+
+      WHEN 'energy_siphon' THEN
+        -- Drain 2 energy from opponent
+        v_opp_energy := GREATEST(v_opp_energy - 2, 0);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'energyDrain', 2);
+
+      WHEN 'antidote' THEN
+        -- Remove all poison from self
+        v_my_poison := 0;
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'curePoison', true);
+
+      WHEN 'taunt' THEN
+        -- Does nothing, just taunts the opponent
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'special', 'card', v_card, 'taunt', true);
     END CASE;
 
     -- Check win condition after each card
@@ -10352,7 +10387,7 @@ BEGIN
   v_opp_shield := 0;
 
   -- Draw cards for opponent's next turn (up to 3, max hand 6)
-  v_draw_count := LEAST(3, 6 - jsonb_array_length(COALESCE(v_opp_hand, '[]'::JSONB)));
+  v_draw_count := 6 - jsonb_array_length(COALESCE(v_opp_hand, '[]'::JSONB));
 
   -- If opponent's deck is empty, reshuffle discard into deck
   IF jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)) < v_draw_count THEN
@@ -10392,11 +10427,13 @@ BEGIN
       'player1Discard', COALESCE(v_my_discard, '[]'::JSONB),
       'player2Discard', '[]'::JSONB,
       'player1Energy', v_energy,
-      'player2Energy', 3,
+      'player2Energy', v_opp_energy + CASE WHEN v_opp_energy <= 1 THEN 3 WHEN v_opp_energy <= 3 THEN 2 ELSE 1 END,
       'player1Weakened', v_weakened,
       'player2Weakened', v_opp_weakened,
       'player1Boosted', v_boosted,
       'player2Boosted', false,
+      'player1Poison', v_my_poison,
+      'player2Poison', v_opp_poison,
       'lastAction', v_log_entries
     );
   ELSE
@@ -10407,12 +10444,14 @@ BEGIN
       'player2Deck', COALESCE(v_my_deck, '[]'::JSONB),
       'player1Discard', '[]'::JSONB,
       'player2Discard', COALESCE(v_my_discard, '[]'::JSONB),
-      'player1Energy', 3,
+      'player1Energy', v_opp_energy + CASE WHEN v_opp_energy <= 1 THEN 3 WHEN v_opp_energy <= 3 THEN 2 ELSE 1 END,
       'player2Energy', v_energy,
       'player1Weakened', v_opp_weakened,
       'player2Weakened', v_weakened,
       'player1Boosted', false,
       'player2Boosted', v_boosted,
+      'player1Poison', v_opp_poison,
+      'player2Poison', v_my_poison,
       'lastAction', v_log_entries
     );
   END IF;
@@ -10467,6 +10506,15 @@ BEGIN
       UPDATE players SET crypto_balance = crypto_balance + v_pot WHERE id = v_winner_id;
     ELSIF v_session.bet_currency = 'RON' THEN
       UPDATE players SET ron_balance = ron_balance + v_pot WHERE id = v_winner_id;
+    END IF;
+
+    -- Track battle missions
+    PERFORM update_mission_progress(v_winner_id, 'battle_win', 1);
+    PERFORM update_mission_progress(v_winner_id, 'battle_play', 1);
+    IF v_winner_id = v_session.player1_id THEN
+      PERFORM update_mission_progress(v_session.player2_id, 'battle_play', 1);
+    ELSE
+      PERFORM update_mission_progress(v_session.player1_id, 'battle_play', 1);
     END IF;
   END IF;
 
@@ -10530,6 +10578,11 @@ BEGIN
   ELSIF v_session.bet_currency = 'RON' THEN
     UPDATE players SET ron_balance = ron_balance + v_pot WHERE id = v_winner_id;
   END IF;
+
+  -- Track battle missions
+  PERFORM update_mission_progress(v_winner_id, 'battle_win', 1);
+  PERFORM update_mission_progress(v_winner_id, 'battle_play', 1);
+  PERFORM update_mission_progress(p_player_id, 'battle_play', 1);
 
   RETURN json_build_object('success', true, 'winner_id', v_winner_id, 'pot', v_pot, 'currency', v_session.bet_currency);
 END;

@@ -45,9 +45,9 @@ function formatEntry(entry: LogEntry): string {
           card: cardName, dmg: entry.damage, self: entry.selfDamage
         });
       }
-      if (entry.pierce) {
-        return t('battle.log.pierce', {
-          card: cardName, dmg: entry.damage, pierce: entry.pierce
+      if (entry.poison) {
+        return t('battle.log.poison', {
+          card: cardName, dmg: entry.damage, turns: entry.poison
         });
       }
       return t('battle.log.attack', { card: cardName, dmg: entry.damage });
@@ -69,6 +69,14 @@ function formatEntry(entry: LogEntry): string {
       }
       return t('battle.log.defense', { card: cardName, shield: entry.shield });
     case 'special':
+      if (entry.poisonTick) {
+        return t('battle.log.poisonTick', { dmg: entry.poisonTick });
+      }
+      if (entry.energyDrain) {
+        return t('battle.log.energyDrain', {
+          card: cardName, amount: entry.energyDrain
+        });
+      }
       if (entry.damage && entry.heal) {
         return t('battle.log.drain', {
           card: cardName, dmg: entry.damage, heal: entry.heal
@@ -91,6 +99,12 @@ function formatEntry(entry: LogEntry): string {
         return t('battle.log.draw', {
           card: cardName, amount: entry.draw
         });
+      }
+      if (entry.curePoison) {
+        return t('battle.log.curePoison', { card: cardName });
+      }
+      if (entry.taunt) {
+        return t('battle.log.taunt', { card: cardName });
       }
       if (entry.damage) {
         return t('battle.log.execute', {
@@ -179,6 +193,30 @@ function formatEntry(entry: LogEntry): string {
         class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 flex-shrink-0"
       >
         +{{ entry.draw }}
+      </span>
+      <span
+        v-else-if="entry.poisonTick"
+        class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-green-500/20 text-green-300 flex-shrink-0"
+      >
+        -{{ entry.poisonTick }}
+      </span>
+      <span
+        v-else-if="entry.energyDrain"
+        class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-300 flex-shrink-0"
+      >
+        -{{ entry.energyDrain }}
+      </span>
+      <span
+        v-else-if="entry.curePoison"
+        class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 flex-shrink-0"
+      >
+        &#10003;
+      </span>
+      <span
+        v-else-if="entry.taunt"
+        class="ml-auto text-[11px] font-black px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 flex-shrink-0"
+      >
+        &#128540;
       </span>
     </div>
 

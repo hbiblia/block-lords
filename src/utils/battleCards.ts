@@ -17,7 +17,7 @@ export interface CardDefinition {
 export type CardEffect =
   | { kind: 'damage'; amount: number }
   | { kind: 'damage_ignore_shield'; amount: number; ignoreShield: number }
-  | { kind: 'damage_pierce'; amount: number; pierce: number }
+  | { kind: 'damage_poison'; amount: number; poisonDamage: number; poisonTurns: number }
   | { kind: 'double_hit'; amount: number }
   | { kind: 'damage_self'; amount: number; selfDamage: number }
   | { kind: 'shield'; amount: number }
@@ -29,7 +29,10 @@ export type CardEffect =
   | { kind: 'boost'; amount: number }
   | { kind: 'drain'; damage: number; heal: number }
   | { kind: 'draw'; amount: number }
-  | { kind: 'execute'; amount: number; bonusAmount: number; threshold: number };
+  | { kind: 'execute'; amount: number; bonusAmount: number; threshold: number }
+  | { kind: 'energy_drain'; amount: number }
+  | { kind: 'cure_poison' }
+  | { kind: 'taunt' };
 
 export interface BattleCard {
   uid: string; // unique instance id (for hand tracking)
@@ -52,7 +55,7 @@ export interface GameState {
   lastAction: string | null;
 }
 
-// === Card Definitions (18 cards total) ===
+// === Card Definitions (20 cards total) ===
 
 export const CARD_DEFINITIONS: CardDefinition[] = [
   // ATTACK CARDS (6) - Red
@@ -117,10 +120,10 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
     nameKey: 'battle.cards.venomStrike',
     type: 'attack',
     cost: 1,
-    value: 13,
-    description: '8 damage + 5 piercing damage to HP',
+    value: 17,
+    description: '8 damage + poison 3 turns (3/turn)',
     descriptionKey: 'battle.cards.venomStrikeDesc',
-    effect: { kind: 'damage_pierce', amount: 8, pierce: 5 },
+    effect: { kind: 'damage_poison', amount: 8, poisonDamage: 3, poisonTurns: 3 },
   },
 
   // DEFENSE CARDS (6) - Blue
@@ -257,6 +260,39 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
     description: '15 damage, +15 bonus if enemy HP ≤ 60',
     descriptionKey: 'battle.cards.executeDesc',
     effect: { kind: 'execute', amount: 15, bonusAmount: 15, threshold: 60 },
+  },
+  {
+    id: 'energy_siphon',
+    name: 'Energy Siphon',
+    nameKey: 'battle.cards.energySiphon',
+    type: 'special',
+    cost: 1,
+    value: 2,
+    description: 'Drain 2 energy from enemy',
+    descriptionKey: 'battle.cards.energySiphonDesc',
+    effect: { kind: 'energy_drain', amount: 2 },
+  },
+  {
+    id: 'antidote',
+    name: 'Antidote',
+    nameKey: 'battle.cards.antidote',
+    type: 'special',
+    cost: 1,
+    value: 0,
+    description: 'Remove all poison',
+    descriptionKey: 'battle.cards.antidoteDesc',
+    effect: { kind: 'cure_poison' },
+  },
+  {
+    id: 'taunt',
+    name: 'Taunt',
+    nameKey: 'battle.cards.taunt',
+    type: 'special',
+    cost: 1,
+    value: 0,
+    description: 'Taunt your opponent!',
+    descriptionKey: 'battle.cards.tauntDesc',
+    effect: { kind: 'taunt' },
   },
 ];
 
