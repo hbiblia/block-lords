@@ -1413,6 +1413,8 @@ export default {
     waitingPlayers: 'Waiting for opponents...',
     quickMatch: 'Quick Match',
     quickMatchSearching: 'Searching for opponent...',
+    inLobby: 'in lobby',
+    inBattle: 'in battle',
     cancelQuickMatch: 'Cancel Search',
     opponentFound: 'Opponent Found!',
     selectYourBet: 'Select your bet to start the battle',

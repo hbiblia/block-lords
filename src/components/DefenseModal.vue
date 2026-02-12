@@ -34,6 +34,8 @@ const {
   cancelReadyRoom,
   cancelReadyRoomAndSearch,
   enemyUsername,
+  lobbyCount,
+  playingCount,
   // Quick match
   quickMatchSearching,
   quickMatch,
@@ -278,6 +280,8 @@ function getEnemyUsername(): string {
           :loading="lobbyLoading"
           :error="errorMessage"
           :quick-match-searching="quickMatchSearching"
+          :lobby-count="lobbyCount"
+          :playing-count="playingCount"
           @quick-match="handleQuickMatch"
           @cancel-quick-match="handleCancelQuickMatch"
         />

@@ -783,6 +783,24 @@ CREATE POLICY "battle_lobby_delete"
   ON battle_lobby FOR DELETE
   USING (player_id = auth.uid());
 
+-- Battle Ready Rooms (ambos jugadores pueden ver/actualizar su sala)
+ALTER TABLE battle_ready_rooms ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "battle_ready_rooms_select" ON battle_ready_rooms;
+CREATE POLICY "battle_ready_rooms_select"
+  ON battle_ready_rooms FOR SELECT
+  USING (player1_id = auth.uid() OR player2_id = auth.uid());
+
+DROP POLICY IF EXISTS "battle_ready_rooms_update" ON battle_ready_rooms;
+CREATE POLICY "battle_ready_rooms_update"
+  ON battle_ready_rooms FOR UPDATE
+  USING (player1_id = auth.uid() OR player2_id = auth.uid());
+
+DROP POLICY IF EXISTS "battle_ready_rooms_delete" ON battle_ready_rooms;
+CREATE POLICY "battle_ready_rooms_delete"
+  ON battle_ready_rooms FOR DELETE
+  USING (player1_id = auth.uid() OR player2_id = auth.uid());
+
 -- Battle Sessions (ambos jugadores pueden ver su partida)
 ALTER TABLE battle_sessions ENABLE ROW LEVEL SECURITY;
 

@@ -6,6 +6,8 @@ defineProps<{
   loading: boolean;
   error: string | null;
   quickMatchSearching: boolean;
+  lobbyCount: number;
+  playingCount: number;
 }>();
 
 const emit = defineEmits<{
@@ -30,6 +32,21 @@ const { t } = useI18n();
         <p class="text-sm text-slate-400 text-center">
           {{ t('battle.quickMatchSearching', 'Searching for opponent...') }}
         </p>
+
+        <!-- Live stats -->
+        <div class="flex gap-4 mt-3">
+          <div class="flex items-center gap-1.5 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-border/20">
+            <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <span class="text-xs text-slate-300 font-medium">{{ lobbyCount }}</span>
+            <span class="text-[10px] text-slate-500">{{ t('battle.inLobby', 'in lobby') }}</span>
+          </div>
+          <div class="flex items-center gap-1.5 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-border/20">
+            <span class="w-2 h-2 rounded-full bg-red-400" />
+            <span class="text-xs text-slate-300 font-medium">{{ playingCount }}</span>
+            <span class="text-[10px] text-slate-500">{{ t('battle.inBattle', 'in battle') }}</span>
+          </div>
+        </div>
+
         <button
           @click="emit('cancelQuickMatch')"
           :disabled="loading"

@@ -1413,6 +1413,8 @@
     waitingPlayers: 'Esperando oponentes...',
     quickMatch: 'Buscar Partida',
     quickMatchSearching: 'Buscando oponente...',
+    inLobby: 'en lobby',
+    inBattle: 'en batalla',
     cancelQuickMatch: 'Cancelar Búsqueda',
     opponentFound: '¡Oponente Encontrado!',
     selectYourBet: 'Selecciona tu apuesta para iniciar la batalla',

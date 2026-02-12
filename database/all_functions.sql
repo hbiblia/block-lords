@@ -9309,29 +9309,7 @@ ALTER TABLE battle_ready_rooms ADD COLUMN IF NOT EXISTS player1_bet_currency TEX
 ALTER TABLE battle_ready_rooms ADD COLUMN IF NOT EXISTS player2_bet_amount NUMERIC DEFAULT 0;
 ALTER TABLE battle_ready_rooms ADD COLUMN IF NOT EXISTS player2_bet_currency TEXT DEFAULT 'GC';
 
--- RLS
-ALTER TABLE battle_lobby ENABLE ROW LEVEL SECURITY;
-ALTER TABLE battle_sessions ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "battle_lobby_select" ON battle_lobby;
-CREATE POLICY "battle_lobby_select" ON battle_lobby FOR SELECT
-  USING (status = 'waiting' OR player_id = auth.uid());
-
-DROP POLICY IF EXISTS "battle_lobby_insert" ON battle_lobby;
-CREATE POLICY "battle_lobby_insert" ON battle_lobby FOR INSERT
-  WITH CHECK (player_id = auth.uid());
-
-DROP POLICY IF EXISTS "battle_lobby_update" ON battle_lobby;
-CREATE POLICY "battle_lobby_update" ON battle_lobby FOR UPDATE
-  USING (player_id = auth.uid());
-
-DROP POLICY IF EXISTS "battle_lobby_delete" ON battle_lobby;
-CREATE POLICY "battle_lobby_delete" ON battle_lobby FOR DELETE
-  USING (player_id = auth.uid());
-
-DROP POLICY IF EXISTS "battle_sessions_select" ON battle_sessions;
-CREATE POLICY "battle_sessions_select" ON battle_sessions FOR SELECT
-  USING (player1_id = auth.uid() OR player2_id = auth.uid());
+-- RLS: See all_rls_policies.sql
 
 -- =====================================================
 -- CARD BATTLE PVP - FUNCTIONS
@@ -10555,6 +10533,8 @@ DECLARE
   v_my_status TEXT;
   v_my_gc_balance NUMERIC;
   v_my_blc_balance NUMERIC;
+  v_lobby_count INT;
+  v_playing_count INT;
   v_my_ron_balance NUMERIC;
 BEGIN
   -- Cleanup expired challenges and orphaned entries first
@@ -10679,6 +10659,14 @@ BEGIN
   ORDER BY created_at DESC
   LIMIT 1;
 
+  -- Count players waiting in lobby (excluding self)
+  SELECT COUNT(*) INTO v_lobby_count
+  FROM battle_lobby WHERE status = 'waiting' AND player_id != p_player_id;
+
+  -- Count active battles
+  SELECT COUNT(*) INTO v_playing_count
+  FROM battle_sessions WHERE status = 'active';
+
   RETURN json_build_object(
     'success', true,
     'lobby', v_lobby,
@@ -10692,7 +10680,9 @@ BEGIN
       'gamecoin', v_my_gc_balance,
       'blockcoin', v_my_blc_balance,
       'ronin', v_my_ron_balance
-    )
+    ),
+    'lobby_count', v_lobby_count,
+    'playing_count', v_playing_count
   );
 END;
 $$;

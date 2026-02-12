@@ -112,6 +112,8 @@ export function useCardBattle() {
   const inLobby = ref(false);
   const lobbyLoading = ref(false);
   const myBalances = ref<{ gamecoin: number; blockcoin: number; ronin: number }>({ gamecoin: 0, blockcoin: 0, ronin: 0 });
+  const lobbyCount = ref(0);
+  const playingCount = ref(0);
   const readyRoom = ref<ReadyRoom | null>(null);
 
   // Battle state
@@ -184,6 +186,8 @@ export function useCardBattle() {
         lobbyEntries.value = data.lobby || [];
         inLobby.value = data.in_lobby || false;
         myBalances.value = data.my_balances || { gamecoin: 0, blockcoin: 0, ronin: 0 };
+        lobbyCount.value = data.lobby_count ?? 0;
+        playingCount.value = data.playing_count ?? 0;
         // Map ready room with defaults for per-player bet fields
         // Skip if a cancel operation is in progress to avoid race conditions
         if (!cancelingReadyRoom.value) {
@@ -205,6 +209,14 @@ export function useCardBattle() {
         // Resume active session if exists
         if (data.active_session) {
           startBattle(data.active_session);
+        }
+
+        // Auto re-join lobby if searching but server says we're not in
+        if (quickMatchMode.value && !inLobby.value && !data.active_session && !readyRoom.value) {
+          const joinData = await joinBattleLobby(playerId.value!);
+          if (joinData?.success) {
+            inLobby.value = true;
+          }
         }
 
         // Auto-pair when in quick match mode and opponent found (excluding recently left opponent)
@@ -398,11 +410,12 @@ export function useCardBattle() {
         const data = await joinBattleLobby(playerId.value);
         if (data?.success) {
           inLobby.value = true;
-          await loadLobby();
         } else {
           throw new Error(data?.error || 'Failed to join lobby');
         }
       }
+      // Always load lobby to trigger auto-pair immediately
+      await loadLobby();
     } catch (e) {
       quickMatchMode.value = false;
       quickMatchSearching.value = false;
@@ -419,6 +432,12 @@ export function useCardBattle() {
         quickMatchSearching.value = false;
         excludedOpponentId.value = null;
         await loadLobby(true);
+      } else if (data?.error?.includes('lobby')) {
+        // We're no longer in the lobby (cleanup/expired), re-join
+        const joinData = await joinBattleLobby(playerId.value!);
+        if (joinData?.success) {
+          inLobby.value = true;
+        }
       }
     } catch {
       // Opponent might have been taken, keep searching
@@ -680,7 +699,7 @@ export function useCardBattle() {
     // Polling fallback: refresh lobby every 5s in case realtime misses events
     if (!lobbyPollInterval) {
       lobbyPollInterval = setInterval(() => {
-        if (inLobby.value && !session.value) {
+        if ((inLobby.value || quickMatchSearching.value) && !session.value) {
           loadLobby(true);
         }
       }, 5000);
@@ -797,6 +816,8 @@ export function useCardBattle() {
     cancelReadyRoom,
     cancelReadyRoomAndSearch,
     enemyUsername,
+    lobbyCount,
+    playingCount,
     // Quick match
     quickMatchSearching,
     quickMatch,
