@@ -39,8 +39,8 @@ export interface LobbyEntry {
   wins?: number;
   losses?: number;
   gamecoin_balance: number;
-  blockcoin_balance: number;
-  ronin_balance: number;
+  crypto_balance: number;
+  ron_balance: number;
   available_bets: AvailableBet[];
 }
 
@@ -184,7 +184,6 @@ export function useCardBattle() {
     errorMessage.value = null;
     try {
       const data = await getBattleLobby(playerId.value);
-      console.log('[Battle] loadLobby response:', JSON.stringify(data));
       if (data?.success) {
         lobbyEntries.value = data.lobby || [];
         inLobby.value = data.in_lobby || false;
@@ -195,13 +194,11 @@ export function useCardBattle() {
 
         // If both players are ready in ready room, start the battle
         if (readyRoom.value && readyRoom.value.player1_ready && readyRoom.value.player2_ready) {
-          console.log('[Battle] Both players ready! Starting battle from ready room');
           await startBattleFromReadyRoom();
         }
 
         // Resume active session if exists
         if (data.active_session) {
-          console.log('[Battle] Found active session, starting battle');
           startBattle(data.active_session);
         }
 
@@ -213,7 +210,6 @@ export function useCardBattle() {
         errorMessage.value = data?.error || 'Error loading lobby';
       }
     } catch (e) {
-      console.error('[Battle] Error loading lobby:', e);
       errorMessage.value = String(e);
     } finally {
       lobbyLoading.value = false;
@@ -227,8 +223,8 @@ export function useCardBattle() {
       if (Array.isArray(data)) {
         leaderboard.value = data;
       }
-    } catch (e) {
-      console.error('[Battle] Error loading leaderboard:', e);
+    } catch {
+      // silently fail
     } finally {
       leaderboardLoading.value = false;
     }
@@ -240,7 +236,6 @@ export function useCardBattle() {
     errorMessage.value = null;
     try {
       const data = await joinBattleLobby(playerId.value);
-      console.log('[Battle] joinLobby response:', JSON.stringify(data));
       if (data?.success) {
         inLobby.value = true;
         playBattleSound('click');
@@ -251,7 +246,6 @@ export function useCardBattle() {
         throw new Error(errorMessage.value ?? 'Failed to join lobby');
       }
     } catch (e) {
-      console.error('[Battle] Error joining lobby:', e);
       if (!errorMessage.value) errorMessage.value = String(e);
       throw e;
     } finally {
@@ -265,13 +259,11 @@ export function useCardBattle() {
     errorMessage.value = null;
     try {
       const data = await leaveBattleLobby(playerId.value);
-      console.log('[Battle] leaveLobby response:', JSON.stringify(data));
       if (data?.success) {
         inLobby.value = false;
         playBattleSound('click');
       }
     } catch (e) {
-      console.error('[Battle] Error leaving lobby:', e);
       errorMessage.value = String(e);
     } finally {
       lobbyLoading.value = false;
@@ -283,12 +275,9 @@ export function useCardBattle() {
     battleLoading.value = true;
     errorMessage.value = null;
     try {
-      console.log('[Battle] Proposing challenge to opponent:', opponentLobbyId, betAmount, betCurrency);
       const data = await proposeBattleChallenge(playerId.value, opponentLobbyId, betAmount, betCurrency as 'GC' | 'BLC' | 'RON');
-      console.log('[Battle] challenge response:', JSON.stringify(data));
       if (data?.success) {
         playBattleSound('success');
-        console.log('[Battle] Challenge sent!');
         // Reload lobby to show updated state
         await loadLobby();
       } else {
@@ -297,7 +286,6 @@ export function useCardBattle() {
         throw new Error(errorMessage.value ?? 'Challenge failed');
       }
     } catch (e) {
-      console.error('[Battle] Error proposing challenge:', e);
       if (!errorMessage.value) errorMessage.value = String(e);
       throw e;
     } finally {
@@ -310,12 +298,9 @@ export function useCardBattle() {
     battleLoading.value = true;
     errorMessage.value = null;
     try {
-      console.log('[Battle] Accepting challenge from:', challengerId);
       const data = await acceptBattleChallenge(playerId.value, challengerId);
-      console.log('[Battle] accept response:', JSON.stringify(data));
       if (data?.success) {
         playBattleSound('success');
-        console.log('[Battle] Challenge accepted! Session:', data.session_id);
         // Load lobby to find active session and start battle
         await loadLobby();
       } else {
@@ -324,7 +309,6 @@ export function useCardBattle() {
         throw new Error(errorMessage.value ?? 'Failed to accept challenge');
       }
     } catch (e) {
-      console.error('[Battle] Error accepting challenge:', e);
       if (!errorMessage.value) errorMessage.value = String(e);
       throw e;
     } finally {
@@ -337,8 +321,8 @@ export function useCardBattle() {
     try {
       await rejectBattleChallenge(playerId.value, challengerId);
       await loadLobby();
-    } catch (e) {
-      console.error('[Battle] Error rejecting challenge:', e);
+    } catch {
+      // silently fail
     }
   }
 
@@ -349,12 +333,9 @@ export function useCardBattle() {
     battleLoading.value = true;
     errorMessage.value = null;
     try {
-      console.log('[Battle] Setting player ready');
       const data = await apiSetPlayerReady(playerId.value);
-      console.log('[Battle] setReady response:', JSON.stringify(data));
       if (data?.success) {
         playBattleSound('success');
-        console.log('[Battle] Ready status updated!');
         // Reload lobby to get updated ready room state
         await loadLobby();
       } else {
@@ -363,7 +344,6 @@ export function useCardBattle() {
         throw new Error(errorMessage.value ?? 'Failed to set ready');
       }
     } catch (e) {
-      console.error('[Battle] Error setting ready:', e);
       if (!errorMessage.value) errorMessage.value = String(e);
       throw e;
     } finally {
@@ -380,7 +360,6 @@ export function useCardBattle() {
       await exitLobby();
       readyRoom.value = null;
     } catch (e) {
-      console.error('[Battle] Error canceling ready room:', e);
       if (!errorMessage.value) errorMessage.value = String(e);
     } finally {
       battleLoading.value = false;
@@ -392,12 +371,9 @@ export function useCardBattle() {
     battleLoading.value = true;
     errorMessage.value = null;
     try {
-      console.log('[Battle] Starting battle from ready room:', readyRoom.value.id);
       const data = await apiStartBattleFromReadyRoom(readyRoom.value.id);
-      console.log('[Battle] startBattleFromReadyRoom response:', JSON.stringify(data));
       if (data?.success && data.session) {
         playBattleSound('battle_start');
-        console.log('[Battle] Battle started! Session:', data.session.id);
         readyRoom.value = null;
         startBattle(data.session);
       } else {
@@ -406,7 +382,6 @@ export function useCardBattle() {
         throw new Error(errorMessage.value ?? 'Failed to start battle');
       }
     } catch (e) {
-      console.error('[Battle] Error starting battle from ready room:', e);
       if (!errorMessage.value) errorMessage.value = String(e);
       throw e;
     } finally {
@@ -429,7 +404,6 @@ export function useCardBattle() {
       }
       await tryAutoMatch();
     } catch (e) {
-      console.error('[Battle] Quick match error:', e);
       quickMatchMode.value = false;
       quickMatchSearching.value = false;
       throw e;
@@ -445,19 +419,15 @@ export function useCardBattle() {
 
     if (available.length > 0) {
       try {
-        console.log('[Battle] Quick match: found opponent, challenging', available[0].id);
         // Use first available bet option that both players can afford
         const affordableBet = available[0].available_bets?.find(bet => bet.enabled);
         if (affordableBet) {
           await challengePlayer(available[0].id, affordableBet.amount, affordableBet.currency);
         }
         quickMatchSearching.value = false;
-      } catch (e) {
-        console.warn('[Battle] Quick match: challenge failed, will retry on next lobby update', e);
+      } catch {
         await loadLobby();
       }
-    } else {
-      console.log('[Battle] Quick match: no opponents available, waiting...');
     }
   }
 
@@ -578,10 +548,8 @@ export function useCardBattle() {
         // Server update will come via realtime
       } else {
         playBattleSound('error');
-        console.error('Turn failed:', data?.error);
       }
-    } catch (e) {
-      console.error('Error playing turn:', e);
+    } catch {
       playBattleSound('error');
     } finally {
       battleLoading.value = false;
@@ -597,8 +565,8 @@ export function useCardBattle() {
         result.value = { won: false, reward: 0 };
         playBattleSound('error');
       }
-    } catch (e) {
-      console.error('Error forfeiting:', e);
+    } catch {
+      // silently fail
     } finally {
       battleLoading.value = false;
     }
@@ -607,7 +575,7 @@ export function useCardBattle() {
   function handleBattleEnd(s: BattleSession) {
     stopTurnTimer();
     const won = s.winner_id === playerId.value;
-    const betAmt = s.bet_amount || selectedBetAmount.value;
+    const betAmt = s.bet_amount || selectedBetAmount.value.amount;
     result.value = {
       won,
       reward: won ? betAmt * 2 : 0,
@@ -676,7 +644,6 @@ export function useCardBattle() {
           table: 'battle_ready_rooms',
         },
         () => {
-          console.log('[Battle] Ready room updated, reloading lobby');
           loadLobby();
         }
       )
@@ -782,6 +749,10 @@ export function useCardBattle() {
   }
 
   function cleanup() {
+    // Leave lobby in the database (not just local state)
+    if (playerId.value && inLobby.value && !session.value) {
+      leaveBattleLobby(playerId.value).catch(() => {});
+    }
     unsubscribeAll();
     resetBattle();
     lobbyEntries.value = [];

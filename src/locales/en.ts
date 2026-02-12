@@ -1434,6 +1434,12 @@ export default {
     soundOn: 'Sound ON',
     soundOff: 'Sound OFF',
     backToLobby: 'Back to Lobby',
+    selectBet: 'Select Bet',
+    challengeOpponent: 'Challenge',
+    winPot: 'Win',
+    insufficientFunds: 'Insufficient funds',
+    myChallenges: 'My Challenges',
+    waiting: 'Waiting',
     // Card hand
     yourHand: 'Your Hand',
     queued: '{n} queued',

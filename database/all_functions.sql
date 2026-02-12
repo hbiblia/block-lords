@@ -1480,6 +1480,7 @@ DECLARE
   v_temp_penalty NUMERIC;
   v_condition_penalty NUMERIC;
   v_hashrate_ratio NUMERIC;
+  v_active_rig_count INT;
 BEGIN
   -- Procesar jugadores que están ONLINE o tienen rigs con autonomous mining boost
   FOR v_player IN
@@ -1706,24 +1707,20 @@ BEGIN
     END LOOP;
 
     -- Actualizar misiones de tiempo activo con rigs y manejar streak
-    DECLARE
-      v_active_rig_count INT;
-    BEGIN
-      SELECT COUNT(*) INTO v_active_rig_count
-      FROM player_rigs WHERE player_id = v_player.id AND is_active = true;
+    SELECT COUNT(*) INTO v_active_rig_count
+    FROM player_rigs WHERE player_id = v_player.id AND is_active = true;
 
-      IF v_active_rig_count > 0 THEN
-        -- rig_active_time: 0.5 minutos (30 segundos) por cada tick con al menos 1 rig activo
-        PERFORM update_mission_progress(v_player.id, 'rig_active_time', 0.5);
+    IF v_active_rig_count > 0 THEN
+      -- rig_active_time: 0.5 minutos (30 segundos) por cada tick con al menos 1 rig activo
+      PERFORM update_mission_progress(v_player.id, 'rig_active_time', 0.5);
 
-        -- multi_rig: si tiene 2+ rigs activos simultáneamente
-        IF v_active_rig_count >= 2 THEN
-          PERFORM update_mission_progress(v_player.id, 'multi_rig', 1);
-          -- multi_rig_time: minutos con múltiples rigs activos (0.5 = 30 segundos)
-          PERFORM update_mission_progress(v_player.id, 'multi_rig_time', 0.5);
-        END IF;
+      -- multi_rig: si tiene 2+ rigs activos simultáneamente
+      IF v_active_rig_count >= 2 THEN
+        PERFORM update_mission_progress(v_player.id, 'multi_rig', 1);
+        -- multi_rig_time: minutos con múltiples rigs activos (0.5 = 30 segundos)
+        PERFORM update_mission_progress(v_player.id, 'multi_rig_time', 0.5);
       END IF;
-    END;
+    END IF;
 
     -- Calcular nuevo nivel de energía e internet
     -- Ambos bajan proporcionalmente a su consumo real (mismo multiplicador)
@@ -6233,6 +6230,7 @@ DECLARE
   v_network_share NUMERIC;
   v_active_rigs INTEGER := 0;
   v_total_active_miners INTEGER;
+  v_hashrate_bonus NUMERIC;
   -- Para rango de confianza (distribución geométrica)
   v_min_minutes NUMERIC;  -- percentil 25
   v_max_minutes NUMERIC;  -- percentil 75
@@ -6287,14 +6285,10 @@ BEGIN
     END IF;
 
     -- Bonus por nivel de hashrate upgrade (usar valor de la tabla upgrade_costs)
-    DECLARE
-      v_hashrate_bonus NUMERIC := 0;
-    BEGIN
-      SELECT COALESCE(hashrate_bonus, 0) INTO v_hashrate_bonus
-      FROM upgrade_costs WHERE level = v_rig.hashrate_level;
-      IF v_hashrate_bonus IS NULL THEN v_hashrate_bonus := 0; END IF;
-      v_hashrate_mult := v_hashrate_mult * (1 + v_hashrate_bonus / 100.0);
-    END;
+    SELECT COALESCE(hashrate_bonus, 0) INTO v_hashrate_bonus
+    FROM upgrade_costs WHERE level = v_rig.hashrate_level;
+    IF v_hashrate_bonus IS NULL THEN v_hashrate_bonus := 0; END IF;
+    v_hashrate_mult := v_hashrate_mult * (1 + v_hashrate_bonus / 100.0);
 
     -- Hashrate efectivo de este rig
     v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier * v_temp_penalty * v_hashrate_mult;
@@ -7606,6 +7600,11 @@ DECLARE
   v_share_percentage NUMERIC;
   v_estimated_reward NUMERIC;
   v_block_reward NUMERIC;
+  v_total_effective_shares NUMERIC;
+  v_player_effective_shares NUMERIC;
+  v_temp_shares NUMERIC;
+  v_temp_player_id UUID;
+  v_temp_is_premium BOOLEAN;
 BEGIN
   -- Obtener bloque activo
   SELECT id, total_shares, reward INTO v_mining_block_id, v_total_shares, v_block_reward
@@ -7637,39 +7636,32 @@ BEGIN
   -- Calcular porcentaje y recompensa estimada
   IF v_total_shares > 0 THEN
     -- Calcular total de shares efectivas (con bonus premium en el peso)
-    DECLARE
-      v_total_effective_shares NUMERIC := 0;
-      v_player_effective_shares NUMERIC;
-      v_temp_shares NUMERIC;
-      v_temp_player_id UUID;
-      v_temp_is_premium BOOLEAN;
-    BEGIN
-      FOR v_temp_player_id, v_temp_shares IN
-        SELECT player_id, shares_count
-        FROM player_shares
-        WHERE mining_block_id = v_mining_block_id
-      LOOP
-        v_temp_is_premium := is_player_premium(v_temp_player_id);
-        IF v_temp_is_premium THEN
-          v_total_effective_shares := v_total_effective_shares + (v_temp_shares * 1.5);
-        ELSE
-          v_total_effective_shares := v_total_effective_shares + v_temp_shares;
-        END IF;
-      END LOOP;
-
-      -- Calcular shares efectivas del jugador
-      IF is_player_premium(p_player_id) THEN
-        v_player_effective_shares := v_player_shares * 1.5;
+    v_total_effective_shares := 0;
+    FOR v_temp_player_id, v_temp_shares IN
+      SELECT player_id, shares_count
+      FROM player_shares
+      WHERE mining_block_id = v_mining_block_id
+    LOOP
+      v_temp_is_premium := is_player_premium(v_temp_player_id);
+      IF v_temp_is_premium THEN
+        v_total_effective_shares := v_total_effective_shares + (v_temp_shares * 1.5);
       ELSE
-        v_player_effective_shares := v_player_shares;
+        v_total_effective_shares := v_total_effective_shares + v_temp_shares;
       END IF;
+    END LOOP;
 
-      -- Porcentaje basado en shares reales
-      v_share_percentage := (v_player_shares / v_total_shares) * 100;
+    -- Calcular shares efectivas del jugador
+    IF is_player_premium(p_player_id) THEN
+      v_player_effective_shares := v_player_shares * 1.5;
+    ELSE
+      v_player_effective_shares := v_player_shares;
+    END IF;
 
-      -- Recompensa basada en shares efectivas
-      v_estimated_reward := v_block_reward * (v_player_effective_shares / v_total_effective_shares);
-    END;
+    -- Porcentaje basado en shares reales
+    v_share_percentage := (v_player_shares / v_total_shares) * 100;
+
+    -- Recompensa basada en shares efectivas
+    v_estimated_reward := v_block_reward * (v_player_effective_shares / v_total_effective_shares);
   ELSE
     v_share_percentage := 0;
     v_estimated_reward := 0;
@@ -8310,35 +8302,32 @@ DECLARE
   v_rand_idx INTEGER;
   v_has_free BOOLEAN;
   v_free_indices INTEGER[];
+  v_existing_full player_crafting_sessions%ROWTYPE;
   i INTEGER;
 BEGIN
   -- Verificar si tiene sesión activa (lock para evitar race conditions)
-  DECLARE
-    v_existing_full player_crafting_sessions%ROWTYPE;
-  BEGIN
-    SELECT * INTO v_existing_full
-    FROM player_crafting_sessions
-    WHERE player_id = p_player_id AND status = 'active'
-    FOR UPDATE SKIP LOCKED
-    LIMIT 1;
+  SELECT * INTO v_existing_full
+  FROM player_crafting_sessions
+  WHERE player_id = p_player_id AND status = 'active'
+  FOR UPDATE SKIP LOCKED
+  LIMIT 1;
 
-    IF v_existing_full IS NOT NULL THEN
-      RETURN json_build_object(
-        'success', false,
-        'error', 'Ya tienes una sesión activa',
-        'session_id', v_existing_full.id,
-        'session', json_build_object(
-          'id', v_existing_full.id,
-          'zone_type', v_existing_full.zone_type,
-          'grid', v_existing_full.grid_config,
-          'elements_collected', v_existing_full.elements_collected,
-          'total_elements', v_existing_full.total_elements,
-          'status', v_existing_full.status,
-          'started_at', v_existing_full.started_at
-        )
-      );
-    END IF;
-  END;
+  IF v_existing_full IS NOT NULL THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'Ya tienes una sesión activa',
+      'session_id', v_existing_full.id,
+      'session', json_build_object(
+        'id', v_existing_full.id,
+        'zone_type', v_existing_full.zone_type,
+        'grid', v_existing_full.grid_config,
+        'elements_collected', v_existing_full.elements_collected,
+        'total_elements', v_existing_full.total_elements,
+        'status', v_existing_full.status,
+        'started_at', v_existing_full.started_at
+      )
+    );
+  END IF;
 
   -- Verificar cooldown
   SELECT * INTO v_cooldown FROM player_crafting_cooldown WHERE player_id = p_player_id;
@@ -9218,6 +9207,41 @@ CREATE TABLE IF NOT EXISTS battle_lobby (
 CREATE INDEX IF NOT EXISTS idx_battle_lobby_status ON battle_lobby(status);
 CREATE INDEX IF NOT EXISTS idx_battle_lobby_player ON battle_lobby(player_id);
 
+-- Fix: Ensure battle_lobby has all required columns (for existing tables)
+ALTER TABLE battle_lobby ADD COLUMN IF NOT EXISTS bet_amount NUMERIC;
+ALTER TABLE battle_lobby ADD COLUMN IF NOT EXISTS bet_currency TEXT;
+ALTER TABLE battle_lobby ADD COLUMN IF NOT EXISTS proposed_bet NUMERIC;
+ALTER TABLE battle_lobby ADD COLUMN IF NOT EXISTS proposed_currency TEXT;
+ALTER TABLE battle_lobby ADD COLUMN IF NOT EXISTS challenged_by UUID;
+ALTER TABLE battle_lobby ADD COLUMN IF NOT EXISTS challenger_username TEXT;
+ALTER TABLE battle_lobby ADD COLUMN IF NOT EXISTS challenge_expires_at TIMESTAMPTZ;
+
+-- Add foreign key constraint if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'battle_lobby_challenged_by_fkey'
+  ) THEN
+    ALTER TABLE battle_lobby ADD CONSTRAINT battle_lobby_challenged_by_fkey
+      FOREIGN KEY (challenged_by) REFERENCES players(id);
+  END IF;
+END $$;
+
+-- Update status check constraint to include 'challenged'
+ALTER TABLE battle_lobby DROP CONSTRAINT IF EXISTS battle_lobby_status_check;
+ALTER TABLE battle_lobby ADD CONSTRAINT battle_lobby_status_check
+  CHECK (status IN ('waiting', 'matched', 'cancelled', 'challenged'));
+
+-- Update currency check constraints
+ALTER TABLE battle_lobby DROP CONSTRAINT IF EXISTS battle_lobby_bet_currency_check;
+ALTER TABLE battle_lobby ADD CONSTRAINT battle_lobby_bet_currency_check
+  CHECK (bet_currency IN ('GC', 'BLC', 'RON'));
+
+ALTER TABLE battle_lobby DROP CONSTRAINT IF EXISTS battle_lobby_proposed_currency_check;
+ALTER TABLE battle_lobby ADD CONSTRAINT battle_lobby_proposed_currency_check
+  CHECK (proposed_currency IN ('GC', 'BLC', 'RON'));
+
 -- Ready Room: Both players accepted, waiting for both to press "Start"
 CREATE TABLE IF NOT EXISTS battle_ready_rooms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -9261,6 +9285,21 @@ CREATE INDEX IF NOT EXISTS idx_battle_sessions_status ON battle_sessions(status)
 -- Ensure HP defaults are 200 (in case table was created with old defaults)
 ALTER TABLE battle_sessions ALTER COLUMN player1_hp SET DEFAULT 200;
 ALTER TABLE battle_sessions ALTER COLUMN player2_hp SET DEFAULT 200;
+
+-- Ensure bet_currency column exists (for existing tables)
+ALTER TABLE battle_sessions ADD COLUMN IF NOT EXISTS bet_currency TEXT;
+
+-- Ensure battle_ready_rooms has bet_currency column (for existing tables)
+ALTER TABLE battle_ready_rooms ADD COLUMN IF NOT EXISTS bet_currency TEXT;
+
+-- Add constraints for bet_currency columns
+ALTER TABLE battle_sessions DROP CONSTRAINT IF EXISTS battle_sessions_bet_currency_check;
+ALTER TABLE battle_sessions ADD CONSTRAINT battle_sessions_bet_currency_check
+  CHECK (bet_currency IN ('GC', 'BLC', 'RON'));
+
+ALTER TABLE battle_ready_rooms DROP CONSTRAINT IF EXISTS battle_ready_rooms_bet_currency_check;
+ALTER TABLE battle_ready_rooms ADD CONSTRAINT battle_ready_rooms_bet_currency_check
+  CHECK (bet_currency IN ('GC', 'BLC', 'RON'));
 
 -- RLS
 ALTER TABLE battle_lobby ENABLE ROW LEVEL SECURITY;
@@ -9340,13 +9379,27 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_lobby battle_lobby%ROWTYPE;
+  v_has_active_battle BOOLEAN;
 BEGIN
   SELECT * INTO v_lobby
   FROM battle_lobby
-  WHERE player_id = p_player_id AND status IN ('waiting', 'challenged');
+  WHERE player_id = p_player_id;
 
   IF v_lobby.id IS NULL THEN
     RETURN json_build_object('success', false, 'error', 'Not in lobby');
+  END IF;
+
+  -- Check if player has active battle or ready room (can't leave if in active game)
+  SELECT EXISTS (
+    SELECT 1 FROM battle_sessions
+    WHERE (player1_id = p_player_id OR player2_id = p_player_id) AND status = 'active'
+    UNION ALL
+    SELECT 1 FROM battle_ready_rooms
+    WHERE (player1_id = p_player_id OR player2_id = p_player_id) AND expires_at > NOW()
+  ) INTO v_has_active_battle;
+
+  IF v_has_active_battle THEN
+    RETURN json_build_object('success', false, 'error', 'Cannot leave while in active battle or ready room');
   END IF;
 
   -- Clear any challenges to this player
@@ -9355,7 +9408,7 @@ BEGIN
       proposed_currency = NULL, challenge_expires_at = NULL, challenger_username = NULL
   WHERE challenged_by = p_player_id;
 
-  -- Remove from lobby (no refund needed since no bet was deducted)
+  -- Remove from lobby
   DELETE FROM battle_lobby WHERE id = v_lobby.id;
 
   RETURN json_build_object('success', true);
@@ -9415,11 +9468,11 @@ BEGIN
     SELECT gamecoin_balance, username INTO v_my_balance, v_my_username FROM players WHERE id = p_challenger_id;
     SELECT gamecoin_balance INTO v_opp_balance FROM players WHERE id = v_opponent.player_id;
   ELSIF p_bet_currency = 'BLC' THEN
-    SELECT blockcoin_balance, username INTO v_my_balance, v_my_username FROM players WHERE id = p_challenger_id;
-    SELECT blockcoin_balance INTO v_opp_balance FROM players WHERE id = v_opponent.player_id;
+    SELECT crypto_balance, username INTO v_my_balance, v_my_username FROM players WHERE id = p_challenger_id;
+    SELECT crypto_balance INTO v_opp_balance FROM players WHERE id = v_opponent.player_id;
   ELSIF p_bet_currency = 'RON' THEN
-    SELECT ronin_balance, username INTO v_my_balance, v_my_username FROM players WHERE id = p_challenger_id;
-    SELECT ronin_balance INTO v_opp_balance FROM players WHERE id = v_opponent.player_id;
+    SELECT ron_balance, username INTO v_my_balance, v_my_username FROM players WHERE id = p_challenger_id;
+    SELECT ron_balance INTO v_opp_balance FROM players WHERE id = v_opponent.player_id;
   END IF;
 
   IF v_my_balance < p_bet_amount THEN
@@ -9511,11 +9564,11 @@ BEGIN
     SELECT gamecoin_balance INTO v_my_balance FROM players WHERE id = p_player_id;
     SELECT gamecoin_balance INTO v_challenger_balance FROM players WHERE id = p_challenger_id;
   ELSIF v_bet_currency = 'BLC' THEN
-    SELECT blockcoin_balance INTO v_my_balance FROM players WHERE id = p_player_id;
-    SELECT blockcoin_balance INTO v_challenger_balance FROM players WHERE id = p_challenger_id;
+    SELECT crypto_balance INTO v_my_balance FROM players WHERE id = p_player_id;
+    SELECT crypto_balance INTO v_challenger_balance FROM players WHERE id = p_challenger_id;
   ELSIF v_bet_currency = 'RON' THEN
-    SELECT ronin_balance INTO v_my_balance FROM players WHERE id = p_player_id;
-    SELECT ronin_balance INTO v_challenger_balance FROM players WHERE id = p_challenger_id;
+    SELECT ron_balance INTO v_my_balance FROM players WHERE id = p_player_id;
+    SELECT ron_balance INTO v_challenger_balance FROM players WHERE id = p_challenger_id;
   END IF;
 
   IF v_my_balance < v_bet_amount THEN
@@ -9531,11 +9584,11 @@ BEGIN
     UPDATE players SET gamecoin_balance = gamecoin_balance - v_bet_amount WHERE id = p_player_id;
     UPDATE players SET gamecoin_balance = gamecoin_balance - v_bet_amount WHERE id = p_challenger_id;
   ELSIF v_bet_currency = 'BLC' THEN
-    UPDATE players SET blockcoin_balance = blockcoin_balance - v_bet_amount WHERE id = p_player_id;
-    UPDATE players SET blockcoin_balance = blockcoin_balance - v_bet_amount WHERE id = p_challenger_id;
+    UPDATE players SET crypto_balance = crypto_balance - v_bet_amount WHERE id = p_player_id;
+    UPDATE players SET crypto_balance = crypto_balance - v_bet_amount WHERE id = p_challenger_id;
   ELSIF v_bet_currency = 'RON' THEN
-    UPDATE players SET ronin_balance = ronin_balance - v_bet_amount WHERE id = p_player_id;
-    UPDATE players SET ronin_balance = ronin_balance - v_bet_amount WHERE id = p_challenger_id;
+    UPDATE players SET ron_balance = ron_balance - v_bet_amount WHERE id = p_player_id;
+    UPDATE players SET ron_balance = ron_balance - v_bet_amount WHERE id = p_challenger_id;
   END IF;
 
   -- Create Ready Room (both players must press "Start" to begin)
@@ -9696,6 +9749,10 @@ BEGIN
 
   -- Delete ready room
   DELETE FROM battle_ready_rooms WHERE id = p_room_id;
+
+  -- Delete lobby entries for both players
+  DELETE FROM battle_lobby
+  WHERE player_id IN (v_room.player1_id, v_room.player2_id);
 
   RETURN json_build_object(
     'success', true,
@@ -10117,9 +10174,9 @@ BEGIN
     IF v_session.bet_currency = 'GC' THEN
       UPDATE players SET gamecoin_balance = gamecoin_balance + v_pot WHERE id = v_winner_id;
     ELSIF v_session.bet_currency = 'BLC' THEN
-      UPDATE players SET blockcoin_balance = blockcoin_balance + v_pot WHERE id = v_winner_id;
+      UPDATE players SET crypto_balance = crypto_balance + v_pot WHERE id = v_winner_id;
     ELSIF v_session.bet_currency = 'RON' THEN
-      UPDATE players SET ronin_balance = ronin_balance + v_pot WHERE id = v_winner_id;
+      UPDATE players SET ron_balance = ron_balance + v_pot WHERE id = v_winner_id;
     END IF;
   END IF;
 
@@ -10179,9 +10236,9 @@ BEGIN
   IF v_session.bet_currency = 'GC' THEN
     UPDATE players SET gamecoin_balance = gamecoin_balance + v_pot WHERE id = v_winner_id;
   ELSIF v_session.bet_currency = 'BLC' THEN
-    UPDATE players SET blockcoin_balance = blockcoin_balance + v_pot WHERE id = v_winner_id;
+    UPDATE players SET crypto_balance = crypto_balance + v_pot WHERE id = v_winner_id;
   ELSIF v_session.bet_currency = 'RON' THEN
-    UPDATE players SET ronin_balance = ronin_balance + v_pot WHERE id = v_winner_id;
+    UPDATE players SET ron_balance = ron_balance + v_pot WHERE id = v_winner_id;
   END IF;
 
   RETURN json_build_object('success', true, 'winner_id', v_winner_id, 'pot', v_pot, 'currency', v_session.bet_currency);
@@ -10205,8 +10262,11 @@ DECLARE
   v_my_blc_balance NUMERIC;
   v_my_ron_balance NUMERIC;
 BEGIN
+  -- Cleanup expired challenges and orphaned entries first
+  PERFORM cleanup_expired_battle_challenges();
+
   -- Get my balances
-  SELECT gamecoin_balance, blockcoin_balance, ronin_balance
+  SELECT gamecoin_balance, crypto_balance, ron_balance
   INTO v_my_gc_balance, v_my_blc_balance, v_my_ron_balance
   FROM players WHERE id = p_player_id;
   -- Get waiting lobby entries (exclude self) with battle stats, challenge info, and balances
@@ -10224,15 +10284,15 @@ BEGIN
     'wins', COALESCE(stats.wins, 0),
     'losses', COALESCE(stats.losses, 0),
     'gamecoin_balance', p.gamecoin_balance,
-    'blockcoin_balance', p.blockcoin_balance,
-    'ronin_balance', p.ronin_balance,
+    'crypto_balance', p.crypto_balance,
+    'ron_balance', p.ron_balance,
     'available_bets', jsonb_build_array(
       jsonb_build_object('amount', 100, 'currency', 'GC', 'enabled', v_my_gc_balance >= 100 AND p.gamecoin_balance >= 100),
       jsonb_build_object('amount', 2500, 'currency', 'GC', 'enabled', v_my_gc_balance >= 2500 AND p.gamecoin_balance >= 2500),
-      jsonb_build_object('amount', 1000, 'currency', 'BLC', 'enabled', v_my_blc_balance >= 1000 AND p.blockcoin_balance >= 1000),
-      jsonb_build_object('amount', 2500, 'currency', 'BLC', 'enabled', v_my_blc_balance >= 2500 AND p.blockcoin_balance >= 2500),
-      jsonb_build_object('amount', 0.2, 'currency', 'RON', 'enabled', v_my_ron_balance >= 0.2 AND p.ronin_balance >= 0.2),
-      jsonb_build_object('amount', 1, 'currency', 'RON', 'enabled', v_my_ron_balance >= 1 AND p.ronin_balance >= 1)
+      jsonb_build_object('amount', 1000, 'currency', 'BLC', 'enabled', v_my_blc_balance >= 1000 AND p.crypto_balance >= 1000),
+      jsonb_build_object('amount', 2500, 'currency', 'BLC', 'enabled', v_my_blc_balance >= 2500 AND p.crypto_balance >= 2500),
+      jsonb_build_object('amount', 0.2, 'currency', 'RON', 'enabled', v_my_ron_balance >= 0.2 AND p.ron_balance >= 0.2),
+      jsonb_build_object('amount', 1, 'currency', 'RON', 'enabled', v_my_ron_balance >= 1 AND p.ron_balance >= 1)
     )
   )), '[]'::JSONB) INTO v_lobby
   FROM battle_lobby bl
@@ -10370,15 +10430,17 @@ BEGIN
 END;
 $$;
 
--- 7) Cleanup expired challenges (called by cron or periodically)
+-- 7) Cleanup expired challenges and orphaned lobby entries
 CREATE OR REPLACE FUNCTION cleanup_expired_battle_challenges()
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_cleaned INTEGER;
+  v_cleaned_challenges INTEGER;
+  v_cleaned_orphans INTEGER;
 BEGIN
+  -- Cleanup expired challenges
   UPDATE battle_lobby
   SET status = 'waiting',
       challenged_by = NULL,
@@ -10389,9 +10451,38 @@ BEGIN
   WHERE status = 'challenged'
     AND challenge_expires_at < NOW();
 
-  GET DIAGNOSTICS v_cleaned = ROW_COUNT;
+  GET DIAGNOSTICS v_cleaned_challenges = ROW_COUNT;
 
-  RETURN json_build_object('success', true, 'cleaned', v_cleaned);
+  -- Cleanup orphaned 'matched' entries (no ready room or active session)
+  UPDATE battle_lobby bl
+  SET status = 'waiting',
+      challenged_by = NULL,
+      proposed_bet = NULL,
+      proposed_currency = NULL,
+      challenge_expires_at = NULL,
+      challenger_username = NULL
+  WHERE bl.status = 'matched'
+    AND NOT EXISTS (
+      SELECT 1 FROM battle_ready_rooms brr
+      WHERE (brr.player1_id = bl.player_id OR brr.player2_id = bl.player_id)
+        AND brr.expires_at > NOW()
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM battle_sessions bs
+      WHERE (bs.player1_id = bl.player_id OR bs.player2_id = bl.player_id)
+        AND bs.status = 'active'
+    );
+
+  GET DIAGNOSTICS v_cleaned_orphans = ROW_COUNT;
+
+  -- Delete expired ready rooms (older than 5 minutes)
+  DELETE FROM battle_ready_rooms WHERE expires_at < NOW();
+
+  RETURN json_build_object(
+    'success', true,
+    'cleaned_challenges', v_cleaned_challenges,
+    'cleaned_orphans', v_cleaned_orphans
+  );
 END;
 $$;
 
@@ -10406,6 +10497,7 @@ GRANT EXECUTE ON FUNCTION start_battle_from_ready_room TO authenticated;
 GRANT EXECUTE ON FUNCTION play_battle_turn TO authenticated;
 GRANT EXECUTE ON FUNCTION forfeit_battle TO authenticated;
 GRANT EXECUTE ON FUNCTION get_battle_lobby TO authenticated;
+GRANT EXECUTE ON FUNCTION cleanup_expired_battle_challenges TO authenticated;
 
 -- =====================================================
 -- BATTLE LEADERBOARD

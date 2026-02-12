@@ -1434,6 +1434,12 @@
     soundOn: 'Sonido ON',
     soundOff: 'Sonido OFF',
     backToLobby: 'Volver al Lobby',
+    selectBet: 'Seleccionar Apuesta',
+    challengeOpponent: 'Desafiar a',
+    winPot: 'Ganar',
+    insufficientFunds: 'Fondos insuficientes',
+    myChallenges: 'Mis Desafíos',
+    waiting: 'Esperando',
     // Mano de cartas
     yourHand: 'Tu Mano',
     queued: '{n} en cola',
