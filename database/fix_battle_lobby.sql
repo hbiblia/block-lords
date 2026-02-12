@@ -3,9 +3,11 @@
 -- =====================================================
 -- This migration fixes players stuck in "matched" status
 -- without an active ready room or battle session.
+-- Also ensures get_battle_lobby returns lobby_count and
+-- playing_count required by the client.
 -- =====================================================
 
--- 1) Update cleanup function to handle orphaned "matched" entries
+-- 1) Update cleanup function to handle orphaned entries
 CREATE OR REPLACE FUNCTION cleanup_expired_battle_challenges()
 RETURNS JSON
 LANGUAGE plpgsql
@@ -28,19 +30,16 @@ BEGIN
 
   GET DIAGNOSTICS v_cleaned_challenges = ROW_COUNT;
 
+  -- Delete expired ready rooms FIRST (before orphan cleanup)
+  DELETE FROM battle_ready_rooms WHERE expires_at < NOW();
+
   -- Cleanup orphaned 'matched' entries (no ready room or active session)
-  UPDATE battle_lobby bl
-  SET status = 'waiting',
-      challenged_by = NULL,
-      proposed_bet = NULL,
-      proposed_currency = NULL,
-      challenge_expires_at = NULL,
-      challenger_username = NULL
+  -- Must run AFTER deleting expired ready rooms so the NOT EXISTS check is accurate
+  DELETE FROM battle_lobby bl
   WHERE bl.status = 'matched'
     AND NOT EXISTS (
       SELECT 1 FROM battle_ready_rooms brr
       WHERE (brr.player1_id = bl.player_id OR brr.player2_id = bl.player_id)
-        AND brr.expires_at > NOW()
     )
     AND NOT EXISTS (
       SELECT 1 FROM battle_sessions bs
@@ -50,9 +49,6 @@ BEGIN
 
   GET DIAGNOSTICS v_cleaned_orphans = ROW_COUNT;
 
-  -- Delete expired ready rooms (older than 5 minutes)
-  DELETE FROM battle_ready_rooms WHERE expires_at < NOW();
-
   RETURN json_build_object(
     'success', true,
     'cleaned_challenges', v_cleaned_challenges,
@@ -61,7 +57,7 @@ BEGIN
 END;
 $$;
 
--- 2) Update get_battle_lobby to auto-cleanup on load
+-- 2) Update get_battle_lobby to auto-cleanup on load (with lobby_count and playing_count)
 CREATE OR REPLACE FUNCTION get_battle_lobby(p_player_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -76,6 +72,8 @@ DECLARE
   v_my_status TEXT;
   v_my_gc_balance NUMERIC;
   v_my_blc_balance NUMERIC;
+  v_lobby_count INT;
+  v_playing_count INT;
   v_my_ron_balance NUMERIC;
 BEGIN
   -- Cleanup expired challenges and orphaned entries first
@@ -86,7 +84,6 @@ BEGIN
   INTO v_my_gc_balance, v_my_blc_balance, v_my_ron_balance
   FROM players WHERE id = p_player_id;
 
-  -- (rest of function remains the same...)
   -- Get waiting lobby entries (exclude self) with battle stats, challenge info, and balances
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
     'id', bl.id,
@@ -127,7 +124,8 @@ BEGIN
     WHERE (bs.player1_id = bl.player_id OR bs.player2_id = bl.player_id)
       AND bs.status IN ('completed', 'forfeited')
   ) stats ON true
-  WHERE bl.player_id != p_player_id AND bl.status IN ('waiting', 'challenged');
+  WHERE bl.player_id != p_player_id AND bl.status IN ('waiting', 'challenged')
+  ORDER BY bl.created_at ASC;
 
   -- Get my outgoing challenges (challenges I sent)
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -202,6 +200,14 @@ BEGIN
   ORDER BY created_at DESC
   LIMIT 1;
 
+  -- Count players waiting in lobby (excluding self)
+  SELECT COUNT(*) INTO v_lobby_count
+  FROM battle_lobby WHERE status = 'waiting' AND player_id != p_player_id;
+
+  -- Count active battles
+  SELECT COUNT(*) INTO v_playing_count
+  FROM battle_sessions WHERE status = 'active';
+
   RETURN json_build_object(
     'success', true,
     'lobby', v_lobby,
@@ -215,12 +221,14 @@ BEGIN
       'gamecoin', v_my_gc_balance,
       'blockcoin', v_my_blc_balance,
       'ronin', v_my_ron_balance
-    )
+    ),
+    'lobby_count', v_lobby_count,
+    'playing_count', v_playing_count
   );
 END;
 $$;
 
--- 3) Update leave_battle_lobby to allow leaving from any state (except active battle)
+-- 3) Update leave_battle_lobby with proper refund logic
 CREATE OR REPLACE FUNCTION leave_battle_lobby(p_player_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -228,37 +236,50 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_lobby battle_lobby%ROWTYPE;
-  v_has_active_battle BOOLEAN;
+  v_room battle_ready_rooms%ROWTYPE;
 BEGIN
   SELECT * INTO v_lobby
   FROM battle_lobby
   WHERE player_id = p_player_id;
 
   IF v_lobby.id IS NULL THEN
-    RETURN json_build_object('success', false, 'error', 'Not in lobby');
+    RETURN json_build_object('success', true);
   END IF;
 
-  -- Check if player has active battle or ready room (can't leave if in active game)
-  SELECT EXISTS (
-    SELECT 1 FROM battle_sessions
-    WHERE (player1_id = p_player_id OR player2_id = p_player_id) AND status = 'active'
-    UNION ALL
-    SELECT 1 FROM battle_ready_rooms
-    WHERE (player1_id = p_player_id OR player2_id = p_player_id) AND expires_at > NOW()
-  ) INTO v_has_active_battle;
+  -- Clean up any active ready room (with refund if needed)
+  SELECT * INTO v_room
+  FROM battle_ready_rooms
+  WHERE (player1_id = p_player_id OR player2_id = p_player_id)
+    AND expires_at > NOW()
+  FOR UPDATE;
 
-  IF v_has_active_battle THEN
-    RETURN json_build_object('success', false, 'error', 'Cannot leave while in active battle or ready room');
+  IF v_room.id IS NOT NULL THEN
+    -- Refund bets if both were ready
+    IF v_room.player1_ready AND v_room.player2_ready AND v_room.bet_amount > 0 THEN
+      IF v_room.bet_currency = 'GC' THEN
+        UPDATE players SET gamecoin_balance = gamecoin_balance + v_room.bet_amount WHERE id = v_room.player1_id;
+        UPDATE players SET gamecoin_balance = gamecoin_balance + v_room.bet_amount WHERE id = v_room.player2_id;
+      ELSIF v_room.bet_currency = 'BLC' THEN
+        UPDATE players SET crypto_balance = crypto_balance + v_room.bet_amount WHERE id = v_room.player1_id;
+        UPDATE players SET crypto_balance = crypto_balance + v_room.bet_amount WHERE id = v_room.player2_id;
+      ELSIF v_room.bet_currency = 'RON' THEN
+        UPDATE players SET ron_balance = ron_balance + v_room.bet_amount WHERE id = v_room.player1_id;
+        UPDATE players SET ron_balance = ron_balance + v_room.bet_amount WHERE id = v_room.player2_id;
+      END IF;
+    END IF;
+    DELETE FROM battle_ready_rooms WHERE id = v_room.id;
+    -- Also remove the other player from lobby
+    DELETE FROM battle_lobby WHERE player_id IN (v_room.player1_id, v_room.player2_id);
   END IF;
 
-  -- Clear any challenges to this player
+  -- Clear any challenges from this player
   UPDATE battle_lobby
   SET status = 'waiting', challenged_by = NULL, proposed_bet = NULL,
       proposed_currency = NULL, challenge_expires_at = NULL, challenger_username = NULL
   WHERE challenged_by = p_player_id;
 
   -- Remove from lobby
-  DELETE FROM battle_lobby WHERE id = v_lobby.id;
+  DELETE FROM battle_lobby WHERE player_id = p_player_id;
 
   RETURN json_build_object('success', true);
 END;

@@ -10078,6 +10078,7 @@ DECLARE
   v_my_discard JSONB;
   v_opp_hand JSONB;
   v_opp_deck JSONB;
+  v_opp_discard JSONB;
   v_energy INTEGER;
   v_my_hp INTEGER;
   v_my_shield INTEGER;
@@ -10130,6 +10131,7 @@ BEGIN
     v_my_discard := v_state->'player1Discard';
     v_opp_hand := v_state->'player2Hand';
     v_opp_deck := v_state->'player2Deck';
+    v_opp_discard := COALESCE(v_state->'player2Discard', '[]'::JSONB);
     v_energy := (v_state->>'player1Energy')::INTEGER;
     v_opp_energy := (v_state->>'player2Energy')::INTEGER;
     v_my_hp := v_session.player1_hp;
@@ -10147,6 +10149,7 @@ BEGIN
     v_my_discard := v_state->'player2Discard';
     v_opp_hand := v_state->'player1Hand';
     v_opp_deck := v_state->'player1Deck';
+    v_opp_discard := COALESCE(v_state->'player1Discard', '[]'::JSONB);
     v_energy := (v_state->>'player2Energy')::INTEGER;
     v_opp_energy := (v_state->>'player1Energy')::INTEGER;
     v_my_hp := v_session.player2_hp;
@@ -10280,16 +10283,10 @@ BEGIN
         v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage, 'selfDamage', 5);
 
       WHEN 'venom_strike' THEN
-        -- 8 damage + apply poison (3 turns, 3 dmg/turn)
-        v_damage := 8;
-        IF v_boosted THEN v_damage := v_damage + 10; v_boosted := false; END IF;
-        IF v_weakened THEN v_damage := GREATEST(v_damage - 8, 0); v_weakened := false; END IF;
-        v_remaining_dmg := GREATEST(v_damage - v_opp_shield, 0);
-        v_opp_shield := GREATEST(v_opp_shield - v_damage, 0);
-        v_opp_hp := GREATEST(v_opp_hp - v_remaining_dmg, 0);
-        -- Apply poison (stacks with existing)
+        -- Solo aplica veneno (el daño ocurre al inicio de cada turno del oponente, ignora escudo)
+        -- Veneno: 3 turnos, 3 dmg/turno (stackeable)
         v_opp_poison := v_opp_poison + 3;
-        v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', v_damage, 'poison', 3);
+        v_log_entries := v_log_entries || jsonb_build_object('type', 'attack', 'card', v_card, 'damage', 0, 'poison', 3);
 
       WHEN 'guard' THEN
         v_my_shield := v_my_shield + 12;
@@ -10424,15 +10421,11 @@ BEGIN
   IF jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)) < v_draw_count THEN
     -- Merge remaining deck + discard, reshuffle
     v_opp_deck := COALESCE(v_opp_deck, '[]'::JSONB);
-    IF v_is_p1 THEN
-      SELECT jsonb_agg(card ORDER BY random()) INTO v_opp_deck
-      FROM jsonb_array_elements(v_opp_deck || COALESCE(v_state->'player2Discard', '[]'::JSONB)) AS card;
-      -- Clear discard handled below
-    ELSE
-      SELECT jsonb_agg(card ORDER BY random()) INTO v_opp_deck
-      FROM jsonb_array_elements(v_opp_deck || COALESCE(v_state->'player1Discard', '[]'::JSONB)) AS card;
-    END IF;
+    SELECT jsonb_agg(card ORDER BY random()) INTO v_opp_deck
+    FROM jsonb_array_elements(v_opp_deck || COALESCE(v_opp_discard, '[]'::JSONB)) AS card;
     v_opp_deck := COALESCE(v_opp_deck, '[]'::JSONB);
+    -- Clear discard after reshuffling into deck
+    v_opp_discard := '[]'::JSONB;
   END IF;
 
   -- Draw cards
@@ -10456,7 +10449,7 @@ BEGIN
       'player1Deck', COALESCE(v_my_deck, '[]'::JSONB),
       'player2Deck', COALESCE(v_opp_deck, '[]'::JSONB),
       'player1Discard', COALESCE(v_my_discard, '[]'::JSONB),
-      'player2Discard', '[]'::JSONB,
+      'player2Discard', COALESCE(v_opp_discard, '[]'::JSONB),
       'player1Energy', v_energy,
       'player2Energy', v_opp_energy + CASE WHEN v_opp_energy <= 1 THEN 3 WHEN v_opp_energy <= 3 THEN 2 ELSE 1 END,
       'player1Weakened', v_weakened,
@@ -10470,7 +10463,7 @@ BEGIN
       'player1DeckCount', jsonb_array_length(COALESCE(v_my_deck, '[]'::JSONB)),
       'player2DeckCount', jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)),
       'player1DiscardCount', jsonb_array_length(COALESCE(v_my_discard, '[]'::JSONB)),
-      'player2DiscardCount', 0,
+      'player2DiscardCount', jsonb_array_length(COALESCE(v_opp_discard, '[]'::JSONB)),
       'totalCards', 22,
       'lastAction', v_log_entries
     );
@@ -10480,7 +10473,7 @@ BEGIN
       'player2Hand', COALESCE(v_my_hand, '[]'::JSONB),
       'player1Deck', COALESCE(v_opp_deck, '[]'::JSONB),
       'player2Deck', COALESCE(v_my_deck, '[]'::JSONB),
-      'player1Discard', '[]'::JSONB,
+      'player1Discard', COALESCE(v_opp_discard, '[]'::JSONB),
       'player2Discard', COALESCE(v_my_discard, '[]'::JSONB),
       'player1Energy', v_opp_energy + CASE WHEN v_opp_energy <= 1 THEN 3 WHEN v_opp_energy <= 3 THEN 2 ELSE 1 END,
       'player2Energy', v_energy,
@@ -10494,7 +10487,7 @@ BEGIN
       'player2HandCount', jsonb_array_length(COALESCE(v_my_hand, '[]'::JSONB)),
       'player1DeckCount', jsonb_array_length(COALESCE(v_opp_deck, '[]'::JSONB)),
       'player2DeckCount', jsonb_array_length(COALESCE(v_my_deck, '[]'::JSONB)),
-      'player1DiscardCount', 0,
+      'player1DiscardCount', jsonb_array_length(COALESCE(v_opp_discard, '[]'::JSONB)),
       'player2DiscardCount', jsonb_array_length(COALESCE(v_my_discard, '[]'::JSONB)),
       'totalCards', 22,
       'lastAction', v_log_entries
@@ -10633,6 +10626,56 @@ BEGIN
 END;
 $$;
 
+-- Cleanup expired challenges and orphaned lobby entries
+CREATE OR REPLACE FUNCTION cleanup_expired_battle_challenges()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_cleaned_challenges INTEGER;
+  v_cleaned_orphans INTEGER;
+BEGIN
+  -- Cleanup expired challenges
+  UPDATE battle_lobby
+  SET status = 'waiting',
+      challenged_by = NULL,
+      proposed_bet = NULL,
+      proposed_currency = NULL,
+      challenge_expires_at = NULL,
+      challenger_username = NULL
+  WHERE status = 'challenged'
+    AND challenge_expires_at < NOW();
+
+  GET DIAGNOSTICS v_cleaned_challenges = ROW_COUNT;
+
+  -- Delete expired ready rooms FIRST (before orphan cleanup)
+  DELETE FROM battle_ready_rooms WHERE expires_at < NOW();
+
+  -- Cleanup orphaned 'matched' entries (no ready room or active session)
+  -- Must run AFTER deleting expired ready rooms so the NOT EXISTS check is accurate
+  DELETE FROM battle_lobby bl
+  WHERE bl.status = 'matched'
+    AND NOT EXISTS (
+      SELECT 1 FROM battle_ready_rooms brr
+      WHERE (brr.player1_id = bl.player_id OR brr.player2_id = bl.player_id)
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM battle_sessions bs
+      WHERE (bs.player1_id = bl.player_id OR bs.player2_id = bl.player_id)
+        AND bs.status = 'active'
+    );
+
+  GET DIAGNOSTICS v_cleaned_orphans = ROW_COUNT;
+
+  RETURN json_build_object(
+    'success', true,
+    'cleaned_challenges', v_cleaned_challenges,
+    'cleaned_orphans', v_cleaned_orphans
+  );
+END;
+$$;
+
 -- 6) Get battle lobby
 CREATE OR REPLACE FUNCTION get_battle_lobby(p_player_id UUID)
 RETURNS JSON
@@ -10684,7 +10727,7 @@ BEGIN
       jsonb_build_object('amount', 0.2, 'currency', 'RON', 'enabled', v_my_ron_balance >= 0.2 AND p.ron_balance >= 0.2),
       jsonb_build_object('amount', 1, 'currency', 'RON', 'enabled', v_my_ron_balance >= 1 AND p.ron_balance >= 1)
     )
-  )), '[]'::JSONB) INTO v_lobby
+  ) ORDER BY bl.created_at ASC), '[]'::JSONB) INTO v_lobby
   FROM battle_lobby bl
   LEFT JOIN players p ON p.id = bl.player_id
   LEFT JOIN LATERAL (
@@ -10699,8 +10742,7 @@ BEGIN
     WHERE (bs.player1_id = bl.player_id OR bs.player2_id = bl.player_id)
       AND bs.status IN ('completed', 'forfeited')
   ) stats ON true
-  WHERE bl.player_id != p_player_id AND bl.status IN ('waiting', 'challenged')
-  ORDER BY bl.created_at ASC;
+  WHERE bl.player_id != p_player_id AND bl.status IN ('waiting', 'challenged');
 
   -- Get my outgoing challenges (challenges I sent)
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -10832,56 +10874,6 @@ BEGIN
   WHERE id = v_my_lobby.id;
 
   RETURN json_build_object('success', true, 'message', 'Challenge rejected');
-END;
-$$;
-
--- 7) Cleanup expired challenges and orphaned lobby entries
-CREATE OR REPLACE FUNCTION cleanup_expired_battle_challenges()
-RETURNS JSON
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_cleaned_challenges INTEGER;
-  v_cleaned_orphans INTEGER;
-BEGIN
-  -- Cleanup expired challenges
-  UPDATE battle_lobby
-  SET status = 'waiting',
-      challenged_by = NULL,
-      proposed_bet = NULL,
-      proposed_currency = NULL,
-      challenge_expires_at = NULL,
-      challenger_username = NULL
-  WHERE status = 'challenged'
-    AND challenge_expires_at < NOW();
-
-  GET DIAGNOSTICS v_cleaned_challenges = ROW_COUNT;
-
-  -- Delete expired ready rooms FIRST (before orphan cleanup)
-  DELETE FROM battle_ready_rooms WHERE expires_at < NOW();
-
-  -- Cleanup orphaned 'matched' entries (no ready room or active session)
-  -- Must run AFTER deleting expired ready rooms so the NOT EXISTS check is accurate
-  DELETE FROM battle_lobby bl
-  WHERE bl.status = 'matched'
-    AND NOT EXISTS (
-      SELECT 1 FROM battle_ready_rooms brr
-      WHERE (brr.player1_id = bl.player_id OR brr.player2_id = bl.player_id)
-    )
-    AND NOT EXISTS (
-      SELECT 1 FROM battle_sessions bs
-      WHERE (bs.player1_id = bl.player_id OR bs.player2_id = bl.player_id)
-        AND bs.status = 'active'
-    );
-
-  GET DIAGNOSTICS v_cleaned_orphans = ROW_COUNT;
-
-  RETURN json_build_object(
-    'success', true,
-    'cleaned_challenges', v_cleaned_challenges,
-    'cleaned_orphans', v_cleaned_orphans
-  );
 END;
 $$;
 

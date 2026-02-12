@@ -205,9 +205,20 @@ export function useCardBattle() {
   });
 
   const myDiscard = computed<string[]>(() => {
-    if (!session.value?.game_state) return [];
-    const state = session.value.game_state;
-    return isP1.value ? (state.player1Discard || []) : (state.player2Discard || []);
+    const serverDiscard = session.value?.game_state
+      ? (isP1.value ? (session.value.game_state.player1Discard || []) : (session.value.game_state.player2Discard || []))
+      : [];
+    // Include cards played this turn (not yet submitted to server), excluding recall entries
+    const localDiscard = cardsPlayedThisTurn.value.filter(c => !c.startsWith('recall:'));
+    const combined = [...serverDiscard, ...localDiscard];
+    // Remove cards that were recalled this turn (one occurrence each)
+    for (const entry of cardsPlayedThisTurn.value) {
+      if (entry.startsWith('recall:')) {
+        const idx = combined.indexOf(entry.substring(7));
+        if (idx !== -1) combined.splice(idx, 1);
+      }
+    }
+    return combined;
   });
 
   const canPlayCard = computed(() => (card: CardDefinition) => {
