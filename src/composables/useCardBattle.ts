@@ -198,6 +198,11 @@ export function useCardBattle() {
             rr.player2_bet_amount = rr.player2_bet_amount ?? 0;
             rr.player2_bet_currency = rr.player2_bet_currency ?? 'GC';
           }
+          // Ready room disappeared (opponent cancelled or expired) → exit quick match
+          if (readyRoom.value && !rr && quickMatchMode.value) {
+            quickMatchMode.value = false;
+            quickMatchSearching.value = false;
+          }
           readyRoom.value = rr;
         }
 
@@ -219,8 +224,8 @@ export function useCardBattle() {
           }
         }
 
-        // Auto-pair when in quick match mode and opponent found (excluding recently left opponent)
-        if (quickMatchMode.value && inLobby.value && !data.active_session && !readyRoom.value && !quickMatchPairing.value && lobbyEntries.value.some(e => e.player_id !== excludedOpponentId.value)) {
+        // Auto-pair when in quick match mode and a waiting opponent is found
+        if (quickMatchMode.value && inLobby.value && !data.active_session && !readyRoom.value && !quickMatchPairing.value && lobbyEntries.value.some(e => e.player_id !== excludedOpponentId.value && e.status === 'waiting')) {
           quickMatchPairing.value = true;
           autoQuickMatchPair().finally(() => { quickMatchPairing.value = false; });
         }
@@ -424,7 +429,7 @@ export function useCardBattle() {
   }
 
   async function autoQuickMatchPair() {
-    const opponent = lobbyEntries.value.find(e => e.player_id !== excludedOpponentId.value);
+    const opponent = lobbyEntries.value.find(e => e.player_id !== excludedOpponentId.value && e.status === 'waiting');
     if (!opponent || !playerId.value) return;
     try {
       const data = await apiQuickMatchPair(playerId.value, opponent.id);

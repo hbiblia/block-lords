@@ -9694,6 +9694,23 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Cannot match with yourself');
   END IF;
 
+  -- Verify neither player is already in a ready room
+  IF EXISTS (
+    SELECT 1 FROM battle_ready_rooms
+    WHERE (player1_id = p_player_id OR player2_id = p_player_id)
+      AND expires_at > NOW()
+  ) THEN
+    RETURN json_build_object('success', false, 'error', 'You are already in a ready room');
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM battle_ready_rooms
+    WHERE (player1_id = v_opponent.player_id OR player2_id = v_opponent.player_id)
+      AND expires_at > NOW()
+  ) THEN
+    RETURN json_build_object('success', false, 'error', 'Opponent is already in a ready room');
+  END IF;
+
   -- Get usernames
   SELECT username INTO v_my_username FROM players WHERE id = p_player_id;
   SELECT username INTO v_opp_username FROM players WHERE id = v_opponent.player_id;
@@ -10742,19 +10759,16 @@ BEGIN
 
   GET DIAGNOSTICS v_cleaned_challenges = ROW_COUNT;
 
+  -- Delete expired ready rooms FIRST (before orphan cleanup)
+  DELETE FROM battle_ready_rooms WHERE expires_at < NOW();
+
   -- Cleanup orphaned 'matched' entries (no ready room or active session)
-  UPDATE battle_lobby bl
-  SET status = 'waiting',
-      challenged_by = NULL,
-      proposed_bet = NULL,
-      proposed_currency = NULL,
-      challenge_expires_at = NULL,
-      challenger_username = NULL
+  -- Must run AFTER deleting expired ready rooms so the NOT EXISTS check is accurate
+  DELETE FROM battle_lobby bl
   WHERE bl.status = 'matched'
     AND NOT EXISTS (
       SELECT 1 FROM battle_ready_rooms brr
       WHERE (brr.player1_id = bl.player_id OR brr.player2_id = bl.player_id)
-        AND brr.expires_at > NOW()
     )
     AND NOT EXISTS (
       SELECT 1 FROM battle_sessions bs
@@ -10763,9 +10777,6 @@ BEGIN
     );
 
   GET DIAGNOSTICS v_cleaned_orphans = ROW_COUNT;
-
-  -- Delete expired ready rooms (older than 5 minutes)
-  DELETE FROM battle_ready_rooms WHERE expires_at < NOW();
 
   RETURN json_build_object(
     'success', true,
