@@ -27,6 +27,10 @@ function dismissAdBlockAlert() {
   showAdBlockAlert.value = false;
 }
 
+watch(showAdBlockAlert, (show) => {
+  document.body.style.overflow = show ? 'hidden' : '';
+});
+
 // Global modals state
 const showMarket = ref(false);
 const showInventory = ref(false);
