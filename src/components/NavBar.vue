@@ -90,10 +90,8 @@ async function handleLogout() {
     <div class="container mx-auto px-4 h-16 flex items-center justify-between">
       <!-- Logo -->
       <RouterLink :to="isAuthenticated ? '/mining' : '/'" class="flex items-center gap-3 group">
-        <div class="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
-          ⛏️
-        </div>
-        <span class="font-display font-bold text-lg hidden sm:inline gradient-text">BLOCK LORDS</span>
+        <img src="/favicon.svg" alt="LootMine" class="w-10 h-10 rounded-xl group-hover:scale-110 transition-transform" />
+        <span class="font-display font-bold text-lg hidden sm:inline gradient-text">LOOTMINE</span>
       </RouterLink>
 
 

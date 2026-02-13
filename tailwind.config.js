@@ -7,18 +7,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Paleta estilo Axie Infinity
+        // Paleta LootMine - Gold/Amber theme
         'bg': {
-          'primary': '#1a1b2e',
-          'secondary': '#252640',
-          'tertiary': '#2f3052',
-          'card': '#1e1f36',
+          'primary': '#1a1510',
+          'secondary': '#262016',
+          'tertiary': '#33291c',
+          'card': '#211c13',
         },
         'accent': {
-          'primary': '#8b5cf6',    // Púrpura
-          'secondary': '#ec4899',  // Rosa
+          'primary': '#f59e0b',    // Amber
+          'secondary': '#d97706',  // Dark amber
           'tertiary': '#06b6d4',   // Cyan
-          'gradient': 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
+          'gradient': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
         },
         'text': {
           'primary': '#ffffff',
@@ -26,8 +26,8 @@ export default {
           'muted': '#71717a',
         },
         'border': {
-          'DEFAULT': '#3f3f5c',
-          'light': '#4f4f6f',
+          'DEFAULT': '#4a3f2a',
+          'light': '#5c4e35',
         },
         'status': {
           'success': '#22c55e',
@@ -54,16 +54,16 @@ export default {
         '2xl': '1.5rem',
       },
       boxShadow: {
-        'glow': '0 0 20px rgba(139, 92, 246, 0.3)',
-        'glow-pink': '0 0 20px rgba(236, 72, 153, 0.3)',
+        'glow': '0 0 20px rgba(245, 158, 11, 0.3)',
+        'glow-amber': '0 0 20px rgba(217, 119, 6, 0.3)',
         'card': '0 4px 20px rgba(0, 0, 0, 0.25)',
         'card-hover': '0 8px 30px rgba(0, 0, 0, 0.35)',
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(ellipse at center, var(--tw-gradient-stops))',
-        'gradient-primary': 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
-        'gradient-secondary': 'linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%)',
-        'gradient-dark': 'linear-gradient(180deg, #1a1b2e 0%, #252640 100%)',
+        'gradient-primary': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+        'gradient-secondary': 'linear-gradient(135deg, #06b6d4 0%, #f59e0b 100%)',
+        'gradient-dark': 'linear-gradient(180deg, #1a1510 0%, #262016 100%)',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -73,8 +73,8 @@ export default {
       },
       keyframes: {
         glow: {
-          'from': { boxShadow: '0 0 10px rgba(139, 92, 246, 0.3)' },
-          'to': { boxShadow: '0 0 25px rgba(139, 92, 246, 0.5)' },
+          'from': { boxShadow: '0 0 10px rgba(245, 158, 11, 0.3)' },
+          'to': { boxShadow: '0 0 25px rgba(245, 158, 11, 0.5)' },
         },
         float: {
           '0%, 100%': { transform: 'translateY(0)' },

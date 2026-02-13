@@ -61,7 +61,7 @@ const typeClasses = computed(() => {
     'bg-status-warning/10 border-status-warning/30 text-status-warning': type === 'warning',
     'bg-status-success/10 border-status-success/30 text-status-success': type === 'success',
     'bg-status-danger/10 border-status-danger/30 text-status-danger': type === 'error',
-    'bg-purple-500/10 border-purple-500/30 text-purple-400': type === 'maintenance',
+    'bg-amber-500/10 border-amber-500/30 text-amber-400': type === 'maintenance',
   };
 });
 

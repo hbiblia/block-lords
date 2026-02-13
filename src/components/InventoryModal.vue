@@ -355,9 +355,9 @@ function formatTimeRemaining(seconds: number): string {
                   <div
                     v-for="boost in inventoryStore.activeBoosts"
                     :key="boost.id"
-                    class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30"
+                    class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30"
                   >
-                    <span class="text-xs sm:text-sm font-medium text-purple-400">{{ getBoostName(boost.boost_id) }}</span>
+                    <span class="text-xs sm:text-sm font-medium text-amber-400">{{ getBoostName(boost.boost_id) }}</span>
                     <span class="text-[10px] sm:text-xs text-text-muted">{{ formatTimeRemaining(boost.seconds_remaining) }}</span>
                   </div>
                 </div>
@@ -514,7 +514,7 @@ function formatTimeRemaining(seconds: number): string {
                 <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
                   <span>🚀</span>
                   Boosts
-                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-purple-500/30 text-purple-400">
+                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-amber-500/30 text-amber-400">
                     {{ inventoryStore.boostItems.length }}
                   </span>
                 </h3>
@@ -522,11 +522,11 @@ function formatTimeRemaining(seconds: number): string {
                   <div
                     v-for="boost in inventoryStore.boostItems"
                     :key="boost.id"
-                    class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full bg-purple-500/10 border-purple-500/30"
+                    class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full bg-amber-500/10 border-amber-500/30"
                   >
                     <div class="flex items-start justify-between mb-1 sm:mb-2">
                       <div class="min-w-0 flex-1">
-                        <h4 class="font-medium text-xs sm:text-sm text-purple-400 truncate">{{ getBoostName(boost.boost_id) }}</h4>
+                        <h4 class="font-medium text-xs sm:text-sm text-amber-400 truncate">{{ getBoostName(boost.boost_id) }}</h4>
                         <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ boost.tier }}</p>
                       </div>
                       <span class="text-lg sm:text-2xl ml-1">{{ getBoostIcon(boost.boost_type) }}</span>
@@ -537,7 +537,7 @@ function formatTimeRemaining(seconds: number): string {
 
                     <div class="flex items-center justify-between mb-0.5 sm:mb-1">
                       <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
-                      <span class="font-mono font-bold text-xs sm:text-sm text-purple-400">{{ formatBoostEffect(boost) }}</span>
+                      <span class="font-mono font-bold text-xs sm:text-sm text-amber-400">{{ formatBoostEffect(boost) }}</span>
                     </div>
 
                     <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">

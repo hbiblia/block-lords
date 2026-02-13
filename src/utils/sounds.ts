@@ -154,7 +154,7 @@ class SoundManager {
 
   private loadSettings(): void {
     try {
-      const saved = localStorage.getItem('blockLords_soundSettings');
+      const saved = localStorage.getItem('lootmine_soundSettings');
       if (saved) {
         const settings = JSON.parse(saved);
         this.enabled = settings.enabled ?? true;
@@ -168,7 +168,7 @@ class SoundManager {
 
   private saveSettings(): void {
     try {
-      localStorage.setItem('blockLords_soundSettings', JSON.stringify({
+      localStorage.setItem('lootmine_soundSettings', JSON.stringify({
         enabled: this.enabled,
         volume: this.volume,
         battleSoundEnabled: this.battleSoundEnabled
@@ -331,7 +331,7 @@ class RigSoundManager {
 
   private loadSettings(): void {
     try {
-      const saved = localStorage.getItem('blockLords_soundSettings');
+      const saved = localStorage.getItem('lootmine_soundSettings');
       if (saved) {
         const settings = JSON.parse(saved);
         this.enabled = settings.enabled ?? true;
@@ -344,10 +344,10 @@ class RigSoundManager {
 
   private saveSettings(): void {
     try {
-      const current = localStorage.getItem('blockLords_soundSettings');
+      const current = localStorage.getItem('lootmine_soundSettings');
       const settings = current ? JSON.parse(current) : {};
       settings.rigLoopVolume = this.baseVolume;
-      localStorage.setItem('blockLords_soundSettings', JSON.stringify(settings));
+      localStorage.setItem('lootmine_soundSettings', JSON.stringify(settings));
     } catch {
       // Ignore storage errors
     }

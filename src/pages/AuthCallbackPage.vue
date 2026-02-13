@@ -85,7 +85,7 @@ onMounted(async () => {
           <div class="progress-bar h-2">
             <div
               class="progress-bar-fill transition-all duration-500"
-              style="background: linear-gradient(90deg, #8b5cf6 0%, #ec4899 100%);"
+              style="background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);"
               :style="{ width: `${((loadingStep + 1) / loadingMessages.length) * 100}%` }"
             ></div>
           </div>

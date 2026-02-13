@@ -119,7 +119,7 @@ onMounted(() => {
             <!-- Mensaje -->
             <div class="flex-1 min-w-0">
               <p class="text-[11px] font-bold text-emerald-300/60 uppercase tracking-wider mb-0.5">{{ t('update.title', 'Update') }}</p>
-              <p class="text-xs font-semibold text-white/90 truncate">{{ currentMessage || 'Nueva actualización disponible!' }}</p>
+              <p class="text-xs font-semibold text-white/90 truncate">{{ currentMessage || t('update.defaultMessage', 'New update available!') }}</p>
             </div>
 
             <!-- Botón actualizar -->

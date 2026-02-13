@@ -807,7 +807,7 @@ function closeProcessingModal() {
           >
             <span>📦</span>
             <span>{{ t('rigManage.installTab', 'Install') }}</span>
-            <span v-if="installedCooling.length + installedBoosts.length > 0" class="px-1.5 py-0.5 rounded-full text-xs bg-purple-500/30 text-purple-400">
+            <span v-if="installedCooling.length + installedBoosts.length > 0" class="px-1.5 py-0.5 rounded-full text-xs bg-amber-500/30 text-amber-400">
               {{ installedCooling.length + installedBoosts.length }}
             </span>
           </button>
@@ -942,19 +942,19 @@ function closeProcessingModal() {
                   <div
                     v-for="boost in installedBoosts"
                     :key="boost.id"
-                    class="flex items-center justify-between w-full px-3 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg"
+                    class="flex items-center justify-between w-full px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg"
                   >
                     <div class="flex items-center gap-2">
                       <span class="text-lg">{{ getBoostIcon(boost.boost_type) }}</span>
                       <div>
-                        <div class="font-medium text-purple-400 text-sm">{{ getBoostName(boost.boost_item_id, boost.name) }}</div>
+                        <div class="font-medium text-amber-400 text-sm">{{ getBoostName(boost.boost_item_id, boost.name) }}</div>
                         <div class="text-xs text-text-muted/70">{{ getBoostTypeDescription(boost.boost_type) }}</div>
                         <div class="text-xs text-text-muted">{{ getBoostEffectText(boost) }}</div>
                       </div>
                     </div>
                     <div class="flex items-center gap-2">
                       <div class="text-right">
-                        <div class="font-mono text-sm text-purple-400">{{ formatTime(boost.remaining_seconds) }}</div>
+                        <div class="font-mono text-sm text-amber-400">{{ formatTime(boost.remaining_seconds) }}</div>
                         <div v-if="boost.stack_count > 1" class="text-xs text-text-muted">x{{ boost.stack_count }}</div>
                       </div>
                       <button
@@ -1037,7 +1037,7 @@ function closeProcessingModal() {
                     <button
                       @click="requestInstallBoost(boost)"
                       :disabled="rig.is_active || processing"
-                      class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-purple-500 text-white hover:bg-purple-400 shrink-0"
+                      class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-amber-500 text-white hover:bg-amber-400 shrink-0"
                     >
                       {{ t('rigManage.install') }}
                     </button>
@@ -1254,15 +1254,15 @@ function closeProcessingModal() {
             <template v-else-if="confirmAction.type === 'boost'">
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">Boost</span>
-                <span class="font-medium text-purple-400">{{ confirmAction.data.boostName }}</span>
+                <span class="font-medium text-amber-400">{{ confirmAction.data.boostName }}</span>
               </div>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.effect', 'Efecto') }}</span>
-                <span class="font-bold text-purple-400">{{ confirmAction.data.boostEffect }}</span>
+                <span class="font-bold text-amber-400">{{ confirmAction.data.boostEffect }}</span>
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-text-muted text-sm">{{ t('rigManage.duration', 'Duración') }}</span>
-                <span class="font-bold text-purple-400">{{ confirmAction.data.boostDuration }} min</span>
+                <span class="font-bold text-amber-400">{{ confirmAction.data.boostDuration }} min</span>
               </div>
             </template>
             <template v-else-if="confirmAction.type === 'repair' && nextRepairInfo">
@@ -1318,15 +1318,15 @@ function closeProcessingModal() {
               <p class="text-sm text-status-danger mb-3">{{ t('rigManage.destroyWarning', 'Este item será destruido permanentemente y no podrá recuperarse.') }}</p>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">Boost</span>
-                <span class="font-medium text-purple-400">{{ confirmAction.data.boostName }}</span>
+                <span class="font-medium text-amber-400">{{ confirmAction.data.boostName }}</span>
               </div>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.effect', 'Efecto') }}</span>
-                <span class="font-bold text-purple-400">{{ confirmAction.data.boostEffect }}</span>
+                <span class="font-bold text-amber-400">{{ confirmAction.data.boostEffect }}</span>
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-text-muted text-sm">{{ t('rigManage.remaining', 'Restante') }}</span>
-                <span class="font-bold text-purple-400">{{ formatTime(confirmAction.data.boostRemainingSeconds ?? 0) }}</span>
+                <span class="font-bold text-amber-400">{{ formatTime(confirmAction.data.boostRemainingSeconds ?? 0) }}</span>
               </div>
             </template>
             <template v-else-if="confirmAction.type === 'delete'">
@@ -1350,7 +1350,7 @@ function closeProcessingModal() {
                 : confirmAction.type === 'repair'
                   ? 'bg-status-warning text-white hover:bg-status-warning/80'
                   : confirmAction.type === 'boost'
-                    ? 'bg-purple-500 text-white hover:bg-purple-400'
+                    ? 'bg-amber-500 text-white hover:bg-amber-400'
                     : confirmAction.type === 'upgrade'
                       ? 'bg-amber-500 text-black hover:bg-amber-400'
                       : 'bg-cyan-500 text-white hover:bg-cyan-400'"

@@ -82,7 +82,7 @@ const typeOptions = [
   { value: 'warning', label: 'Warning', color: 'text-status-warning' },
   { value: 'success', label: 'Success', color: 'text-status-success' },
   { value: 'error', label: 'Error', color: 'text-status-danger' },
-  { value: 'maintenance', label: 'Maintenance', color: 'text-purple-400' },
+  { value: 'maintenance', label: 'Maintenance', color: 'text-amber-400' },
   { value: 'update', label: 'Update', color: 'text-blue-400' },
 ];
 
@@ -292,7 +292,7 @@ const selectedBoostId = ref('');
 
 const rewardTypeOptions = [
   { value: 'gamecoin', label: '💰 GameCoin', unit: 'GC', color: 'text-yellow-400', step: '1', defaultTitle: 'Bonus GameCoin', defaultDesc: 'Disfruta de este bono de GameCoin para tu aventura', defaultIcon: '💰' },
-  { value: 'crypto', label: '💎 BLC (Crypto)', unit: 'BLC', color: 'text-purple-400', step: '0.0001', defaultTitle: 'Bonus BLC', defaultDesc: 'Has recibido un bono de BLC. ¡Úsalo sabiamente!', defaultIcon: '💎' },
+  { value: 'crypto', label: '💎 BLC (Crypto)', unit: 'BLC', color: 'text-amber-400', step: '0.0001', defaultTitle: 'Bonus BLC', defaultDesc: 'Has recibido un bono de BLC. ¡Úsalo sabiamente!', defaultIcon: '💎' },
   { value: 'energy', label: '⚡ Energía', unit: '', color: 'text-green-400', step: '1', defaultTitle: 'Recarga de Energía', defaultDesc: 'Recarga de energía para mantener tus rigs activos', defaultIcon: '⚡' },
   { value: 'internet', label: '🌐 Internet', unit: '', color: 'text-blue-400', step: '1', defaultTitle: 'Recarga de Internet', defaultDesc: 'Recarga de internet para tus operaciones de minería', defaultIcon: '🌐' },
   { value: 'premium', label: '👑 Premium', unit: 'días', color: 'text-amber-300', step: '1', defaultTitle: 'Premium Gratis', defaultDesc: '¡Disfruta de los beneficios Premium! +50% recompensas, menos fees y más', defaultIcon: '👑' },
@@ -640,12 +640,12 @@ onMounted(async () => {
           @keyup.enter="loadUsers"
           type="text"
           placeholder="Buscar por username, email o ID..."
-          class="flex-1 px-4 py-2 bg-bg-secondary border border-border rounded-lg focus:border-purple-400 focus:outline-none"
+          class="flex-1 px-4 py-2 bg-bg-secondary border border-border rounded-lg focus:border-amber-400 focus:outline-none"
         />
         <button
           @click="loadUsers"
           :disabled="loadingUsers"
-          class="px-6 py-2 rounded-lg font-medium bg-purple-600 hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+          class="px-6 py-2 rounded-lg font-medium bg-amber-600 hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {{ loadingUsers ? '⏳' : '🔍' }} {{ loadingUsers ? 'Buscando...' : 'Buscar' }}
         </button>
@@ -653,7 +653,7 @@ onMounted(async () => {
 
       <!-- Users Table -->
       <div v-if="loadingUsers" class="flex justify-center py-12">
-        <div class="animate-spin w-12 h-12 border-4 border-purple-400 border-t-transparent rounded-full"></div>
+        <div class="animate-spin w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full"></div>
       </div>
 
       <div v-else-if="users.length === 0" class="text-center py-12 text-text-muted card">
@@ -721,7 +721,7 @@ onMounted(async () => {
                   </button>
                   <button
                     @click="openUserDetail(user)"
-                    class="px-3 py-1.5 rounded-lg font-medium bg-purple-600 hover:bg-purple-700 transition-colors text-sm"
+                    class="px-3 py-1.5 rounded-lg font-medium bg-amber-600 hover:bg-amber-700 transition-colors text-sm"
                   >
                     Ver Detalles
                   </button>
@@ -764,7 +764,7 @@ onMounted(async () => {
                     'bg-status-warning/20 text-status-warning': announcement.type === 'warning',
                     'bg-status-success/20 text-status-success': announcement.type === 'success',
                     'bg-status-danger/20 text-status-danger': announcement.type === 'error',
-                    'bg-purple-500/20 text-purple-400': announcement.type === 'maintenance',
+                    'bg-amber-500/20 text-amber-400': announcement.type === 'maintenance',
                     'bg-blue-500/20 text-blue-400': announcement.type === 'update',
                   }"
                 >
@@ -1289,7 +1289,7 @@ onMounted(async () => {
       >
         <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeUserDetail"></div>
 
-        <div class="relative bg-bg-secondary rounded-xl p-5 max-w-3xl w-full border border-purple-400 animate-fade-in max-h-[85vh] flex flex-col">
+        <div class="relative bg-bg-secondary rounded-xl p-5 max-w-3xl w-full border border-amber-400 animate-fade-in max-h-[85vh] flex flex-col">
           <!-- Fixed Header -->
           <div class="flex items-center justify-between mb-4 flex-shrink-0">
             <div>
@@ -1311,7 +1311,7 @@ onMounted(async () => {
           <div class="flex-1 overflow-y-auto pr-2">
             <!-- Loading State -->
             <div v-if="loadingUserDetail" class="text-center py-12">
-              <div class="animate-spin w-12 h-12 border-4 border-purple-400 border-t-transparent rounded-full mx-auto"></div>
+              <div class="animate-spin w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full mx-auto"></div>
               <p class="text-text-muted mt-4">Cargando detalles...</p>
             </div>
 
@@ -1346,7 +1346,7 @@ onMounted(async () => {
                 </div>
                 <div>
                   <span class="text-text-muted block text-xs">RON Retirado</span>
-                  <p class="font-medium text-purple-400">{{ Number(selectedUserDetail.ron_movements?.total_withdrawn || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }}</p>
+                  <p class="font-medium text-amber-400">{{ Number(selectedUserDetail.ron_movements?.total_withdrawn || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }}</p>
                 </div>
                 <div>
                   <span class="text-text-muted block text-xs">Reputación</span>
@@ -1432,7 +1432,7 @@ onMounted(async () => {
                   <div v-if="rig.boosts_installed && rig.boosts_installed.length > 0">
                     <p class="text-xs text-text-muted mb-1">Boosts:</p>
                     <div class="flex flex-wrap gap-1">
-                      <span v-for="boost in rig.boosts_installed" :key="boost.id" class="bg-purple-500/20 text-purple-300 px-2 py-1 rounded text-sm">
+                      <span v-for="boost in rig.boosts_installed" :key="boost.id" class="bg-amber-500/20 text-amber-300 px-2 py-1 rounded text-sm">
                         ⚡ {{ boost.boost_name }}
                       </span>
                     </div>
@@ -1490,7 +1490,7 @@ onMounted(async () => {
                         <span class="font-medium">#{{ block.block_id }}</span>
                         <span v-if="block.is_premium" class="ml-1">⭐</span>
                       </td>
-                      <td class="px-2 py-2 text-right text-purple-400 font-medium">
+                      <td class="px-2 py-2 text-right text-amber-400 font-medium">
                         {{ Number(block.reward || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} BLC
                       </td>
                       <td class="px-2 py-2 text-right text-text-muted text-xs">
@@ -1586,7 +1586,7 @@ onMounted(async () => {
                           </span>
                           <span class="px-1.5 py-0.5 rounded text-xs font-medium uppercase" :class="{
                             'bg-yellow-500/20 text-yellow-400': tx.currency === 'gamecoin',
-                            'bg-purple-500/20 text-purple-400': tx.currency === 'crypto',
+                            'bg-amber-500/20 text-amber-400': tx.currency === 'crypto',
                             'bg-blue-500/20 text-blue-400': tx.currency === 'ron'
                           }">
                             {{ tx.currency === 'gamecoin' ? 'GC' : tx.currency === 'crypto' ? 'BLC' : 'RON' }}
@@ -1639,11 +1639,11 @@ onMounted(async () => {
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: rgba(138, 43, 226, 0.5);
+  background: rgba(245, 158, 11, 0.5);
   border-radius: 4px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: rgba(138, 43, 226, 0.7);
+  background: rgba(245, 158, 11, 0.7);
 }
 </style>

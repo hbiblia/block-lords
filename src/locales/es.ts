@@ -115,7 +115,7 @@
       hours: 'hace {n}h',
       days: 'hace {n}d',
     },
-    footer: 'Block Lords © 2025',
+    footer: 'LootMine © 2025',
   },
 
   login: {
@@ -888,7 +888,7 @@
 
   tabLock: {
     title: 'App ya abierta',
-    message: 'Block Lords ya está abierto en otra pestaña. Solo puede estar activo en una pestaña a la vez para evitar conflictos.',
+    message: 'LootMine ya está abierto en otra pestaña. Solo puede estar activo en una pestaña a la vez para evitar conflictos.',
     useThisTab: 'Usar esta pestaña',
     hint: 'Solo cierra esta pestaña.',
   },
@@ -1287,7 +1287,7 @@
     yourCode: 'Tu código de referido',
     copyLink: 'Copiar enlace',
     share: 'Compartir',
-    shareText: 'Únete a Block Lords y recibe 200 GameCoin de bienvenida!',
+    shareText: 'Únete a LootMine y recibe 200 GameCoin de bienvenida!',
     rewards: 'Recompensas por referido',
     rewardsDesc: 'Tu recibes 500 GameCoin y tu amigo recibe 200 GameCoin al registrarse.',
     referredBy: 'Referido por',
@@ -1440,6 +1440,11 @@
     energy: '+{amount} Energía',
     internet: '+{amount} Internet',
     item: '{name} x{quantity}',
+    itemGeneric: 'Objeto',
+    itemCooling: 'Enfriamiento',
+    itemBoost: 'Impulso',
+    itemRig: 'Rig',
+    itemPrepaidCard: 'Tarjeta Prepago',
     admin: {
       sendGift: 'Enviar Regalo',
       title: 'Enviar Regalo',
@@ -1742,6 +1747,7 @@
     refreshPrompt: 'Una nueva versión está disponible. Por favor actualiza la página.',
     later: 'Más Tarde',
     refreshNow: 'Actualizar Ahora',
+    defaultMessage: '¡Nueva actualización disponible!',
     autoRefresh: 'Actualizando automáticamente en {seconds} segundos...',
   },
 };

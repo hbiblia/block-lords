@@ -115,7 +115,7 @@ export default {
       hours: '{n}h ago',
       days: '{n}d ago',
     },
-    footer: 'Block Lords © 2025',
+    footer: 'LootMine © 2025',
   },
 
   login: {
@@ -888,7 +888,7 @@ export default {
 
   tabLock: {
     title: 'App already open',
-    message: 'Block Lords is already open in another tab. It can only be active in one tab at a time to avoid conflicts.',
+    message: 'LootMine is already open in another tab. It can only be active in one tab at a time to avoid conflicts.',
     useThisTab: 'Use this tab',
     hint: 'Just close this tab.',
   },
@@ -1287,7 +1287,7 @@ export default {
     yourCode: 'Your referral code',
     copyLink: 'Copy link',
     share: 'Share',
-    shareText: 'Join Block Lords and receive 200 GameCoin welcome bonus!',
+    shareText: 'Join LootMine and receive 200 GameCoin welcome bonus!',
     rewards: 'Referral rewards',
     rewardsDesc: 'You receive 500 GameCoin and your friend receives 200 GameCoin upon registration.',
     referredBy: 'Referred by',
@@ -1440,6 +1440,11 @@ export default {
     energy: '+{amount} Energy',
     internet: '+{amount} Internet',
     item: '{name} x{quantity}',
+    itemGeneric: 'Item',
+    itemCooling: 'Cooling',
+    itemBoost: 'Boost',
+    itemRig: 'Rig',
+    itemPrepaidCard: 'Prepaid Card',
     admin: {
       sendGift: 'Send Gift',
       title: 'Send Gift',
@@ -1742,6 +1747,7 @@ export default {
     refreshPrompt: 'A new version is available. Please refresh to update.',
     later: 'Later',
     refreshNow: 'Refresh Now',
+    defaultMessage: 'New update available!',
     autoRefresh: 'Auto-refreshing in {seconds} seconds...',
   },
 };

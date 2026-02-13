@@ -91,10 +91,10 @@ watch(() => props.loading, (isLoading) => {
 </script>
 
 <template>
-  <div class="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-900 via-purple-900/20 to-slate-900 overflow-y-auto">
+  <div class="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-900 via-amber-900/20 to-slate-900 overflow-y-auto">
     <!-- Title -->
     <div class="text-center mb-6">
-      <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-1">
+      <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-400 mb-1">
         {{ t('battle.readyRoom.title', 'Battle Ready Room') }}
       </h2>
       <p class="text-sm text-slate-400">
@@ -120,7 +120,7 @@ watch(() => props.loading, (isLoading) => {
               ? 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/50 scale-110'
               : iHaveSelected
                 ? 'bg-gradient-to-br from-yellow-500 to-amber-600 shadow-lg shadow-yellow-500/30'
-                : 'bg-gradient-to-br from-purple-500 to-blue-500'"
+                : 'bg-gradient-to-br from-amber-500 to-blue-500'"
           >
             {{ myUsername.charAt(0).toUpperCase() }}
           </div>
@@ -211,9 +211,9 @@ watch(() => props.loading, (isLoading) => {
     <div class="w-full max-w-sm">
       <!-- STATE 1: Both ready, bets matched → Starting battle -->
       <div v-if="bothReady" class="text-center space-y-3">
-        <div class="px-5 py-3 bg-purple-500/10 border border-purple-500/30 rounded-xl text-center">
+        <div class="px-5 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center">
           <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">{{ t('battle.readyRoom.bet', 'Battle Bet') }}</div>
-          <div class="text-2xl font-bold text-purple-400">{{ readyRoom.bet_amount }} {{ readyRoom.bet_currency }}</div>
+          <div class="text-2xl font-bold text-amber-400">{{ readyRoom.bet_amount }} {{ readyRoom.bet_currency }}</div>
           <div class="text-xs text-slate-500 mt-1">{{ t('battle.readyRoom.winner', 'Winner takes') }} {{ readyRoom.bet_amount * 2 }} {{ readyRoom.bet_currency }}</div>
         </div>
         <div class="py-4 px-6 bg-green-500/20 border border-green-500/50 rounded-xl animate-pulse">
@@ -283,9 +283,9 @@ watch(() => props.loading, (isLoading) => {
 
       <!-- STATE 3: I selected, waiting for opponent -->
       <div v-else-if="iHaveSelected && !opponentHasSelected" class="space-y-3">
-        <div class="px-5 py-3 bg-purple-500/10 border border-purple-500/30 rounded-xl text-center">
+        <div class="px-5 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center">
           <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">{{ t('battle.readyRoom.yourBet', 'Your bet') }}</div>
-          <div class="text-2xl font-bold text-purple-400">{{ myBetAmount }} {{ myBetCurrency }}</div>
+          <div class="text-2xl font-bold text-amber-400">{{ myBetAmount }} {{ myBetCurrency }}</div>
           <div class="text-xs text-slate-500 mt-1">{{ t('battle.readyRoom.winPotential', 'Potential win') }}: {{ myBetAmount * 2 }} {{ myBetCurrency }}</div>
         </div>
         <div class="py-4 px-6 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-center">

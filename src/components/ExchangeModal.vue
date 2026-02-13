@@ -172,7 +172,7 @@ onUnmounted(() => {
             </div>
             <div class="text-center">
               <div class="text-xs text-text-muted mb-1">{{ t('exchange.yourRon') }}</div>
-              <div class="text-xl font-bold text-purple-400 font-mono">
+              <div class="text-xl font-bold text-amber-400 font-mono">
                 {{ formatRon(ronBalance) }} RON
               </div>
             </div>
@@ -195,7 +195,7 @@ onUnmounted(() => {
             @click="activeTab = 'ron'"
             class="flex-1 py-3 flex flex-col items-center gap-1 transition-colors"
             :class="activeTab === 'ron'
-              ? 'bg-purple-500/10 text-purple-400 border-b-2 border-purple-400'
+              ? 'bg-amber-500/10 text-amber-400 border-b-2 border-amber-400'
               : 'text-text-muted hover:bg-bg-tertiary'"
           >
             <span class="text-2xl">💎</span>
@@ -214,7 +214,7 @@ onUnmounted(() => {
             <span v-else-if="rates && activeTab === 'gamecoin'" class="text-status-warning font-medium">
               1 ₿ = {{ rates.crypto_to_gamecoin }} 🪙
             </span>
-            <span v-else-if="rates" class="text-purple-400 font-medium">
+            <span v-else-if="rates" class="text-amber-400 font-medium">
               1,000 ₿ = {{ formatRon(1000 * rates.crypto_to_ron) }} RON
             </span>
             <span v-else class="text-status-danger">{{ t('common.error') }}</span>
@@ -273,7 +273,7 @@ onUnmounted(() => {
           <!-- Estimated Receive -->
           <div class="bg-bg-primary rounded-xl p-4">
             <div class="text-xs text-text-muted mb-2 text-center">{{ t('exchange.youWillReceive') }}</div>
-            <div class="text-3xl font-bold text-center font-mono" :class="activeTab === 'gamecoin' ? 'text-status-warning' : 'text-purple-400'">
+            <div class="text-3xl font-bold text-center font-mono" :class="activeTab === 'gamecoin' ? 'text-status-warning' : 'text-amber-400'">
               {{ activeTab === 'gamecoin' ? estimatedReceive.toFixed(2) : formatRon(estimatedReceive) }}
               <span class="text-lg">{{ activeTab === 'gamecoin' ? '🪙' : 'RON' }}</span>
             </div>
@@ -292,7 +292,7 @@ onUnmounted(() => {
             :class="canExchange && !exchanging && !loadingRates
               ? (activeTab === 'gamecoin'
                   ? 'bg-gradient-to-r from-status-warning to-yellow-500 text-black hover:opacity-90'
-                  : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90')
+                  : 'bg-gradient-to-r from-amber-500 to-yellow-500 text-black hover:opacity-90')
               : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
           >
             {{ exchanging ? t('common.processing') : (activeTab === 'gamecoin' ? t('exchange.convertToGamecoin') : t('exchange.convertToRon')) }}

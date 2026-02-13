@@ -470,11 +470,11 @@ onUnmounted(() => {
           <div class="flex items-center justify-between">
             <div>
               <div class="text-sm text-text-muted">RON</div>
-              <div class="text-2xl font-bold text-purple-400">
+              <div class="text-2xl font-bold text-amber-400">
                 {{ formatRon(ronBalance) }}
               </div>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-2xl">
+            <div class="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center text-2xl">
               💎
             </div>
           </div>
@@ -502,7 +502,7 @@ onUnmounted(() => {
 
             <!-- Withdraw button - only if has balance -->
             <button v-if="ronBalance > 0" @click="openWithdrawModal" :disabled="!canWithdraw"
-              class="flex-1 py-2 rounded-lg text-sm font-medium bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              class="flex-1 py-2 rounded-lg text-sm font-medium bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {{ player?.ron_wallet ? t('profile.withdraw.button', 'Retirar') : t('profile.withdraw.needWallet',
               'Configura wallet') }}
             </button>
@@ -575,20 +575,20 @@ onUnmounted(() => {
       </div>
 
       <!-- Admin: Game Status -->
-      <div v-if="isAdmin && gameStatus" class="card p-0 border-purple-500/40 bg-gradient-to-br from-purple-500/10 to-transparent overflow-hidden">
+      <div v-if="isAdmin && gameStatus" class="card p-0 border-amber-500/40 bg-gradient-to-br from-amber-500/10 to-transparent overflow-hidden">
         <!-- Header (clickable) -->
         <div
-          class="px-5 py-4 bg-purple-500/5 cursor-pointer select-none transition-colors hover:bg-purple-500/10"
-          :class="{ 'border-b border-purple-500/20': adminPanelExpanded }"
+          class="px-5 py-4 bg-amber-500/5 cursor-pointer select-none transition-colors hover:bg-amber-500/10"
+          :class="{ 'border-b border-amber-500/20': adminPanelExpanded }"
           @click="adminPanelExpanded = !adminPanelExpanded"
         >
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+              <div class="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
                 <span class="text-xl">🛡️</span>
               </div>
               <div>
-                <h3 class="font-bold text-purple-400">Panel de Administrador</h3>
+                <h3 class="font-bold text-amber-400">Panel de Administrador</h3>
                 <p class="text-xs text-text-muted">Estado del servidor en tiempo real</p>
               </div>
             </div>
@@ -598,9 +598,9 @@ onUnmounted(() => {
                 <span class="text-xs text-status-success">Online</span>
               </div>
               <!-- Toggle button -->
-              <button class="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center transition-transform"
+              <button class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center transition-transform"
                 :class="{ 'rotate-180': !adminPanelExpanded }">
-                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
@@ -745,15 +745,15 @@ onUnmounted(() => {
               </div>
 
               <!-- Economy -->
-              <div class="bg-bg-tertiary/50 rounded-xl border border-border/50 hover:border-purple-500/30 transition-colors overflow-hidden flex flex-col h-full">
+              <div class="bg-bg-tertiary/50 rounded-xl border border-border/50 hover:border-amber-500/30 transition-colors overflow-hidden flex flex-col h-full">
                 <!-- Contenido principal -->
                 <div class="p-4 flex-1">
                   <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
-                      <div class="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-sm">💰</div>
+                      <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-sm">💰</div>
                       <span class="text-sm font-medium">Economia</span>
                     </div>
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400">Finanzas</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">Finanzas</span>
                   </div>
                   <div class="space-y-2">
                     <!-- Ingresos -->
@@ -764,7 +764,7 @@ onUnmounted(() => {
                     <!-- Saldo usuarios -->
                     <div class="flex justify-between items-center">
                       <span class="text-xs text-text-muted flex items-center gap-1.5">👛 Saldo usuarios</span>
-                      <span class="text-sm font-bold text-purple-400">{{ formatRon(gameStatus.economy.totalRonBalance || 0) }} RON</span>
+                      <span class="text-sm font-bold text-amber-400">{{ formatRon(gameStatus.economy.totalRonBalance || 0) }} RON</span>
                     </div>
                     <!-- Egresos -->
                     <div class="flex justify-between items-center">
@@ -773,7 +773,7 @@ onUnmounted(() => {
                     </div>
                     <div class="flex justify-between items-center">
                       <span class="text-xs text-text-muted flex items-center gap-1.5">💸 Retirado</span>
-                      <span class="text-sm font-bold text-purple-400">{{ formatRon(gameStatus.economy.totalRonWithdrawn || 0) }} RON</span>
+                      <span class="text-sm font-bold text-amber-400">{{ formatRon(gameStatus.economy.totalRonWithdrawn || 0) }} RON</span>
                     </div>
                     <!-- Pendientes -->
                     <div v-if="gameStatus.economy.pendingWithdrawals > 0" class="flex justify-between items-center">
@@ -824,14 +824,14 @@ onUnmounted(() => {
 
             <!-- Admin Tools -->
             <div class="mt-6 pt-6 border-t border-border/30">
-              <h4 class="text-sm font-semibold text-purple-400 mb-3 flex items-center gap-2">
+              <h4 class="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2">
                 <span>⚙️</span>
                 Herramientas de Administración
               </h4>
               <div class="flex flex-wrap gap-3">
                 <button
                   @click="router.push('/admin')"
-                  class="px-4 py-2.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 font-medium transition-colors flex items-center gap-2"
+                  class="px-4 py-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 font-medium transition-colors flex items-center gap-2"
                 >
                   <span>📢</span>
                   Gestionar Anuncios
@@ -963,9 +963,9 @@ onUnmounted(() => {
       <Transition name="modal">
         <div v-if="showWithdrawModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
-          <div class="relative bg-bg-primary border border-purple-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
+          <div class="relative bg-bg-primary border border-amber-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
             @click.stop>
-            <h3 class="text-lg font-bold mb-4 text-center text-purple-400">
+            <h3 class="text-lg font-bold mb-4 text-center text-amber-400">
               💎 {{ t('profile.withdraw.title', 'Retirar RON') }}
             </h3>
 
@@ -987,7 +987,7 @@ onUnmounted(() => {
               <div class="border-t border-border pt-3 flex justify-between items-center">
                 <span class="text-sm font-medium text-status-success">{{ t('profile.withdraw.youReceive', 'Recibiras')
                   }}</span>
-                <span class="text-xl font-bold text-purple-400">{{ formatRon(ronBalance * (1 - withdrawalFeeRate)) }}
+                <span class="text-xl font-bold text-amber-400">{{ formatRon(ronBalance * (1 - withdrawalFeeRate)) }}
                   RON</span>
               </div>
             </div>
@@ -1013,7 +1013,7 @@ onUnmounted(() => {
                 {{ t('common.cancel') }}
               </button>
               <button @click="confirmWithdraw" :disabled="withdrawing"
-                class="flex-1 py-2.5 rounded-lg font-semibold bg-purple-500 text-white hover:bg-purple-500/90 transition-colors disabled:opacity-50">
+                class="flex-1 py-2.5 rounded-lg font-semibold bg-amber-500 text-white hover:bg-amber-500/90 transition-colors disabled:opacity-50">
                 <span v-if="withdrawing" class="flex items-center justify-center gap-2">
                   <span class="animate-spin">⏳</span>
                 </span>
@@ -1065,7 +1065,7 @@ onUnmounted(() => {
               <!-- Current balance -->
               <div class="bg-bg-tertiary rounded-xl p-3 mb-4 flex justify-between items-center">
                 <span class="text-sm text-text-muted">{{ t('profile.reload.currentBalance', 'Balance actual') }}</span>
-                <span class="font-medium text-purple-400">{{ formatRon(ronBalance) }} RON</span>
+                <span class="font-medium text-amber-400">{{ formatRon(ronBalance) }} RON</span>
               </div>
 
               <div v-if="reloadError" class="mb-4 p-3 rounded-lg bg-status-danger/20 border border-status-danger/30">

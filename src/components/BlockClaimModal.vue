@@ -332,7 +332,7 @@ function initCaptchaAd() {
               <button
                 @click="handleClaimAllWithRon"
                 :disabled="pendingStore.claiming || !canAffordRonClaim"
-                class="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-600 text-black font-bold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 <span v-if="pendingStore.claiming" class="flex items-center gap-2">
                   <span class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>

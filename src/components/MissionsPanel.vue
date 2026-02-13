@@ -30,8 +30,8 @@ function missionCategory(missionId: string): string {
 function categoryColor(cat: string): string {
   switch (cat) {
     case 'daily': return 'bg-blue-500/20 text-blue-400';
-    case 'weekly': return 'bg-purple-500/20 text-purple-400';
-    case 'achievement': return 'bg-amber-500/20 text-amber-400';
+    case 'weekly': return 'bg-amber-500/20 text-amber-400';
+    case 'achievement': return 'bg-yellow-500/20 text-yellow-400';
     case 'event': return 'bg-pink-500/20 text-pink-400';
     default: return 'bg-bg-tertiary text-text-muted';
   }

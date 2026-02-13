@@ -200,7 +200,7 @@ async function shareLink() {
   if (navigator.share) {
     try {
       await navigator.share({
-        title: 'Block Lords',
+        title: 'LootMine',
         text: t('referral.shareText'),
         url: referralLink.value,
       });

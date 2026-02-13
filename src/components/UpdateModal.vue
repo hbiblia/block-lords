@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router';
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
 const CURRENT_VERSION = '1.3.0';
-const STORAGE_KEY = 'block-lords-last-seen-version';
+const STORAGE_KEY = 'lootmine-last-seen-version';
 
 const route = useRoute();
 const showModal = ref(false);
@@ -70,24 +70,24 @@ function closeModal() {
         <!-- Contenido scrollable -->
         <div class="space-y-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
           <!-- Nuevas Ventajas Premium -->
-          <div class="p-3 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-lg">
+          <div class="p-3 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-lg">
             <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
               👑 Nuevas Ventajas Premium
             </h3>
             <p class="text-text-secondary text-sm mb-2">
-              Los usuarios <strong class="text-purple-400">Premium</strong> ahora disfrutan de beneficios exclusivos:
+              Los usuarios <strong class="text-amber-400">Premium</strong> ahora disfrutan de beneficios exclusivos:
             </p>
             <ul class="space-y-2 text-sm">
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-purple-400 mt-0.5">⚡</span>
+                <span class="text-amber-400 mt-0.5">⚡</span>
                 <span><strong>Boost de Hashrate:</strong> +15% de velocidad de minado</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-purple-400 mt-0.5">💎</span>
+                <span class="text-amber-400 mt-0.5">💎</span>
                 <span><strong>Probabilidad mejorada:</strong> Mayor chance de encontrar bloques Gold y Silver</span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-purple-400 mt-0.5">🔧</span>
+                <span class="text-amber-400 mt-0.5">🔧</span>
                 <span><strong>Desgaste reducido:</strong> Tus rigs se desgastan más lentamente</span>
               </li>
             </ul>
@@ -197,11 +197,11 @@ function closeModal() {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(139, 92, 246, 0.3);
+  background: rgba(245, 158, 11, 0.3);
   border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 92, 246, 0.5);
+  background: rgba(245, 158, 11, 0.5);
 }
 </style>

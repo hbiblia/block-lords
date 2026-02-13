@@ -1,7 +1,7 @@
 {
-  "name": "block-lords",
+  "name": "lootmine",
   "version": "0.1.0",
-  "description": "Block Lords - MMO de Minería de Criptomonedas",
+  "description": "LootMine - MMO de Minería de Criptomonedas",
   "private": true,
   "type": "module",
   "scripts": {

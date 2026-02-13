@@ -130,14 +130,14 @@ function getItemEmoji(type: string | null): string {
 }
 
 function getItemName(type: string | null, id: string | null): string {
-  if (!type) return 'Item';
+  if (!type) return t('gifts.itemGeneric', 'Item');
   const names: Record<string, string> = {
-    cooling: 'Cooling',
-    boost: 'Boost',
-    rig: 'Rig',
-    prepaid_card: 'Prepaid Card',
+    cooling: t('gifts.itemCooling', 'Cooling'),
+    boost: t('gifts.itemBoost', 'Boost'),
+    rig: t('gifts.itemRig', 'Rig'),
+    prepaid_card: t('gifts.itemPrepaidCard', 'Prepaid Card'),
   };
-  return names[type] || id || 'Item';
+  return names[type] || id || t('gifts.itemGeneric', 'Item');
 }
 
 function initAd() {

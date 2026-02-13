@@ -254,10 +254,15 @@ export function useCardBattle() {
             rr.player2_bet_amount = rr.player2_bet_amount ?? 0;
             rr.player2_bet_currency = rr.player2_bet_currency ?? 'GC';
           }
-          // Ready room disappeared (opponent cancelled or expired) → exit quick match
+          // Ready room disappeared (opponent cancelled or expired) → keep searching
           if (readyRoom.value && !rr && quickMatchMode.value) {
-            quickMatchMode.value = false;
-            quickMatchSearching.value = false;
+            quickMatchSearching.value = true;
+            // Re-join lobby if needed (server may have removed us)
+            if (!inLobby.value && playerId.value) {
+              joinBattleLobby(playerId.value).then(d => {
+                if (d?.success) inLobby.value = true;
+              }).catch(() => {});
+            }
           }
           readyRoom.value = rr;
         }
@@ -392,15 +397,7 @@ export function useCardBattle() {
         await loadLobby(true);
         // Re-start polling via subscribeToLobby if needed
         subscribeToLobby();
-        // If no other opponents available, go back to start
-        const available = lobbyEntries.value.filter(e => e.player_id !== excludedOpponentId.value);
-        if (available.length === 0) {
-          quickMatchMode.value = false;
-          quickMatchSearching.value = false;
-          excludedOpponentId.value = null;
-          await exitLobby();
-        }
-        // Otherwise polling will auto-pair with next opponent
+        // Keep searching — polling will auto-pair when a new opponent appears
       } else {
         errorMessage.value = data?.error || 'Failed to cancel ready room';
       }

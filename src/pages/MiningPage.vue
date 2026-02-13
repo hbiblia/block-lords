@@ -535,9 +535,9 @@ onUnmounted(() => {
     <div v-if="activeBoosts.length > 0" class="mb-4">
       <div class="flex flex-wrap gap-2">
         <div v-for="boost in activeBoosts" :key="boost.id"
-          class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30">
+          class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30">
           <span>{{ getBoostIcon(boost.boost_type) }}</span>
-          <span class="text-sm font-medium text-purple-400">{{ getBoostName(boost.boost_id) }}</span>
+          <span class="text-sm font-medium text-amber-400">{{ getBoostName(boost.boost_id) }}</span>
           <span class="text-xs text-text-muted">{{ formatTimeRemaining(boost.seconds_remaining) }}</span>
         </div>
       </div>
@@ -625,7 +625,7 @@ onUnmounted(() => {
               </div>
               <div v-tooltip="t('mining.tooltip.networkHashrate')" class="text-center cursor-help">
                 <div class="text-[10px] sm:text-xs text-text-muted mb-0.5 sm:mb-1">🌐 {{ t('mining.networkHashrateLabel') }}</div>
-                <div class="text-sm sm:text-base font-bold font-mono text-purple-400">
+                <div class="text-sm sm:text-base font-bold font-mono text-amber-400">
                   {{ (networkStats.hashrate / 1000).toFixed(1) }}K
                 </div>
               </div>
@@ -679,7 +679,7 @@ onUnmounted(() => {
                   :class="{
                     'bg-gradient-to-r from-status-danger to-red-400': timeRemainingAlert === 'critical',
                     'bg-gradient-to-r from-status-warning to-amber-400': timeRemainingAlert === 'warning',
-                    'bg-gradient-to-r from-accent-primary to-purple-500': timeRemainingAlert === 'normal'
+                    'bg-gradient-to-r from-accent-primary to-amber-500': timeRemainingAlert === 'normal'
                   }"
                   :style="{ width: `${Math.max(0, 100 - (currentMiningBlock.time_remaining_seconds / 1800 * 100))}%` }"
                 ></div>
@@ -736,12 +736,12 @@ onUnmounted(() => {
 
               <!-- % del Bloque -->
               <div v-tooltip="t('mining.tooltip.blockParticipation')"
-                class="bg-bg-secondary rounded-xl p-2 sm:p-3 border-l-4 border-purple-500 cursor-help">
+                class="bg-bg-secondary rounded-xl p-2 sm:p-3 border-l-4 border-amber-500 cursor-help">
                 <div class="flex items-center gap-1 mb-0.5 sm:mb-1">
                   <span class="text-sm sm:text-base">📊</span>
                   <div class="text-[10px] text-text-muted">{{ t('mining.blockPercent') }}</div>
                 </div>
-                <div class="text-lg sm:text-xl font-bold font-mono text-purple-400">
+                <div class="text-lg sm:text-xl font-bold font-mono text-amber-400">
                   {{ playerSharePercentage.toFixed(1) }}%
                 </div>
                 <div class="text-[10px] text-text-muted">{{ t('mining.yourParticipation') }}</div>
@@ -888,7 +888,7 @@ onUnmounted(() => {
                   <div
                     v-if="(playerRig.hashrate_level ?? 1) > 1 || (playerRig.efficiency_level ?? 1) > 1 || (playerRig.thermal_level ?? 1) > 1"
                     v-tooltip="t('mining.tooltips.upgrades') + ` - ⚡${playerRig.hashrate_level ?? 1} 💡${playerRig.efficiency_level ?? 1} ❄️${playerRig.thermal_level ?? 1}`"
-                    class="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-purple-500/20 rounded cursor-help">
+                    class="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-amber-500/20 rounded cursor-help">
                     <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400">⚡{{
                       playerRig.hashrate_level }}</span>
                     <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">💡{{
@@ -956,8 +956,8 @@ onUnmounted(() => {
                 <span v-if="rigBoosts[playerRig.id]?.length > 0"
                   v-tooltip="t('mining.tooltips.boosts') + ': ' + rigBoosts[playerRig.id].map((b: any) => b.name).join(', ')"
                   class="flex items-center gap-1 cursor-help">
-                  <span class="text-purple-400">🚀</span>
-                  <span class="text-purple-400">{{ rigBoosts[playerRig.id].length }}</span>
+                  <span class="text-amber-400">🚀</span>
+                  <span class="text-amber-400">{{ rigBoosts[playerRig.id].length }}</span>
                 </span>
               </div>
 

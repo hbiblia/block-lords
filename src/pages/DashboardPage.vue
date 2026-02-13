@@ -202,7 +202,7 @@ function getRankName(score: number): string {
             <div class="progress-bar">
               <div
                 class="progress-bar-fill"
-                style="background: linear-gradient(90deg, #8b5cf6 0%, #ec4899 100%);"
+                style="background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);"
                 :style="{ width: `${player?.reputation_score ?? 50}%` }"
               ></div>
             </div>

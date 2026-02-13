@@ -76,7 +76,7 @@ interface CryptoPackage {
 }
 
 // LocalStorage cache
-const STORAGE_KEY = 'blocklords_market_cache';
+const STORAGE_KEY = 'lootmine_market_cache';
 
 interface MarketCache {
   rigs: Rig[];

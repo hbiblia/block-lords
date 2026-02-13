@@ -1,29 +1,77 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <defs>
-    <linearGradient id="blockGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#6366f1"/>
-      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    <linearGradient id="chestGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#b45309"/>
+      <stop offset="100%" style="stop-color:#78350f"/>
+    </linearGradient>
+    <linearGradient id="lidGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#d97706"/>
+      <stop offset="100%" style="stop-color:#92400e"/>
+    </linearGradient>
+    <linearGradient id="goldGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fde68a"/>
+      <stop offset="50%" style="stop-color:#fbbf24"/>
+      <stop offset="100%" style="stop-color:#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="gemGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="50%" style="stop-color:#10b981"/>
+      <stop offset="100%" style="stop-color:#059669"/>
     </linearGradient>
     <linearGradient id="pickGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#fbbf24"/>
-      <stop offset="100%" style="stop-color:#f59e0b"/>
+      <stop offset="100%" style="stop-color:#d97706"/>
     </linearGradient>
+    <radialGradient id="glowRadial" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" style="stop-color:#fde68a;stop-opacity:0.8"/>
+      <stop offset="100%" style="stop-color:#fbbf24;stop-opacity:0"/>
+    </radialGradient>
   </defs>
-  <!-- Block/Cube base -->
-  <path d="M16 2L4 9v14l12 7 12-7V9L16 2z" fill="url(#blockGrad)"/>
-  <!-- Block top face -->
-  <path d="M16 2L4 9l12 7 12-7L16 2z" fill="#818cf8" opacity="0.8"/>
-  <!-- Block right face -->
-  <path d="M28 9l-12 7v14l12-7V9z" fill="#4f46e5" opacity="0.6"/>
-  <!-- Pickaxe -->
-  <g transform="translate(8, 8) scale(0.5)">
-    <!-- Handle -->
-    <rect x="14" y="14" width="4" height="16" rx="1" fill="#78350f"/>
-    <!-- Head -->
-    <path d="M8 8L16 16L24 8L22 6L16 12L10 6L8 8Z" fill="url(#pickGrad)"/>
-    <!-- Shine -->
-    <path d="M10 7L16 13L14 11L9 6L10 7Z" fill="#fde68a" opacity="0.6"/>
-  </g>
-  <!-- Bitcoin symbol hint -->
-  <text x="16" y="22" font-family="Arial" font-size="8" font-weight="bold" fill="#fbbf24" text-anchor="middle">B</text>
+
+  <!-- Glow behind chest -->
+  <ellipse cx="16" cy="14" rx="12" ry="10" fill="url(#glowRadial)" opacity="0.6"/>
+
+  <!-- Pickaxe behind chest -->
+  <!-- Handle (diagonal) -->
+  <rect x="22" y="3" width="2.5" height="14" rx="1" fill="#78350f" transform="rotate(35, 23, 10)"/>
+  <!-- Pickaxe head -->
+  <path d="M24 4L28 2L30 4L26 8L24 6Z" fill="url(#pickGrad)"/>
+  <path d="M26 8L28 6L30 4L29 5L27 7Z" fill="#fde68a" opacity="0.5"/>
+
+  <!-- Chest body -->
+  <rect x="5" y="17" width="22" height="11" rx="2" fill="url(#chestGrad)"/>
+  <!-- Chest body highlight -->
+  <rect x="5" y="17" width="22" height="3" rx="2" fill="#d97706" opacity="0.3"/>
+  <!-- Chest metal bands -->
+  <rect x="5" y="21" width="22" height="1.5" fill="#92400e" opacity="0.6"/>
+  <rect x="5" y="25" width="22" height="1" fill="#92400e" opacity="0.4"/>
+
+  <!-- Chest lid (open, tilted back) -->
+  <path d="M5 17L6 10Q16 7 26 10L27 17Z" fill="url(#lidGrad)"/>
+  <!-- Lid rim -->
+  <path d="M5 17L6 10Q16 7 26 10L27 17" fill="none" stroke="#92400e" stroke-width="0.5" opacity="0.6"/>
+  <!-- Lid highlight -->
+  <path d="M7 15L8 11Q16 8.5 24 11L25 15Z" fill="#d97706" opacity="0.3"/>
+
+  <!-- Gold glow from inside -->
+  <ellipse cx="16" cy="17" rx="8" ry="3" fill="url(#goldGlow)" opacity="0.9"/>
+
+  <!-- Loot: Gold coins stacking out -->
+  <circle cx="11" cy="15.5" r="2.5" fill="#fbbf24" stroke="#d97706" stroke-width="0.5"/>
+  <text x="11" y="16.8" font-family="Arial" font-size="3" font-weight="bold" fill="#92400e" text-anchor="middle">$</text>
+
+  <circle cx="16" cy="14" r="2.8" fill="#fbbf24" stroke="#d97706" stroke-width="0.5"/>
+  <text x="16" y="15.5" font-family="Arial" font-size="3.5" font-weight="bold" fill="#92400e" text-anchor="middle">$</text>
+
+  <circle cx="21" cy="15.5" r="2.5" fill="#fbbf24" stroke="#d97706" stroke-width="0.5"/>
+  <text x="21" y="16.8" font-family="Arial" font-size="3" font-weight="bold" fill="#92400e" text-anchor="middle">$</text>
+
+  <!-- Gem on top -->
+  <path d="M16 9L13.5 12L16 15L18.5 12Z" fill="url(#gemGrad)"/>
+  <path d="M16 9L13.5 12L16 12.5L18.5 12Z" fill="#6ee7b7" opacity="0.5"/>
+  <path d="M16 12.5L18.5 12L16 15Z" fill="#047857" opacity="0.3"/>
+
+  <!-- Chest lock/clasp -->
+  <rect x="14.5" y="19.5" width="3" height="3.5" rx="0.5" fill="#fbbf24" stroke="#d97706" stroke-width="0.4"/>
+  <circle cx="16" cy="21.5" r="0.7" fill="#92400e"/>
 </svg>

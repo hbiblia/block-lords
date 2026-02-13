@@ -154,7 +154,7 @@ interface PlayerSharesInfo {
 }
 
 // LocalStorage cache
-const STORAGE_KEY = 'blocklords_mining_cache';
+const STORAGE_KEY = 'lootmine_mining_cache';
 
 // Default data for new accounts
 const DEFAULT_NETWORK_STATS: NetworkStats = {

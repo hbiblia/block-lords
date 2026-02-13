@@ -157,7 +157,7 @@ function getTierColor(tier: string) {
   switch (tier) {
     case 'basic': return 'text-gray-400';
     case 'standard': return 'text-blue-400';
-    case 'advanced': return 'text-purple-400';
+    case 'advanced': return 'text-amber-400';
     case 'elite': return 'text-yellow-400';
     default: return 'text-white';
   }
@@ -167,7 +167,7 @@ function getTierBorder(tier: string) {
   switch (tier) {
     case 'basic': return 'border-gray-500/30';
     case 'standard': return 'border-blue-500/30';
-    case 'advanced': return 'border-purple-500/30';
+    case 'advanced': return 'border-amber-500/30';
     case 'elite': return 'border-yellow-500/30';
     default: return 'border-border/50';
   }
@@ -550,7 +550,7 @@ watch(() => props.show, (newVal) => {
             <span class="text-text-muted hidden sm:inline">{{ t('market.balance') }}</span>
             <span class="font-bold text-status-warning">{{ formatGamecoin(balance) }} 🪙</span>
             <span class="font-bold text-accent-primary">{{ formatCrypto(cryptoBalance) }} 💎</span>
-            <span class="font-bold text-purple-400">{{ formatRon(ronBalance) }} RON</span>
+            <span class="font-bold text-amber-400">{{ formatRon(ronBalance) }} RON</span>
           </div>
         </div>
 
@@ -612,7 +612,7 @@ watch(() => props.show, (newVal) => {
               @click="activeFilter = 'boosts'"
               class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left"
               :class="activeFilter === 'boosts'
-                ? 'bg-purple-500/20 text-purple-400'
+                ? 'bg-amber-500/20 text-amber-400'
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
               <span>🚀</span>
@@ -622,7 +622,7 @@ watch(() => props.show, (newVal) => {
               @click="activeFilter = 'crypto'"
               class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left"
               :class="activeFilter === 'crypto'
-                ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400'
+                ? 'bg-gradient-to-r from-blue-500/20 to-amber-500/20 text-blue-400'
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
               <span>💎</span>
@@ -685,7 +685,7 @@ watch(() => props.show, (newVal) => {
                       class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
                       :class="canAffordRig(rig)
                         ? rig.currency === 'ron'
-                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-400 hover:to-purple-400'
+                          ? 'bg-gradient-to-r from-blue-500 to-amber-500 text-white hover:from-blue-400 hover:to-amber-400'
                           : rig.currency === 'crypto'
                             ? 'bg-accent-primary text-white hover:bg-accent-primary/80'
                             : 'bg-accent-primary text-white hover:bg-accent-primary/80'
@@ -849,11 +849,11 @@ watch(() => props.show, (newVal) => {
                 <div
                   v-for="boost in boostItems"
                   :key="boost.id"
-                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col bg-purple-500/10 border-purple-500/30 transition-all hover:scale-[1.01]"
+                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col bg-amber-500/10 border-amber-500/30 transition-all hover:scale-[1.01]"
                 >
                   <div class="flex items-start justify-between mb-1 sm:mb-2">
                     <div class="min-w-0 flex-1">
-                      <h4 class="font-medium text-xs sm:text-sm text-purple-400 truncate">{{ getBoostName(boost.id) }}</h4>
+                      <h4 class="font-medium text-xs sm:text-sm text-amber-400 truncate">{{ getBoostName(boost.id) }}</h4>
                       <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ boost.tier }}</p>
                     </div>
                     <span class="text-lg sm:text-2xl ml-1">{{ getBoostIcon(boost.boost_type) }}</span>
@@ -864,7 +864,7 @@ watch(() => props.show, (newVal) => {
 
                   <div class="flex items-center justify-between mb-0.5 sm:mb-1">
                     <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
-                    <span class="font-mono font-bold text-xs sm:text-sm text-purple-400">{{ formatBoostEffect(boost) }}</span>
+                    <span class="font-mono font-bold text-xs sm:text-sm text-amber-400">{{ formatBoostEffect(boost) }}</span>
                   </div>
 
                   <div class="flex items-center justify-between mb-1 sm:mb-2">
@@ -874,7 +874,7 @@ watch(() => props.show, (newVal) => {
 
                   <!-- Show owned quantity if any -->
                   <div v-if="getBoostOwned(boost.id) > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
-                    <span class="px-1.5 sm:px-2 py-0.5 rounded bg-purple-500/20 text-purple-400">
+                    <span class="px-1.5 sm:px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">
                       {{ getBoostOwned(boost.id) }} {{ t('market.cooling.inventory') }}
                     </span>
                   </div>
@@ -885,8 +885,8 @@ watch(() => props.show, (newVal) => {
                       class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
                       :class="canAffordBoost(boost)
                         ? boost.currency === 'ron'
-                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-400 hover:to-purple-400'
-                          : 'bg-purple-500 text-white hover:bg-purple-400'
+                          ? 'bg-gradient-to-r from-blue-500 to-amber-500 text-white hover:from-blue-400 hover:to-amber-400'
+                          : 'bg-amber-500 text-white hover:bg-amber-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="purchaseDisabled || !canAffordBoost(boost)"
                     >
@@ -904,14 +904,14 @@ watch(() => props.show, (newVal) => {
                   class="rounded-lg border p-2.5 sm:p-4 flex flex-col transition-all hover:scale-[1.01] relative overflow-hidden"
                   :class="[
                     pkg.is_featured
-                      ? 'bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 border-blue-500/50'
-                      : 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30'
+                      ? 'bg-gradient-to-br from-blue-500/20 via-amber-500/20 to-pink-500/20 border-blue-500/50'
+                      : 'bg-gradient-to-br from-blue-500/10 to-amber-500/10 border-blue-500/30'
                   ]"
                 >
                   <!-- Featured badge -->
                   <div
                     v-if="pkg.is_featured"
-                    class="absolute top-0 right-0 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-0.5 sm:py-1 rounded-bl-lg"
+                    class="absolute top-0 right-0 bg-gradient-to-r from-blue-500 to-amber-500 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-0.5 sm:py-1 rounded-bl-lg"
                   >
                     {{ t('market.crypto.featured', 'Popular') }}
                   </div>
@@ -947,7 +947,7 @@ watch(() => props.show, (newVal) => {
                       :class="[
                         'w-full py-1.5 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all disabled:opacity-50',
                         ronBalance >= pkg.ron_price
-                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-400 hover:to-purple-400 shadow-lg'
+                          ? 'bg-gradient-to-r from-blue-500 to-amber-500 text-white hover:from-blue-400 hover:to-amber-400 shadow-lg'
                           : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
                       ]"
                       :disabled="purchaseDisabled || ronBalance < pkg.ron_price"
@@ -1032,7 +1032,7 @@ watch(() => props.show, (newVal) => {
               :class="[
                 'flex-1 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50',
                 confirmAction.currency === 'ron'
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-400 hover:to-purple-400'
+                  ? 'bg-gradient-to-r from-blue-500 to-amber-500 text-white hover:from-blue-400 hover:to-amber-400'
                   : 'bg-accent-primary text-white hover:bg-accent-primary/80'
               ]"
             >
@@ -1116,7 +1116,7 @@ watch(() => props.show, (newVal) => {
                 @click="selectCategory('boosts')"
                 class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-colors"
                 :class="activeFilter === 'boosts'
-                  ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
                 <span class="text-lg">🚀</span>
@@ -1126,7 +1126,7 @@ watch(() => props.show, (newVal) => {
                 @click="selectCategory('crypto')"
                 class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-colors col-span-2"
                 :class="activeFilter === 'crypto'
-                  ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 border border-blue-500/30'
+                  ? 'bg-gradient-to-r from-blue-500/20 to-amber-500/20 text-blue-400 border border-blue-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
                 <span class="text-lg">💎</span>

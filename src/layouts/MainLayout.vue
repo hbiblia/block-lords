@@ -555,7 +555,7 @@ async function handleConnectionClick() {
 
     <!-- Footer -->
     <footer class="border-t border-border/30 py-6 text-center">
-      <p class="text-text-muted text-sm">Block Lords &copy; 2025</p>
+      <p class="text-text-muted text-sm">LootMine &copy; 2025</p>
     </footer>
   </div>
 </template>
