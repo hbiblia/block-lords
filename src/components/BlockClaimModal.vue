@@ -188,13 +188,17 @@ function onScroll() {
 
 // Init ad in captcha screen
 function initCaptchaAd() {
-  nextTick(() => {
+  setTimeout(() => {
     try {
-      ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+      document.querySelectorAll('ins.adsbygoogle').forEach((el) => {
+        if (el.clientWidth > 0 && !el.hasAttribute('data-adsbygoogle-status')) {
+          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+        }
+      });
     } catch (e) {
-      // AdSense may not be available
+      // AdSense not available
     }
-  });
+  }, 500);
 }
 </script>
 

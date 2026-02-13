@@ -157,13 +157,17 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
     // Subscribe to lobby count for badge
     defenseStore.subscribeLobbyCount();
     // Inicializar AdSense cuando el usuario se autentica
-    nextTick(() => {
+    setTimeout(() => {
       try {
-        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+        document.querySelectorAll('ins.adsbygoogle').forEach((el) => {
+          if (el.clientWidth > 0 && !el.hasAttribute('data-adsbygoogle-status')) {
+            ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+          }
+        });
       } catch (e) {
-        console.error('AdSense error:', e);
+        // AdSense not available
       }
-    });
+    }, 1500);
   } else {
     missionsStore.stopHeartbeat();
     authStore.stopSessionCheck();

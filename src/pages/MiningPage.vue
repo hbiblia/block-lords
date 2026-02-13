@@ -488,14 +488,17 @@ onMounted(() => {
 
   window.addEventListener('block-mined', handleBlockMined as EventListener);
 
-  // Initialize AdSense
-  nextTick(() => {
+  // Initialize AdSense (delay to ensure container has width)
+  setTimeout(() => {
     try {
-      ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+      const adEl = document.querySelector('.adsbygoogle[data-ad-slot="6463255272"]');
+      if (adEl && adEl.clientWidth > 0) {
+        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+      }
     } catch (e) {
-      console.error('AdSense error:', e);
+      // AdSense not available
     }
-  });
+  }, 1500);
 });
 
 onUnmounted(() => {
