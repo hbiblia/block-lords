@@ -7299,8 +7299,6 @@ DECLARE
   v_player_reward NUMERIC;
   v_participants_count INTEGER := 0;
   v_rewards_distributed NUMERIC := 0;
-  v_total_effective_shares NUMERIC := 0;
-  v_effective_shares NUMERIC;
 BEGIN
   -- Obtener bloque de minería
   SELECT * INTO v_mining_block FROM mining_blocks WHERE id = p_mining_block_id;
@@ -7334,23 +7332,7 @@ BEGIN
     );
   END IF;
 
-  -- Paso 1: Calcular total de shares efectivas (con bonus premium en el peso)
-  BEGIN
-    FOR v_participant IN
-      SELECT player_id, shares_count
-      FROM player_shares
-      WHERE mining_block_id = p_mining_block_id
-    LOOP
-      -- Shares efectivas: multiplicar por 1.5 si es premium
-      IF is_player_premium(v_participant.player_id) THEN
-        v_total_effective_shares := v_total_effective_shares + (v_participant.shares_count * 1.5);
-      ELSE
-        v_total_effective_shares := v_total_effective_shares + v_participant.shares_count;
-      END IF;
-    END LOOP;
-  END;
-
-  -- Paso 2: Distribuir recompensas proporcionalmente basadas en shares efectivas
+  -- Distribuir recompensas proporcionalmente basadas en shares reales, con bonus premium +50% encima
   FOR v_participant IN
     SELECT player_id, shares_count
     FROM player_shares
@@ -7359,18 +7341,16 @@ BEGIN
   LOOP
     v_participants_count := v_participants_count + 1;
 
-    -- Calcular shares efectivas del jugador
-    IF is_player_premium(v_participant.player_id) THEN
-      v_effective_shares := v_participant.shares_count * 1.5;
-    ELSE
-      v_effective_shares := v_participant.shares_count;
-    END IF;
-
-    -- Calcular porcentaje basado en shares REALES (para registro)
+    -- Calcular porcentaje basado en shares REALES
     v_share_percentage := (v_participant.shares_count / v_mining_block.total_shares) * 100;
 
-    -- Calcular recompensa basada en shares EFECTIVAS
-    v_player_reward := v_mining_block.reward * (v_effective_shares / v_total_effective_shares);
+    -- Calcular recompensa proporcional basada en shares reales
+    v_player_reward := v_mining_block.reward * (v_participant.shares_count / v_mining_block.total_shares);
+
+    -- Aplicar bonus premium +50% encima de la recompensa proporcional
+    IF is_player_premium(v_participant.player_id) THEN
+      v_player_reward := v_player_reward * 1.5;
+    END IF;
 
     -- Mínimo 0.01 crypto si contribuyó
     v_player_reward := GREATEST(0.01, v_player_reward);
@@ -7630,11 +7610,6 @@ DECLARE
   v_share_percentage NUMERIC;
   v_estimated_reward NUMERIC;
   v_block_reward NUMERIC;
-  v_total_effective_shares NUMERIC;
-  v_player_effective_shares NUMERIC;
-  v_temp_shares NUMERIC;
-  v_temp_player_id UUID;
-  v_temp_is_premium BOOLEAN;
 BEGIN
   -- Obtener bloque activo
   SELECT id, total_shares, reward INTO v_mining_block_id, v_total_shares, v_block_reward
@@ -7665,33 +7640,16 @@ BEGIN
 
   -- Calcular porcentaje y recompensa estimada
   IF v_total_shares > 0 THEN
-    -- Calcular total de shares efectivas (con bonus premium en el peso)
-    v_total_effective_shares := 0;
-    FOR v_temp_player_id, v_temp_shares IN
-      SELECT player_id, shares_count
-      FROM player_shares
-      WHERE mining_block_id = v_mining_block_id
-    LOOP
-      v_temp_is_premium := is_player_premium(v_temp_player_id);
-      IF v_temp_is_premium THEN
-        v_total_effective_shares := v_total_effective_shares + (v_temp_shares * 1.5);
-      ELSE
-        v_total_effective_shares := v_total_effective_shares + v_temp_shares;
-      END IF;
-    END LOOP;
-
-    -- Calcular shares efectivas del jugador
-    IF is_player_premium(p_player_id) THEN
-      v_player_effective_shares := v_player_shares * 1.5;
-    ELSE
-      v_player_effective_shares := v_player_shares;
-    END IF;
-
     -- Porcentaje basado en shares reales
     v_share_percentage := (v_player_shares / v_total_shares) * 100;
 
-    -- Recompensa basada en shares efectivas
-    v_estimated_reward := v_block_reward * (v_player_effective_shares / v_total_effective_shares);
+    -- Recompensa proporcional basada en shares reales
+    v_estimated_reward := v_block_reward * (v_player_shares / v_total_shares);
+
+    -- Aplicar bonus premium +50% encima de la recompensa proporcional
+    IF is_player_premium(p_player_id) THEN
+      v_estimated_reward := v_estimated_reward * 1.5;
+    END IF;
   ELSE
     v_share_percentage := 0;
     v_estimated_reward := 0;

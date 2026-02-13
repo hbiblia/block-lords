@@ -918,11 +918,12 @@ export const useMiningStore = defineStore('mining', () => {
       if (wasActive && (!data?.active || data?.block_number !== prevBlockNumber)) {
         // Trigger reward celebration if player had shares in this block
         if (playerShares.value?.has_shares && playerShares.value.estimated_reward > 0) {
+          const authStore = useAuthStore();
           window.dispatchEvent(
             new CustomEvent('pending-block-created', {
               detail: {
                 reward: playerShares.value.estimated_reward,
-                is_premium: false,
+                is_premium: authStore.isPremium,
                 is_pity: false,
               },
             })
