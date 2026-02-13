@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, ref, onUnmounted, nextTick } from 'vue';
+import { watch, ref, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useGiftsStore } from '@/stores/gifts';
 import { useToastStore } from '@/stores/toast';
