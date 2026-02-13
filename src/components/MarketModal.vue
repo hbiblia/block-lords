@@ -1056,7 +1056,7 @@ watch(() => props.show, (newVal) => {
             <div class="flex items-center justify-between">
               <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.price') }}</span>
               <span class="font-bold" :class="confirmAction.currency === 'crypto' ? 'text-accent-primary' : confirmAction.currency === 'ron' ? 'text-blue-400' : 'text-status-warning'">
-                {{ formatNumber(confirmAction.price) }} {{ confirmAction.currency === 'crypto' ? '💎' : confirmAction.currency === 'ron' ? 'RON' : '🪙' }}
+                {{ confirmAction.currency === 'crypto' ? formatCrypto(confirmAction.price) : confirmAction.currency === 'ron' ? formatRon(confirmAction.price) : formatGamecoin(confirmAction.price) }} {{ confirmAction.currency === 'crypto' ? '💎' : confirmAction.currency === 'ron' ? 'RON' : '🪙' }}
               </span>
             </div>
             <div class="flex items-center justify-between mt-1">
