@@ -307,6 +307,15 @@ async function handleConnectionClick() {
                 </div>
               </div>
 
+              <!-- Firefox -->
+              <div class="flex gap-2.5">
+                <span class="text-base mt-0.5 shrink-0">🦊</span>
+                <div>
+                  <p class="text-xs font-semibold text-text-primary">{{ t('adblock.firefox.title') }}</p>
+                  <p class="text-[11px] text-text-muted leading-relaxed">{{ t('adblock.firefox.description') }}</p>
+                </div>
+              </div>
+
               <!-- Brave -->
               <div class="flex gap-2.5">
                 <span class="text-base mt-0.5 shrink-0">🦁</span>

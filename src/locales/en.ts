@@ -1796,6 +1796,10 @@ export default {
       title: 'Microsoft Edge',
       description: 'Go to Settings → Privacy, search and services → Tracking prevention. If set to "Strict", switch to "Balanced" or add this site to exceptions.',
     },
+    firefox: {
+      title: 'Mozilla Firefox',
+      description: 'Click the shield icon in the address bar and turn off Enhanced Tracking Protection for this site.',
+    },
     brave: {
       title: 'Brave Browser',
       description: 'Click the Brave Shields icon (lion) in the address bar and turn off Shields for this site.',

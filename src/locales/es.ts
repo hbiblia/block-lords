@@ -1796,6 +1796,10 @@
       title: 'Microsoft Edge',
       description: 'Ve a Configuración → Privacidad, búsqueda y servicios → Prevención de seguimiento. Si está en "Estricto", cámbialo a "Equilibrado" o agrega este sitio a las excepciones.',
     },
+    firefox: {
+      title: 'Mozilla Firefox',
+      description: 'Haz clic en el icono del escudo en la barra de direcciones y desactiva la Protección contra rastreo mejorada para este sitio.',
+    },
     brave: {
       title: 'Brave Browser',
       description: 'Haz clic en el icono de Brave Shields (león) en la barra de direcciones y desactiva Shields para este sitio.',
