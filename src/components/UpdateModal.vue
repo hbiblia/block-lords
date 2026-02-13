@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '1.3.0';
+const CURRENT_VERSION = '2.0.1';
 const STORAGE_KEY = 'lootmine-last-seen-version';
 
 const route = useRoute();
@@ -61,83 +64,86 @@ function closeModal() {
               ✨
             </div>
             <div>
-              <h2 class="text-xl font-bold text-text-primary">¡Nueva Actualización!</h2>
-              <p class="text-xs text-text-muted">Versión {{ CURRENT_VERSION }}</p>
+              <h2 class="text-xl font-bold text-text-primary">{{ t('updateModal.title') }}</h2>
+              <p class="text-xs text-text-muted">{{ t('updateModal.version', { version: CURRENT_VERSION }) }}</p>
             </div>
           </div>
         </div>
 
         <!-- Contenido scrollable -->
         <div class="space-y-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- Nuevas Ventajas Premium -->
+          <!-- Rebranding -->
           <div class="p-3 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-lg">
             <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
-              👑 Nuevas Ventajas Premium
+              <img src="/favicon.svg" class="w-6 h-6" alt="" /> {{ t('updateModal.rebranding.title') }}
             </h3>
-            <p class="text-text-secondary text-sm mb-2">
-              Los usuarios <strong class="text-amber-400">Premium</strong> ahora disfrutan de beneficios exclusivos:
-            </p>
+            <p class="text-text-secondary text-sm" v-html="t('updateModal.rebranding.description')"></p>
+          </div>
+
+          <!-- Battle Arena mejoras -->
+          <div class="p-3 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 rounded-lg">
+            <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
+              ⚔️ {{ t('updateModal.battleArena.title') }}
+            </h3>
             <ul class="space-y-2 text-sm">
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-amber-400 mt-0.5">⚡</span>
-                <span><strong>Boost de Hashrate:</strong> +15% de velocidad de minado</span>
+                <span class="text-blue-400 mt-0.5">🏆</span>
+                <span v-html="t('updateModal.battleArena.leaderboard')"></span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-amber-400 mt-0.5">💎</span>
-                <span><strong>Probabilidad mejorada:</strong> Mayor chance de encontrar bloques Gold y Silver</span>
+                <span class="text-blue-400 mt-0.5">🔍</span>
+                <span v-html="t('updateModal.battleArena.persistentSearch')"></span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-amber-400 mt-0.5">🔧</span>
-                <span><strong>Desgaste reducido:</strong> Tus rigs se desgastan más lentamente</span>
+                <span class="text-blue-400 mt-0.5">🃏</span>
+                <span v-html="t('updateModal.battleArena.cards')"></span>
               </li>
             </ul>
           </div>
 
-          <!-- Mini-juego de Cartas -->
-          <div class="p-3 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 rounded-lg">
+          <!-- Sistema de Regalos -->
+          <div class="p-3 bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 rounded-lg">
             <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
-              🃏 Nuevo Mini-Juego: Battle Defense
+              🎁 {{ t('updateModal.gifts.title') }}
             </h3>
-            <p class="text-text-secondary text-sm mb-2">
-              ¡Defiende tu base en emocionantes batallas estratégicas por turnos!
+            <p class="text-text-secondary text-sm">
+              {{ t('updateModal.gifts.description') }}
             </p>
-            <ul class="space-y-2 text-sm">
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-blue-400 mt-0.5">⚔️</span>
-                <span><strong>Sistema de cartas:</strong> Colecciona y mejora cartas de ataque y defensa</span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-blue-400 mt-0.5">🎮</span>
-                <span><strong>Modo PvP:</strong> Enfrenta a otros jugadores en batallas estratégicas</span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-blue-400 mt-0.5">🏆</span>
-                <span><strong>Recompensas:</strong> Gana BLC y recursos exclusivos al vencer</span>
-              </li>
-            </ul>
           </div>
 
           <!-- Correcciones y Mejoras -->
           <div>
             <h3 class="text-base font-semibold text-text-primary mb-2 flex items-center gap-2">
-              🔧 Correcciones y Mejoras
+              🔧 {{ t('updateModal.fixes.title') }}
             </h3>
             <ul class="space-y-2">
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Optimización de rendimiento:</strong> Carga más rápida y menor consumo de recursos</span>
+                <span v-html="t('updateModal.fixes.newLook')"></span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Interfaz mejorada:</strong> Mejor visualización de estadísticas y tooltips más claros</span>
+                <span v-html="t('updateModal.fixes.notifications')"></span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Balance general:</strong> Ajustes en costos de crafteo y recompensas de misiones</span>
+                <span v-html="t('updateModal.fixes.sounds')"></span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span><strong>Corrección de bugs:</strong> Solucionados varios errores menores reportados por la comunidad</span>
+                <span v-html="t('updateModal.fixes.ronWallet')"></span>
+              </li>
+              <li class="flex items-start gap-2 text-text-secondary">
+                <span class="text-green-500 mt-1">✓</span>
+                <span v-html="t('updateModal.fixes.reputation')"></span>
+              </li>
+              <li class="flex items-start gap-2 text-text-secondary">
+                <span class="text-green-500 mt-1">✓</span>
+                <span v-html="t('updateModal.fixes.translations')"></span>
+              </li>
+              <li class="flex items-start gap-2 text-text-secondary">
+                <span class="text-green-500 mt-1">✓</span>
+                <span v-html="t('updateModal.fixes.rigUpgrade')"></span>
               </li>
             </ul>
           </div>
@@ -150,7 +156,7 @@ function closeModal() {
             @click="closeModal"
             class="btn btn-primary px-6 py-2 font-semibold"
           >
-            ¡Entendido! 🚀
+            {{ t('updateModal.button') }} 🚀
           </button>
         </div>
       </div>

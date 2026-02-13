@@ -1750,4 +1750,34 @@ export default {
     defaultMessage: 'New update available!',
     autoRefresh: 'Auto-refreshing in {seconds} seconds...',
   },
+
+  updateModal: {
+    title: 'New Update!',
+    version: 'Version {version}',
+    rebranding: {
+      title: "We're now LootMine",
+      description: 'Block Lords is now <strong class="text-amber-400">LootMine</strong>. New identity, new logo, same community. The loot is yours.',
+    },
+    battleArena: {
+      title: 'Improved Battle Arena',
+      leaderboard: '<strong>Leaderboard:</strong> Rankings with the top fighters',
+      persistentSearch: '<strong>Persistent search:</strong> If your opponent cancels, you keep searching automatically',
+      cards: '<strong>22 cards:</strong> Expanded deck with more strategies',
+    },
+    gifts: {
+      title: 'Gift System',
+      description: 'Receive surprise gifts with coins, energy, internet and special items. Tap the gift to open it.',
+    },
+    fixes: {
+      title: 'Fixes & Improvements',
+      newLook: '<strong>New look:</strong> Refreshed color palette with golden accents',
+      notifications: '<strong>Improved notifications:</strong> Connection lost and updates now with non-intrusive toast style',
+      sounds: '<strong>Sounds:</strong> Sound effects for notifications, rewards and alerts',
+      ronWallet: '<strong>RON Wallet:</strong> RON balance display and BLC to RON conversion in profile',
+      reputation: '<strong>Reputation:</strong> Reputation system visible in your profile',
+      translations: '<strong>Translations:</strong> Fixed untranslated texts across the app',
+      rigUpgrade: '<strong>Rig upgrades:</strong> Fixed an error that prevented upgrading rigs',
+    },
+    button: 'Got it!',
+  },
 };

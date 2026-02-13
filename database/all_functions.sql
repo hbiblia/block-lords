@@ -5871,19 +5871,20 @@ $$;
 
 CREATE OR REPLACE FUNCTION upgrade_rig(p_player_id UUID, p_player_rig_id UUID, p_upgrade_type TEXT)
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_player RECORD; v_player_rig RECORD; v_current_level INTEGER; v_next_level INTEGER; v_upgrade_cost RECORD;
+DECLARE v_player RECORD; v_player_rig RECORD; v_current_level INTEGER; v_next_level INTEGER; v_upgrade_cost RECORD; v_max_upgrade_level INTEGER;
 BEGIN
   IF p_upgrade_type NOT IN ('hashrate', 'efficiency', 'thermal') THEN RETURN jsonb_build_object('success', false, 'error', 'Tipo invalido'); END IF;
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
-  SELECT pr.*, r.max_upgrade_level INTO v_player_rig FROM player_rigs pr JOIN rigs r ON pr.rig_id = r.id WHERE pr.id = p_player_rig_id AND pr.player_id = p_player_id;
+  SELECT pr.* INTO v_player_rig FROM player_rigs pr WHERE pr.id = p_player_rig_id AND pr.player_id = p_player_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Rig no encontrado'); END IF;
+  SELECT r.max_upgrade_level INTO v_max_upgrade_level FROM rigs r WHERE r.id = v_player_rig.rig_id;
   IF v_player_rig.is_active THEN RETURN jsonb_build_object('success', false, 'error', 'Deten el rig primero'); END IF;
   CASE p_upgrade_type WHEN 'hashrate' THEN v_current_level := v_player_rig.hashrate_level;
     WHEN 'efficiency' THEN v_current_level := v_player_rig.efficiency_level;
     WHEN 'thermal' THEN v_current_level := v_player_rig.thermal_level; END CASE;
   v_next_level := v_current_level + 1;
-  IF v_next_level > v_player_rig.max_upgrade_level THEN RETURN jsonb_build_object('success', false, 'error', 'Nivel maximo alcanzado'); END IF;
+  IF v_next_level > v_max_upgrade_level THEN RETURN jsonb_build_object('success', false, 'error', 'Nivel maximo alcanzado'); END IF;
   SELECT * INTO v_upgrade_cost FROM upgrade_costs WHERE level = v_next_level;
   IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Nivel no valido'); END IF;
   IF v_player.crypto_balance < v_upgrade_cost.crypto_cost THEN RETURN jsonb_build_object('success', false, 'error', 'Crypto insuficiente', 'required', v_upgrade_cost.crypto_cost); END IF;
@@ -5896,14 +5897,14 @@ BEGIN
   PERFORM update_mission_progress(p_player_id, 'first_upgrade', 1);
 
   -- Check if upgrade reached max level
-  IF v_next_level = v_player_rig.max_upgrade_level THEN
+  IF v_next_level = v_max_upgrade_level THEN
     PERFORM update_mission_progress(p_player_id, 'max_upgrade', 1);
 
     -- Check if ALL upgrades on this rig are maxed
     SELECT * INTO v_player_rig FROM player_rigs WHERE id = p_player_rig_id;
-    IF v_player_rig.hashrate_level >= v_player_rig.max_upgrade_level
-       AND v_player_rig.efficiency_level >= v_player_rig.max_upgrade_level
-       AND v_player_rig.thermal_level >= v_player_rig.max_upgrade_level THEN
+    IF v_player_rig.hashrate_level >= v_max_upgrade_level
+       AND v_player_rig.efficiency_level >= v_max_upgrade_level
+       AND v_player_rig.thermal_level >= v_max_upgrade_level THEN
       PERFORM update_mission_progress(p_player_id, 'full_upgrades', 1);
     END IF;
   END IF;

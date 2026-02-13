@@ -1750,4 +1750,34 @@
     defaultMessage: '¡Nueva actualización disponible!',
     autoRefresh: 'Actualizando automáticamente en {seconds} segundos...',
   },
+
+  updateModal: {
+    title: '¡Nueva Actualización!',
+    version: 'Versión {version}',
+    rebranding: {
+      title: 'Ahora somos LootMine',
+      description: 'Block Lords cambia de nombre a <strong class="text-amber-400">LootMine</strong>. Nueva identidad, nuevo logo, misma comunidad. El loot es tuyo.',
+    },
+    battleArena: {
+      title: 'Battle Arena mejorada',
+      leaderboard: '<strong>Leaderboard:</strong> Tabla de clasificación con los mejores luchadores',
+      persistentSearch: '<strong>Búsqueda persistente:</strong> Si tu oponente cancela, sigues buscando automáticamente',
+      cards: '<strong>22 cartas:</strong> Nuevo mazo ampliado con más estrategias',
+    },
+    gifts: {
+      title: 'Sistema de Regalos',
+      description: 'Recibe regalos sorpresa con monedas, energía, internet y items especiales. Toca el regalo para abrirlo.',
+    },
+    fixes: {
+      title: 'Correcciones y Mejoras',
+      newLook: '<strong>Nuevo look:</strong> Paleta de colores renovada con acentos dorados',
+      notifications: '<strong>Notificaciones mejoradas:</strong> Conexión perdida y actualizaciones ahora con estilo toast no intrusivo',
+      sounds: '<strong>Sonidos:</strong> Efectos de sonido en notificaciones, recompensas y alertas',
+      ronWallet: '<strong>RON Wallet:</strong> Visualización de balance RON y conversión BLC a RON en el perfil',
+      reputation: '<strong>Reputación:</strong> Sistema de reputación visible en tu perfil',
+      translations: '<strong>Traducciones:</strong> Corrección de textos sin traducir en toda la app',
+      rigUpgrade: '<strong>Mejoras de rigs:</strong> Corregido un error que impedía mejorar los rigs',
+    },
+    button: '¡Entendido!',
+  },
 };
