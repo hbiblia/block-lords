@@ -30,39 +30,34 @@ const { t } = useI18n();
       <p class="text-xs text-red-400">{{ error }}</p>
     </div>
 
-    <div class="flex-1 overflow-y-auto p-2">
-      <!-- Searching state -->
-      <div v-if="quickMatchSearching" class="flex-1 flex flex-col items-center justify-center py-8">
-        <div class="w-6 h-6 border-2 border-accent-primary border-t-transparent rounded-full animate-spin mb-3" />
-        <p class="text-sm text-slate-400 text-center">
-          {{ t('battle.quickMatchSearching', 'Searching for opponent...') }}
-        </p>
-
-        <!-- Live stats -->
-        <div class="flex gap-4 mt-3">
-          <div class="flex items-center gap-1.5 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-border/20">
-            <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            <span class="text-xs text-slate-300 font-medium">{{ lobbyCount }}</span>
-            <span class="text-[10px] text-slate-500">{{ t('battle.inLobby', 'in lobby') }}</span>
-          </div>
-          <div class="flex items-center gap-1.5 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-border/20">
-            <span class="w-2 h-2 rounded-full bg-red-400" />
-            <span class="text-xs text-slate-300 font-medium">{{ playingCount }}</span>
-            <span class="text-[10px] text-slate-500">{{ t('battle.inBattle', 'in battle') }}</span>
+    <div class="flex-1 overflow-y-auto p-2 relative">
+      <!-- Searching notification banner -->
+      <Transition name="search-toast">
+        <div v-if="quickMatchSearching" class="sticky top-0 z-10 mb-2">
+          <div class="relative overflow-hidden rounded-xl bg-slate-900/95 border border-emerald-500/30 shadow-lg shadow-emerald-500/10 backdrop-blur-sm">
+            <div class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400 animate-shimmer"></div>
+            <div class="flex items-center gap-3 px-4 py-3">
+              <div class="relative flex-shrink-0">
+                <div class="w-5 h-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-[11px] font-bold text-emerald-300/60 uppercase tracking-wider mb-0.5">{{ t('battle.quickMatch', 'Quick Match') }}</p>
+                <p class="text-xs font-semibold text-white/90">{{ t('battle.quickMatchSearching', 'Waiting for opponent...') }}</p>
+              </div>
+              <button
+                @click="emit('cancelQuickMatch')"
+                :disabled="loading"
+                class="flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 border border-yellow-500/20 hover:border-yellow-500/40 transition-all disabled:opacity-50"
+              >
+                {{ t('battle.cancelQuickMatch', 'Cancel Search') }}
+              </button>
+            </div>
           </div>
         </div>
+      </Transition>
 
-        <button
-          @click="emit('cancelQuickMatch')"
-          :disabled="loading"
-          class="mt-4 py-2 px-6 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-        >
-          {{ t('battle.cancelQuickMatch', 'Cancel Search') }}
-        </button>
-      </div>
-
-      <!-- Welcome screen -->
-      <div v-else class="flex-1 flex flex-col items-center py-4 px-3 space-y-3">
+      <!-- Welcome screen (always visible) -->
+      <div class="flex-1 flex flex-col items-center py-4 px-3 space-y-3">
         <!-- Title -->
         <div class="text-center">
           <span class="text-4xl block mb-1">&#9876;</span>
@@ -128,8 +123,9 @@ const { t } = useI18n();
           </div>
         </div>
 
-        <!-- Quick Match button -->
+        <!-- Quick Match / Cancel button -->
         <button
+          v-if="!quickMatchSearching"
           @click="emit('quickMatch')"
           :disabled="loading"
           class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-lg font-bold text-sm transition-all disabled:opacity-50 shadow-lg shadow-green-500/20"
@@ -142,7 +138,45 @@ const { t } = useI18n();
             &#9876; {{ t('battle.quickMatch', 'Quick Match') }}
           </span>
         </button>
+        <button
+          v-else
+          @click="emit('cancelQuickMatch')"
+          :disabled="loading"
+          class="w-full py-3 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg font-bold text-sm transition-all disabled:opacity-50 border border-yellow-500/30"
+        >
+          {{ t('battle.cancelQuickMatch', 'Cancel Search') }}
+        </button>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+.search-toast-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.search-toast-leave-active {
+  transition: all 0.2s ease-in;
+}
+
+.search-toast-enter-from {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.search-toast-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+</style>
