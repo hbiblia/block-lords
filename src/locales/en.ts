@@ -1786,7 +1786,21 @@ export default {
 
   adblock: {
     title: 'Ad Blocker Detected',
-    message: 'We noticed you are using an ad blocker. Ads help us keep LootMine free for everyone. Please consider disabling your ad blocker to support the game.',
+    message: 'We noticed you are using an ad blocker. Ads help us keep LootMine free for everyone. Please consider disabling it to support the game.',
+    howToFix: 'How to fix it',
+    extensions: {
+      title: 'Browser extensions',
+      description: 'If you use AdBlock, uBlock Origin or similar, click the extension icon and disable it for this site, or add it to your whitelist.',
+    },
+    edge: {
+      title: 'Microsoft Edge',
+      description: 'Go to Settings → Privacy, search and services → Tracking prevention. If set to "Strict", switch to "Balanced" or add this site to exceptions.',
+    },
+    brave: {
+      title: 'Brave Browser',
+      description: 'Click the Brave Shields icon (lion) in the address bar and turn off Shields for this site.',
+    },
+    reloadHint: 'After making changes, reload the page for them to take effect.',
     button: 'I understand',
   },
 };

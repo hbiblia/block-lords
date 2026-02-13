@@ -1786,7 +1786,21 @@
 
   adblock: {
     title: 'Bloqueador de anuncios detectado',
-    message: 'Hemos detectado que estás usando un bloqueador de anuncios. Los anuncios nos ayudan a mantener LootMine gratuito para todos. Por favor, considera desactivar tu bloqueador de anuncios para apoyar el juego.',
+    message: 'Hemos detectado que estás usando un bloqueador de anuncios. Los anuncios nos ayudan a mantener LootMine gratuito para todos. Por favor, considera desactivarlo para apoyar el juego.',
+    howToFix: 'Cómo solucionarlo',
+    extensions: {
+      title: 'Extensiones del navegador',
+      description: 'Si usas AdBlock, uBlock Origin o similar, haz clic en el icono de la extensión y desactívala para este sitio, o agrégalo a tu lista blanca.',
+    },
+    edge: {
+      title: 'Microsoft Edge',
+      description: 'Ve a Configuración → Privacidad, búsqueda y servicios → Prevención de seguimiento. Si está en "Estricto", cámbialo a "Equilibrado" o agrega este sitio a las excepciones.',
+    },
+    brave: {
+      title: 'Brave Browser',
+      description: 'Haz clic en el icono de Brave Shields (león) en la barra de direcciones y desactiva Shields para este sitio.',
+    },
+    reloadHint: 'Después de hacer los cambios, recarga la página para que surtan efecto.',
     button: 'Entendido',
   },
 };

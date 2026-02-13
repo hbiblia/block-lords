@@ -15,14 +15,13 @@ const { t } = useI18n();
 // Ad blocker detection
 const showAdBlockAlert = ref(false);
 
-// function detectAdBlocker() {
-//   fetch('https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js', {
-//     method: 'HEAD',
-//     mode: 'no-cors',
-//   })
-//     .then(() => { showAdBlockAlert.value = false; })
-//     .catch(() => { showAdBlockAlert.value = true; });
-// }
+function detectAdBlocker() {
+  const script = document.createElement('script');
+  script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
+  script.onload = () => { script.remove(); };
+  script.onerror = () => { showAdBlockAlert.value = true; script.remove(); };
+  document.head.appendChild(script);
+}
 
 function dismissAdBlockAlert() {
   showAdBlockAlert.value = false;
@@ -132,8 +131,10 @@ onMounted(() => {
   window.addEventListener('open-market', handleOpenMarketEvent);
   window.addEventListener('open-exchange', handleOpenExchangeEvent);
   window.addEventListener('open-inventory', handleOpenInventoryEvent);
-  // Ad blocker detection (disabled for now)
-  // detectAdBlocker();
+  // Ad blocker detection (only in production)
+  if (window.location.hostname !== 'localhost' && !window.location.hostname.startsWith('127.')) {
+    detectAdBlocker();
+  }
 });
 
 // Cargar datos cuando cambia el estado de autenticación
@@ -276,11 +277,48 @@ async function handleConnectionClick() {
         leave-from-class="opacity-100"
         leave-to-class="opacity-0"
       >
-        <div v-if="showAdBlockAlert" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div class="bg-bg-secondary border border-border/40 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
-            <div class="text-4xl mb-3">🛡️</div>
-            <h3 class="text-lg font-bold text-text-primary mb-2">{{ t('adblock.title') }}</h3>
-            <p class="text-sm text-text-muted mb-5 leading-relaxed">{{ t('adblock.message') }}</p>
+        <div v-if="showAdBlockAlert" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+          <div class="bg-bg-secondary border border-border/40 rounded-2xl p-6 max-w-md w-full shadow-2xl my-auto">
+            <div class="text-center">
+              <div class="text-4xl mb-3">🛡️</div>
+              <h3 class="text-lg font-bold text-text-primary mb-2">{{ t('adblock.title') }}</h3>
+              <p class="text-sm text-text-muted mb-4 leading-relaxed">{{ t('adblock.message') }}</p>
+            </div>
+
+            <!-- Instructions -->
+            <div class="bg-bg-primary/50 rounded-xl p-4 mb-4 text-left space-y-3">
+              <h4 class="text-xs font-bold text-text-primary uppercase tracking-wide">{{ t('adblock.howToFix') }}</h4>
+
+              <!-- Extensions -->
+              <div class="flex gap-2.5">
+                <span class="text-base mt-0.5 shrink-0">🧩</span>
+                <div>
+                  <p class="text-xs font-semibold text-text-primary">{{ t('adblock.extensions.title') }}</p>
+                  <p class="text-[11px] text-text-muted leading-relaxed">{{ t('adblock.extensions.description') }}</p>
+                </div>
+              </div>
+
+              <!-- Edge -->
+              <div class="flex gap-2.5">
+                <span class="text-base mt-0.5 shrink-0">🌐</span>
+                <div>
+                  <p class="text-xs font-semibold text-text-primary">{{ t('adblock.edge.title') }}</p>
+                  <p class="text-[11px] text-text-muted leading-relaxed">{{ t('adblock.edge.description') }}</p>
+                </div>
+              </div>
+
+              <!-- Brave -->
+              <div class="flex gap-2.5">
+                <span class="text-base mt-0.5 shrink-0">🦁</span>
+                <div>
+                  <p class="text-xs font-semibold text-text-primary">{{ t('adblock.brave.title') }}</p>
+                  <p class="text-[11px] text-text-muted leading-relaxed">{{ t('adblock.brave.description') }}</p>
+                </div>
+              </div>
+            </div>
+
+            <p class="text-[11px] text-text-muted text-center mb-4">{{ t('adblock.reloadHint') }}</p>
+
             <button
               @click="dismissAdBlockAlert"
               class="w-full px-4 py-2.5 bg-accent-primary hover:bg-accent-primary/80 text-white font-semibold rounded-xl transition-colors"
