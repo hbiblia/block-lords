@@ -30,6 +30,8 @@ const rewardQueue: RewardEvent[] = [];
 let isShowing = false;
 let dismissTimer: ReturnType<typeof setTimeout> | null = null;
 let countUpFrame: number | null = null;
+let lastRewardTime = 0;
+let lastRewardAmount = 0;
 
 function generateParticles(): CoinParticle[] {
   const emojis = ['🪙', '💰', '✨', '⭐', '💎'];
@@ -89,8 +91,15 @@ function handlePendingBlockCreated(event: Event) {
   const { reward, is_premium, is_pity } = (event as CustomEvent).detail;
   if (!reward) return;
 
+  // Dedup: ignore duplicate events for same reward within 5 seconds
+  const now = Date.now();
+  const amount = Number(reward);
+  if (amount === lastRewardAmount && now - lastRewardTime < 5000) return;
+  lastRewardTime = now;
+  lastRewardAmount = amount;
+
   rewardQueue.push({
-    reward: Number(reward),
+    reward: amount,
     is_premium: !!is_premium,
     is_pity: !!is_pity,
   });

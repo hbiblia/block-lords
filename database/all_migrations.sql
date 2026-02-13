@@ -810,6 +810,22 @@ END $$;
 -- SELECT * FROM cron.job;
 
 -- =====================================================
+-- SUPABASE REALTIME - Habilitar para tablas que necesitan eventos en tiempo real
+-- =====================================================
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE blocks;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE pending_blocks;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE player_rigs;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- =====================================================
 -- NOTA: Las funciones están en all_functions.sql
 -- NOTA: Las políticas RLS están en all_rls_policies.sql
 -- =====================================================
