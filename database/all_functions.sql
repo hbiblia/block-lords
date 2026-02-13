@@ -3130,6 +3130,13 @@ BEGIN
         updated_at = NOW()
     WHERE player_id = p_player_id
     RETURNING * INTO v_streak;
+
+    -- Resetear progreso de achievements de login_streak (no se deben acumular entre rachas)
+    UPDATE player_missions
+    SET progress = 0, is_completed = false, completed_at = NULL
+    WHERE player_id = p_player_id
+      AND mission_id IN (SELECT id FROM missions WHERE mission_type = 'login_streak')
+      AND is_claimed = false;
   END IF;
 
   -- Verificar si puede reclamar (pasaron 20h desde el último claim o nunca ha reclamado)
@@ -3226,6 +3233,13 @@ BEGIN
         updated_at = NOW()
     WHERE player_id = p_player_id
     RETURNING * INTO v_streak;
+
+    -- Resetear progreso de achievements de login_streak (no se deben acumular entre rachas)
+    UPDATE player_missions
+    SET progress = 0, is_completed = false, completed_at = NULL
+    WHERE player_id = p_player_id
+      AND mission_id IN (SELECT id FROM missions WHERE mission_type = 'login_streak')
+      AND is_claimed = false;
   END IF;
 
   -- Verificar si puede reclamar
@@ -3418,20 +3432,44 @@ DECLARE
   v_assigned_count INTEGER := 0;
   v_epic_chance FLOAT := 0.25; -- 25% de probabilidad de misión épica
 BEGIN
-  -- Verificar si ya tiene misiones asignadas hoy
+  -- Asignar achievements permanentes (solo si no existen aún)
+  FOR v_mission IN
+    SELECT * FROM missions WHERE category = 'achievement'
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM player_missions
+      WHERE player_id = p_player_id AND mission_id = v_mission.id
+    ) THEN
+      INSERT INTO player_missions (player_id, mission_id, assigned_date)
+      VALUES (p_player_id, v_mission.id, v_today);
+    END IF;
+  END LOOP;
+
+  -- Auto-completar achievement_premium si el jugador ya compró premium
+  IF EXISTS (SELECT 1 FROM premium_subscriptions WHERE player_id = p_player_id) THEN
+    UPDATE player_missions
+    SET progress = 1, is_completed = true, completed_at = NOW()
+    WHERE player_id = p_player_id
+      AND mission_id = 'achievement_premium'
+      AND is_completed = false;
+  END IF;
+
+  -- Verificar si ya tiene misiones diarias asignadas hoy
   SELECT COUNT(*) INTO v_existing_count
-  FROM player_missions
-  WHERE player_id = p_player_id AND assigned_date = v_today;
+  FROM player_missions pm
+  JOIN missions m ON m.id = pm.mission_id
+  WHERE pm.player_id = p_player_id AND pm.assigned_date = v_today AND m.category = 'daily';
 
   IF v_existing_count >= 4 THEN
     RETURN json_build_object('success', true, 'message', 'Ya tienes misiones asignadas hoy', 'count', v_existing_count);
   END IF;
 
-  -- Eliminar misiones anteriores no completadas (limpieza)
+  -- Eliminar misiones anteriores no completadas (limpieza, excluir achievements)
   DELETE FROM player_missions
   WHERE player_id = p_player_id
     AND assigned_date < v_today
-    AND is_claimed = false;
+    AND is_claimed = false
+    AND mission_id NOT IN (SELECT id FROM missions WHERE category = 'achievement');
 
   -- Seleccionar 1 misión fácil aleatoria
   SELECT * INTO v_easy_mission
@@ -3536,7 +3574,8 @@ BEGIN
   ) INTO v_missions
   FROM player_missions pm
   JOIN missions m ON m.id = pm.mission_id
-  WHERE pm.player_id = p_player_id AND pm.assigned_date = v_today;
+  WHERE pm.player_id = p_player_id
+    AND (pm.assigned_date = v_today OR m.category = 'achievement');
 
   RETURN json_build_object(
     'success', true,
@@ -3562,13 +3601,13 @@ DECLARE
   v_mission RECORD;
   v_updated_count INTEGER := 0;
 BEGIN
-  -- Actualizar todas las misiones del tipo especificado
+  -- Actualizar todas las misiones del tipo especificado (diarias de hoy + achievements permanentes)
   FOR v_mission IN
     SELECT pm.id, pm.progress, m.target_value
     FROM player_missions pm
     JOIN missions m ON m.id = pm.mission_id
     WHERE pm.player_id = p_player_id
-      AND pm.assigned_date = v_today
+      AND (pm.assigned_date = v_today OR m.category = 'achievement')
       AND pm.is_completed = false
       AND m.mission_type = p_mission_type
   LOOP

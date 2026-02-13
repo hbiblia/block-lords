@@ -1016,6 +1016,9 @@ export default {
     onlineTimeToday: 'Online time today:',
     min: 'min',
     toClaim: 'to claim',
+    tabDaily: 'Missions',
+    tabAchievements: 'Achievements',
+    noAchievements: 'No achievements available',
     expiresIn: 'Expires in {time}',
     category: {
       daily: 'Daily',

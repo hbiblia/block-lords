@@ -1016,6 +1016,9 @@
     onlineTimeToday: 'Tiempo online hoy:',
     min: 'min',
     toClaim: 'por reclamar',
+    tabDaily: 'Misiones',
+    tabAchievements: 'Logros',
+    noAchievements: 'No hay logros disponibles',
     expiresIn: 'Expira en {time}',
     category: {
       daily: 'Diaria',

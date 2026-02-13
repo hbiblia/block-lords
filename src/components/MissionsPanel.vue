@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useMissionsStore } from '@/stores/missions';
 import { useStreakStore } from '@/stores/streak';
 import { playSound } from '@/utils/sounds';
+import { formatCompact } from '@/utils/format';
 
 const { t, te } = useI18n();
 
@@ -38,6 +39,16 @@ function categoryColor(cat: string): string {
 }
 const missionsStore = useMissionsStore();
 const streakStore = useStreakStore();
+
+// Tabs
+const activeTab = ref<'daily' | 'achievements'>('daily');
+
+const dailyMissions = computed(() =>
+  missionsStore.missions.filter(m => missionCategory(m.missionId) !== 'achievement')
+);
+const achievementMissions = computed(() =>
+  missionsStore.missions.filter(m => missionCategory(m.missionId) === 'achievement')
+);
 
 const props = defineProps<{
   show: boolean;
@@ -237,9 +248,9 @@ function handleClose() {
       ></div>
 
       <!-- Modal -->
-      <div class="relative w-full max-w-lg max-h-[85vh] overflow-hidden card animate-fade-in p-0">
+      <div class="relative w-full max-w-lg h-[85vh] overflow-hidden card animate-fade-in p-0 flex flex-col">
         <!-- Header -->
-        <div class="flex items-center justify-between p-4 border-b border-border/50">
+        <div class="flex items-center justify-between p-4 border-b border-border/50 shrink-0">
           <div class="flex items-center gap-3">
             <div class="text-3xl">🎯</div>
             <div>
@@ -261,11 +272,40 @@ function handleClose() {
           </button>
         </div>
 
+        <!-- Tabs -->
+        <div class="flex border-b border-border/50 shrink-0">
+          <button
+            @click="activeTab = 'daily'"
+            class="flex-1 py-2.5 text-sm font-medium transition-colors relative"
+            :class="activeTab === 'daily' ? 'text-white' : 'text-text-muted hover:text-white'"
+          >
+            🎯 {{ t('missions.tabDaily') }}
+            <span v-if="dailyMissions.filter(m => m.isCompleted && !m.isClaimed).length" class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-accent-primary text-white">
+              {{ dailyMissions.filter(m => m.isCompleted && !m.isClaimed).length }}
+            </span>
+            <div v-if="activeTab === 'daily'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-primary"></div>
+          </button>
+          <button
+            @click="activeTab = 'achievements'"
+            class="flex-1 py-2.5 text-sm font-medium transition-colors relative"
+            :class="activeTab === 'achievements' ? 'text-white' : 'text-text-muted hover:text-white'"
+          >
+            🏆 {{ t('missions.tabAchievements') }}
+            <span v-if="achievementMissions.filter(m => m.isCompleted && !m.isClaimed).length" class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-yellow-500 text-black">
+              {{ achievementMissions.filter(m => m.isCompleted && !m.isClaimed).length }}
+            </span>
+            <div v-if="activeTab === 'achievements'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-yellow-500"></div>
+          </button>
+        </div>
+
         <!-- Content -->
-        <div class="p-4 overflow-y-auto max-h-[60vh]">
+        <div class="p-4 overflow-y-auto flex-1 min-h-0">
           <div class="space-y-3">
 
-            <!-- ========== STREAK CARD (as first "mission") ========== -->
+            <!-- ========== DAILY TAB ========== -->
+            <template v-if="activeTab === 'daily'">
+
+            <!-- ========== STREAK CARD ========== -->
             <!-- Streak claim result -->
             <div
               v-if="streakStore.lastClaimResult"
@@ -400,7 +440,7 @@ function handleClose() {
 
             <!-- ========== MISSIONS LIST ========== -->
             <!-- Inline Loading -->
-            <div v-if="missionsStore.loading && missionsStore.missions.length === 0" class="space-y-3">
+            <div v-if="missionsStore.loading && dailyMissions.length === 0" class="space-y-3">
               <div v-for="i in 3" :key="i" class="bg-bg-secondary rounded-xl p-4 border-l-4 border-border/50 animate-pulse">
                 <div class="flex items-start gap-3 mb-2">
                   <div class="w-8 h-8 bg-bg-tertiary rounded"></div>
@@ -413,7 +453,7 @@ function handleClose() {
               </div>
             </div>
             <div
-              v-for="mission in missionsStore.missions"
+              v-for="mission in dailyMissions"
               :key="mission.id"
               class="bg-bg-secondary rounded-xl p-4 border-l-4 transition-all"
               :class="{
@@ -475,7 +515,7 @@ function handleClose() {
                 <div class="flex items-center gap-2">
                   <span class="text-lg">{{ missionsStore.getRewardIcon(mission.rewardType) }}</span>
                   <span class="font-bold" :class="mission.rewardType === 'crypto' ? 'text-accent-primary' : 'text-status-warning'">
-                    +{{ mission.rewardAmount }}
+                    +{{ formatCompact(mission.rewardAmount) }}
                   </span>
                 </div>
 
@@ -503,16 +543,119 @@ function handleClose() {
             </div>
 
             <!-- Empty State -->
-            <div v-if="!missionsStore.loading && missionsStore.missions.length === 0" class="text-center py-8 text-text-muted">
+            <div v-if="!missionsStore.loading && dailyMissions.length === 0" class="text-center py-8 text-text-muted">
               <div class="text-4xl mb-3">📋</div>
               <p>{{ t('missions.noMissions') }}</p>
               <p class="text-xs mt-1">{{ t('missions.comeBackTomorrow') }}</p>
             </div>
+
+            </template>
+
+            <!-- ========== ACHIEVEMENTS TAB ========== -->
+            <template v-if="activeTab === 'achievements'">
+            <div v-if="missionsStore.loading && achievementMissions.length === 0" class="grid grid-cols-2 gap-3">
+              <div v-for="i in 4" :key="i" class="bg-bg-secondary rounded-xl p-3 border-l-4 border-border/50 animate-pulse">
+                <div class="flex items-start gap-2 mb-2">
+                  <div class="w-7 h-7 bg-bg-tertiary rounded"></div>
+                  <div class="flex-1">
+                    <div class="h-3 bg-bg-tertiary rounded w-20 mb-1.5"></div>
+                    <div class="h-2.5 bg-bg-tertiary rounded w-28"></div>
+                  </div>
+                </div>
+                <div class="h-1.5 bg-bg-tertiary rounded-full"></div>
+              </div>
+            </div>
+            <div v-if="achievementMissions.length > 0" class="grid grid-cols-2 gap-3">
+              <div
+                v-for="mission in achievementMissions"
+                :key="mission.id"
+                class="bg-bg-secondary rounded-xl p-3 border-l-4 transition-all"
+                :class="{
+                  'border-status-success opacity-75': mission.isClaimed,
+                  'border-yellow-500': mission.isCompleted && !mission.isClaimed,
+                  'border-border/50': !mission.isCompleted,
+                }"
+              >
+                <!-- Header -->
+                <div class="flex items-start gap-2 mb-1.5">
+                  <span class="text-xl">{{ mission.icon }}</span>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="font-medium text-sm leading-tight truncate">{{ missionName(mission.missionId) }}</h3>
+                    <p class="text-[10px] text-text-muted leading-tight truncate">{{ missionDesc(mission.missionId) }}</p>
+                  </div>
+                </div>
+
+                <!-- Difficulty Badge -->
+                <div class="mb-1.5">
+                  <span
+                    class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+                    :class="missionsStore.getDifficultyBg(mission.difficulty) + ' ' + missionsStore.getDifficultyColor(mission.difficulty)"
+                  >
+                    {{ t(`missions.difficulty.${mission.difficulty}`) }}
+                  </span>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="mb-2">
+                  <div class="flex items-center justify-between text-[10px] mb-0.5">
+                    <span class="text-text-muted">{{ t('missions.progress') }}</span>
+                    <span class="font-mono" :class="mission.isCompleted ? 'text-status-success' : ''">
+                      {{ formatProgress(mission.progress, mission.targetValue) }}
+                    </span>
+                  </div>
+                  <div class="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+                    <div
+                      class="h-full rounded-full transition-all duration-300"
+                      :class="mission.isCompleted ? 'bg-status-success' : 'bg-gradient-to-r from-yellow-500 to-amber-500'"
+                      :style="{ width: `${mission.progressPercent}%` }"
+                    ></div>
+                  </div>
+                </div>
+
+                <!-- Reward & Action -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1">
+                    <span class="text-sm">{{ missionsStore.getRewardIcon(mission.rewardType) }}</span>
+                    <span class="font-bold text-sm" :class="mission.rewardType === 'crypto' ? 'text-accent-primary' : 'text-status-warning'">
+                      +{{ formatCompact(mission.rewardAmount) }}
+                    </span>
+                  </div>
+
+                  <button
+                    v-if="mission.isCompleted && !mission.isClaimed"
+                    @click="handleClaimMission(mission.id)"
+                    :disabled="missionsStore.claiming"
+                    class="px-2.5 py-1 rounded-lg bg-yellow-500 text-black font-medium text-xs hover:bg-yellow-400 transition-colors disabled:opacity-50"
+                  >
+                    {{ missionsStore.claiming ? '...' : t('missions.claim') }}
+                  </button>
+                  <span
+                    v-else-if="mission.isClaimed"
+                    class="text-[10px] text-status-success font-medium flex items-center gap-0.5"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    {{ t('missions.claimed') }}
+                  </span>
+                  <span v-else class="text-[10px] text-text-muted">
+                    {{ mission.progressPercent }}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empty State -->
+            <div v-if="!missionsStore.loading && achievementMissions.length === 0" class="text-center py-8 text-text-muted">
+              <div class="text-4xl mb-3">🏆</div>
+              <p>{{ t('missions.noAchievements') }}</p>
+            </div>
+            </template>
           </div>
         </div>
 
         <!-- Footer -->
-        <div class="p-4 border-t border-border/50 bg-bg-secondary">
+        <div class="p-4 border-t border-border/50 bg-bg-secondary shrink-0">
           <div class="flex items-center justify-between text-sm">
             <div class="flex items-center gap-2 text-text-muted">
               <span>⏱️</span>
