@@ -74,13 +74,16 @@ watch(() => props.show, (isOpen) => {
     document.body.style.overflow = 'hidden';
     missionsStore.fetchMissions();
     streakStore.fetchStatus();
+    startCountdown();
   } else {
     document.body.style.overflow = '';
+    stopCountdown();
   }
 });
 
 onUnmounted(() => {
   document.body.style.overflow = '';
+  stopCountdown();
 });
 
 // === Missions logic ===
@@ -165,6 +168,36 @@ function formatTimeRemaining(dateStr: string | null) {
   }
   return `${minutes}m`;
 }
+
+// === Mission countdown timer ===
+const now = ref(new Date());
+let countdownInterval: ReturnType<typeof setInterval> | null = null;
+
+function startCountdown() {
+  now.value = new Date();
+  if (!countdownInterval) {
+    countdownInterval = setInterval(() => { now.value = new Date(); }, 60_000);
+  }
+}
+
+function stopCountdown() {
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+}
+
+const missionTimeRemaining = computed(() => {
+  const n = now.value;
+  // Missions expire at next midnight UTC
+  const tomorrow = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate() + 1));
+  const diff = tomorrow.getTime() - n.getTime();
+  if (diff <= 0) return '';
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+});
 
 function handleClose() {
   playSound('click');
@@ -412,6 +445,12 @@ function handleClose() {
                     {{ t(`missions.difficulty.${mission.difficulty}`) }}
                   </span>
                 </div>
+              </div>
+
+              <!-- Time remaining -->
+              <div v-if="!mission.isClaimed && missionTimeRemaining" class="flex items-center gap-1 text-[11px] text-text-muted mb-2">
+                <span>⏳</span>
+                <span>{{ t('missions.expiresIn', { time: missionTimeRemaining }) }}</span>
               </div>
 
               <!-- Progress Bar -->

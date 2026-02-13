@@ -1013,6 +1013,7 @@ export default {
     onlineTimeToday: 'Online time today:',
     min: 'min',
     toClaim: 'to claim',
+    expiresIn: 'Expires in {time}',
     category: {
       daily: 'Daily',
       weekly: 'Weekly',

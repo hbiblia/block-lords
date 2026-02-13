@@ -1013,6 +1013,7 @@
     onlineTimeToday: 'Tiempo online hoy:',
     min: 'min',
     toClaim: 'por reclamar',
+    expiresIn: 'Expira en {time}',
     category: {
       daily: 'Diaria',
       weekly: 'Semanal',

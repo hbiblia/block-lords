@@ -3436,7 +3436,7 @@ BEGIN
   -- Seleccionar 1 misión fácil aleatoria
   SELECT * INTO v_easy_mission
   FROM missions
-  WHERE difficulty = 'easy'
+  WHERE difficulty = 'easy' AND category = 'daily'
   ORDER BY RANDOM()
   LIMIT 1;
 
@@ -3450,7 +3450,7 @@ BEGIN
   -- Seleccionar 2 misiones medias aleatorias
   FOR v_mission IN
     SELECT * FROM missions
-    WHERE difficulty = 'medium'
+    WHERE difficulty = 'medium' AND category = 'daily'
     ORDER BY RANDOM()
     LIMIT 2
   LOOP
@@ -3463,7 +3463,7 @@ BEGIN
   -- Seleccionar 1 misión difícil aleatoria
   SELECT * INTO v_hard_mission
   FROM missions
-  WHERE difficulty = 'hard'
+  WHERE difficulty = 'hard' AND category = 'daily'
   ORDER BY RANDOM()
   LIMIT 1;
 
@@ -3478,7 +3478,7 @@ BEGIN
   IF RANDOM() < v_epic_chance THEN
     SELECT * INTO v_epic_mission
     FROM missions
-    WHERE difficulty = 'epic'
+    WHERE difficulty = 'epic' AND category = 'daily'
     ORDER BY RANDOM()
     LIMIT 1;
 
@@ -5549,6 +5549,7 @@ BEGIN
   PERFORM update_mission_progress(p_player_id, 'earn_crypto', v_pending.reward);
   PERFORM update_mission_progress(p_player_id, 'earn_crypto_weekly', v_pending.reward);
   PERFORM update_mission_progress(p_player_id, 'total_crypto', v_pending.reward);
+  PERFORM update_mission_progress(p_player_id, 'event_crypto', v_pending.reward);
   RETURN json_build_object('success', true, 'reward', v_pending.reward, 'block_id', COALESCE(v_pending.block_id, v_pending.id));
 END;
 $$;
@@ -5571,6 +5572,7 @@ BEGIN
   PERFORM update_mission_progress(p_player_id, 'earn_crypto', v_total_reward);
   PERFORM update_mission_progress(p_player_id, 'earn_crypto_weekly', v_total_reward);
   PERFORM update_mission_progress(p_player_id, 'total_crypto', v_total_reward);
+  PERFORM update_mission_progress(p_player_id, 'event_crypto', v_total_reward);
   RETURN json_build_object('success', true, 'total_reward', v_total_reward, 'blocks_claimed', v_count);
 END;
 $$;
