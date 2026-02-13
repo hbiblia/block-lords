@@ -10,7 +10,7 @@
 
 body {
   min-height: 100vh;
-  background: #1a1510;
+  background: #1a1b2e;
   font-family: 'Inter', sans-serif;
 }
 
@@ -21,16 +21,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #211c13;
+  background: #1e1f36;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4a3f2a;
+  background: #3f3f5c;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #5c4e35;
+  background: #4f4f6f;
 }
 
 /* === COMPONENTES === */
@@ -472,7 +472,7 @@ body {
 
 /* === FLOATING-VUE TOOLTIPS === */
 .v-popper--theme-tooltip {
-  --v-popper-bg: rgba(26, 21, 16, 0.95);
+  --v-popper-bg: rgba(15, 16, 30, 0.95);
   --v-popper-border: rgba(245, 158, 11, 0.3);
   --v-popper-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }

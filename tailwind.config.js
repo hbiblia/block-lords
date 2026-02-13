@@ -7,12 +7,12 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Paleta LootMine - Gold/Amber theme
+        // Paleta LootMine - Dark base + Amber accents
         'bg': {
-          'primary': '#1a1510',
-          'secondary': '#262016',
-          'tertiary': '#33291c',
-          'card': '#211c13',
+          'primary': '#1a1b2e',
+          'secondary': '#252640',
+          'tertiary': '#2f3052',
+          'card': '#1e1f36',
         },
         'accent': {
           'primary': '#f59e0b',    // Amber
@@ -26,8 +26,8 @@ export default {
           'muted': '#71717a',
         },
         'border': {
-          'DEFAULT': '#4a3f2a',
-          'light': '#5c4e35',
+          'DEFAULT': '#3f3f5c',
+          'light': '#4f4f6f',
         },
         'status': {
           'success': '#22c55e',
@@ -63,7 +63,7 @@ export default {
         'gradient-radial': 'radial-gradient(ellipse at center, var(--tw-gradient-stops))',
         'gradient-primary': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
         'gradient-secondary': 'linear-gradient(135deg, #06b6d4 0%, #f59e0b 100%)',
-        'gradient-dark': 'linear-gradient(180deg, #1a1510 0%, #262016 100%)',
+        'gradient-dark': 'linear-gradient(180deg, #1a1b2e 0%, #252640 100%)',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
