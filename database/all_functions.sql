@@ -7410,7 +7410,7 @@ BEGIN
     'success', true,
     'participants', v_participants_count,
     'total_shares', v_mining_block.total_shares,
-    'rewards_distributed', v_rewards_distributed,
+    'rewards_distributed', v_mining_block.reward,
     'block_number', v_mining_block.block_number
   );
 END;
@@ -7754,11 +7754,16 @@ BEGIN
       mb.total_shares,
       mb.reward,
       mb.closed_at as created_at,
-      -- Total real distribuido (incluye bonus premium)
-      (SELECT COALESCE(SUM(pb.reward), 0) FROM pending_blocks pb
-       WHERE pb.created_at >= mb.closed_at - INTERVAL '5 seconds'
-         AND pb.created_at <= mb.closed_at + INTERVAL '5 seconds'
-         AND pb.shares_contributed IS NOT NULL) as total_distributed,
+      -- Total distribuido (base sin bonus premium)
+      COALESCE((SELECT SUM(
+        CASE WHEN pb.is_premium THEN pb.reward / 1.5 ELSE pb.reward END
+       ) FROM pending_blocks pb
+       WHERE pb.block_number = mb.block_number), mb.reward) as total_distributed,
+      -- Bonus premium aparte (+50% extra que recibieron los premium)
+      COALESCE((SELECT SUM(
+        CASE WHEN pb.is_premium THEN pb.reward - (pb.reward / 1.5) ELSE 0 END
+       ) FROM pending_blocks pb
+       WHERE pb.block_number = mb.block_number), 0) as premium_bonus,
       -- Contar contribuyentes únicos
       (SELECT COUNT(DISTINCT player_id) FROM pending_blocks
        WHERE created_at >= mb.closed_at - INTERVAL '5 seconds'

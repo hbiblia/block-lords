@@ -62,6 +62,7 @@ interface Block {
   // Nuevo sistema de shares
   total_shares?: number;
   total_distributed?: number;
+  premium_bonus?: number;
   contributors_count?: number;
   top_contributor?: {
     username: string;

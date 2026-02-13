@@ -1135,6 +1135,12 @@ onUnmounted(() => {
                       {{ (block.total_distributed || block.reward || 0).toFixed(1) }} ₿
                     </span>
                   </div>
+                  <div v-if="block.premium_bonus && block.premium_bonus > 0" class="flex items-center justify-between text-xs">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.tooltip.premiumBonusAmount')">👑 {{ t('mining.recentBlock.premiumBonus') }}</span>
+                    <span class="font-mono text-purple-400 cursor-help" v-tooltip="t('mining.tooltip.premiumBonusAmountValue', { bonus: block.premium_bonus.toFixed(3) })">
+                      +{{ block.premium_bonus.toFixed(1) }} ₿
+                    </span>
+                  </div>
                   <!-- Top contributor -->
                   <div v-if="block.top_contributor" class="flex items-center justify-between text-xs pt-0.5 border-t border-border/20">
                     <span class="text-text-muted flex items-center gap-1 cursor-help" v-tooltip="t('mining.tooltip.topContributor')">
@@ -1157,6 +1163,12 @@ onUnmounted(() => {
                     <span class="text-text-muted cursor-help" v-tooltip="t('mining.tooltip.totalDistributed')">{{ t('mining.recentBlock.totalDistributed') }}</span>
                     <span class="font-mono text-status-warning" v-tooltip="t('mining.tooltip.totalDistributedValue', { total: (block.total_distributed || block.reward || 0).toFixed(3) })">
                       {{ (block.total_distributed || block.reward || 0).toFixed(1) }} ₿
+                    </span>
+                  </div>
+                  <div v-if="block.premium_bonus && block.premium_bonus > 0" class="flex items-center justify-between text-xs">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.tooltip.premiumBonusAmount')">👑 {{ t('mining.recentBlock.premiumBonus') }}</span>
+                    <span class="font-mono text-purple-400 cursor-help" v-tooltip="t('mining.tooltip.premiumBonusAmountValue', { bonus: block.premium_bonus.toFixed(3) })">
+                      +{{ block.premium_bonus.toFixed(1) }} ₿
                     </span>
                   </div>
                   <!-- Top contributor -->
