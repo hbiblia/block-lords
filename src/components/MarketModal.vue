@@ -28,11 +28,11 @@ interface CoolingItemType {
 
 interface CardItem {
   id: string;
-  card_type: 'energy' | 'internet';
+  card_type: 'energy' | 'internet' | 'combo';
   amount: number;
   base_price: number;
   tier: string;
-  currency: 'gamecoin' | 'crypto';
+  currency: 'gamecoin' | 'crypto' | 'ron';
 }
 
 interface BoostItemType {
@@ -142,6 +142,7 @@ const rigsForSale = computed(() => marketStore.rigsForSale);
 const coolingItems = computed(() => marketStore.coolingItems);
 const energyCards = computed(() => marketStore.energyCards);
 const internetCards = computed(() => marketStore.internetCards);
+const comboCards = computed(() => marketStore.comboCards);
 const boostItems = computed(() => marketStore.boostItems);
 const cryptoPackages = computed(() => marketStore.cryptoPackages);
 
@@ -286,6 +287,15 @@ function canAffordRig(rig: RigItem): boolean {
   return balance.value >= rig.base_price;
 }
 
+function canAffordCard(card: CardItem): boolean {
+  if (card.currency === 'crypto') {
+    return cryptoBalance.value >= card.base_price;
+  } else if (card.currency === 'ron') {
+    return ronBalance.value >= card.base_price;
+  }
+  return balance.value >= card.base_price;
+}
+
 function getRigCurrencyIcon(currency: string): string {
   if (currency === 'crypto') return '💎';
   if (currency === 'ron') return 'RON';
@@ -383,7 +393,9 @@ function requestBuyCard(card: CardItem) {
     id: card.id,
     name: getCardName(card.id),
     price: card.base_price,
-    description: `+${card.amount} ${card.card_type === 'energy' ? t('market.energy') : t('market.internet')}`,
+    description: card.card_type === 'combo'
+      ? `+${card.amount} ⚡ ${t('market.energy')} + 📡 ${t('market.internet')}`
+      : `+${card.amount} ${card.card_type === 'energy' ? t('market.energy') : t('market.internet')}`,
     currency: card.currency || 'gamecoin',
   };
   showConfirm.value = true;
@@ -444,7 +456,7 @@ function requestBuyCryptoPackage(pkg: CryptoPackageType) {
     id: pkg.id,
     name: getCryptoPackageName(pkg.id),
     price: pkg.ron_price,
-    description: `${pkg.total_crypto} 💎 BLC${bonusText}`,
+    description: `${pkg.total_crypto} 💎 Landwork${bonusText}`,
     currency: 'ron',
   };
   showConfirm.value = true;
@@ -626,7 +638,7 @@ watch(() => props.show, (newVal) => {
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
               <span>💎</span>
-              <span>{{ t('market.tabs.crypto', 'BLC') }}</span>
+              <span>{{ t('market.tabs.crypto', 'Landwork') }}</span>
             </button>
           </div>
 
@@ -839,6 +851,56 @@ watch(() => props.show, (newVal) => {
                       :disabled="purchaseDisabled || (card.currency === 'crypto' ? cryptoBalance : balance) < card.base_price"
                     >
                       {{ buying ? '...' : `${formatNumber(card.base_price)} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
+                    </button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Combo Cards (Energy + Internet) -->
+              <template v-if="activeFilter === 'all' || activeFilter === 'energy' || activeFilter === 'internet'">
+                <div
+                  v-for="card in comboCards"
+                  :key="card.id"
+                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col bg-gradient-to-br from-amber-500/10 to-cyan-500/10 border-amber-500/20 transition-all hover:scale-[1.01]"
+                >
+                  <div class="flex items-start justify-between mb-1.5 sm:mb-2">
+                    <div class="min-w-0 flex-1">
+                      <h4 class="font-medium text-xs sm:text-sm text-white truncate">{{ getCardName(card.id) }}</h4>
+                      <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ card.tier }}</p>
+                    </div>
+                    <span class="text-lg sm:text-2xl ml-1">⚡📡</span>
+                  </div>
+
+                  <div class="space-y-1 mb-1 sm:mb-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[10px] sm:text-xs text-text-muted">⚡ {{ t('market.energy') }}</span>
+                      <span class="font-mono font-bold text-xs sm:text-sm text-amber-400">+{{ card.amount }}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span class="text-[10px] sm:text-xs text-text-muted">📡 {{ t('market.internet') }}</span>
+                      <span class="font-mono font-bold text-xs sm:text-sm text-cyan-400">+{{ card.amount }}</span>
+                    </div>
+                  </div>
+
+                  <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ getCardDescription(card.id) }}</p>
+
+                  <!-- Show owned quantity if any -->
+                  <div v-if="getCardOwned(card.id) > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
+                    <span class="px-1.5 sm:px-2 py-0.5 rounded bg-white/10 text-white">
+                      {{ getCardOwned(card.id) }} {{ t('market.cooling.inventory') }}
+                    </span>
+                  </div>
+
+                  <div class="mt-auto">
+                    <button
+                      @click="requestBuyCard(card)"
+                      class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
+                      :class="canAffordCard(card)
+                        ? 'bg-gradient-to-r from-amber-500 to-cyan-500 text-white hover:from-amber-400 hover:to-cyan-400'
+                        : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
+                      :disabled="purchaseDisabled || !canAffordCard(card)"
+                    >
+                      {{ buying ? '...' : `${formatNumber(card.base_price, 2)} RON` }}
                     </button>
                   </div>
                 </div>
@@ -1130,7 +1192,7 @@ watch(() => props.show, (newVal) => {
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
                 <span class="text-lg">💎</span>
-                <span class="text-[10px] font-medium">BLC</span>
+                <span class="text-[10px] font-medium">Landwork</span>
               </button>
             </div>
           </div>

@@ -377,7 +377,7 @@ export const TURN_DURATION = 45;
 export const BET_AMOUNT = 20; // default, kept for backward compat
 
 // Currency type
-export type Currency = 'GC' | 'BLC' | 'RON';
+export type Currency = 'GC' | 'Landwork' | 'RON';
 
 // Bet option interface
 export interface BetOption {
@@ -390,8 +390,8 @@ export interface BetOption {
 export const BET_OPTIONS: readonly BetOption[] = [
   { amount: 100, currency: 'GC', label: '100 GC' },
   { amount: 2500, currency: 'GC', label: '2500 GC' },
-  { amount: 1000, currency: 'BLC', label: '1000 BLC' },
-  { amount: 2500, currency: 'BLC', label: '2500 BLC' },
+  { amount: 1000, currency: 'Landwork', label: '1000 Landwork' },
+  { amount: 2500, currency: 'Landwork', label: '2500 Landwork' },
   { amount: 0.2, currency: 'RON', label: '0.2 RON' },
   { amount: 1, currency: 'RON', label: '1 RON' },
 ] as const;

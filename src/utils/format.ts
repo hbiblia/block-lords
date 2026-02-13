@@ -30,17 +30,27 @@ export function formatNumber(value: number | string | undefined | null, decimals
 }
 
 /**
- * Format GameCoin balance (no decimals for display, but with thousands separators)
+ * Format GameCoin balance (compact for large numbers)
  */
 export function formatGamecoin(value: number | undefined | null): string {
-  return formatNumber(value, 0);
+  if (value === undefined || value === null) return '0';
+  const v = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(v)) return '0';
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (v >= 1_000) return (v / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return formatNumber(v, 0);
 }
 
 /**
- * Format Crypto balance (2 decimals with thousands separators)
+ * Format Crypto balance (compact for large numbers, 2 decimals for small)
  */
 export function formatCrypto(value: number | undefined | null): string {
-  return formatNumber(value, 2);
+  if (value === undefined || value === null) return '0.00';
+  const v = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(v)) return '0.00';
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (v >= 1_000) return (v / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return formatNumber(v, 2);
 }
 
 /**
@@ -69,7 +79,7 @@ export function formatCompact(value: number | undefined | null): string {
     return (value / 1_000_000).toFixed(1) + 'M';
   }
   if (value >= 1_000) {
-    return (value / 1_000).toFixed(1) + 'K';
+    return (value / 1_000).toFixed(1) + 'k';
   }
   return formatNumber(value, 0);
 }

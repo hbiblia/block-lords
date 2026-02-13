@@ -77,7 +77,7 @@ onMounted(async () => {
 
         <!-- Título -->
         <h1 class="text-3xl font-display font-bold mb-2">
-          <span class="gradient-text">BLOCK LORDS</span>
+          <span class="gradient-text">LOOTMINE</span>
         </h1>
 
         <!-- Barra de progreso -->

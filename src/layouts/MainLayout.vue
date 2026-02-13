@@ -8,11 +8,25 @@ import { useMissionsStore } from '@/stores/missions';
 import { usePendingBlocksStore } from '@/stores/pendingBlocks';
 import { useMiningStore } from '@/stores/mining';
 import { useGiftsStore } from '@/stores/gifts';
-import { useToastStore } from '@/stores/toast';
 import { useDefenseStore } from '@/stores/defense';
-import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
+
+// Ad blocker detection
+const showAdBlockAlert = ref(false);
+
+// function detectAdBlocker() {
+//   fetch('https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js', {
+//     method: 'HEAD',
+//     mode: 'no-cors',
+//   })
+//     .then(() => { showAdBlockAlert.value = false; })
+//     .catch(() => { showAdBlockAlert.value = true; });
+// }
+
+function dismissAdBlockAlert() {
+  showAdBlockAlert.value = false;
+}
 
 // Global modals state
 const showMarket = ref(false);
@@ -46,6 +60,7 @@ import InventoryModal from '@/components/InventoryModal.vue';
 import ExchangeModal from '@/components/ExchangeModal.vue';
 import GiftModal from '@/components/GiftModal.vue';
 import DefenseModal from '@/components/DefenseModal.vue';
+import RewardCelebration from '@/components/RewardCelebration.vue';
 
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
@@ -54,7 +69,6 @@ const missionsStore = useMissionsStore();
 const pendingBlocksStore = usePendingBlocksStore();
 const miningStore = useMiningStore();
 const giftsStore = useGiftsStore();
-const toastStore = useToastStore();
 const defenseStore = useDefenseStore();
 
 // Combined rewards panel (missions + streak)
@@ -95,18 +109,9 @@ function handleBlockMined(event: CustomEvent) {
 }
 
 // Escuchar evento de bloque pendiente creado (incluye pity blocks)
-function handlePendingBlockCreated(event: CustomEvent) {
+// El feedback visual y sonido lo maneja RewardCelebration.vue
+function handlePendingBlockCreated() {
   pendingBlocksStore.fetchPendingBlocks();
-
-  // Mostrar toast con la recompensa del cierre de bloque
-  const { reward } = event.detail;
-  if (reward) {
-    playSound('block_mined');
-    toastStore.show(`+${Number(reward).toFixed(4)} ₿`, 'success', {
-      icon: '⛏️',
-      duration: 6000,
-    });
-  }
 }
 
 // Event handlers for modal opening from other pages
@@ -127,6 +132,8 @@ onMounted(() => {
   window.addEventListener('open-market', handleOpenMarketEvent);
   window.addEventListener('open-exchange', handleOpenExchangeEvent);
   window.addEventListener('open-inventory', handleOpenInventoryEvent);
+  // Ad blocker detection (disabled for now)
+  // detectAdBlocker();
 });
 
 // Cargar datos cuando cambia el estado de autenticación
@@ -255,6 +262,35 @@ async function handleConnectionClick() {
 
     <!-- Toast Notifications -->
     <ToastContainer />
+
+    <!-- Reward Celebration Animation -->
+    <RewardCelebration />
+
+    <!-- Ad Blocker Alert -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-300"
+        leave-active-class="transition-opacity duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="showAdBlockAlert" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div class="bg-bg-secondary border border-border/40 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
+            <div class="text-4xl mb-3">🛡️</div>
+            <h3 class="text-lg font-bold text-text-primary mb-2">{{ t('adblock.title') }}</h3>
+            <p class="text-sm text-text-muted mb-5 leading-relaxed">{{ t('adblock.message') }}</p>
+            <button
+              @click="dismissAdBlockAlert"
+              class="w-full px-4 py-2.5 bg-accent-primary hover:bg-accent-primary/80 text-white font-semibold rounded-xl transition-colors"
+            >
+              {{ t('adblock.button') }}
+            </button>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
 
     <!-- Missions & Streak Panel -->
     <MissionsPanel

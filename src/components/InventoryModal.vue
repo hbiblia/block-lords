@@ -24,7 +24,7 @@ const using = ref(false);
 
 // Group cards by card_id (same type + same value)
 const groupedCards = computed(() => {
-  const groups = new Map<string, { card_id: string; card_type: 'energy' | 'internet'; amount: number; tier: string; codes: { id: string; code: string }[]; }>();
+  const groups = new Map<string, { card_id: string; card_type: 'energy' | 'internet' | 'combo'; amount: number; tier: string; codes: { id: string; code: string }[]; }>();
   for (const card of inventoryStore.cardItems) {
     const existing = groups.get(card.card_id);
     if (existing) {
@@ -69,7 +69,7 @@ const confirmAction = ref<{
   data: {
     cardCode?: string;
     cardName?: string;
-    cardType?: 'energy' | 'internet';
+    cardType?: 'energy' | 'internet' | 'combo';
     cardAmount?: number;
     rigId?: string;
     rigName?: string;
@@ -87,7 +87,7 @@ function closeProcessingModal() {
   processingError.value = '';
 }
 
-function requestRedeemCard(group: { card_id: string; card_type: 'energy' | 'internet'; amount: number; codes: { id: string; code: string }[] }) {
+function requestRedeemCard(group: { card_id: string; card_type: 'energy' | 'internet' | 'combo'; amount: number; codes: { id: string; code: string }[] }) {
   confirmAction.value = {
     type: 'redeem',
     data: {
@@ -426,27 +426,45 @@ function formatTimeRemaining(seconds: number): string {
                     v-for="group in groupedCards"
                     :key="group.card_id"
                     class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
-                    :class="group.card_type === 'energy'
-                      ? 'bg-amber-500/10 border-amber-500/30'
-                      : 'bg-cyan-500/10 border-cyan-500/30'"
+                    :class="group.card_type === 'combo'
+                      ? 'bg-gradient-to-br from-amber-500/10 to-cyan-500/10 border-amber-500/20'
+                      : group.card_type === 'energy'
+                        ? 'bg-amber-500/10 border-amber-500/30'
+                        : 'bg-cyan-500/10 border-cyan-500/30'"
                   >
                     <div class="flex items-start justify-between mb-2 sm:mb-3">
                       <div class="min-w-0 flex-1">
-                        <h4 class="font-medium text-xs sm:text-sm truncate" :class="group.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">{{ getCardName(group.card_id) }}</h4>
+                        <h4 class="font-medium text-xs sm:text-sm truncate" :class="group.card_type === 'combo' ? 'text-white' : group.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">{{ getCardName(group.card_id) }}</h4>
                         <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ group.tier }}</p>
                       </div>
-                      <span class="text-lg sm:text-2xl ml-1">{{ group.card_type === 'energy' ? '⚡' : '📡' }}</span>
+                      <span class="text-lg sm:text-2xl ml-1">{{ group.card_type === 'combo' ? '⚡📡' : group.card_type === 'energy' ? '⚡' : '📡' }}</span>
                     </div>
 
-                    <div class="flex items-center justify-between mb-1 sm:mb-2">
-                      <span class="text-[10px] sm:text-xs text-text-muted">{{ group.card_type === 'energy' ? t('welcome.energy', 'Energía') : t('welcome.internet', 'Internet') }}</span>
-                      <span class="font-mono font-bold text-sm sm:text-lg" :class="group.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">
-                        +{{ group.amount }}%
-                      </span>
-                    </div>
+                    <!-- Combo: show both resources -->
+                    <template v-if="group.card_type === 'combo'">
+                      <div class="space-y-1 mb-1 sm:mb-2">
+                        <div class="flex items-center justify-between">
+                          <span class="text-[10px] sm:text-xs text-text-muted">⚡ {{ t('welcome.energy', 'Energía') }}</span>
+                          <span class="font-mono font-bold text-xs sm:text-sm text-amber-400">+{{ group.amount }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                          <span class="text-[10px] sm:text-xs text-text-muted">📡 {{ t('welcome.internet', 'Internet') }}</span>
+                          <span class="font-mono font-bold text-xs sm:text-sm text-cyan-400">+{{ group.amount }}</span>
+                        </div>
+                      </div>
+                    </template>
+                    <!-- Single resource -->
+                    <template v-else>
+                      <div class="flex items-center justify-between mb-1 sm:mb-2">
+                        <span class="text-[10px] sm:text-xs text-text-muted">{{ group.card_type === 'energy' ? t('welcome.energy', 'Energía') : t('welcome.internet', 'Internet') }}</span>
+                        <span class="font-mono font-bold text-sm sm:text-lg" :class="group.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">
+                          +{{ group.amount }}%
+                        </span>
+                      </div>
+                    </template>
 
                     <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
-                      <span>{{ group.card_type === 'energy' ? '⚡' : '📡' }} {{ t('inventory.tabs.cards', 'Tarjetas') }}</span>
+                      <span>{{ group.card_type === 'combo' ? '⚡📡' : group.card_type === 'energy' ? '⚡' : '📡' }} {{ t('inventory.tabs.cards', 'Tarjetas') }}</span>
                       <span class="font-medium">x{{ group.codes.length }}</span>
                     </div>
 
@@ -455,9 +473,11 @@ function formatTimeRemaining(seconds: number): string {
                         @click="requestRedeemCard(group)"
                         :disabled="using"
                         class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
-                        :class="group.card_type === 'energy'
-                          ? 'bg-amber-500 text-white hover:bg-amber-400'
-                          : 'bg-cyan-500 text-white hover:bg-cyan-400'"
+                        :class="group.card_type === 'combo'
+                          ? 'bg-gradient-to-r from-amber-500 to-cyan-500 text-white hover:from-amber-400 hover:to-cyan-400'
+                          : group.card_type === 'energy'
+                            ? 'bg-amber-500 text-white hover:bg-amber-400'
+                            : 'bg-cyan-500 text-white hover:bg-cyan-400'"
                       >
                         {{ using ? '...' : t('inventory.cards.recharge') }}
                       </button>

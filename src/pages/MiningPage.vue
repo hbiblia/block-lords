@@ -182,7 +182,7 @@ function getSlotCurrencyIcon(currency: string): string {
 
 function getSlotCurrencyName(currency: string): string {
   if (currency === 'ron') return 'RON';
-  if (currency === 'crypto') return 'BLC';
+  if (currency === 'crypto') return 'Landwork';
   return 'GC';
 }
 
@@ -1204,7 +1204,7 @@ onUnmounted(() => {
               <div class="text-center text-2xl font-bold">
                 <span>{{ slotInfo.next_upgrade.currency === 'crypto' ? '💎' : '🪙' }}</span>
                 {{ slotInfo.next_upgrade.price.toLocaleString() }}
-                <span class="text-sm">{{ slotInfo.next_upgrade.currency === 'crypto' ? 'BLC' : 'GC' }}</span>
+                <span class="text-sm">{{ slotInfo.next_upgrade.currency === 'crypto' ? 'Landwork' : 'GC' }}</span>
               </div>
             </div>
 

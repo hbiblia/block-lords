@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '2.0.1';
+const CURRENT_VERSION = '2.1.0';
 const STORAGE_KEY = 'lootmine-last-seen-version';
 
 const route = useRoute();
@@ -72,43 +72,20 @@ function closeModal() {
 
         <!-- Contenido scrollable -->
         <div class="space-y-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- Rebranding -->
-          <div class="p-3 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-lg">
+          <!-- Moneda Landwork -->
+          <div class="p-3 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-lg">
             <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
-              <img src="/favicon.svg" class="w-6 h-6" alt="" /> {{ t('updateModal.rebranding.title') }}
+              💎 {{ t('updateModal.landwork.title') }}
             </h3>
-            <p class="text-text-secondary text-sm" v-html="t('updateModal.rebranding.description')"></p>
+            <p class="text-text-secondary text-sm" v-html="t('updateModal.landwork.description')"></p>
           </div>
 
-          <!-- Battle Arena mejoras -->
-          <div class="p-3 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 rounded-lg">
-            <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
-              ⚔️ {{ t('updateModal.battleArena.title') }}
-            </h3>
-            <ul class="space-y-2 text-sm">
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-blue-400 mt-0.5">🏆</span>
-                <span v-html="t('updateModal.battleArena.leaderboard')"></span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-blue-400 mt-0.5">🔍</span>
-                <span v-html="t('updateModal.battleArena.persistentSearch')"></span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-blue-400 mt-0.5">🃏</span>
-                <span v-html="t('updateModal.battleArena.cards')"></span>
-              </li>
-            </ul>
-          </div>
-
-          <!-- Sistema de Regalos -->
+          <!-- Celebración de Recompensas -->
           <div class="p-3 bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 rounded-lg">
             <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
-              🎁 {{ t('updateModal.gifts.title') }}
+              🪙 {{ t('updateModal.rewardCelebration.title') }}
             </h3>
-            <p class="text-text-secondary text-sm">
-              {{ t('updateModal.gifts.description') }}
-            </p>
+            <p class="text-text-secondary text-sm" v-html="t('updateModal.rewardCelebration.description')"></p>
           </div>
 
           <!-- Correcciones y Mejoras -->
@@ -119,31 +96,15 @@ function closeModal() {
             <ul class="space-y-2">
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.fixes.newLook')"></span>
+                <span v-html="t('updateModal.fixes.rewardsTerminology')"></span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.fixes.notifications')"></span>
+                <span v-html="t('updateModal.fixes.claimModal')"></span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.fixes.sounds')"></span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.fixes.ronWallet')"></span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.fixes.reputation')"></span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.fixes.translations')"></span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.fixes.rigUpgrade')"></span>
+                <span v-html="t('updateModal.fixes.balanceFormat')"></span>
               </li>
             </ul>
           </div>

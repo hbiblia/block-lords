@@ -717,6 +717,7 @@ ALTER TABLE blocks ADD COLUMN IF NOT EXISTS total_shares NUMERIC;
 ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS shares_contributed NUMERIC;
 ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS total_block_shares NUMERIC;
 ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS share_percentage NUMERIC;
+ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS block_number INTEGER;
 
 -- =====================================================
 -- GRANTS PARA FUNCIONES DEL SISTEMA DE SHARES

@@ -7,7 +7,7 @@ import { useRealtimeStore } from '@/stores/realtime';
 import { useMiningStore } from '@/stores/mining';
 import { toggleLocale, getLocale } from '@/plugins/i18n';
 import { useSound } from '@/composables/useSound';
-import { formatGamecoin, formatCrypto } from '@/utils/format';
+import { formatGamecoin, formatCrypto, formatCompact, formatNumber } from '@/utils/format';
 
 // Inject InfoBar visibility to adjust positioning
 const infoBarVisible = inject<Ref<boolean>>('infoBarVisible', ref(false));
@@ -106,7 +106,7 @@ async function handleLogout() {
               :class="{ 'ring-2 ring-accent-primary': showMobileResources }"
             >
               <span class="text-status-warning">🪙</span>
-              <span class="font-medium">{{ formatGamecoin(authStore.player?.gamecoin_balance) }}</span>
+              <span v-tooltip="formatNumber(authStore.player?.gamecoin_balance ?? 0)" class="font-medium cursor-help">{{ formatGamecoin(authStore.player?.gamecoin_balance) }}</span>
               <svg
                 class="w-3.5 h-3.5 text-text-muted transition-transform"
                 :class="{ 'rotate-180': showMobileResources }"
@@ -125,11 +125,11 @@ async function handleLogout() {
             <!-- Coins -->
             <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg">
               <span class="text-status-warning">🪙</span>
-              <span class="font-medium">{{ formatGamecoin(authStore.player?.gamecoin_balance) }}</span>
+              <span v-tooltip="formatNumber(authStore.player?.gamecoin_balance ?? 0)" class="font-medium cursor-help">{{ formatGamecoin(authStore.player?.gamecoin_balance) }}</span>
             </div>
             <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg">
               <span class="text-accent-primary">💎</span>
-              <span class="font-medium">{{ formatCrypto(authStore.player?.crypto_balance) }}</span>
+              <span v-tooltip="formatNumber(authStore.player?.crypto_balance ?? 0, 2)" class="font-medium cursor-help">{{ formatCrypto(authStore.player?.crypto_balance) }}</span>
             </div>
 
             <!-- Energy Bar -->
@@ -304,16 +304,16 @@ async function handleLogout() {
             <span class="text-status-warning text-lg">🪙</span>
             <span class="text-text-muted text-sm">GameCoin</span>
           </div>
-          <span class="font-bold">{{ authStore.player?.gamecoin_balance?.toFixed(2) ?? '0.00' }}</span>
+          <span v-tooltip="formatNumber(authStore.player?.gamecoin_balance ?? 0)" class="font-bold cursor-help">{{ formatCompact(authStore.player?.gamecoin_balance) }}</span>
         </div>
 
-        <!-- BLC -->
+        <!-- Landwork -->
         <div class="flex items-center justify-between py-2 border-b border-border/30">
           <div class="flex items-center gap-2">
             <span class="text-accent-primary text-lg">💎</span>
-            <span class="text-text-muted text-sm">BLC</span>
+            <span class="text-text-muted text-sm">Landwork</span>
           </div>
-          <span class="font-bold">{{ authStore.player?.crypto_balance?.toFixed(2) ?? '0.00' }}</span>
+          <span v-tooltip="formatNumber(authStore.player?.crypto_balance ?? 0, 2)" class="font-bold cursor-help">{{ formatCompact(authStore.player?.crypto_balance) }}</span>
         </div>
 
         <!-- Energy -->

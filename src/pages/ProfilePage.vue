@@ -429,7 +429,7 @@ onUnmounted(() => {
               <div class="text-xs text-text-muted">{{ t('profile.blocksMined', 'Bloques') }}</div>
             </div>
             <div>
-              <div class="text-xl font-bold text-accent-primary">{{ formatCrypto(player?.total_crypto_earned) }}</div>
+              <div v-tooltip="formatNumber(player?.total_crypto_earned ?? 0, 2)" class="text-xl font-bold text-accent-primary cursor-help">{{ formatCrypto(player?.total_crypto_earned) }}</div>
               <div class="text-xs text-text-muted">{{ t('profile.cryptoEarned', 'Minado') }}</div>
             </div>
           </div>
@@ -442,7 +442,7 @@ onUnmounted(() => {
           <div class="flex items-center justify-between">
             <div>
               <div class="text-sm text-text-muted">GameCoin</div>
-              <div class="text-2xl font-bold text-status-warning">
+              <div v-tooltip="formatNumber(player?.gamecoin_balance ?? 0)" class="text-2xl font-bold text-status-warning cursor-help">
                 🪙 {{ formatGamecoin(player?.gamecoin_balance) }}
               </div>
             </div>
@@ -455,8 +455,8 @@ onUnmounted(() => {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <div class="text-sm text-text-muted">BLC</div>
-              <div class="text-2xl font-bold text-accent-primary">
+              <div class="text-sm text-text-muted">Landwork</div>
+              <div v-tooltip="formatNumber(player?.crypto_balance ?? 0, 2)" class="text-2xl font-bold text-accent-primary cursor-help">
                 💎 {{ formatCrypto(player?.crypto_balance) }}
               </div>
             </div>
@@ -722,11 +722,11 @@ onUnmounted(() => {
                       </span>
                     </div>
                     <div class="flex justify-between items-center">
-                      <span class="text-xs text-text-muted">Total BLC emitido</span>
-                      <span class="text-sm font-bold">💎 {{ formatCrypto(gameStatus.mining.totalCryptoMined) }}</span>
+                      <span class="text-xs text-text-muted">Total Landwork emitido</span>
+                      <span v-tooltip="formatNumber(gameStatus.mining.totalCryptoMined, 2)" class="text-sm font-bold cursor-help">💎 {{ formatCrypto(gameStatus.mining.totalCryptoMined) }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                      <span class="text-xs text-text-muted">BLC por bloque</span>
+                      <span class="text-xs text-text-muted">Landwork por bloque</span>
                       <span class="text-sm font-bold text-status-warning">{{ gameStatus.mining.totalBlocks > 0 ? formatCrypto(gameStatus.mining.totalCryptoMined / gameStatus.mining.totalBlocks) : 0 }}</span>
                     </div>
                   </div>

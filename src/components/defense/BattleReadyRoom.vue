@@ -56,7 +56,7 @@ const availableBets = computed(() => {
     currency: opt.currency,
     label: opt.label,
     enabled: opt.currency === 'GC' ? bal.gamecoin >= opt.amount
-           : opt.currency === 'BLC' ? bal.blockcoin >= opt.amount
+           : opt.currency === 'Landwork' ? bal.blockcoin >= opt.amount
            : opt.currency === 'RON' ? bal.ronin >= opt.amount
            : false,
     isMySelection: iHaveSelected.value && myBetAmount.value === opt.amount && myBetCurrency.value === opt.currency,

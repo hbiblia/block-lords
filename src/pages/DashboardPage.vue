@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getPlayerMiningStats, getPlayerTransactions, getNetworkStats } from '@/utils/api';
+import { formatCompact, formatNumber } from '@/utils/format';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -121,8 +122,8 @@ function getRankName(score: number): string {
               </div>
               <span class="text-text-muted">GameCoin</span>
             </div>
-            <div class="text-3xl font-bold text-status-warning">
-              {{ player?.gamecoin_balance?.toFixed(2) ?? '0.00' }}
+            <div v-tooltip="formatNumber(player?.gamecoin_balance ?? 0)" class="text-3xl font-bold text-status-warning cursor-help">
+              {{ formatCompact(player?.gamecoin_balance) }}
             </div>
           </div>
           <div class="card">
@@ -130,10 +131,10 @@ function getRankName(score: number): string {
               <div class="w-10 h-10 rounded-xl bg-accent-tertiary/20 flex items-center justify-center text-xl">
                 ₿
               </div>
-              <span class="text-text-muted">BLC</span>
+              <span class="text-text-muted">Landwork</span>
             </div>
-            <div class="text-3xl font-bold text-accent-tertiary">
-              {{ player?.crypto_balance?.toFixed(4) ?? '0.0000' }}
+            <div v-tooltip="formatNumber(player?.crypto_balance ?? 0, 2)" class="text-3xl font-bold text-accent-tertiary cursor-help">
+              {{ formatCompact(player?.crypto_balance) }}
             </div>
           </div>
         </div>

@@ -2766,6 +2766,10 @@ BEGIN
     IF v_player.crypto_balance < v_card.base_price THEN
       RETURN json_build_object('success', false, 'error', 'Crypto insuficiente');
     END IF;
+  ELSIF v_currency = 'ron' THEN
+    IF COALESCE(v_player.ron_balance, 0) < v_card.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'RON insuficiente');
+    END IF;
   ELSE
     IF v_player.gamecoin_balance < v_card.base_price THEN
       RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
@@ -2779,6 +2783,10 @@ BEGIN
   IF v_currency = 'crypto' THEN
     UPDATE players
     SET crypto_balance = crypto_balance - v_card.base_price
+    WHERE id = p_player_id;
+  ELSIF v_currency = 'ron' THEN
+    UPDATE players
+    SET ron_balance = ron_balance - v_card.base_price
     WHERE id = p_player_id;
   ELSE
     UPDATE players
@@ -5495,7 +5503,7 @@ DECLARE
   v_blocks JSON;
   v_total INT;
 BEGIN
-  -- Get current max block height for display
+  -- Get current max block height for display (fallback for old rows without block_number)
   SELECT COALESCE(MAX(height), 1) INTO v_max_height FROM blocks;
 
   -- Total count for pagination
@@ -5505,7 +5513,7 @@ BEGIN
   FROM (
     SELECT pb.id,
            COALESCE(pb.block_id, pb.id) as block_id,
-           COALESCE(b.height, v_max_height) as block_height,
+           COALESCE(pb.block_number, b.height, v_max_height) as block_height,
            pb.reward, pb.is_premium, pb.created_at
     FROM pending_blocks pb
     LEFT JOIN blocks b ON b.id = pb.block_id
@@ -5743,7 +5751,12 @@ BEGIN
   IF v_card.card_type = 'energy' THEN
     v_effective_max := get_effective_max_energy(p_player_id);
     UPDATE players SET energy = LEAST(v_effective_max, energy + v_card.amount) WHERE id = p_player_id RETURNING energy INTO v_new_value;
-  ELSE
+  ELSIF v_card.card_type = 'internet' THEN
+    v_effective_max := get_effective_max_internet(p_player_id);
+    UPDATE players SET internet = LEAST(v_effective_max, internet + v_card.amount) WHERE id = p_player_id RETURNING internet INTO v_new_value;
+  ELSIF v_card.card_type = 'combo' THEN
+    v_effective_max := get_effective_max_energy(p_player_id);
+    UPDATE players SET energy = LEAST(v_effective_max, energy + v_card.amount) WHERE id = p_player_id;
     v_effective_max := get_effective_max_internet(p_player_id);
     UPDATE players SET internet = LEAST(v_effective_max, internet + v_card.amount) WHERE id = p_player_id RETURNING internet INTO v_new_value;
   END IF;
@@ -7362,7 +7375,8 @@ BEGIN
 
     -- Crear entrada en pending_blocks
     INSERT INTO pending_blocks (
-      block_id,  -- NULL por ahora, se llenará cuando se cree el bloque real si es necesario
+      block_id,
+      block_number,
       player_id,
       reward,
       is_premium,
@@ -7372,6 +7386,7 @@ BEGIN
       created_at
     ) VALUES (
       NULL,
+      v_mining_block.block_number,
       v_participant.player_id,
       v_player_reward,
       is_player_premium(v_participant.player_id),

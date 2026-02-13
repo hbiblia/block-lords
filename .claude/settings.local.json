@@ -17,7 +17,9 @@
       "Bash(npm run dev:*)",
       "Bash(del \"d:\\\\software\\\\block-lords\\\\database\\\\fix_battle_ready_room.sql\")",
       "Bash(git -C \"d:/software/block-lords\" diff --stat database/all_functions.sql)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Bash(python -c:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

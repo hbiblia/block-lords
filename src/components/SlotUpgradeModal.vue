@@ -128,7 +128,7 @@ function formatPrice(price: number, currency: string): string {
     return `${price.toLocaleString()} RON`;
   }
   if (currency === 'crypto') {
-    return `${price.toLocaleString()} BLC`;
+    return `${price.toLocaleString()} Landwork`;
   }
   return `${price.toLocaleString()} GC`;
 }
@@ -305,7 +305,7 @@ function getDescription(descriptionKey: string): string {
                   🪙 {{ balance.toLocaleString() }} GC
                 </span>
                 <span class="text-text-muted">
-                  💎 {{ cryptoBalance.toLocaleString() }} BLC
+                  💎 {{ cryptoBalance.toLocaleString() }} Landwork
                 </span>
               </div>
               <button

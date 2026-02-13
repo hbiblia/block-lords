@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
+import { formatCompact, formatNumber } from '@/utils/format';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -45,13 +46,6 @@ function getRankIcon(score: number): string {
   return '🥉';
 }
 
-function formatCurrency(value: number | undefined, decimals: number = 0): string {
-  if (value === undefined || value === null) return decimals > 0 ? '0.00' : '0';
-  return value.toLocaleString('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
 </script>
 
 <template>
@@ -90,16 +84,16 @@ function formatCurrency(value: number | undefined, decimals: number = 0): string
         :class="showStats ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'"
       >
         <div class="card py-4">
-          <div class="text-2xl font-bold text-status-warning">
-            {{ formatCurrency(player?.gamecoin_balance, 0) }}
+          <div v-tooltip="formatNumber(player?.gamecoin_balance ?? 0)" class="text-2xl font-bold text-status-warning cursor-help">
+            {{ formatCompact(player?.gamecoin_balance) }}
           </div>
           <div class="text-xs text-text-muted mt-1">🪙 GameCoin</div>
         </div>
         <div class="card py-4">
-          <div class="text-2xl font-bold text-accent-tertiary">
-            {{ formatCurrency(player?.crypto_balance, 2) }}
+          <div v-tooltip="formatNumber(player?.crypto_balance ?? 0, 2)" class="text-2xl font-bold text-accent-tertiary cursor-help">
+            {{ formatCompact(player?.crypto_balance) }}
           </div>
-          <div class="text-xs text-text-muted mt-1">💎 BLC</div>
+          <div class="text-xs text-text-muted mt-1">💎 Landwork</div>
         </div>
         <div class="card py-4">
           <div class="text-2xl font-bold text-accent-primary">

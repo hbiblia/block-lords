@@ -1120,7 +1120,7 @@ function closeProcessingModal() {
               <!-- Upgrades available (shown even when rig is active, but buttons disabled) -->
               <template v-if="rigUpgrades">
                 <div class="text-center mb-4">
-                  <p class="text-text-muted text-sm">{{ t('rigManage.upgradeDescription', 'Mejora tu rig con BLC para aumentar su rendimiento') }}</p>
+                  <p class="text-text-muted text-sm">{{ t('rigManage.upgradeDescription', 'Mejora tu rig con Landwork para aumentar su rendimiento') }}</p>
                   <p class="text-xs text-amber-400 mt-1">Max nivel: {{ rigUpgrades.max_level }}</p>
                 </div>
 
@@ -1216,7 +1216,7 @@ function closeProcessingModal() {
 
                 <!-- Current crypto balance -->
                 <div class="text-center text-sm text-text-muted mt-4">
-                  {{ t('rigManage.yourCrypto', 'Tu BLC') }}: <span class="text-amber-400 font-mono">💎 {{ formatCrypto(authStore.player?.crypto_balance ?? 0) }}</span>
+                  {{ t('rigManage.yourCrypto', 'Tu Landwork') }}: <span class="text-amber-400 font-mono">💎 {{ formatCrypto(authStore.player?.crypto_balance ?? 0) }}</span>
                 </div>
               </template>
             </div>

@@ -72,9 +72,9 @@ const activeRigsCount = computed(() => {
 });
 
 const blcValueInRon = computed(() => {
-  const blc = Number(selectedUser.value?.crypto_balance || 0);
-  // Rate: 100,000 BLC = 1 RON
-  return blc / 100000;
+  const Landwork = Number(selectedUser.value?.crypto_balance || 0);
+  // Rate: 100,000 Landwork = 1 RON
+  return Landwork / 100000;
 });
 
 const typeOptions = [
@@ -292,7 +292,7 @@ const selectedBoostId = ref('');
 
 const rewardTypeOptions = [
   { value: 'gamecoin', label: '💰 GameCoin', unit: 'GC', color: 'text-yellow-400', step: '1', defaultTitle: 'Bonus GameCoin', defaultDesc: 'Disfruta de este bono de GameCoin para tu aventura', defaultIcon: '💰' },
-  { value: 'crypto', label: '💎 BLC (Crypto)', unit: 'BLC', color: 'text-amber-400', step: '0.0001', defaultTitle: 'Bonus BLC', defaultDesc: 'Has recibido un bono de BLC. ¡Úsalo sabiamente!', defaultIcon: '💎' },
+  { value: 'crypto', label: '💎 Landwork (Crypto)', unit: 'Landwork', color: 'text-amber-400', step: '0.0001', defaultTitle: 'Bonus Landwork', defaultDesc: 'Has recibido un bono de Landwork. ¡Úsalo sabiamente!', defaultIcon: '💎' },
   { value: 'energy', label: '⚡ Energía', unit: '', color: 'text-green-400', step: '1', defaultTitle: 'Recarga de Energía', defaultDesc: 'Recarga de energía para mantener tus rigs activos', defaultIcon: '⚡' },
   { value: 'internet', label: '🌐 Internet', unit: '', color: 'text-blue-400', step: '1', defaultTitle: 'Recarga de Internet', defaultDesc: 'Recarga de internet para tus operaciones de minería', defaultIcon: '🌐' },
   { value: 'premium', label: '👑 Premium', unit: 'días', color: 'text-amber-300', step: '1', defaultTitle: 'Premium Gratis', defaultDesc: '¡Disfruta de los beneficios Premium! +50% recompensas, menos fees y más', defaultIcon: '👑' },
@@ -669,7 +669,7 @@ onMounted(async () => {
               <th class="px-4 py-3 text-left text-sm font-semibold text-text-secondary">Email</th>
               <th class="px-4 py-3 text-left text-sm font-semibold text-text-secondary">Rol</th>
               <th class="px-4 py-3 text-right text-sm font-semibold text-text-secondary">GameCoin</th>
-              <th class="px-4 py-3 text-right text-sm font-semibold text-text-secondary">BLC</th>
+              <th class="px-4 py-3 text-right text-sm font-semibold text-text-secondary">Landwork</th>
               <th class="px-4 py-3 text-right text-sm font-semibold text-text-secondary">Rigs</th>
               <th class="px-4 py-3 text-right text-sm font-semibold text-text-secondary">Hashrate</th>
               <th class="px-4 py-3 text-center text-sm font-semibold text-text-secondary">Acciones</th>
@@ -1330,7 +1330,7 @@ onMounted(async () => {
                   <p class="font-medium">{{ Number(selectedUser.gamecoin_balance).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) }}</p>
                 </div>
                 <div>
-                  <span class="text-text-muted block text-xs">BLC Balance</span>
+                  <span class="text-text-muted block text-xs">Landwork Balance</span>
                   <p class="font-medium text-accent-primary">
                     {{ Number(selectedUser.crypto_balance).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }}
                     <span v-if="blcValueInRon > 0" class="text-text-muted text-xs font-normal">(~{{ blcValueInRon.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) }} RON)</span>
@@ -1469,7 +1469,7 @@ onMounted(async () => {
             <div v-if="selectedUserDetail.pending_blocks && selectedUserDetail.pending_blocks.blocks && selectedUserDetail.pending_blocks.blocks.length > 0" class="card p-3">
               <h4 class="text-base font-semibold mb-3 text-accent-primary">
                 ⏳ Bloques Pendientes ({{ selectedUserDetail.pending_blocks.pending_count }})
-                <span class="text-xs text-text-muted ml-2">Total: {{ Number(selectedUserDetail.pending_blocks.total_reward || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} BLC (~{{ (Number(selectedUserDetail.pending_blocks.total_reward || 0) / 100000).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} RON)</span>
+                <span class="text-xs text-text-muted ml-2">Total: {{ Number(selectedUserDetail.pending_blocks.total_reward || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} Landwork (~{{ (Number(selectedUserDetail.pending_blocks.total_reward || 0) / 100000).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} RON)</span>
               </h4>
               <div
                 @scroll="handlePendingBlocksScroll"
@@ -1491,7 +1491,7 @@ onMounted(async () => {
                         <span v-if="block.is_premium" class="ml-1">⭐</span>
                       </td>
                       <td class="px-2 py-2 text-right text-amber-400 font-medium">
-                        {{ Number(block.reward || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} BLC
+                        {{ Number(block.reward || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} Landwork
                       </td>
                       <td class="px-2 py-2 text-right text-text-muted text-xs">
                         {{ Number(block.shares_contributed).toLocaleString('en-US') }}/{{ Number(block.total_block_shares).toLocaleString('en-US') }}
@@ -1513,7 +1513,7 @@ onMounted(async () => {
             <div v-if="selectedUserDetail.claimed_blocks && selectedUserDetail.claimed_blocks.length > 0" class="card p-3">
               <h4 class="text-base font-semibold mb-3 text-accent-primary">
                 ✅ Bloques Reclamados ({{ selectedUserDetail.claimed_blocks.length }})
-                <span class="text-xs text-text-muted ml-2">Total: {{ claimedBlocksTotalReward.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} BLC</span>
+                <span class="text-xs text-text-muted ml-2">Total: {{ claimedBlocksTotalReward.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} Landwork</span>
               </h4>
               <div
                 @scroll="handleClaimedBlocksScroll"
@@ -1535,7 +1535,7 @@ onMounted(async () => {
                         <span v-if="block.is_premium" class="ml-1">⭐</span>
                       </td>
                       <td class="px-2 py-2 text-right text-green-400 font-medium">
-                        {{ Number(block.reward || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} BLC
+                        {{ Number(block.reward || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} Landwork
                       </td>
                       <td class="px-2 py-2 text-right text-text-muted text-xs">
                         {{ Number(block.shares_contributed).toLocaleString('en-US') }}/{{ Number(block.total_block_shares).toLocaleString('en-US') }}
@@ -1589,7 +1589,7 @@ onMounted(async () => {
                             'bg-amber-500/20 text-amber-400': tx.currency === 'crypto',
                             'bg-blue-500/20 text-blue-400': tx.currency === 'ron'
                           }">
-                            {{ tx.currency === 'gamecoin' ? 'GC' : tx.currency === 'crypto' ? 'BLC' : 'RON' }}
+                            {{ tx.currency === 'gamecoin' ? 'GC' : tx.currency === 'crypto' ? 'Landwork' : 'RON' }}
                           </span>
                         </div>
                       </td>

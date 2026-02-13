@@ -100,6 +100,26 @@ ON CONFLICT (id) DO UPDATE SET
   tier = EXCLUDED.tier,
   currency = EXCLUDED.currency;
 
+-- Expand amount column to support values >= 1000 (was NUMERIC(5,2), max 999.99)
+ALTER TABLE prepaid_cards ALTER COLUMN amount TYPE NUMERIC(7,2);
+
+-- Allow 'combo' card_type and 'ron' currency (drop old check constraints and add new ones)
+ALTER TABLE prepaid_cards DROP CONSTRAINT IF EXISTS prepaid_cards_card_type_check;
+ALTER TABLE prepaid_cards ADD CONSTRAINT prepaid_cards_card_type_check CHECK (card_type IN ('energy', 'internet', 'combo'));
+ALTER TABLE prepaid_cards DROP CONSTRAINT IF EXISTS prepaid_cards_currency_check;
+ALTER TABLE prepaid_cards ADD CONSTRAINT prepaid_cards_currency_check CHECK (currency IN ('gamecoin', 'crypto', 'ron'));
+
+-- Prepaid cards - Combo (Energy + Internet, RON)
+INSERT INTO prepaid_cards (id, name, description, card_type, amount, base_price, tier, currency)
+VALUES
+  ('combo_basic', 'combo_basic', 'combo_basic', 'combo', 1100, 0.01, 'elite', 'ron')
+ON CONFLICT (id) DO UPDATE SET
+  card_type = EXCLUDED.card_type,
+  amount = EXCLUDED.amount,
+  base_price = EXCLUDED.base_price,
+  tier = EXCLUDED.tier,
+  currency = EXCLUDED.currency;
+
 -- Delete old prepaid cards that no longer exist
 -- First delete references in player_cards, then delete the prepaid cards
 DELETE FROM player_cards WHERE card_id IN ('energy_10', 'energy_25', 'energy_50', 'energy_full', 'energy_medium', 'internet_10', 'internet_25', 'internet_50', 'internet_full', 'internet_medium');

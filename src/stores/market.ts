@@ -33,11 +33,11 @@ interface PrepaidCard {
   id: string;
   name: string;
   description: string;
-  card_type: 'energy' | 'internet';
+  card_type: 'energy' | 'internet' | 'combo';
   amount: number;
   base_price: number;
   tier: string;
-  currency: 'gamecoin' | 'crypto';
+  currency: 'gamecoin' | 'crypto' | 'ron';
 }
 
 interface BoostItem {
@@ -186,6 +186,10 @@ export const useMarketStore = defineStore('market', () => {
 
   const internetCards = computed(() =>
     sortByCurrencyAndPrice(prepaidCards.value.filter(c => c.card_type === 'internet'))
+  );
+
+  const comboCards = computed(() =>
+    sortByCurrencyAndPrice(prepaidCards.value.filter(c => c.card_type === 'combo'))
   );
 
   const loading = computed(() => loadingCatalogs.value || loadingQuantities.value);
@@ -611,6 +615,7 @@ export const useMarketStore = defineStore('market', () => {
     rigsForSale,
     energyCards,
     internetCards,
+    comboCards,
     loading,
     catalogsLoaded,
     buying,

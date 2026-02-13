@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { usePendingBlocksStore } from '@/stores/pendingBlocks';
 import { useAuthStore } from '@/stores/auth';
 import { playSound } from '@/utils/sounds';
+import { formatCrypto, formatNumber } from '@/utils/format';
 
 const { t } = useI18n();
 const pendingStore = usePendingBlocksStore();
@@ -232,8 +233,8 @@ function initCaptchaAd() {
           <div class="flex items-center gap-3">
             <div class="text-3xl">⛏️</div>
             <div>
-              <h2 class="text-xl font-display font-bold">
-                <span class="gradient-text">{{ t('blocks.claimTitle') }}</span>
+              <h2 class="text-xl font-display font-bold text-white">
+                {{ t('blocks.claimTitle') }}
               </h2>
               <p class="text-sm text-text-muted">
                 {{ pendingStore.count }} {{ t('blocks.pendingBlocks') }}
@@ -270,7 +271,7 @@ function initCaptchaAd() {
             <!-- Block Info -->
             <div class="bg-bg-secondary rounded-xl p-4 mb-4">
               <div class="text-sm text-text-muted">Block #{{ getSelectedBlock()?.block_height }}</div>
-              <div class="text-2xl font-bold text-accent-primary">
+              <div class="text-2xl font-bold text-white">
                 +{{ Number(getSelectedBlock()?.reward ?? 0).toFixed(2) }} ₿
               </div>
             </div>
@@ -285,7 +286,7 @@ function initCaptchaAd() {
               v-if="captchaVerified"
               @click="handleClaimAfterCaptcha"
               :disabled="pendingStore.claiming"
-              class="w-full py-4 rounded-xl bg-gradient-primary text-white font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 mb-3"
+              class="w-full py-4 rounded-xl bg-accent-tertiary/80 text-white font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 mb-3"
             >
               <span v-if="pendingStore.claiming">{{ t('blocks.claiming') }}</span>
               <span v-else class="flex items-center justify-center gap-2">
@@ -315,14 +316,14 @@ function initCaptchaAd() {
           <!-- Pending Blocks List -->
           <div v-else>
             <!-- Summary -->
-            <div class="bg-gradient-to-r from-accent-primary/20 to-accent-secondary/20 rounded-xl p-4 mb-4">
+            <div class="bg-bg-secondary rounded-xl p-4 mb-4">
               <div class="text-center">
                 <div class="text-sm text-text-muted mb-1">{{ t('blocks.totalReward') }}</div>
                 <div v-if="pendingStore.loading && pendingStore.pendingBlocks.length === 0" class="flex justify-center py-2">
                   <span class="animate-spin w-6 h-6 border-2 border-accent-primary border-t-transparent rounded-full"></span>
                 </div>
-                <div v-else class="text-3xl font-bold text-accent-primary">
-                  {{ pendingStore.totalReward.toFixed(2) }} ₿
+                <div v-else v-tooltip="formatNumber(pendingStore.totalReward, 2)" class="text-3xl font-bold text-white cursor-help">
+                  {{ formatCrypto(pendingStore.totalReward) }} ₿
                 </div>
               </div>
             </div>
@@ -332,7 +333,7 @@ function initCaptchaAd() {
               <button
                 @click="handleClaimAllWithRon"
                 :disabled="pendingStore.claiming || !canAffordRonClaim"
-                class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-600 text-black font-bold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600/80 to-amber-700/80 text-white font-bold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 <span v-if="pendingStore.claiming" class="flex items-center gap-2">
                   <span class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
@@ -399,7 +400,7 @@ function initCaptchaAd() {
                 class="flex items-center justify-between p-3 bg-bg-secondary rounded-lg hover:bg-bg-tertiary transition-colors"
               >
                 <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-lg bg-accent-primary/20 flex items-center justify-center">
+                  <div class="w-10 h-10 rounded-lg bg-bg-tertiary flex items-center justify-center">
                     <span class="text-lg">📦</span>
                   </div>
                   <div>
@@ -410,12 +411,12 @@ function initCaptchaAd() {
 
                 <div class="flex items-center gap-3">
                   <div class="text-right">
-                    <div class="font-bold text-accent-primary">+{{ Number(block.reward).toFixed(2) }} ₿</div>
+                    <div class="font-bold text-amber-400/70">+{{ Number(block.reward).toFixed(2) }} ₿</div>
                   </div>
                   <button
                     @click="selectBlockForClaim(block.id)"
                     :disabled="pendingStore.claiming"
-                    class="px-3 py-1.5 rounded-lg bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30 transition-colors disabled:opacity-50 text-sm font-medium"
+                    class="px-3 py-1.5 rounded-lg bg-accent-primary/10 text-amber-400/80 hover:bg-accent-primary/20 transition-colors disabled:opacity-50 text-sm font-medium"
                   >
                     {{ t('blocks.claim') }}
                   </button>
