@@ -5589,6 +5589,8 @@ BEGIN
   PERFORM update_mission_progress(p_player_id, 'earn_crypto_weekly', v_pending.reward);
   PERFORM update_mission_progress(p_player_id, 'total_crypto', v_pending.reward);
   PERFORM update_mission_progress(p_player_id, 'event_crypto', v_pending.reward);
+  -- Trackear captcha resuelto (cada claim requiere captcha)
+  PERFORM update_mission_progress(p_player_id, 'captcha_solved', 1);
   RETURN json_build_object('success', true, 'reward', v_pending.reward, 'block_id', COALESCE(v_pending.block_id, v_pending.id));
 END;
 $$;
@@ -5612,6 +5614,8 @@ BEGIN
   PERFORM update_mission_progress(p_player_id, 'earn_crypto_weekly', v_total_reward);
   PERFORM update_mission_progress(p_player_id, 'total_crypto', v_total_reward);
   PERFORM update_mission_progress(p_player_id, 'event_crypto', v_total_reward);
+  -- Trackear captchas resueltos (1 por cada bloque reclamado)
+  PERFORM update_mission_progress(p_player_id, 'captcha_solved', v_count);
   RETURN json_build_object('success', true, 'total_reward', v_total_reward, 'blocks_claimed', v_count);
 END;
 $$;

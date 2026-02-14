@@ -78,15 +78,15 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO missions (id, name, description, mission_type, target_value, reward_type, reward_amount, difficulty, icon, category)
 VALUES
   ('daily_mine_20', 'daily_mine_20', 'daily_mine_20', 'mine_blocks', 20, 'crypto', 3000, 'epic', '👑', 'daily'),
-  ('daily_mine_30', 'daily_mine_30', 'daily_mine_30', 'mine_blocks', 30, 'crypto', 10000, 'epic', '🌟', 'daily'),
-  ('daily_mine_35', 'daily_mine_35', 'daily_mine_35', 'mine_blocks', 35, 'crypto', 15000, 'epic', '💪', 'daily'),
-  ('daily_mine_40', 'daily_mine_40', 'daily_mine_40', 'mine_blocks', 40, 'crypto', 20000, 'epic', '🏆', 'daily'),
-  ('daily_mine_50', 'daily_mine_50', 'daily_mine_50', 'mine_blocks', 50, 'crypto', 30000, 'epic', '🌟', 'daily'),
-  ('daily_mine_100', 'daily_mine_100', 'daily_mine_100', 'mine_blocks', 100, 'crypto', 100000, 'epic', '👑', 'daily'),
+  ('daily_mine_30', 'daily_mine_30', 'daily_mine_30', 'mine_blocks', 30, 'crypto', 3200, 'epic', '🌟', 'daily'),
+  ('daily_mine_35', 'daily_mine_35', 'daily_mine_35', 'mine_blocks', 35, 'crypto', 3400, 'epic', '💪', 'daily'),
+  ('daily_mine_40', 'daily_mine_40', 'daily_mine_40', 'mine_blocks', 40, 'crypto', 3800, 'epic', '🏆', 'daily'),
+  ('daily_mine_50', 'daily_mine_50', 'daily_mine_50', 'mine_blocks', 50, 'crypto', 4400, 'epic', '🌟', 'daily'),
+  ('daily_mine_100', 'daily_mine_100', 'daily_mine_100', 'mine_blocks', 100, 'crypto', 5000, 'epic', '👑', 'daily'),
   ('daily_no_overheat', 'daily_no_overheat', 'daily_no_overheat', 'no_overheat', 1, 'gamecoin', 1000, 'medium', '🧊', 'daily'),
   ('daily_online_480', 'daily_online_480', 'daily_online_480', 'online_time', 480, 'crypto', 1200, 'epic', '🔥', 'daily'),
   ('daily_earn_25000', 'daily_earn_25000', 'daily_earn_25000', 'earn_crypto', 25000, 'crypto', 2000, 'epic', '💎', 'daily'),
-  ('daily_earn_50000', 'daily_earn_50000', 'daily_earn_50000', 'earn_crypto', 50000, 'crypto', 5000, 'epic', '🏛️', 'daily'),
+  ('daily_earn_50000', 'daily_earn_50000', 'daily_earn_50000', 'earn_crypto', 50000, 'crypto', 4600, 'epic', '🏛️', 'daily'),
   ('daily_perfect', 'daily_perfect', 'daily_perfect', 'complete_easy_missions', 5, 'crypto', 1500, 'epic', '✨', 'daily'),
   ('daily_all_rigs', 'daily_all_rigs', 'daily_all_rigs', 'multi_rig_time', 3, 'crypto', 2400, 'epic', '🏭', 'daily')
 ON CONFLICT (id) DO UPDATE SET
@@ -106,17 +106,17 @@ VALUES
   ('weekly_mine_25', 'weekly_mine_25', 'weekly_mine_25', 'mine_blocks_weekly', 25, 'crypto', 1000, 'easy', '📅', 'weekly'),
   ('weekly_online_300', 'weekly_online_300', 'weekly_online_300', 'online_time_weekly', 300, 'gamecoin', 2000, 'easy', '🗓️', 'weekly'),
   ('weekly_login_5', 'weekly_login_5', 'weekly_login_5', 'daily_login', 5, 'energy', 75, 'easy', '📆', 'weekly'),
-  ('weekly_mine_75', 'weekly_mine_75', 'weekly_mine_75', 'mine_blocks_weekly', 75, 'crypto', 3000, 'medium', '⛏️', 'weekly'),
+  ('weekly_mine_75', 'weekly_mine_75', 'weekly_mine_75', 'mine_blocks_weekly', 75, 'crypto', 2600, 'medium', '⛏️', 'weekly'),
   ('weekly_earn_25000', 'weekly_earn_25000', 'weekly_earn_25000', 'earn_crypto_weekly', 25000, 'gamecoin', 6000, 'medium', '💰', 'weekly'),
-  ('weekly_trades_5', 'weekly_trades_5', 'weekly_trades_5', 'market_trades_weekly', 5, 'crypto', 800, 'medium', '🏪', 'weekly'),
-  ('weekly_mine_80', 'weekly_mine_80', 'weekly_mine_80', 'mine_blocks_weekly', 80, 'crypto', 8000, 'hard', '🔨', 'weekly'),
-  ('weekly_earn_100000', 'weekly_earn_100000', 'weekly_earn_100000', 'earn_crypto_weekly', 100000, 'crypto', 10000, 'hard', '🤑', 'weekly'),
-  ('weekly_login_7', 'weekly_login_7', 'weekly_login_7', 'daily_login', 7, 'crypto', 1500, 'hard', '🏆', 'weekly'),
-  ('weekly_mine_150', 'weekly_mine_150', 'weekly_mine_150', 'mine_blocks_weekly', 150, 'crypto', 20000, 'epic', '👑', 'weekly'),
-  ('weekly_mine_200', 'weekly_mine_200', 'weekly_mine_200', 'mine_blocks_weekly', 200, 'crypto', 30000, 'epic', '💎', 'weekly'),
-  ('weekly_mine_500', 'weekly_mine_500', 'weekly_mine_500', 'mine_blocks_weekly', 500, 'crypto', 100000, 'epic', '🏛️', 'weekly'),
+  ('weekly_trades_5', 'weekly_trades_5', 'weekly_trades_5', 'market_trades_weekly', 5, 'crypto', 850, 'medium', '🏪', 'weekly'),
+  ('weekly_mine_80', 'weekly_mine_80', 'weekly_mine_80', 'mine_blocks_weekly', 80, 'crypto', 3100, 'hard', '🔨', 'weekly'),
+  ('weekly_earn_100000', 'weekly_earn_100000', 'weekly_earn_100000', 'earn_crypto_weekly', 100000, 'crypto', 3500, 'hard', '🤑', 'weekly'),
+  ('weekly_login_7', 'weekly_login_7', 'weekly_login_7', 'daily_login', 7, 'crypto', 1400, 'hard', '🏆', 'weekly'),
+  ('weekly_mine_150', 'weekly_mine_150', 'weekly_mine_150', 'mine_blocks_weekly', 150, 'crypto', 3900, 'epic', '👑', 'weekly'),
+  ('weekly_mine_200', 'weekly_mine_200', 'weekly_mine_200', 'mine_blocks_weekly', 200, 'crypto', 4300, 'epic', '💎', 'weekly'),
+  ('weekly_mine_500', 'weekly_mine_500', 'weekly_mine_500', 'mine_blocks_weekly', 500, 'crypto', 4900, 'epic', '🏛️', 'weekly'),
   ('weekly_1_block', 'weekly_1_block', 'weekly_1_block', 'mine_blocks_weekly', 1, 'gamecoin', 400, 'easy', '📅', 'weekly'),
-  ('weekly_perfect', 'weekly_perfect', 'weekly_perfect', 'perfect_week', 7, 'crypto', 15000, 'epic', '🌟', 'weekly')
+  ('weekly_perfect', 'weekly_perfect', 'weekly_perfect', 'perfect_week', 7, 'crypto', 3700, 'epic', '🌟', 'weekly')
 ON CONFLICT (id) DO UPDATE SET
   mission_type = EXCLUDED.mission_type,
   target_value = EXCLUDED.target_value,
@@ -131,28 +131,29 @@ ON CONFLICT (id) DO UPDATE SET
 -- =====================================================
 INSERT INTO missions (id, name, description, mission_type, target_value, reward_type, reward_amount, difficulty, icon, category)
 VALUES
-  ('achievement_first_block', 'achievement_first_block', 'achievement_first_block', 'first_block', 1, 'gamecoin', 1000, 'easy', '🎉', 'achievement'),
-  ('achievement_first_trade', 'achievement_first_trade', 'achievement_first_trade', 'first_trade', 1, 'gamecoin', 600, 'easy', '🤝', 'achievement'),
-  ('achievement_first_upgrade', 'achievement_first_upgrade', 'achievement_first_upgrade', 'first_upgrade', 1, 'gamecoin', 800, 'easy', '⬆️', 'achievement'),
-  ('achievement_first_rig', 'achievement_first_rig', 'achievement_first_rig', 'buy_rig', 1, 'crypto', 200, 'easy', '🖥️', 'achievement'),
-  ('achievement_mine_100', 'achievement_mine_100', 'achievement_mine_100', 'total_blocks', 100, 'crypto', 1000, 'medium', '💯', 'achievement'),
-  ('achievement_mine_500', 'achievement_mine_500', 'achievement_mine_500', 'total_blocks', 500, 'crypto', 4000, 'medium', '🎯', 'achievement'),
-  ('achievement_mine_1000', 'achievement_mine_1000', 'achievement_mine_1000', 'total_blocks', 1000, 'crypto', 10000, 'hard', '🏅', 'achievement'),
-  ('achievement_mine_5000', 'achievement_mine_5000', 'achievement_mine_5000', 'total_blocks', 5000, 'crypto', 30000, 'hard', '🎖️', 'achievement'),
-  ('achievement_mine_10000', 'achievement_mine_10000', 'achievement_mine_10000', 'total_blocks', 10000, 'crypto', 100000, 'epic', '👑', 'achievement'),
-  ('achievement_earn_10000', 'achievement_earn_10000', 'achievement_earn_10000', 'total_crypto', 10000, 'gamecoin', 2000, 'easy', '💵', 'achievement'),
-  ('achievement_earn_100000', 'achievement_earn_100000', 'achievement_earn_100000', 'total_crypto', 100000, 'gamecoin', 10000, 'medium', '💰', 'achievement'),
-  ('achievement_earn_1000000', 'achievement_earn_1000000', 'achievement_earn_1000000', 'total_crypto', 1000000, 'crypto', 20000, 'hard', '🤑', 'achievement'),
-  ('achievement_earn_10000000', 'achievement_earn_10000000', 'achievement_earn_10000000', 'total_crypto', 10000000, 'crypto', 200000, 'epic', '🏛️', 'achievement'),
-  ('achievement_own_3_rigs', 'achievement_own_3_rigs', 'achievement_own_3_rigs', 'own_rigs', 3, 'crypto', 2000, 'medium', '🖥️', 'achievement'),
-  ('achievement_own_5_rigs', 'achievement_own_5_rigs', 'achievement_own_5_rigs', 'own_rigs', 5, 'crypto', 6000, 'hard', '🏭', 'achievement'),
-  ('achievement_own_all_rigs', 'achievement_own_all_rigs', 'achievement_own_all_rigs', 'own_rigs', 8, 'crypto', 50000, 'epic', '🏆', 'achievement'),
-  ('achievement_max_upgrade', 'achievement_max_upgrade', 'achievement_max_upgrade', 'max_upgrade', 1, 'crypto', 4000, 'hard', '⭐', 'achievement'),
-  ('achievement_full_upgrades', 'achievement_full_upgrades', 'achievement_full_upgrades', 'full_upgrades', 1, 'crypto', 20000, 'epic', '💎', 'achievement'),
-  ('achievement_premium', 'achievement_premium', 'achievement_premium', 'first_premium', 1, 'crypto', 10000, 'medium', '⭐', 'achievement'),
-  ('achievement_streak_7', 'achievement_streak_7', 'achievement_streak_7', 'login_streak', 7, 'crypto', 1000, 'easy', '🔥', 'achievement'),
-  ('achievement_streak_30', 'achievement_streak_30', 'achievement_streak_30', 'login_streak', 30, 'crypto', 6000, 'hard', '🔥', 'achievement'),
-  ('achievement_streak_100', 'achievement_streak_100', 'achievement_streak_100', 'login_streak', 100, 'crypto', 30000, 'epic', '🔥', 'achievement')
+  ('achievement_first_block', 'achievement_first_block', 'achievement_first_block', 'first_block', 1, 'gamecoin', 500, 'easy', '🎉', 'achievement'),
+  ('achievement_first_trade', 'achievement_first_trade', 'achievement_first_trade', 'first_trade', 1, 'gamecoin', 300, 'easy', '🤝', 'achievement'),
+  ('achievement_first_upgrade', 'achievement_first_upgrade', 'achievement_first_upgrade', 'first_upgrade', 1, 'gamecoin', 400, 'easy', '⬆️', 'achievement'),
+  ('achievement_first_rig', 'achievement_first_rig', 'achievement_first_rig', 'buy_rig', 1, 'crypto', 50, 'easy', '🖥️', 'achievement'),
+  ('achievement_mine_100', 'achievement_mine_100', 'achievement_mine_100', 'total_blocks', 100, 'crypto', 250, 'medium', '💯', 'achievement'),
+  ('achievement_mine_500', 'achievement_mine_500', 'achievement_mine_500', 'total_blocks', 500, 'crypto', 1000, 'medium', '🎯', 'achievement'),
+  ('achievement_mine_1000', 'achievement_mine_1000', 'achievement_mine_1000', 'total_blocks', 1000, 'crypto', 2500, 'hard', '🏅', 'achievement'),
+  ('achievement_mine_5000', 'achievement_mine_5000', 'achievement_mine_5000', 'total_blocks', 5000, 'crypto', 4000, 'hard', '🎖️', 'achievement'),
+  ('achievement_mine_10000', 'achievement_mine_10000', 'achievement_mine_10000', 'total_blocks', 10000, 'crypto', 5000, 'epic', '👑', 'achievement'),
+  ('achievement_earn_10000', 'achievement_earn_10000', 'achievement_earn_10000', 'total_crypto', 10000, 'gamecoin', 1000, 'easy', '💵', 'achievement'),
+  ('achievement_earn_100000', 'achievement_earn_100000', 'achievement_earn_100000', 'total_crypto', 100000, 'gamecoin', 5000, 'medium', '💰', 'achievement'),
+  ('achievement_earn_1000000', 'achievement_earn_1000000', 'achievement_earn_1000000', 'total_crypto', 1000000, 'crypto', 3000, 'hard', '🤑', 'achievement'),
+  ('achievement_earn_10000000', 'achievement_earn_10000000', 'achievement_earn_10000000', 'total_crypto', 10000000, 'crypto', 4500, 'epic', '🏛️', 'achievement'),
+  ('achievement_own_3_rigs', 'achievement_own_3_rigs', 'achievement_own_3_rigs', 'own_rigs', 3, 'crypto', 500, 'medium', '🖥️', 'achievement'),
+  ('achievement_own_5_rigs', 'achievement_own_5_rigs', 'achievement_own_5_rigs', 'own_rigs', 5, 'crypto', 1500, 'hard', '🏭', 'achievement'),
+  ('achievement_own_all_rigs', 'achievement_own_all_rigs', 'achievement_own_all_rigs', 'own_rigs', 8, 'crypto', 3500, 'epic', '🏆', 'achievement'),
+  ('achievement_max_upgrade', 'achievement_max_upgrade', 'achievement_max_upgrade', 'max_upgrade', 1, 'crypto', 1000, 'hard', '⭐', 'achievement'),
+  ('achievement_full_upgrades', 'achievement_full_upgrades', 'achievement_full_upgrades', 'full_upgrades', 1, 'crypto', 4200, 'epic', '💎', 'achievement'),
+  ('achievement_premium', 'achievement_premium', 'achievement_premium', 'first_premium', 1, 'crypto', 2500, 'medium', '⭐', 'achievement'),
+  ('achievement_streak_7', 'achievement_streak_7', 'achievement_streak_7', 'login_streak', 7, 'crypto', 250, 'easy', '🔥', 'achievement'),
+  ('achievement_streak_30', 'achievement_streak_30', 'achievement_streak_30', 'login_streak', 30, 'crypto', 1500, 'hard', '🔥', 'achievement'),
+  ('achievement_streak_100', 'achievement_streak_100', 'achievement_streak_100', 'login_streak', 100, 'crypto', 4800, 'epic', '🔥', 'achievement'),
+  ('achievement_captcha_10000', 'achievement_captcha_10000', 'achievement_captcha_10000', 'captcha_solved', 10000, 'crypto', 5000, 'epic', '🧩', 'achievement')
 ON CONFLICT (id) DO UPDATE SET
   mission_type = EXCLUDED.mission_type,
   target_value = EXCLUDED.target_value,
@@ -169,12 +170,12 @@ INSERT INTO missions (id, name, description, mission_type, target_value, reward_
 VALUES
   ('tutorial_start', 'tutorial_start', 'tutorial_start', 'tutorial', 1, 'gamecoin', 2000, 'easy', '📚', 'event'),
   ('tutorial_first_mine', 'tutorial_first_mine', 'tutorial_first_mine', 'tutorial_mine', 1, 'energy', 75, 'easy', '🎓', 'event'),
-  ('referral_1', 'referral_1', 'referral_1', 'referrals', 1, 'crypto', 2000, 'easy', '👥', 'event'),
-  ('referral_5', 'referral_5', 'referral_5', 'referrals', 5, 'crypto', 15000, 'medium', '👥', 'event'),
-  ('referral_10', 'referral_10', 'referral_10', 'referrals', 10, 'crypto', 40000, 'hard', '🌟', 'event'),
-  ('event_weekend_warrior', 'event_weekend_warrior', 'event_weekend_warrior', 'event_blocks', 50, 'crypto', 4000, 'medium', '🎊', 'event'),
-  ('event_double_xp', 'event_double_xp', 'event_double_xp', 'event_crypto', 50000, 'crypto', 10000, 'hard', '✨', 'event'),
-  ('event_community', 'event_community', 'event_community', 'community_goal', 1, 'crypto', 20000, 'epic', '🌍', 'event')
+  ('referral_1', 'referral_1', 'referral_1', 'referrals', 1, 'crypto', 1900, 'easy', '👥', 'event'),
+  ('referral_5', 'referral_5', 'referral_5', 'referrals', 5, 'crypto', 3300, 'medium', '👥', 'event'),
+  ('referral_10', 'referral_10', 'referral_10', 'referrals', 10, 'crypto', 4500, 'hard', '🌟', 'event'),
+  ('event_weekend_warrior', 'event_weekend_warrior', 'event_weekend_warrior', 'event_blocks', 50, 'crypto', 2800, 'medium', '🎊', 'event'),
+  ('event_double_xp', 'event_double_xp', 'event_double_xp', 'event_crypto', 50000, 'crypto', 4000, 'hard', '✨', 'event'),
+  ('event_community', 'event_community', 'event_community', 'community_goal', 1, 'crypto', 4700, 'epic', '🌍', 'event')
 ON CONFLICT (id) DO UPDATE SET
   mission_type = EXCLUDED.mission_type,
   target_value = EXCLUDED.target_value,
@@ -195,8 +196,8 @@ VALUES
   ('use_boost_1', 'use_boost_1', 'use_boost_1', 'use_boost', 1, 'gamecoin', 600, 'medium', '🚀', 'daily'),
   ('use_boost_2', 'use_boost_2', 'use_boost_2', 'use_boost', 2, 'gamecoin', 1000, 'hard', '🚀', 'daily'),
   ('use_boost_3', 'use_boost_3', 'use_boost_3', 'use_boost', 3, 'gamecoin', 1400, 'hard', '🚀', 'daily'),
-  ('use_boost_5', 'use_boost_5', 'use_boost_5', 'use_boost', 5, 'crypto', 600, 'epic', '🚀', 'daily'),
-  ('use_boost_10', 'use_boost_10', 'use_boost_10', 'use_boost', 10, 'crypto', 1500, 'epic', '🚀', 'daily'),
+  ('use_boost_5', 'use_boost_5', 'use_boost_5', 'use_boost', 5, 'crypto', 550, 'epic', '🚀', 'daily'),
+  ('use_boost_10', 'use_boost_10', 'use_boost_10', 'use_boost', 10, 'crypto', 1700, 'epic', '🚀', 'daily'),
   ('use_cooling_1', 'use_cooling_1', 'use_cooling_1', 'install_cooling', 1, 'energy', 25, 'easy', '❄️', 'daily'),
   ('use_cooling_2', 'use_cooling_2', 'use_cooling_2', 'install_cooling', 2, 'energy', 45, 'medium', '❄️', 'daily'),
   ('use_cooling_3', 'use_cooling_3', 'use_cooling_3', 'install_cooling', 3, 'energy', 75, 'hard', '❄️', 'daily'),
@@ -220,7 +221,7 @@ INSERT INTO missions (id, name, description, mission_type, target_value, reward_
 VALUES
   ('craft_1', 'craft_1', 'craft_1', 'crafting_session', 1, 'gamecoin', 400, 'easy', '🔨', 'daily'),
   ('craft_5', 'craft_5', 'craft_5', 'crafting_session', 5, 'gamecoin', 1600, 'medium', '🔨', 'daily'),
-  ('craft_10', 'craft_10', 'craft_10', 'crafting_session', 10, 'crypto', 1000, 'hard', '🔨', 'daily')
+  ('craft_10', 'craft_10', 'craft_10', 'crafting_session', 10, 'crypto', 950, 'hard', '🔨', 'daily')
 ON CONFLICT (id) DO UPDATE SET
   mission_type = EXCLUDED.mission_type,
   target_value = EXCLUDED.target_value,
@@ -237,7 +238,7 @@ INSERT INTO missions (id, name, description, mission_type, target_value, reward_
 VALUES
   ('defense_win_1', 'defense_win_1', 'defense_win_1', 'defense_win', 1, 'gamecoin', 600, 'easy', '🛡️', 'daily'),
   ('defense_win_5', 'defense_win_5', 'defense_win_5', 'defense_win', 5, 'gamecoin', 2000, 'medium', '🛡️', 'daily'),
-  ('defense_win_10', 'defense_win_10', 'defense_win_10', 'defense_win', 10, 'crypto', 1500, 'hard', '🛡️', 'daily')
+  ('defense_win_10', 'defense_win_10', 'defense_win_10', 'defense_win', 10, 'crypto', 1300, 'hard', '🛡️', 'daily')
 ON CONFLICT (id) DO UPDATE SET
   mission_type = EXCLUDED.mission_type,
   target_value = EXCLUDED.target_value,
@@ -261,17 +262,17 @@ VALUES
   ('battle_win_3', 'battle_win_3', 'battle_win_3', 'battle_win', 3, 'gamecoin', 1200, 'medium', '⚔️', 'daily'),
   ('battle_cards_15', 'battle_cards_15', 'battle_cards_15', 'battle_cards_played', 15, 'gamecoin', 600, 'medium', '🃏', 'daily'),
   -- Daily Hard
-  ('battle_win_5', 'battle_win_5', 'battle_win_5', 'battle_win', 5, 'crypto', 1500, 'hard', '⚔️', 'daily'),
+  ('battle_win_5', 'battle_win_5', 'battle_win_5', 'battle_win', 5, 'crypto', 1100, 'hard', '⚔️', 'daily'),
   ('battle_cards_30', 'battle_cards_30', 'battle_cards_30', 'battle_cards_played', 30, 'gamecoin', 1000, 'hard', '🃏', 'daily'),
   -- Daily Epic
-  ('battle_win_10', 'battle_win_10', 'battle_win_10', 'battle_win', 10, 'crypto', 3000, 'epic', '👑', 'daily'),
+  ('battle_win_10', 'battle_win_10', 'battle_win_10', 'battle_win', 10, 'crypto', 2900, 'epic', '👑', 'daily'),
   -- Weekly
-  ('weekly_battle_win_15', 'weekly_battle_win_15', 'weekly_battle_win_15', 'battle_win', 15, 'crypto', 3000, 'medium', '⚔️', 'weekly'),
+  ('weekly_battle_win_15', 'weekly_battle_win_15', 'weekly_battle_win_15', 'battle_win', 15, 'crypto', 2200, 'medium', '⚔️', 'weekly'),
   ('weekly_battle_play_20', 'weekly_battle_play_20', 'weekly_battle_play_20', 'battle_play', 20, 'gamecoin', 5000, 'medium', '⚔️', 'weekly'),
   -- Achievements
-  ('achievement_first_battle', 'achievement_first_battle', 'achievement_first_battle', 'battle_play', 1, 'gamecoin', 500, 'easy', '⚔️', 'achievement'),
-  ('achievement_battle_wins_50', 'achievement_battle_wins_50', 'achievement_battle_wins_50', 'battle_win', 50, 'crypto', 10000, 'hard', '🏅', 'achievement'),
-  ('achievement_battle_wins_100', 'achievement_battle_wins_100', 'achievement_battle_wins_100', 'battle_win', 100, 'crypto', 25000, 'epic', '👑', 'achievement')
+  ('achievement_first_battle', 'achievement_first_battle', 'achievement_first_battle', 'battle_play', 1, 'gamecoin', 250, 'easy', '⚔️', 'achievement'),
+  ('achievement_battle_wins_50', 'achievement_battle_wins_50', 'achievement_battle_wins_50', 'battle_win', 50, 'crypto', 2500, 'hard', '🏅', 'achievement'),
+  ('achievement_battle_wins_100', 'achievement_battle_wins_100', 'achievement_battle_wins_100', 'battle_win', 100, 'crypto', 3800, 'epic', '👑', 'achievement')
 ON CONFLICT (id) DO UPDATE SET
   mission_type = EXCLUDED.mission_type,
   target_value = EXCLUDED.target_value,
