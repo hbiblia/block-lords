@@ -4,9 +4,11 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { getActiveAnnouncements } from '@/utils/api'
 import { playSound } from '@/utils/sounds'
+import { useAuthStore } from '@/stores/auth'
 
 const { t, locale } = useI18n()
 const route = useRoute()
+const authStore = useAuthStore()
 
 interface Announcement {
   id: string
@@ -40,6 +42,8 @@ const currentMessage = computed(() => {
 })
 
 async function checkForUpdates() {
+  // Solo verificar si el usuario está autenticado
+  if (!authStore.isAuthenticated) return
   try {
     const data = await getActiveAnnouncements()
     const updateAnnouncementData = (data ?? []).find((a: any) => a.type === 'update')
@@ -58,33 +62,40 @@ async function checkForUpdates() {
 
 function refreshPage() {
   if (updateAnnouncement.value) {
-    sessionStorage.setItem('update_dismissed', updateAnnouncement.value.id)
+    localStorage.setItem('update_dismissed', updateAnnouncement.value.id)
   }
   window.location.reload()
 }
 
 function startUpdateCheck() {
-  checkForUpdates()
-  checkInterval = window.setInterval(checkForUpdates, 2 * 60 * 1000)
+  // No verificar inmediatamente: si acabas de cargar/refrescar ya tienes el código más reciente.
+  // Esperar 2 minutos antes del primer check para solo notificar a quienes llevan rato en la app.
+  checkInterval = window.setTimeout(() => {
+    checkForUpdates()
+    checkInterval = window.setInterval(checkForUpdates, 2 * 60 * 1000)
+  }, 2 * 60 * 1000)
 }
 
 function stopUpdateCheck() {
   if (checkInterval !== null) {
     clearInterval(checkInterval)
+    clearTimeout(checkInterval)
     checkInterval = null
   }
 }
 
 onMounted(() => {
-  const dismissed = sessionStorage.getItem('update_dismissed')
+  const dismissed = localStorage.getItem('update_dismissed')
   if (dismissed) {
     dismissedId.value = dismissed
   }
 
   startUpdateCheck()
 
+  // No verificar en visibility change si acaba de cargar
+  const pageLoadedAt = Date.now()
   const handleVisibilityChange = () => {
-    if (!document.hidden) {
+    if (!document.hidden && authStore.isAuthenticated && (Date.now() - pageLoadedAt > 2 * 60 * 1000)) {
       checkForUpdates()
     }
   }
