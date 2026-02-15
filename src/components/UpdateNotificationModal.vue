@@ -27,6 +27,7 @@ const showToast = ref(false)
 const updateAnnouncement = ref<Announcement | null>(null)
 const dismissedId = ref<string | null>(null)
 let checkInterval: number | null = null
+const appLoadedAt = Date.now()
 
 const isMiningPage = computed(() => route.path === '/mining')
 
@@ -52,6 +53,15 @@ async function checkForUpdates() {
   try {
     const data = await getActiveAnnouncements()
     const updateAnnouncementData = (data ?? []).find((a: any) => a.type === 'update')
+
+    // Ignorar actualizaciones anteriores a la carga de la página (ya las tenemos)
+    if (updateAnnouncementData) {
+      const announcementTime = new Date(updateAnnouncementData.starts_at).getTime()
+      // Si el anuncio es anterior a cuando cargamos la app, asumimos que ya tenemos esa versión
+      if (announcementTime <= appLoadedAt) {
+        return
+      }
+    }
 
     if (updateAnnouncementData && updateAnnouncementData.id !== dismissedId.value) {
       updateAnnouncement.value = updateAnnouncementData
@@ -98,9 +108,8 @@ onMounted(() => {
   startUpdateCheck()
 
   // No verificar en visibility change si acaba de cargar
-  const pageLoadedAt = Date.now()
   const handleVisibilityChange = () => {
-    if (!document.hidden && authStore.isAuthenticated && (Date.now() - pageLoadedAt > 2 * 60 * 1000)) {
+    if (!document.hidden && authStore.isAuthenticated && (Date.now() - appLoadedAt > 2 * 60 * 1000)) {
       checkForUpdates()
     }
   }

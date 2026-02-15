@@ -1170,7 +1170,7 @@ function closeProcessingModal() {
             <p class="text-text-muted text-sm">{{ t('common.loading') }}</p>
           </div>
 
-          <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
+          <div v-else class="grid grid-cols-1 gap-6 pb-20">
             
             <!-- LEFT COLUMN: Hardware & Boosts -->
             <div class="space-y-4">
@@ -1377,7 +1377,7 @@ function closeProcessingModal() {
             </div>
 
             <!-- FOOTER: Maintenance -->
-            <div class="lg:col-span-2 pt-4 border-t border-border mt-2 space-y-3">
+            <div class="pt-4 border-t border-border mt-2 space-y-3">
                <h3 class="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2"><span>🛠️</span> Maintenance Zone</h3>
                
                <div class="grid grid-cols-1 gap-4">
