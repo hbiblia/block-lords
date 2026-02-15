@@ -44,6 +44,11 @@ const currentMessage = computed(() => {
 async function checkForUpdates() {
   // Solo verificar si el usuario está autenticado
   if (!authStore.isAuthenticated) return
+  // Si el UpdateModal (changelog) aún no fue descartado, no mostrar este toast.
+  // Cuando el usuario cierra el UpdateModal, guarda la versión en localStorage.
+  // Si no existe valor o no coincide, significa que el UpdateModal va a mostrarse primero.
+  const lastSeen = localStorage.getItem('lootmine-last-seen-version')
+  if (!lastSeen) return
   try {
     const data = await getActiveAnnouncements()
     const updateAnnouncementData = (data ?? []).find((a: any) => a.type === 'update')
