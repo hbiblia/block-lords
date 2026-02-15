@@ -497,12 +497,17 @@ INSERT INTO upgrade_costs (level, crypto_cost, hashrate_bonus, efficiency_bonus,
 VALUES
   (2, 100, 15, 10, 10),
   (3, 300, 35, 20, 20),
-  (4, 700, 60, 35, 30),
-  (5, 1500, 100, 50, 50)
+  (4, 700, 45, 35, 30),
+  (5, 1500, 50, 50, 50)
 ON CONFLICT (level) DO UPDATE SET
   hashrate_bonus = EXCLUDED.hashrate_bonus,
   efficiency_bonus = EXCLUDED.efficiency_bonus,
   thermal_bonus = EXCLUDED.thermal_bonus;
+
+-- Fix upgrade costs to cap bonuses at 50%
+UPDATE upgrade_costs SET hashrate_bonus = 50 WHERE hashrate_bonus > 50;
+UPDATE upgrade_costs SET efficiency_bonus = 50 WHERE efficiency_bonus > 50;
+UPDATE upgrade_costs SET thermal_bonus = 50 WHERE thermal_bonus > 50;
 
 -- =====================================================
 -- 10. RON WITHDRAWALS

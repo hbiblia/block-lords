@@ -232,6 +232,30 @@ async function loadData() {
     installedCooling.value = cooling || [];
     boostItems.value = playerBoosts?.inventory || [];
     installedBoosts.value = rigBoosts || [];
+    
+    if (upgrades?.success) {
+      // Enforce 50% cap on hashrate bonus
+      if (upgrades.hashrate.next_bonus > 50) upgrades.hashrate.next_bonus = 50;
+      if (upgrades.hashrate.current_bonus >= 50) {
+        upgrades.hashrate.can_upgrade = false;
+        upgrades.hashrate.next_bonus = 50;
+      }
+
+      // Enforce 50% cap on efficiency bonus
+      if (upgrades.efficiency.next_bonus > 50) upgrades.efficiency.next_bonus = 50;
+      if (upgrades.efficiency.current_bonus >= 50) {
+        upgrades.efficiency.can_upgrade = false;
+        upgrades.efficiency.next_bonus = 50;
+      }
+
+      // Enforce 50% cap on thermal bonus
+      if (upgrades.thermal.next_bonus > 50) upgrades.thermal.next_bonus = 50;
+      if (upgrades.thermal.current_bonus >= 50) {
+        upgrades.thermal.can_upgrade = false;
+        upgrades.thermal.next_bonus = 50;
+      }
+    }
+
     rigUpgrades.value = upgrades?.success ? upgrades : null;
     dataLoaded.value = true;
   } catch (e) {

@@ -6891,23 +6891,23 @@ BEGIN
     'hashrate', jsonb_build_object(
       'current_level', COALESCE(v_rig.hashrate_level, 1),
       'current_bonus', COALESCE(v_hashrate_current.hashrate_bonus, 0),
-      'can_upgrade', COALESCE(v_rig.hashrate_level, 1) < v_max_level,
+      'can_upgrade', (COALESCE(v_rig.hashrate_level, 1) < v_max_level AND COALESCE(v_hashrate_current.hashrate_bonus, 0) < 50),
       'next_cost', COALESCE(v_hashrate_next.crypto_cost, 0),
-      'next_bonus', COALESCE(v_hashrate_next.hashrate_bonus, 0)
+      'next_bonus', LEAST(COALESCE(v_hashrate_next.hashrate_bonus, 0), 50)
     ),
     'efficiency', jsonb_build_object(
       'current_level', COALESCE(v_rig.efficiency_level, 1),
       'current_bonus', COALESCE(v_efficiency_current.efficiency_bonus, 0),
-      'can_upgrade', COALESCE(v_rig.efficiency_level, 1) < v_max_level,
+      'can_upgrade', (COALESCE(v_rig.efficiency_level, 1) < v_max_level AND COALESCE(v_efficiency_current.efficiency_bonus, 0) < 50),
       'next_cost', COALESCE(v_efficiency_next.crypto_cost, 0),
-      'next_bonus', COALESCE(v_efficiency_next.efficiency_bonus, 0)
+      'next_bonus', LEAST(COALESCE(v_efficiency_next.efficiency_bonus, 0), 50)
     ),
     'thermal', jsonb_build_object(
       'current_level', COALESCE(v_rig.thermal_level, 1),
       'current_bonus', COALESCE(v_thermal_current.thermal_bonus, 0),
-      'can_upgrade', COALESCE(v_rig.thermal_level, 1) < v_max_level,
+      'can_upgrade', (COALESCE(v_rig.thermal_level, 1) < v_max_level AND COALESCE(v_thermal_current.thermal_bonus, 0) < 50),
       'next_cost', COALESCE(v_thermal_next.crypto_cost, 0),
-      'next_bonus', COALESCE(v_thermal_next.thermal_bonus, 0)
+      'next_bonus', LEAST(COALESCE(v_thermal_next.thermal_bonus, 0), 50)
     )
   );
 END;
