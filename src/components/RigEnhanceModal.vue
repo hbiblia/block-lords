@@ -726,7 +726,7 @@ function getCoolantImpactText(boost: InstalledBoost): string {
 /**
  * Returns a detailed tooltip explaining the coolant impact calculation.
  */
-function getCoolantImpactTooltip(boost: InstalledBoost): string {
+function getCoolantImpactTooltip(boost: InstalledBoost) {
   if (boost.boost_type !== 'coolant_injection' || !props.rig) return '';
 
   const pc = props.rig.rig.power_consumption;
@@ -758,25 +758,27 @@ function getCoolantImpactTooltip(boost: InstalledBoost): string {
 
   const saved = heatWithout - heatWith;
 
-  const lines = [
-    `⚡ ${t('rigManage.coolantTooltip.basePower')}: ${pc}W`,
-    `📊 ${t('rigManage.coolantTooltip.workRatio')}: ${(hashrateRatio * 100).toFixed(0)}%`,
-    `🔥 ${t('rigManage.coolantTooltip.baseHeat')}: ${baseHeat.toFixed(1)}°`,
-  ];
-  
+  let content = `<div class="text-xs text-left space-y-1 min-w-[180px]">`;
+
+  content += `<div class="flex justify-between gap-4"><span>⚡ ${t('rigManage.coolantTooltip.basePower')}:</span> <span class="font-mono">${pc}W</span></div>`;
+  content += `<div class="flex justify-between gap-4"><span>📊 ${t('rigManage.coolantTooltip.workRatio')}:</span> <span class="font-mono">${(hashrateRatio * 100).toFixed(0)}%</span></div>`;
+  content += `<div class="flex justify-between gap-4"><span>🔥 ${t('rigManage.coolantTooltip.baseHeat')}:</span> <span class="font-mono">${baseHeat.toFixed(1)}°</span></div>`;
+
   if (thermalBonusPercent > 0) {
-    lines.push(`🔧 ${t('rigManage.coolantTooltip.thermalUpgrade')}: -${thermalReductionAmount.toFixed(1)}° (${thermalBonusPercent}%)`);
+    content += `<div class="flex justify-between gap-4 text-cyan-300"><span>🔧 ${t('rigManage.coolantTooltip.thermalUpgrade')}:</span> <span class="font-mono">-${thermalReductionAmount.toFixed(1)}° (${thermalBonusPercent}%)</span></div>`;
   }
   if (coolingPower > 0) {
-    lines.push(`❄️ ${t('rigManage.coolantTooltip.coolingReduction')}: -${coolingPower.toFixed(1)}°`);
+    content += `<div class="flex justify-between gap-4 text-cyan-400"><span>❄️ ${t('rigManage.coolantTooltip.coolingReduction')}:</span> <span class="font-mono">-${coolingPower.toFixed(1)}°</span></div>`;
   }
 
-  lines.push(`──────────────`);
-  lines.push(`🌡️ ${t('rigManage.coolantTooltip.without')}: +${heatWithout.toFixed(1)}°/tick`);
-  lines.push(`❄️ ${t('rigManage.coolantTooltip.with')} ${getBoostName(boost.boost_item_id, boost.name)} (-${boost.effect_value}%): +${heatWith.toFixed(1)}°/tick`);
-  lines.push(`✅ ${t('rigManage.coolantTooltip.saving')}: -${saved.toFixed(1)}°/tick`);
+  content += `<div class="my-1 border-t border-white/20"></div>`;
+  content += `<div class="flex justify-between gap-4 text-orange-300"><span>🌡️ ${t('rigManage.coolantTooltip.without')}:</span> <span class="font-mono">+${heatWithout.toFixed(1)}°/tick</span></div>`;
+  content += `<div class="flex justify-between gap-4 text-cyan-300"><span>❄️ ${t('rigManage.coolantTooltip.with')} (-${boost.effect_value}%):</span> <span class="font-mono">+${heatWith.toFixed(1)}°/tick</span></div>`;
+  content += `<div class="flex justify-between gap-4 font-bold text-emerald-400"><span>✅ ${t('rigManage.coolantTooltip.saving')}:</span> <span class="font-mono">-${saved.toFixed(1)}°/tick</span></div>`;
 
-  return lines.join('\n');
+  content += `</div>`;
+
+  return { content, html: true };
 }
 
 // Translation helpers

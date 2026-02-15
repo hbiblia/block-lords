@@ -18,6 +18,9 @@ app.use(FloatingVue, {
       $extend: 'tooltip',
       $resetCss: false,
     },
+    tooltip: {
+      html: true,
+    },
   },
 });
 
