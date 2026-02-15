@@ -1480,6 +1480,8 @@ DECLARE
   v_temp_penalty NUMERIC;
   v_condition_penalty NUMERIC;
   v_hashrate_ratio NUMERIC;
+  v_base_heat NUMERIC;
+  v_heat_after_upgrade NUMERIC;
   v_active_rig_count INT;
 BEGIN
   -- Procesar jugadores que están ONLINE o tienen rigs con autonomous mining boost
@@ -1579,17 +1581,23 @@ BEGIN
       -- Con cooling apropiado: temperatura se estabiliza
       -- Aplicar multiplicador de boost de coolant_injection
       -- Aplicar bonus térmico del upgrade (reduce generación de calor)
+      -- Calcular calor base generado (antes de cooling y upgrades)
+      -- Sin cooling: max 15°C. Con cooling: factor 0.8
       IF v_rig_cooling_power <= 0 THEN
-        -- Sin cooling: calentamiento significativo (max 15°C por tick)
-        -- Solo si está trabajando (v_hashrate_ratio > 0)
-        v_temp_increase := LEAST(v_rig.power_consumption * v_hashrate_ratio * 1.0, 15) * v_temp_mult;
-        -- Reducción directa por upgrade térmico (en °C)
-        v_temp_increase := GREATEST(0, v_temp_increase - v_thermal_bonus);
+         v_base_heat := LEAST(v_rig.power_consumption * v_hashrate_ratio * 1.0, 15);
       ELSE
-        -- Con cooling: calentamiento reducido por poder de refrigeración
-        v_temp_increase := v_rig.power_consumption * v_hashrate_ratio * 0.8;
-        -- Reducción adicional por upgrade térmico (en °C)
-        v_temp_increase := GREATEST(0, v_temp_increase - v_rig_cooling_power - v_thermal_bonus) * v_temp_mult;
+         v_base_heat := v_rig.power_consumption * v_hashrate_ratio * 0.8;
+      END IF;
+
+      -- Aplicar reducción por upgrade térmico (porcentaje del calor base)
+      -- v_thermal_bonus ahora es un porcentaje (ej: 50 para 50%)
+      v_heat_after_upgrade := v_base_heat * (1 - v_thermal_bonus / 100.0);
+
+      -- Restar poder de refrigeración y aplicar multiplicador de coolant
+      IF v_rig_cooling_power <= 0 THEN
+        v_temp_increase := v_heat_after_upgrade * v_temp_mult;
+      ELSE
+        v_temp_increase := GREATEST(0, v_heat_after_upgrade - v_rig_cooling_power) * v_temp_mult;
       END IF;
 
       -- Calcular nueva temperatura

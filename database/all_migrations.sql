@@ -495,10 +495,10 @@ CREATE TABLE IF NOT EXISTS upgrade_costs (
 
 INSERT INTO upgrade_costs (level, crypto_cost, hashrate_bonus, efficiency_bonus, thermal_bonus)
 VALUES
-  (2, 100, 15, 10, 5),
-  (3, 300, 35, 20, 10),
-  (4, 700, 60, 35, 15),
-  (5, 1500, 100, 50, 20)
+  (2, 100, 15, 10, 10),
+  (3, 300, 35, 20, 20),
+  (4, 700, 60, 35, 30),
+  (5, 1500, 100, 50, 50)
 ON CONFLICT (level) DO UPDATE SET
   hashrate_bonus = EXCLUDED.hashrate_bonus,
   efficiency_bonus = EXCLUDED.efficiency_bonus,

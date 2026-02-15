@@ -390,6 +390,38 @@ export const useMiningStore = defineStore('mining', () => {
     }
   }
 
+  // Boost countdown tick: interpolates remaining_seconds between server updates
+  let boostCountdownInterval: number | null = null;
+
+  function startBoostCountdown() {
+    if (boostCountdownInterval) return;
+    boostCountdownInterval = window.setInterval(() => {
+      let hasActiveBoosts = false;
+      for (const rigId of Object.keys(rigBoosts.value)) {
+        const rig = rigs.value.find(r => r.id === rigId);
+        if (!rig?.is_active) continue; // Only count down when rig is mining
+
+        const boosts = rigBoosts.value[rigId];
+        if (boosts && boosts.length > 0) {
+          hasActiveBoosts = true;
+          rigBoosts.value[rigId] = boosts
+            .map(b => ({ ...b, remaining_seconds: Math.max(0, b.remaining_seconds - 1) }))
+            .filter(b => b.remaining_seconds > 0);
+        }
+      }
+      if (!hasActiveBoosts) {
+        stopBoostCountdown();
+      }
+    }, 1000);
+  }
+
+  function stopBoostCountdown() {
+    if (boostCountdownInterval) {
+      clearInterval(boostCountdownInterval);
+      boostCountdownInterval = null;
+    }
+  }
+
   // Actions
   async function loadData() {
     const authStore = useAuthStore();
@@ -477,6 +509,14 @@ export const useMiningStore = defineStore('mining', () => {
       boostsMap[rigId] = boosts;
     });
     rigBoosts.value = boostsMap;
+
+    // Start local countdown for boost timers
+    const hasAny = Object.values(boostsMap).some(b => b.length > 0);
+    if (hasAny) {
+      startBoostCountdown();
+    } else {
+      stopBoostCountdown();
+    }
   }
 
   // Reload just the rigs data (used when boosts expire to update stats)
@@ -885,6 +925,8 @@ export const useMiningStore = defineStore('mining', () => {
     slotInfo.value = DEFAULT_SLOT_INFO;
     loading.value = false;
     dataLoaded.value = true;
+    refreshing.value = false;
+    stopBoostCountdown();
     currentMiningBlock.value = null;
     playerShares.value = null;
     stopWarmupTick();
