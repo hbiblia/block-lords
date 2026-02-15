@@ -1795,19 +1795,20 @@
   updateModal: {
     title: '¡Nueva Actualización!',
     version: 'Versión {version}',
-    landwork: {
-      title: 'La moneda ahora es Landwork',
-      description: 'La criptomoneda del juego cambia de BLC a <strong class="text-cyan-400">Landwork</strong>. Mismo valor, nuevo nombre. Tus balances no cambian.',
+    unifiedDashboard: {
+      title: 'Dashboard Unificado de Rig',
+      description: 'La administración de rigs ahora tiene un <strong class="text-purple-400">dashboard unificado</strong> sin pestañas. Hardware, upgrades y mantenimiento se ven en una sola vista para gestionar todo más rápido.',
     },
-    rewardCelebration: {
-      title: 'Celebración de Recompensas',
-      description: 'Cuando ganas una recompensa de bloque, ahora verás una <strong class="text-emerald-400">animación con monedas cayendo</strong> y el monto que ganaste. Las recompensas premium muestran un badge especial.',
+    realTimeConsumption: {
+      title: 'Consumo en Tiempo Real',
+      description: 'Ahora puedes ver el <strong class="text-cyan-400">consumo real</strong> de energía e internet considerando todos los modificadores (upgrades + boosts). Se muestra como <strong class="text-cyan-400">base → real/t</strong> cuando hay mejoras activas.',
     },
-    fixes: {
-      title: 'Correcciones y Mejoras',
-      rewardsTerminology: '<strong>Nueva terminología:</strong> "Bloques pendientes" ahora se llaman "Recompensas pendientes" para mayor claridad',
-      claimModal: '<strong>Modal de reclamar:</strong> Interfaz renovada con colores más suaves y mejor legibilidad',
-      balanceFormat: '<strong>Formato de balances:</strong> Los números grandes ahora se muestran como 1k, 2.5k, 1.5M',
+    improvements: {
+      title: 'Mejoras y Correcciones',
+      boostImpact: '<strong>Impacto de Boosts:</strong> Cada boost instalado ahora muestra su efecto real en números absolutos según tu rig',
+      activeEffects: '<strong>Efectos Activos:</strong> Panel mejorado con layout vertical y mejor legibilidad',
+      hashUnit: '<strong>Unidad de Hashrate:</strong> Se corrigió de "TH" a "Hash" para mayor claridad',
+      maintenance: '<strong>Zona de Mantenimiento:</strong> Reparar y eliminar ahora se muestran en columna vertical',
     },
     button: '¡Entendido!',
   },

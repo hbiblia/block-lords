@@ -1795,19 +1795,20 @@ export default {
   updateModal: {
     title: 'New Update!',
     version: 'Version {version}',
-    landwork: {
-      title: 'Currency is now Landwork',
-      description: 'The in-game cryptocurrency changes from BLC to <strong class="text-cyan-400">Landwork</strong>. Same value, new name. Your balances remain unchanged.',
+    unifiedDashboard: {
+      title: 'Unified Rig Dashboard',
+      description: 'Rig management now features a <strong class="text-purple-400">unified dashboard</strong> without tabs. Hardware, upgrades, and maintenance are all visible in a single view for faster management.',
     },
-    rewardCelebration: {
-      title: 'Reward Celebration',
-      description: 'When you earn a block reward, you\'ll now see a <strong class="text-emerald-400">coin rain animation</strong> showing your earnings. Premium rewards display a special badge.',
+    realTimeConsumption: {
+      title: 'Real-Time Consumption',
+      description: 'You can now see the <strong class="text-cyan-400">actual consumption</strong> of energy and internet considering all modifiers (upgrades + boosts). Shown as <strong class="text-cyan-400">base → actual/t</strong> when improvements are active.',
     },
-    fixes: {
-      title: 'Fixes & Improvements',
-      rewardsTerminology: '<strong>New terminology:</strong> "Pending blocks" are now called "Pending rewards" for clarity',
-      claimModal: '<strong>Claim modal:</strong> Refreshed interface with softer colors and better readability',
-      balanceFormat: '<strong>Balance format:</strong> Large numbers now display as 1k, 2.5k, 1.5M',
+    improvements: {
+      title: 'Improvements & Fixes',
+      boostImpact: '<strong>Boost Impact:</strong> Each installed boost now shows its real effect in absolute numbers based on your rig',
+      activeEffects: '<strong>Active Effects:</strong> Improved panel with vertical layout and better readability',
+      hashUnit: '<strong>Hashrate Unit:</strong> Corrected from "TH" to "Hash" for clarity',
+      maintenance: '<strong>Maintenance Zone:</strong> Repair and delete now display in a vertical column layout',
     },
     button: 'Got it!',
   },

@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '2.1.0';
+const CURRENT_VERSION = '2.2.0';
 const STORAGE_KEY = 'lootmine-last-seen-version';
 
 const route = useRoute();
@@ -72,39 +72,43 @@ function closeModal() {
 
         <!-- Contenido scrollable -->
         <div class="space-y-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- Moneda Landwork -->
+          <!-- Dashboard Unificado -->
+          <div class="p-3 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 border border-purple-500/30 rounded-lg">
+            <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
+              �️ {{ t('updateModal.unifiedDashboard.title') }}
+            </h3>
+            <p class="text-text-secondary text-sm" v-html="t('updateModal.unifiedDashboard.description')"></p>
+          </div>
+
+          <!-- Consumo en Tiempo Real -->
           <div class="p-3 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-lg">
             <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
-              💎 {{ t('updateModal.landwork.title') }}
+              📊 {{ t('updateModal.realTimeConsumption.title') }}
             </h3>
-            <p class="text-text-secondary text-sm" v-html="t('updateModal.landwork.description')"></p>
+            <p class="text-text-secondary text-sm" v-html="t('updateModal.realTimeConsumption.description')"></p>
           </div>
 
-          <!-- Celebración de Recompensas -->
-          <div class="p-3 bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 rounded-lg">
-            <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
-              🪙 {{ t('updateModal.rewardCelebration.title') }}
-            </h3>
-            <p class="text-text-secondary text-sm" v-html="t('updateModal.rewardCelebration.description')"></p>
-          </div>
-
-          <!-- Correcciones y Mejoras -->
+          <!-- Mejoras -->
           <div>
             <h3 class="text-base font-semibold text-text-primary mb-2 flex items-center gap-2">
-              🔧 {{ t('updateModal.fixes.title') }}
+              🔧 {{ t('updateModal.improvements.title') }}
             </h3>
             <ul class="space-y-2">
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.fixes.rewardsTerminology')"></span>
+                <span v-html="t('updateModal.improvements.boostImpact')"></span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.fixes.claimModal')"></span>
+                <span v-html="t('updateModal.improvements.activeEffects')"></span>
               </li>
               <li class="flex items-start gap-2 text-text-secondary">
                 <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.fixes.balanceFormat')"></span>
+                <span v-html="t('updateModal.improvements.hashUnit')"></span>
+              </li>
+              <li class="flex items-start gap-2 text-text-secondary">
+                <span class="text-green-500 mt-1">✓</span>
+                <span v-html="t('updateModal.improvements.maintenance')"></span>
               </li>
             </ul>
           </div>
