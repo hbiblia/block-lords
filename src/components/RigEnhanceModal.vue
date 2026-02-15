@@ -424,7 +424,7 @@ const heatBreakdownTooltip = computed(() => {
   const cooling = totalCoolingPower.value;
   // const afterCooling = Math.max(0, heatAfterUpgrade - cooling);
   // const coolantPct = coolantBoostPercent.value;
-  const final = rigHeatGeneration.value;
+  // const final = rigHeatGeneration.value;
 
   let content = `<div class="text-xs text-left space-y-1 min-w-[180px]">`;
   
