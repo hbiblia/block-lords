@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onUnmounted, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useInventoryStore } from '@/stores/inventory';
@@ -42,19 +42,12 @@ const groupedCards = computed(() => {
   return Array.from(groups.values());
 });
 
-// Bloquear scroll del body cuando el modal está abierto
+// Fetch inventory when modal opens
 watch(() => props.show, (isOpen) => {
   if (isOpen) {
-    document.body.style.overflow = 'hidden';
     // Fetch inventory (will use cache if available)
     inventoryStore.fetchInventory();
-  } else {
-    document.body.style.overflow = '';
   }
-});
-
-onUnmounted(() => {
-  document.body.style.overflow = '';
 });
 
 function handleClose() {

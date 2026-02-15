@@ -79,21 +79,18 @@ function triggerConfetti() {
   }, 3000);
 }
 
-// Bloquear scroll del body cuando el modal está abierto
+// Fetch data when modal opens
 watch(() => props.show, (isOpen) => {
   if (isOpen) {
-    document.body.style.overflow = 'hidden';
     missionsStore.fetchMissions();
     streakStore.fetchStatus();
     startCountdown();
   } else {
-    document.body.style.overflow = '';
     stopCountdown();
   }
 });
 
 onUnmounted(() => {
-  document.body.style.overflow = '';
   stopCountdown();
 });
 

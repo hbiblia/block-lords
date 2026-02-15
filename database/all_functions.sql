@@ -7144,30 +7144,30 @@ BEGIN
   -- 🎲 Probabilidades dinámicas según mineros activos
   -- Más mineros = mejor chance de bloques Silver/Gold
   IF v_active_miners <= 5 THEN
-    v_bronze_prob := 0.75;    -- Bronze 75%, Silver 20%, Gold 5%
-    v_silver_cutoff := 0.95;
+    v_bronze_prob := 0.80;    -- Bronze 80%, Silver 17%, Gold 3%
+    v_silver_cutoff := 0.97;
   ELSIF v_active_miners <= 15 THEN
-    v_bronze_prob := 0.65;    -- Bronze 65%, Silver 25%, Gold 10%
-    v_silver_cutoff := 0.90;
+    v_bronze_prob := 0.70;    -- Bronze 70%, Silver 25%, Gold 5%
+    v_silver_cutoff := 0.95;
   ELSIF v_active_miners <= 30 THEN
-    v_bronze_prob := 0.55;    -- Bronze 55%, Silver 30%, Gold 15%
-    v_silver_cutoff := 0.85;
+    v_bronze_prob := 0.60;    -- Bronze 60%, Silver 30%, Gold 10%
+    v_silver_cutoff := 0.90;
   ELSE
-    v_bronze_prob := 0.45;    -- Bronze 45%, Silver 35%, Gold 20%
-    v_silver_cutoff := 0.80;
+    v_bronze_prob := 0.50;    -- Bronze 50%, Silver 35%, Gold 15%
+    v_silver_cutoff := 0.85;
   END IF;
 
   v_random := RANDOM();
 
   IF v_random < v_bronze_prob THEN
     v_block_type := 'bronze';
-    v_reward := 2000;  -- 🥉 Bronze
+    v_reward := 4000;  -- 🥉 Bronze
   ELSIF v_random < v_silver_cutoff THEN
     v_block_type := 'silver';
-    v_reward := 3000;  -- 🥈 Silver
+    v_reward := 6000;  -- 🥈 Silver
   ELSE
     v_block_type := 'gold';
-    v_reward := 5000;  -- 🥇 Gold
+    v_reward := 10000;  -- 🥇 Gold
   END IF;
 
   -- Calcular tiempo objetivo (30 minutos)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMarketStore } from '@/stores/market';
@@ -72,20 +72,6 @@ const emit = defineEmits<{
   close: [];
   purchased: [];
 }>();
-
-// Bloquear scroll del body cuando el modal está abierto
-watch(() => props.show, (isOpen) => {
-  if (isOpen) {
-    document.body.style.overflow = 'hidden';
-  } else {
-    document.body.style.overflow = '';
-  }
-});
-
-// Limpiar al desmontar
-onUnmounted(() => {
-  document.body.style.overflow = '';
-});
 
 function handleClose() {
   playSound('click');

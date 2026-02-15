@@ -772,6 +772,8 @@ export default {
       cost: 'Cost:',
       maxConditionWarning: 'Max condition will be reduced by 30% after each repair (max 3 repairs).',
       deleteWarning: 'This action cannot be undone. The rig will be permanently deleted.',
+      enterCode: 'Enter the code to confirm',
+      codePlaceholder: '----',
     },
   },
 
@@ -907,6 +909,7 @@ export default {
     maxLv: 'Max Lv',
     maintenanceZone: 'Maintenance Zone',
     nextRepairLabel: 'Next Repair',
+    repairsUsedLabel: 'Repairs',
     costLabel: 'Cost',
     bonusLabel: 'Bonus',
     maxLevelReachedShort: 'Max level reached',
@@ -1858,6 +1861,26 @@ export default {
     slotDurability: {
       title: 'Slot Durability',
       description: 'Each slot now has limited durability. <strong class="text-blue-400">Free players: 2 uses</strong> per slot. <strong class="text-amber-400">Premium players: 3 uses</strong> per slot. Each mining cycle consumes 1 use. When a slot runs out, it is destroyed and must be purchased again.',
+    },
+    cardConfirmCode: {
+      title: 'Recharge Confirmation',
+      description: 'When redeeming a prepaid card, you now need to enter a <strong class="text-emerald-400">4-digit code</strong> to confirm the operation. This prevents accidental recharges.',
+    },
+    inventoryResources: {
+      title: 'Resources in Inventory',
+      description: 'The inventory now shows your current <strong class="text-amber-400">⚡ Energy</strong> and <strong class="text-cyan-400">📡 Internet</strong> in the header so you always know how much you have available.',
+    },
+    slotPrice: {
+      title: 'Slot Price Update',
+      description: 'RON slot prices have been updated to <strong class="text-blue-400">2 RON</strong> per slot (slots #4 and above).',
+    },
+    repairCounter: {
+      title: 'Repair Counter',
+      description: 'The rig management panel now shows a <strong class="text-orange-400">repair counter (0/3)</strong> so you can easily track how many repairs you have used.',
+    },
+    blockRewards: {
+      title: 'Block Rewards x2',
+      description: 'Mining block rewards have been <strong class="text-amber-400">doubled</strong>.<br>🥉 Bronze: 2,000 → <strong class="text-amber-400">4,000</strong><br>🥈 Silver: 3,000 → <strong class="text-blue-400">6,000</strong><br>🥇 Gold: 5,000 → <strong class="text-yellow-400">10,000</strong>',
     },
     button: 'Got it!',
   },

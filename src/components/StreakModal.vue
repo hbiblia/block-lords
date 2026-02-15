@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStreakStore } from '@/stores/streak';
 import { playSound } from '@/utils/sounds';
@@ -36,18 +36,11 @@ function triggerConfetti() {
   }, 3000);
 }
 
-// Bloquear scroll del body cuando el modal está abierto
+// Fetch status when modal opens
 watch(() => props.show, (isOpen) => {
   if (isOpen) {
-    document.body.style.overflow = 'hidden';
     streakStore.fetchStatus();
-  } else {
-    document.body.style.overflow = '';
   }
-});
-
-onUnmounted(() => {
-  document.body.style.overflow = '';
 });
 
 // Días de recompensas principales para mostrar

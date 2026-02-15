@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted, nextTick, computed } from 'vue';
+import { ref, watch, nextTick, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { usePendingBlocksStore } from '@/stores/pendingBlocks';
 import { useAuthStore } from '@/stores/auth';
@@ -52,19 +52,13 @@ const captchaContainer = ref<HTMLElement | null>(null);
 // Bloquear scroll del body cuando el modal está abierto
 watch(() => props.show, (isOpen) => {
   if (isOpen) {
-    document.body.style.overflow = 'hidden';
     pendingStore.fetchPendingBlocks();
     // Reset captcha state
     selectedBlockId.value = null;
     captchaVerified.value = false;
   } else {
-    document.body.style.overflow = '';
     resetCaptcha();
   }
-});
-
-onUnmounted(() => {
-  document.body.style.overflow = '';
 });
 
 function formatTimeAgo(dateStr: string) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, onUnmounted } from 'vue';
+import { watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useDefenseStore } from '@/stores/defense';
 import { useAuthStore } from '@/stores/auth';
@@ -79,19 +79,6 @@ const {
   selectRecallTarget,
   cancelRecall,
 } = useCardBattle();
-
-// Lock body scroll when modal is open
-watch(
-  () => props.show,
-  (open) => {
-    document.body.style.overflow = open ? 'hidden' : '';
-  },
-  { immediate: true }
-);
-
-onUnmounted(() => {
-  document.body.style.overflow = '';
-});
 
 // Load lobby when modal opens (watch the prop, not store)
 watch(

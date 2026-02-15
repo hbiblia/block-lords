@@ -772,6 +772,8 @@
       cost: 'Costo:',
       maxConditionWarning: 'La condición máxima se reducirá en 30% después de cada reparación (max 3 reparaciones).',
       deleteWarning: 'Esta acción no se puede deshacer. El rig será eliminado permanentemente.',
+      enterCode: 'Ingresa el código para confirmar',
+      codePlaceholder: '----',
     },
   },
 
@@ -907,6 +909,7 @@
     maxLv: 'Max Nv',
     maintenanceZone: 'Zona de Mantenimiento',
     nextRepairLabel: 'Siguiente Reparación',
+    repairsUsedLabel: 'Reparaciones',
     costLabel: 'Costo',
     bonusLabel: 'Bonus',
     maxLevelReachedShort: 'Nivel máximo alcanzado',
@@ -1858,6 +1861,26 @@
     slotDurability: {
       title: 'Durabilidad de Slots',
       description: 'Cada slot ahora tiene durabilidad limitada. <strong class="text-blue-400">Jugadores Free: 2 usos</strong> por slot. <strong class="text-amber-400">Jugadores Premium: 3 usos</strong> por slot. Cada ciclo de minería consume 1 uso. Cuando un slot se agota, se destruye y debe comprarse de nuevo.',
+    },
+    cardConfirmCode: {
+      title: 'Confirmación de Recarga',
+      description: 'Al canjear una tarjeta prepaga, ahora debes ingresar un <strong class="text-emerald-400">código de 4 dígitos</strong> para confirmar la operación. Esto previene recargas accidentales.',
+    },
+    inventoryResources: {
+      title: 'Recursos en Inventario',
+      description: 'El inventario ahora muestra tu <strong class="text-amber-400">⚡ Energía</strong> e <strong class="text-cyan-400">📡 Internet</strong> actual en el encabezado para que siempre sepas cuánto tienes disponible.',
+    },
+    slotPrice: {
+      title: 'Precio de Slots Actualizado',
+      description: 'Los precios de slots en RON se han actualizado a <strong class="text-blue-400">2 RON</strong> por slot (slots #4 en adelante).',
+    },
+    repairCounter: {
+      title: 'Contador de Reparaciones',
+      description: 'El panel de administración de rigs ahora muestra un <strong class="text-orange-400">contador de reparaciones (0/3)</strong> para que puedas ver fácilmente cuántas reparaciones has usado.',
+    },
+    blockRewards: {
+      title: 'Recompensas de Bloques x2',
+      description: 'Las recompensas de los bloques de minería se han <strong class="text-amber-400">duplicado</strong>.<br>🥉 Bronze: 2,000 → <strong class="text-amber-400">4,000</strong><br>🥈 Silver: 3,000 → <strong class="text-blue-400">6,000</strong><br>🥇 Gold: 5,000 → <strong class="text-yellow-400">10,000</strong>',
     },
     button: '¡Entendido!',
   },

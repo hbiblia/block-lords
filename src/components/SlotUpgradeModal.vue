@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getPlayerSlotInfo, getRigSlotUpgrades, buyRigSlot } from '@/utils/api';
@@ -16,18 +16,11 @@ const emit = defineEmits<{
   purchased: [];
 }>();
 
-// Block body scroll when modal is open
+// Load data when modal opens
 watch(() => props.show, (isOpen) => {
   if (isOpen) {
-    document.body.style.overflow = 'hidden';
     loadData();
-  } else {
-    document.body.style.overflow = '';
   }
-});
-
-onUnmounted(() => {
-  document.body.style.overflow = '';
 });
 
 const loading = ref(false);
@@ -306,6 +299,9 @@ function getDescription(descriptionKey: string): string {
                 </span>
                 <span class="text-text-muted">
                   💎 {{ cryptoBalance.toLocaleString() }} Landwork
+                </span>
+                <span class="text-text-muted">
+                  🔷 {{ ronBalance.toFixed(4) }} RON
                 </span>
               </div>
               <button

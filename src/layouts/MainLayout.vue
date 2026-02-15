@@ -9,6 +9,7 @@ import { usePendingBlocksStore } from '@/stores/pendingBlocks';
 import { useMiningStore } from '@/stores/mining';
 import { useGiftsStore } from '@/stores/gifts';
 import { useDefenseStore } from '@/stores/defense';
+import { formatCompact } from '@/utils/format';
 
 const { t } = useI18n();
 
@@ -26,10 +27,6 @@ function detectAdBlocker() {
 function dismissAdBlockAlert() {
   showAdBlockAlert.value = false;
 }
-
-watch(showAdBlockAlert, (show) => {
-  document.body.style.overflow = show ? 'hidden' : '';
-});
 
 // Global modals state
 const showMarket = ref(false);
@@ -569,7 +566,7 @@ async function handleConnectionClick() {
           </div>
           <div class="text-left">
             <div class="text-xs font-semibold text-slate-200">{{ t('blocks.claimTitle') }}</div>
-            <div class="text-[10px] text-slate-400">{{ pendingBlocksStore.totalReward.toFixed(2) }} ₿</div>
+            <div class="text-[10px] text-slate-400">{{ formatCompact(pendingBlocksStore.totalReward) }} ₿</div>
           </div>
           <div class="ml-auto px-1.5 py-0.5 bg-green-500 text-white text-[10px] font-bold rounded-full">
             {{ pendingBlocksStore.count }}

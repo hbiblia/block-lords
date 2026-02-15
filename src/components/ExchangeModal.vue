@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { exchangeCryptoToGamecoin, exchangeCryptoToRon, getExchangeRates } from '@/utils/api';
@@ -122,21 +122,13 @@ watch(() => props.show, (newVal) => {
   if (newVal) {
     loadRates();
     amount.value = '';
-    document.body.style.overflow = 'hidden';
-  } else {
-    document.body.style.overflow = '';
   }
 });
 
 onMounted(() => {
   if (props.show) {
     loadRates();
-    document.body.style.overflow = 'hidden';
   }
-});
-
-onUnmounted(() => {
-  document.body.style.overflow = '';
 });
 </script>
 

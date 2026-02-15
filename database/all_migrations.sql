@@ -422,28 +422,30 @@ CREATE TABLE rig_slot_upgrades (
   description TEXT
 );
 
--- Slot prices: #2-#3 Crypto, #4+ RON (0.5 RON fixed)
+-- Slot prices: #2-#3 Crypto, #4+ RON (2 RON fixed)
 INSERT INTO rig_slot_upgrades (slot_number, price, currency, name, description) VALUES
   (2, 10000, 'crypto', 'Slot #2', 'slot2'),
   (3, 10000, 'crypto', 'Slot #3', 'slot3'),
-  (4, 0.5, 'ron', 'Slot #4', 'slot4'),
-  (5, 0.5, 'ron', 'Slot #5', 'slot5'),
-  (6, 0.5, 'ron', 'Slot #6', 'expansion'),
-  (7, 0.5, 'ron', 'Slot #7', 'expansion'),
-  (8, 0.5, 'ron', 'Slot #8', 'medium'),
-  (9, 0.5, 'ron', 'Slot #9', 'medium'),
-  (10, 0.5, 'ron', 'Slot #10', 'large'),
-  (11, 0.5, 'ron', 'Slot #11', 'smallFarm'),
-  (12, 0.5, 'ron', 'Slot #12', 'smallFarm'),
-  (13, 0.5, 'ron', 'Slot #13', 'mediumFarm'),
-  (14, 0.5, 'ron', 'Slot #14', 'mediumFarm'),
-  (15, 0.5, 'ron', 'Slot #15', 'largeFarm'),
-  (16, 0.5, 'ron', 'Slot #16', 'largeFarm'),
-  (17, 0.5, 'ron', 'Slot #17', 'megaFarm'),
-  (18, 0.5, 'ron', 'Slot #18', 'megaFarm'),
-  (19, 0.5, 'ron', 'Slot #19', 'industrial'),
-  (20, 0.5, 'ron', 'Slot #20', 'maxPower')
-ON CONFLICT (slot_number) DO NOTHING;
+  (4, 2, 'ron', 'Slot #4', 'slot4'),
+  (5, 2, 'ron', 'Slot #5', 'slot5'),
+  (6, 2, 'ron', 'Slot #6', 'expansion'),
+  (7, 2, 'ron', 'Slot #7', 'expansion'),
+  (8, 2, 'ron', 'Slot #8', 'medium'),
+  (9, 2, 'ron', 'Slot #9', 'medium'),
+  (10, 2, 'ron', 'Slot #10', 'large'),
+  (11, 2, 'ron', 'Slot #11', 'smallFarm'),
+  (12, 2, 'ron', 'Slot #12', 'smallFarm'),
+  (13, 2, 'ron', 'Slot #13', 'mediumFarm'),
+  (14, 2, 'ron', 'Slot #14', 'mediumFarm'),
+  (15, 2, 'ron', 'Slot #15', 'largeFarm'),
+  (16, 2, 'ron', 'Slot #16', 'largeFarm'),
+  (17, 2, 'ron', 'Slot #17', 'megaFarm'),
+  (18, 2, 'ron', 'Slot #18', 'megaFarm'),
+  (19, 2, 'ron', 'Slot #19', 'industrial'),
+  (20, 2, 'ron', 'Slot #20', 'maxPower')
+ON CONFLICT (slot_number) DO UPDATE SET
+  price = EXCLUDED.price,
+  currency = EXCLUDED.currency;
 
 -- =====================================================
 -- 8. BOOSTS SYSTEM
@@ -517,7 +519,7 @@ CREATE TABLE IF NOT EXISTS player_slots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   slot_number INTEGER NOT NULL CHECK (slot_number >= 1 AND slot_number <= 20),
-  max_uses INTEGER NOT NULL CHECK (max_uses IN (2, 4)),
+  max_uses INTEGER NOT NULL CHECK (max_uses IN (2, 3)),
   uses_remaining INTEGER NOT NULL CHECK (uses_remaining >= 0),
   player_rig_id UUID REFERENCES player_rigs(id) ON DELETE SET NULL,
   is_destroyed BOOLEAN DEFAULT false,
@@ -567,6 +569,12 @@ BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+-- Migración: Primero eliminar constraint viejo, luego corregir datos, luego agregar nuevo constraint
+ALTER TABLE player_slots DROP CONSTRAINT IF EXISTS player_slots_max_uses_check;
+UPDATE player_slots SET uses_remaining = 3 WHERE uses_remaining > 3;
+UPDATE player_slots SET max_uses = 3 WHERE max_uses > 3;
+ALTER TABLE player_slots ADD CONSTRAINT player_slots_max_uses_check CHECK (max_uses IN (2, 3));
 
 -- =====================================================
 -- 10. RON WITHDRAWALS

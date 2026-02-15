@@ -120,7 +120,6 @@ function openCreateModal() {
     ends_at: '',
   };
   showModal.value = true;
-  document.body.style.overflow = 'hidden';
   playSound('click');
 }
 
@@ -139,14 +138,12 @@ function openEditModal(announcement: Announcement) {
     ends_at: announcement.ends_at ? new Date(announcement.ends_at).toISOString().slice(0, 16) : '',
   };
   showModal.value = true;
-  document.body.style.overflow = 'hidden';
   playSound('click');
 }
 
 function closeModal() {
   showModal.value = false;
   editingAnnouncement.value = null;
-  document.body.style.overflow = '';
   playSound('click');
 }
 
@@ -235,14 +232,12 @@ function openUpdateModal() {
   const now = new Date();
   updateVersion.value = `v${now.getFullYear()}.${now.getMonth() + 1}.${now.getDate()}`;
   showUpdateModal.value = true;
-  document.body.style.overflow = 'hidden';
   playSound('click');
 }
 
 function closeUpdateModal() {
   showUpdateModal.value = false;
   updateVersion.value = '';
-  document.body.style.overflow = '';
   playSound('click');
 }
 
@@ -371,7 +366,6 @@ function openGiftModal() {
   selectedBoostId.value = '';
   giftSuccess.value = '';
   showGiftModal.value = true;
-  document.body.style.overflow = 'hidden';
   playSound('click');
   // Cargar boost items si no se han cargado
   if (boostItems.value.length === 0) {
@@ -382,7 +376,6 @@ function openGiftModal() {
 function closeGiftModal() {
   showGiftModal.value = false;
   giftSuccess.value = '';
-  document.body.style.overflow = '';
   playSound('click');
 }
 
@@ -472,7 +465,6 @@ function openUserDetail(user: any) {
   selectedUser.value = user;
   selectedUserDetail.value = null;
   showUserDetailModal.value = true;
-  document.body.style.overflow = 'hidden';
   playSound('click');
   loadUserDetail(user.id);
 }
@@ -481,7 +473,6 @@ function closeUserDetail() {
   showUserDetailModal.value = false;
   selectedUser.value = null;
   selectedUserDetail.value = null;
-  document.body.style.overflow = '';
   // Reset infinite scroll
   pendingBlocksToShow.value = BLOCKS_PER_PAGE;
   claimedBlocksToShow.value = BLOCKS_PER_PAGE;

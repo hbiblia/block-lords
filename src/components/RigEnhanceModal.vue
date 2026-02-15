@@ -203,12 +203,10 @@ const dataLoaded = ref(false);
 // Load data when modal opens
 watch(() => props.show, async (isOpen) => {
   if (isOpen && props.rig) {
-    document.body.style.overflow = 'hidden';
     dataLoaded.value = false;
     await loadData();
     startBoostTimer();
   } else {
-    document.body.style.overflow = '';
     stopBoostTimer();
   }
 });
@@ -1432,8 +1430,8 @@ function closeProcessingModal() {
                  <div v-if="nextRepairInfo" class="p-3 rounded-lg border border-border bg-bg-primary/30 flex items-center justify-between gap-4">
                    <div class="flex items-center gap-3">
                      <div class="bg-bg-tertiary p-2 rounded">
-                       <div class="text-[10px] text-text-muted">{{ t('rigManage.nextRepairLabel') }}</div>
-                       <div class="font-mono font-bold text-sm">{{ nextRepairInfo.number }}/{{ MAX_REPAIRS }}</div>
+                       <div class="text-[10px] text-text-muted">{{ t('rigManage.repairsUsedLabel') }}</div>
+                       <div class="font-mono font-bold text-sm">{{ timesRepaired }}/{{ MAX_REPAIRS }}</div>
                      </div>
                      <div>
                        <div class="text-xs text-text-muted">{{ t('rigManage.costLabel') }}: <span class="text-amber-400 font-mono">{{ nextRepairInfo.maxCost }} GC</span></div>

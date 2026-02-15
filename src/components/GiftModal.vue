@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, ref, onUnmounted } from 'vue';
+import { watch, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useGiftsStore } from '@/stores/gifts';
 import { useToastStore } from '@/stores/toast';
@@ -43,23 +43,15 @@ function generateParticles() {
   }));
 }
 
-// Lock body scroll when modal is showing
 watch(() => giftsStore.phase, (phase) => {
   if (phase !== 'idle') {
-    document.body.style.overflow = 'hidden';
     if (phase === 'showing') {
       generateParticles();
     }
     if (phase === 'revealed') {
       initAd();
     }
-  } else {
-    document.body.style.overflow = '';
   }
-});
-
-onUnmounted(() => {
-  document.body.style.overflow = '';
 });
 
 // Handle gift click -> start opening

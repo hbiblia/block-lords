@@ -14,6 +14,11 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
+/* Bloquear scroll del body cuando hay un modal/overlay abierto */
+body:has(.fixed.inset-0:not(.pointer-events-none)) {
+  overflow: hidden;
+}
+
 /* === SCROLLBAR PERSONALIZADA === */
 ::-webkit-scrollbar {
   width: 8px;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onUnmounted, computed, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
@@ -388,17 +388,7 @@ function getTransactionIcon(type: string): string {
   }
 }
 
-// Lock body scroll when modal is open
-watch([showResetConfirm, showWithdrawModal, showReloadModal], ([reset, withdraw, reload]) => {
-  document.body.style.overflow = (reset || withdraw || reload) ? 'hidden' : '';
-});
-
 // loadData is called by the watcher with immediate: true
-
-onUnmounted(() => {
-  // Ensure scroll is restored when component unmounts
-  document.body.style.overflow = '';
-});
 </script>
 
 <template>
