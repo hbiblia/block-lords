@@ -1009,7 +1009,7 @@ function closeProcessingModal() {
       ></div>
 
       <!-- Modal -->
-      <div class="relative w-full max-w-lg h-[610px] flex flex-col bg-bg-secondary border border-border rounded-xl overflow-hidden">
+      <div class="relative w-full max-w-lg lg:max-w-2xl h-[610px] lg:h-[750px] flex flex-col bg-bg-secondary border border-border rounded-xl overflow-hidden">
         <!-- Header -->
         <div class="flex items-center justify-between p-4 border-b border-border">
           <div>
@@ -1086,80 +1086,7 @@ function closeProcessingModal() {
             </div>
           </div>
 
-          <!-- Active Effects Panel -->
-          <div v-if="installedCooling.length > 0 || coolantBoostPercent > 0 || hasUpgradeBonuses"
-            class="mt-3 pt-3 border-t border-border/50">
-            <div class="text-[10px] uppercase tracking-wider text-text-muted/60 mb-2 font-semibold">
-              {{ t('rigManage.activeEffects') }}
-            </div>
-            <div class="space-y-1">
-              <!-- Cooling effects -->
-              <div v-for="cooling in installedCooling" :key="'eff-cool-' + cooling.id"
-                v-tooltip="t('rigManage.tooltips.coolingEffect', {
-                  power: cooling.cooling_power,
-                  durability: cooling.durability.toFixed(0),
-                  effective: (cooling.cooling_power * cooling.durability / 100).toFixed(1),
-                  energy: cooling.energy_cost
-                })"
-                class="flex items-center justify-between text-xs px-2 py-1 rounded bg-cyan-500/5 cursor-help">
-                <div class="flex items-center gap-1.5">
-                  <span class="text-cyan-400">❄️</span>
-                  <span class="text-cyan-300">{{ getCoolingName(cooling.cooling_item_id) }}</span>
-                </div>
-                <div class="flex items-center gap-2 font-mono">
-                  <span class="text-cyan-400">-{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</span>
-                  <span class="text-[10px]" :class="cooling.durability < 30 ? 'text-status-danger' : cooling.durability < 60 ? 'text-status-warning' : 'text-text-muted/60'">
-                    {{ cooling.durability.toFixed(0) }}%
-                  </span>
-                </div>
-              </div>
 
-
-
-
-              <!-- Coolant impact summary (if any coolant boost active and rig running) -->
-              <div v-if="rig.is_active && installedBoosts.some(b => b.boost_type === 'coolant_injection')"
-                class="flex items-center justify-between text-xs px-2 py-1 rounded bg-cyan-500/5 border border-dashed border-cyan-500/20"
-                v-tooltip="getCoolantImpactTooltip(installedBoosts.find(b => b.boost_type === 'coolant_injection')!)"
-              >
-                <span class="text-[10px] text-cyan-300/70 cursor-help">
-                  {{ getCoolantImpactText(installedBoosts.find(b => b.boost_type === 'coolant_injection')!) }}
-                </span>
-              </div>
-
-              <!-- Upgrade bonuses -->
-              <div v-if="hasUpgradeBonuses"
-                class="flex flex-col gap-2 text-xs px-2 py-2 rounded bg-amber-500/5 w-full">
-                <div v-if="rigUpgradeHashBonus > 0"
-                  v-tooltip="t('rigManage.tooltips.upgradeHashBonus', { value: rigUpgradeHashBonus, abs: (baseHashrate * rigUpgradeHashBonus / 100).toFixed(1) })"
-                  class="flex items-center justify-between w-full cursor-help border-b border-amber-500/10 pb-1 last:border-0 last:pb-0">
-                  <div class="flex items-center gap-2">
-                    <span>⚡</span>
-                    <span class="text-text-muted">{{ t('rigManage.effectUpgradeHash') }}</span>
-                  </div>
-                  <span class="text-status-success font-mono">+{{ rigUpgradeHashBonus }}% <span class="text-xs opacity-70">(+{{ (baseHashrate * rigUpgradeHashBonus / 100).toFixed(1) }} Hash)</span></span>
-                </div>
-                <div v-if="rigUpgradeEffBonus > 0"
-                  v-tooltip="t('rigManage.tooltips.upgradeEffBonus', { value: rigUpgradeEffBonus, abs: (basePower * rigUpgradeEffBonus / 100).toFixed(1) })"
-                  class="flex items-center justify-between w-full cursor-help border-b border-amber-500/10 pb-1 last:border-0 last:pb-0">
-                  <div class="flex items-center gap-2">
-                    <span>🔋</span>
-                    <span class="text-text-muted">{{ t('rigManage.effectUpgradeEff') }}</span>
-                  </div>
-                  <span class="text-green-400 font-mono">-{{ rigUpgradeEffBonus }}% <span class="text-xs opacity-70">(-{{ (basePower * rigUpgradeEffBonus / 100).toFixed(1) }} W)</span></span>
-                </div>
-                <div v-if="rigUpgradeThermalBonus > 0"
-                  v-tooltip="t('rigManage.tooltips.upgradeThermalBonus', { value: rigUpgradeThermalBonus, abs: (rigBaseHeat * rigUpgradeThermalBonus / 100).toFixed(1) })"
-                  class="flex items-center justify-between w-full cursor-help pb-1 last:pb-0">
-                  <div class="flex items-center gap-2">
-                    <span>🌡️</span>
-                    <span class="text-text-muted">{{ t('rigManage.effectUpgradeThermal') }}</span>
-                  </div>
-                  <span class="text-cyan-400 font-mono">-{{ rigUpgradeThermalBonus }}% <span class="text-xs opacity-70">(-{{ (rigBaseHeat * rigUpgradeThermalBonus / 100).toFixed(1) }}°)</span></span>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <!-- Unified Dashboard Content -->
@@ -1171,6 +1098,79 @@ function closeProcessingModal() {
           </div>
 
           <div v-else class="grid grid-cols-1 gap-6 pb-20">
+            <!-- Active Effects Panel -->
+            <div v-if="installedCooling.length > 0 || coolantBoostPercent > 0 || hasUpgradeBonuses"
+              class="space-y-4">
+              <div class="flex items-center justify-between border-b border-border pb-2 mb-2">
+                <h3 class="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+                  <span>✨</span> {{ t('rigManage.activeEffects') }}
+                </h3>
+              </div>
+              <div class="space-y-1">
+                <!-- Cooling effects -->
+                <div v-for="cooling in installedCooling" :key="'eff-cool-' + cooling.id"
+                  v-tooltip="t('rigManage.tooltips.coolingEffect', {
+                    power: cooling.cooling_power,
+                    durability: cooling.durability.toFixed(0),
+                    effective: (cooling.cooling_power * cooling.durability / 100).toFixed(1),
+                    energy: cooling.energy_cost
+                  })"
+                  class="flex items-center justify-between text-xs px-2 py-1 rounded bg-cyan-500/5 cursor-help">
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-cyan-400">❄️</span>
+                    <span class="text-cyan-300">{{ getCoolingName(cooling.cooling_item_id) }}</span>
+                  </div>
+                  <div class="flex items-center gap-2 font-mono">
+                    <span class="text-cyan-400">-{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</span>
+                    <span class="text-[10px]" :class="cooling.durability < 30 ? 'text-status-danger' : cooling.durability < 60 ? 'text-status-warning' : 'text-text-muted/60'">
+                      {{ cooling.durability.toFixed(0) }}%
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Coolant impact summary (if any coolant boost active and rig running) -->
+                <div v-if="rig.is_active && installedBoosts.some(b => b.boost_type === 'coolant_injection')"
+                  class="flex items-center justify-between text-xs px-2 py-1 rounded bg-cyan-500/5 border border-dashed border-cyan-500/20"
+                  v-tooltip="getCoolantImpactTooltip(installedBoosts.find(b => b.boost_type === 'coolant_injection')!)"
+                >
+                  <span class="text-[10px] text-cyan-300/70 cursor-help">
+                    {{ getCoolantImpactText(installedBoosts.find(b => b.boost_type === 'coolant_injection')!) }}
+                  </span>
+                </div>
+
+                <!-- Upgrade bonuses -->
+                <div v-if="hasUpgradeBonuses"
+                  class="flex flex-col gap-2 text-xs px-2 py-2 rounded bg-amber-500/5 w-full">
+                  <div v-if="rigUpgradeHashBonus > 0"
+                    v-tooltip="t('rigManage.tooltips.upgradeHashBonus', { value: rigUpgradeHashBonus, abs: (baseHashrate * rigUpgradeHashBonus / 100).toFixed(1) })"
+                    class="flex items-center justify-between w-full cursor-help border-b border-amber-500/10 pb-1 last:border-0 last:pb-0">
+                    <div class="flex items-center gap-2">
+                      <span>⚡</span>
+                      <span class="text-text-muted">{{ t('rigManage.effectUpgradeHash') }}</span>
+                    </div>
+                    <span class="text-status-success font-mono">+{{ rigUpgradeHashBonus }}% <span class="text-xs opacity-70">(+{{ (baseHashrate * rigUpgradeHashBonus / 100).toFixed(1) }} Hash)</span></span>
+                  </div>
+                  <div v-if="rigUpgradeEffBonus > 0"
+                    v-tooltip="t('rigManage.tooltips.upgradeEffBonus', { value: rigUpgradeEffBonus, abs: (basePower * rigUpgradeEffBonus / 100).toFixed(1) })"
+                    class="flex items-center justify-between w-full cursor-help border-b border-amber-500/10 pb-1 last:border-0 last:pb-0">
+                    <div class="flex items-center gap-2">
+                      <span>🔋</span>
+                      <span class="text-text-muted">{{ t('rigManage.effectUpgradeEff') }}</span>
+                    </div>
+                    <span class="text-green-400 font-mono">-{{ rigUpgradeEffBonus }}% <span class="text-xs opacity-70">(-{{ (basePower * rigUpgradeEffBonus / 100).toFixed(1) }} W)</span></span>
+                  </div>
+                  <div v-if="rigUpgradeThermalBonus > 0"
+                    v-tooltip="t('rigManage.tooltips.upgradeThermalBonus', { value: rigUpgradeThermalBonus, abs: (rigBaseHeat * rigUpgradeThermalBonus / 100).toFixed(1) })"
+                    class="flex items-center justify-between w-full cursor-help pb-1 last:pb-0">
+                    <div class="flex items-center gap-2">
+                      <span>🌡️</span>
+                      <span class="text-text-muted">{{ t('rigManage.effectUpgradeThermal') }}</span>
+                    </div>
+                    <span class="text-cyan-400 font-mono">-{{ rigUpgradeThermalBonus }}% <span class="text-xs opacity-70">(-{{ (rigBaseHeat * rigUpgradeThermalBonus / 100).toFixed(1) }}°)</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
             
             <!-- LEFT COLUMN: Hardware & Boosts -->
             <div class="space-y-4">
