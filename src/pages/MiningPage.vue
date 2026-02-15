@@ -34,6 +34,15 @@ const selectedRigForManage = ref<typeof miningStore.rigs[0] | null>(null);
 const buyingSlot = ref(false);
 const showConfirmSlotPurchase = ref(false);
 
+// Slot durability info modal
+const showSlotDurabilityInfo = ref(false);
+const slotDurabilityModalData = ref<{ uses_remaining: number; max_uses: number; slot_number: number } | null>(null);
+
+function openSlotDurabilityInfo(slot: { uses_remaining: number; max_uses: number; slot_number: number }) {
+  slotDurabilityModalData.value = slot;
+  showSlotDurabilityInfo.value = true;
+}
+
 // Stop rig confirmation
 const showConfirmStopRig = ref(false);
 const rigToStop = ref<typeof miningStore.rigs[0] | null>(null);
@@ -349,6 +358,16 @@ function getRigName(id: string): string {
   const playerRig = rigs.value.find(r => r.rig.id === id);
   return playerRig?.rig.name ?? id;
 }
+
+// Get slot data for a given rig
+function getSlotForRig(rigId: string) {
+  return slotInfo.value?.slots?.find(s => s.player_rig_id === rigId) ?? null;
+}
+
+// Get slot data for empty slots (no rig assigned)
+const emptySlots = computed(() => {
+  return slotInfo.value?.slots?.filter(s => !s.has_rig && !s.is_destroyed) ?? [];
+});
 
 // Get upgraded hashrate using bonus from backend (base * (1 + bonus%))
 function getUpgradedHashrate(playerRig: typeof miningStore.rigs[0]): number {
@@ -863,8 +882,18 @@ onUnmounted(() => {
 
           <div v-else class="grid sm:grid-cols-2 gap-4">
             <div v-for="playerRig in rigs" :key="playerRig.id"
-              class="bg-bg-secondary/80 rounded-xl border p-4 relative overflow-hidden"
+              class="bg-bg-secondary/80 rounded-xl border relative overflow-hidden"
               :class="playerRig.condition <= 0 ? 'border-status-danger/70' : playerRig.condition < 30 ? 'border-status-warning/50' : 'border-border/30'">
+              <!-- Slot Durability Bar (top border) -->
+              <div v-if="getSlotForRig(playerRig.id)" class="flex w-full h-2.5 cursor-pointer hover:brightness-110"
+                :class="getSlotForRig(playerRig.id)!.max_uses > 1 ? 'gap-px' : ''"
+                @click="openSlotDurabilityInfo(getSlotForRig(playerRig.id)!)">
+                <div v-for="i in getSlotForRig(playerRig.id)!.max_uses" :key="i"
+                  class="flex-1 h-full transition-colors"
+                  :class="i <= getSlotForRig(playerRig.id)!.uses_remaining ? 'bg-emerald-500' : 'bg-gray-700/60'">
+                </div>
+              </div>
+              <div class="p-4">
               <!-- Mining indicator dot -->
               <div v-if="playerRig.is_active" class="absolute top-3 right-3">
                 <span class="relative flex h-2.5 w-2.5">
@@ -1011,17 +1040,29 @@ onUnmounted(() => {
                       ⚙️
                     </button>
               </div>
+              </div>
             </div>
 
             <!-- Empty Available Slots -->
-            <div v-for="n in (slotInfo?.available_slots ?? 0)" :key="'empty-slot-' + n"
-              class="bg-bg-secondary/50 rounded-xl border border-dashed border-border/50 p-4 flex flex-col items-center justify-center min-h-[200px]">
-              <div
-                class="w-12 h-12 rounded-lg bg-bg-tertiary/50 flex items-center justify-center text-2xl mb-3 opacity-50">
-                🖥️
+            <div v-for="slot in emptySlots" :key="'empty-slot-' + slot.slot_number"
+              class="bg-bg-secondary/50 rounded-xl border border-dashed border-border/50 overflow-hidden min-h-[200px]">
+              <!-- Slot Durability Bar (top border) -->
+              <div class="flex w-full h-2.5 cursor-pointer hover:brightness-110"
+                :class="slot.max_uses > 1 ? 'gap-px' : ''"
+                @click="openSlotDurabilityInfo(slot)">
+                <div v-for="i in slot.max_uses" :key="i"
+                  class="flex-1 h-full transition-colors"
+                  :class="i <= slot.uses_remaining ? 'bg-emerald-500' : 'bg-gray-700/60'">
+                </div>
               </div>
-              <div class="text-text-muted font-medium">{{ t('slots.available', 'Disponible') }}</div>
-              <p class="text-xs text-text-muted/70 mt-1">{{ t('slots.buyRigToUse', 'Compra un rig en el mercado') }}</p>
+              <div class="p-4 flex flex-col items-center justify-center h-full">
+                <div
+                  class="w-12 h-12 rounded-lg bg-bg-tertiary/50 flex items-center justify-center text-2xl mb-3 opacity-50">
+                  🖥️
+                </div>
+                <div class="text-text-muted font-medium">{{ t('slots.available', 'Disponible') }}</div>
+                <p class="text-xs text-text-muted/70 mt-1">{{ t('slots.buyRigToUse', 'Compra un rig en el mercado') }}</p>
+              </div>
             </div>
 
             <!-- Slot Purchase Card -->
@@ -1240,6 +1281,63 @@ onUnmounted(() => {
                 <span v-else>{{ t('common.confirm', 'Confirmar') }}</span>
               </button>
             </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Slot Durability Info Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showSlotDurabilityInfo && slotDurabilityModalData"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="showSlotDurabilityInfo = false">
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+          <div class="relative bg-bg-primary border border-border rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+            <h3 class="text-lg font-bold mb-4 text-center">{{ t('slots.durabilityTitle') }}</h3>
+
+            <!-- Visual bar -->
+            <div class="flex gap-px w-full h-3 rounded-lg overflow-hidden mb-3">
+              <div v-for="i in slotDurabilityModalData.max_uses" :key="i"
+                class="flex-1 h-full transition-colors"
+                :class="i <= slotDurabilityModalData.uses_remaining ? 'bg-emerald-500' : 'bg-gray-700/60'">
+              </div>
+            </div>
+            <p class="text-center text-sm font-semibold mb-4"
+              :class="slotDurabilityModalData.uses_remaining <= 1 ? 'text-status-danger' : 'text-emerald-400'">
+              {{ t('slots.usesRemaining', { uses: slotDurabilityModalData.uses_remaining, max: slotDurabilityModalData.max_uses }) }}
+            </p>
+
+            <!-- Info sections -->
+            <div class="space-y-3 mb-5">
+              <div class="bg-bg-secondary rounded-xl p-3">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-base">📋</span>
+                  <span class="text-sm font-semibold">{{ t('slots.durabilityInfo.whatIsTitle') }}</span>
+                </div>
+                <p class="text-xs text-text-muted leading-relaxed">{{ t('slots.durabilityInfo.whatIsDesc') }}</p>
+              </div>
+
+              <div class="bg-bg-secondary rounded-xl p-3">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-base">📉</span>
+                  <span class="text-sm font-semibold">{{ t('slots.durabilityInfo.howDecreasesTitle') }}</span>
+                </div>
+                <p class="text-xs text-text-muted leading-relaxed">{{ t('slots.durabilityInfo.howDecreasesDesc') }}</p>
+              </div>
+
+              <div class="bg-status-danger/10 border border-status-danger/20 rounded-xl p-3">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-base">⚠️</span>
+                  <span class="text-sm font-semibold text-status-danger">{{ t('slots.durabilityInfo.whenEmptyTitle') }}</span>
+                </div>
+                <p class="text-xs text-text-muted leading-relaxed">{{ t('slots.durabilityInfo.whenEmptyDesc') }}</p>
+              </div>
+            </div>
+
+            <button @click="showSlotDurabilityInfo = false"
+              class="w-full py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
+              {{ t('common.close') }}
+            </button>
           </div>
         </div>
       </Transition>

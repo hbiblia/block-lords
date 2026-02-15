@@ -979,10 +979,16 @@ async function confirmUse() {
 
       // Handle delete separately - close modal immediately
       if (type === 'delete') {
+        // Mostrar feedback de durabilidad del slot
+        if (result.slot_destroyed) {
+          toastStore.error(t('slots.slotDestroyed', { number: result.slot_number }));
+        } else if (result.slot_uses_remaining !== undefined && result.slot_uses_remaining > 0) {
+          toastStore.warning(t('slots.usesDecreased', { number: result.slot_number, uses: result.slot_uses_remaining }));
+        }
         toastStore.success(`${rigName} eliminado`);
         closeProcessingModal();
         await authStore.fetchPlayer();
-        await miningStore.reloadRigs();
+        await miningStore.loadData();
         emit('updated');
         emit('close');
         return;
@@ -1217,10 +1223,10 @@ function closeProcessingModal() {
             <div class="space-y-4">
               <div class="flex items-center justify-between border-b border-border pb-2 mb-2">
                 <h3 class="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
-                  <span>📦</span> Hardware & Items
+                  <span>📦</span> {{ t('rigManage.hardwareItems') }}
                 </h3>
                 <span v-if="installedCooling.length + installedBoosts.length > 0" class="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold bg-amber-500/20 text-amber-400">
-                  {{ installedCooling.length + installedBoosts.length }} Active
+                  {{ installedCooling.length + installedBoosts.length }} {{ t('rigManage.active') }}
                 </span>
               </div>
 
@@ -1243,9 +1249,9 @@ function closeProcessingModal() {
                             <svg class="w-3 h-3 text-text-muted transition-transform" :class="expandedCoolingId === cooling.id ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                           </div>
                           <div class="flex items-center gap-3 text-xs mt-0.5">
-                            <span class="text-cyan-300 font-mono" v-tooltip="'Potencia de enfriamiento efectiva según durabilidad actual'">❄️ -{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</span>
-                            <span class="text-yellow-400/70 font-mono" v-tooltip="'Consumo de energía extra por este cooler'">⚡{{ (cooling.energy_cost * cooling.durability / 100).toFixed(1) }}/t</span>
-                            <span v-if="rig?.is_active" class="text-text-muted/70 font-mono text-[10px]" v-tooltip="'Tiempo estimado de vida según temperatura y carga actuales'">⏱️{{ estimateCoolingLife(cooling) }}</span>
+                            <span class="text-cyan-300 font-mono" v-tooltip="t('rigManage.coolingDetail.effectivePowerTip')">❄️ -{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</span>
+                            <span class="text-yellow-400/70 font-mono" v-tooltip="t('rigManage.coolingDetail.energyCostTip')">⚡{{ (cooling.energy_cost * cooling.durability / 100).toFixed(1) }}/t</span>
+                            <span v-if="rig?.is_active" class="text-text-muted/70 font-mono text-[10px]" v-tooltip="t('rigManage.coolingDetail.estimatedLifeTip')">⏱️{{ estimateCoolingLife(cooling) }}</span>
                           </div>
                         </div>
                       </div>
@@ -1261,24 +1267,24 @@ function closeProcessingModal() {
                     <!-- Detail -->
                     <div v-if="expandedCoolingId === cooling.id" class="px-3 py-2.5 border-t border-cyan-500/20 bg-cyan-500/5 text-xs space-y-2">
                        <div class="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                         <div class="flex justify-between cursor-help" v-tooltip="'Capacidad real de enfriamiento, reducida por el desgaste'"><span class="text-text-muted">Potencia efectiva</span><span class="text-cyan-400 font-mono">-{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</span></div>
-                         <div class="flex justify-between cursor-help" v-tooltip="'Capacidad máxima al 100% de durabilidad'"><span class="text-text-muted">Potencia base</span><span class="text-cyan-300/60 font-mono">-{{ cooling.cooling_power }}°</span></div>
-                         <div class="flex justify-between cursor-help" v-tooltip="'Energía adicional que consume este cooler por tick'"><span class="text-text-muted">Consumo energía</span><span class="text-yellow-400 font-mono">⚡{{ (cooling.energy_cost * cooling.durability / 100).toFixed(1) }}/t</span></div>
-                         <div class="flex justify-between cursor-help" v-tooltip="'Grados enfriados por unidad de energía consumida'"><span class="text-text-muted">Eficiencia</span><span class="text-emerald-400 font-mono">{{ cooling.energy_cost > 0 ? (cooling.cooling_power / cooling.energy_cost).toFixed(2) : '∞' }} °/⚡</span></div>
+                         <div class="flex justify-between cursor-help" v-tooltip="t('rigManage.coolingDetail.effectivePowerTip')"><span class="text-text-muted">{{ t('rigManage.coolingDetail.effectivePower') }}</span><span class="text-cyan-400 font-mono">-{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</span></div>
+                         <div class="flex justify-between cursor-help" v-tooltip="t('rigManage.coolantTooltip.basePower')"><span class="text-text-muted">{{ t('rigManage.coolingDetail.basePower') }}</span><span class="text-cyan-300/60 font-mono">-{{ cooling.cooling_power }}°</span></div>
+                         <div class="flex justify-between cursor-help" v-tooltip="t('rigManage.coolingDetail.energyCostTip')"><span class="text-text-muted">{{ t('rigManage.coolingDetail.energyConsumption') }}</span><span class="text-yellow-400 font-mono">⚡{{ (cooling.energy_cost * cooling.durability / 100).toFixed(1) }}/t</span></div>
+                         <div class="flex justify-between cursor-help" v-tooltip="t('rigManage.coolingDetail.efficiencyLabel')"><span class="text-text-muted">{{ t('rigManage.coolingDetail.efficiencyLabel') }}</span><span class="text-emerald-400 font-mono">{{ cooling.energy_cost > 0 ? (cooling.cooling_power / cooling.energy_cost).toFixed(2) : '∞' }} °/⚡</span></div>
                        </div>
-                       <div v-if="totalCoolingPower > 0" class="flex justify-between border-t border-cyan-500/15 pt-1.5 cursor-help" v-tooltip="'Porcentaje del enfriamiento total del rig que aporta este cooler'">
-                         <span class="text-text-muted">% del cooling total</span>
+                       <div v-if="totalCoolingPower > 0" class="flex justify-between border-t border-cyan-500/15 pt-1.5 cursor-help" v-tooltip="t('rigManage.coolingDetail.coolingShare')">
+                         <span class="text-text-muted">{{ t('rigManage.coolingDetail.coolingShare') }}</span>
                          <span class="text-cyan-300 font-mono">{{ ((cooling.cooling_power * cooling.durability / 100) / totalCoolingPower * 100).toFixed(0) }}%</span>
                        </div>
                        <div class="flex items-center gap-2 border-t border-cyan-500/15 pt-1.5">
-                         <span class="text-text-muted cursor-help" v-tooltip="'Durabilidad restante. Baja más rápido con temperaturas altas o calor excesivo'">Durabilidad</span>
+                         <span class="text-text-muted cursor-help" v-tooltip="t('rigManage.coolingDetail.durabilityTip')">{{ t('rigManage.coolingDetail.durabilityLabel') }}</span>
                          <div class="flex-1 h-1.5 bg-black/30 rounded-full overflow-hidden">
                            <div class="h-full rounded-full transition-all" :class="cooling.durability < 30 ? 'bg-status-danger' : cooling.durability < 60 ? 'bg-status-warning' : 'bg-cyan-400'" :style="{ width: `${cooling.durability}%` }"></div>
                          </div>
                          <span class="font-mono" :class="cooling.durability < 30 ? 'text-status-danger' : cooling.durability < 60 ? 'text-status-warning' : 'text-cyan-400'">{{ cooling.durability.toFixed(1) }}%</span>
                        </div>
-                       <div v-if="rig?.is_active" class="flex justify-between border-t border-cyan-500/15 pt-1.5 cursor-help" v-tooltip="'Estimación basada en: desgaste base (0.5%/min) + penalización por temp. alta + exceso de calor'">
-                         <span class="text-text-muted">⏱️ Tiempo estimado vida</span>
+                       <div v-if="rig?.is_active" class="flex justify-between border-t border-cyan-500/15 pt-1.5 cursor-help" v-tooltip="t('rigManage.coolingDetail.estimatedLifeDetail')">
+                         <span class="text-text-muted">⏱️ {{ t('rigManage.coolingDetail.estimatedLife') }}</span>
                          <span class="font-mono" :class="cooling.durability < 30 ? 'text-status-danger' : 'text-cyan-300'">{{ estimateCoolingLife(cooling) }}</span>
                        </div>
                     </div>
@@ -1318,7 +1324,7 @@ function closeProcessingModal() {
 
               <div v-else class="space-y-3">
                  <div v-if="coolingItems.length > 0" class="space-y-2">
-                   <h4 class="text-xs font-bold text-text-muted uppercase tracking-wider">Available Cooling</h4>
+                   <h4 class="text-xs font-bold text-text-muted uppercase tracking-wider">{{ t('rigManage.availableCooling') }}</h4>
                    <div v-for="item in coolingItems" :key="item.id" class="flex items-center justify-between w-full p-2 rounded-lg border bg-bg-tertiary" :class="getTierBg(item.tier)">
                      <div class="flex items-center gap-2">
                        <span class="text-xl">❄️</span>
@@ -1327,11 +1333,11 @@ function closeProcessingModal() {
                          <div class="text-[10px] text-text-muted">❄️-{{ item.cooling_power }}° • x{{ item.quantity }}</div>
                        </div>
                      </div>
-                     <button @click="requestInstallCooling(item)" :disabled="rig.is_active || processing" class="px-2 py-1 rounded text-xs font-medium bg-cyan-500 text-white hover:bg-cyan-400">Install</button>
+                     <button @click="requestInstallCooling(item)" :disabled="rig.is_active || processing" class="px-2 py-1 rounded text-xs font-medium bg-cyan-500 text-white hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-cyan-500">{{ t('rigManage.install') }}</button>
                    </div>
                  </div>
                  <div v-if="boostItems.length > 0" class="space-y-2">
-                   <h4 class="text-xs font-bold text-text-muted uppercase tracking-wider">Available Boosts</h4>
+                   <h4 class="text-xs font-bold text-text-muted uppercase tracking-wider">{{ t('rigManage.availableBoosts') }}</h4>
                    <div v-for="boost in boostItems" :key="boost.boost_id" class="flex items-center justify-between w-full p-2 rounded-lg border bg-bg-tertiary" :class="getTierBg(boost.tier)">
                      <div class="flex items-center gap-2">
                        <span class="text-xl">{{ getBoostIcon(boost.boost_type) }}</span>
@@ -1340,7 +1346,7 @@ function closeProcessingModal() {
                          <div class="text-[10px] text-text-muted">{{ getBoostEffectText(boost) }} • x{{ boost.quantity }}</div>
                        </div>
                      </div>
-                     <button @click="requestInstallBoost(boost)" :disabled="rig.is_active || processing" class="px-2 py-1 rounded text-xs font-medium bg-amber-500 text-white hover:bg-amber-400">Install</button>
+                     <button @click="requestInstallBoost(boost)" :disabled="rig.is_active || processing" class="px-2 py-1 rounded text-xs font-medium bg-amber-500 text-white hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-amber-500">{{ t('rigManage.install') }}</button>
                    </div>
                  </div>
               </div>
@@ -1350,9 +1356,9 @@ function closeProcessingModal() {
             <div class="space-y-4">
               <div class="flex items-center justify-between border-b border-border pb-2 mb-2">
                 <h3 class="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
-                  <span>⬆️</span> System Firmware
+                  <span>⬆️</span> {{ t('rigManage.systemFirmware') }}
                 </h3>
-                <span class="text-[10px] text-amber-400 font-mono" v-if="rigUpgrades">Max Lv {{ rigUpgrades.max_level }}</span>
+                <span class="text-[10px] text-amber-400 font-mono" v-if="rigUpgrades">{{ t('rigManage.maxLv') }} {{ rigUpgrades.max_level }}</span>
               </div>
 
               <!-- Warning if rig is active -->
@@ -1365,49 +1371,49 @@ function closeProcessingModal() {
                  <!-- Hashrate -->
                  <div class="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
                    <div class="flex items-center justify-between">
-                     <div class="flex items-center gap-2"><span class="text-xl">⚡</span><div><h4 class="font-medium text-amber-400 text-sm">Hashrate</h4><div class="text-[10px] text-text-muted">Mining Speed</div></div></div>
+                     <div class="flex items-center gap-2"><span class="text-xl">⚡</span><div><h4 class="font-medium text-amber-400 text-sm">{{ t('rigManage.hashrate') }}</h4><div class="text-[10px] text-text-muted">{{ t('rigManage.miningSpeed') }}</div></div></div>
                      <div class="text-right">
-                       <div class="font-mono text-amber-400 text-sm">Lv {{ rigUpgrades.hashrate.current_level }}</div>
+                       <div class="font-mono text-amber-400 text-sm">{{ t('rigManage.lv') }} {{ rigUpgrades.hashrate.current_level }}</div>
                        <div class="font-mono text-xs text-status-success cursor-help" v-tooltip="t('rigManage.tooltips.upgradeHashBonus', { value: rigUpgrades.hashrate.current_bonus, abs: (baseHashrate * rigUpgrades.hashrate.current_bonus / 100).toFixed(1) })">+{{ rigUpgrades.hashrate.current_bonus }}% <span class="opacity-70">(+{{ (baseHashrate * rigUpgrades.hashrate.current_bonus / 100).toFixed(1) }} Hash)</span></div>
                      </div>
                    </div>
                    <div v-if="rigUpgrades.hashrate.can_upgrade" class="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
-                     <div class="text-xs text-text-muted">→ Lv {{ rigUpgrades.hashrate.current_level + 1 }}: <span class="text-status-success cursor-help" v-tooltip="t('rigManage.tooltips.upgradeHashBonus', { value: rigUpgrades.hashrate.next_bonus, abs: (baseHashrate * rigUpgrades.hashrate.next_bonus / 100).toFixed(1) })">+{{ rigUpgrades.hashrate.next_bonus }}% (+{{ (baseHashrate * rigUpgrades.hashrate.next_bonus / 100).toFixed(1) }} Hash)</span></div>
-                     <button @click="requestUpgrade('hashrate')" :disabled="rig.is_active || processing || (authStore.player?.crypto_balance ?? 0) < rigUpgrades.hashrate.next_cost" class="px-2 py-1 rounded text-xs font-medium bg-amber-500 text-black hover:bg-amber-400 flex items-center gap-1"><span>💎</span> {{ formatCrypto(rigUpgrades.hashrate.next_cost) }}</button>
+                     <div class="text-xs text-text-muted">→ {{ t('rigManage.lv') }} {{ rigUpgrades.hashrate.current_level + 1 }}: <span class="text-status-success cursor-help" v-tooltip="t('rigManage.tooltips.upgradeHashBonus', { value: rigUpgrades.hashrate.next_bonus, abs: (baseHashrate * rigUpgrades.hashrate.next_bonus / 100).toFixed(1) })">+{{ rigUpgrades.hashrate.next_bonus }}% (+{{ (baseHashrate * rigUpgrades.hashrate.next_bonus / 100).toFixed(1) }} Hash)</span></div>
+                     <button @click="requestUpgrade('hashrate')" :disabled="rig.is_active || processing || (authStore.player?.crypto_balance ?? 0) < rigUpgrades.hashrate.next_cost" class="px-2 py-1 rounded text-xs font-medium bg-amber-500 text-black hover:bg-amber-400 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-amber-500"><span>💎</span> {{ formatCrypto(rigUpgrades.hashrate.next_cost) }}</button>
                    </div>
-                   <div v-else class="text-center text-xs text-text-muted mt-2">Max level reached</div>
+                   <div v-else class="text-center text-xs text-text-muted mt-2">{{ t('rigManage.maxLevelReachedShort') }}</div>
                  </div>
 
                  <!-- Efficiency -->
                  <div class="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
                    <div class="flex items-center justify-between">
-                     <div class="flex items-center gap-2"><span class="text-xl">🔋</span><div><h4 class="font-medium text-emerald-400 text-sm">Efficiency</h4><div class="text-[10px] text-text-muted">Power Usage</div></div></div>
+                     <div class="flex items-center gap-2"><span class="text-xl">🔋</span><div><h4 class="font-medium text-emerald-400 text-sm">{{ t('rigManage.efficiency') }}</h4><div class="text-[10px] text-text-muted">{{ t('rigManage.powerUsage') }}</div></div></div>
                      <div class="text-right">
-                       <div class="font-mono text-emerald-400 text-sm">Lv {{ rigUpgrades.efficiency.current_level }}</div>
+                       <div class="font-mono text-emerald-400 text-sm">{{ t('rigManage.lv') }} {{ rigUpgrades.efficiency.current_level }}</div>
                        <div class="font-mono text-xs text-status-success cursor-help" v-tooltip="t('rigManage.tooltips.upgradeEffBonus', { value: rigUpgrades.efficiency.current_bonus, abs: (basePower * rigUpgrades.efficiency.current_bonus / 100).toFixed(1) })">-{{ rigUpgrades.efficiency.current_bonus }}% <span class="opacity-70">(-{{ (basePower * rigUpgrades.efficiency.current_bonus / 100).toFixed(1) }} W)</span></div>
                      </div>
                    </div>
                    <div v-if="rigUpgrades.efficiency.can_upgrade" class="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
-                     <div class="text-xs text-text-muted">→ Lv {{ rigUpgrades.efficiency.current_level + 1 }}: <span class="text-status-success cursor-help" v-tooltip="t('rigManage.tooltips.upgradeEffBonus', { value: rigUpgrades.efficiency.next_bonus, abs: (basePower * rigUpgrades.efficiency.next_bonus / 100).toFixed(1) })">-{{ rigUpgrades.efficiency.next_bonus }}% (-{{ (basePower * rigUpgrades.efficiency.next_bonus / 100).toFixed(1) }} W)</span></div>
-                     <button @click="requestUpgrade('efficiency')" :disabled="rig.is_active || processing || (authStore.player?.crypto_balance ?? 0) < rigUpgrades.efficiency.next_cost" class="px-2 py-1 rounded text-xs font-medium bg-emerald-500 text-black hover:bg-emerald-400 flex items-center gap-1"><span>💎</span> {{ formatCrypto(rigUpgrades.efficiency.next_cost) }}</button>
+                     <div class="text-xs text-text-muted">→ {{ t('rigManage.lv') }} {{ rigUpgrades.efficiency.current_level + 1 }}: <span class="text-status-success cursor-help" v-tooltip="t('rigManage.tooltips.upgradeEffBonus', { value: rigUpgrades.efficiency.next_bonus, abs: (basePower * rigUpgrades.efficiency.next_bonus / 100).toFixed(1) })">-{{ rigUpgrades.efficiency.next_bonus }}% (-{{ (basePower * rigUpgrades.efficiency.next_bonus / 100).toFixed(1) }} W)</span></div>
+                     <button @click="requestUpgrade('efficiency')" :disabled="rig.is_active || processing || (authStore.player?.crypto_balance ?? 0) < rigUpgrades.efficiency.next_cost" class="px-2 py-1 rounded text-xs font-medium bg-emerald-500 text-black hover:bg-emerald-400 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500"><span>💎</span> {{ formatCrypto(rigUpgrades.efficiency.next_cost) }}</button>
                    </div>
-                   <div v-else class="text-center text-xs text-text-muted mt-2">Max level reached</div>
+                   <div v-else class="text-center text-xs text-text-muted mt-2">{{ t('rigManage.maxLevelReachedShort') }}</div>
                  </div>
 
                  <!-- Thermal -->
                  <div class="p-3 rounded-lg border border-cyan-500/30 bg-cyan-500/5">
                    <div class="flex items-center justify-between">
-                     <div class="flex items-center gap-2"><span class="text-xl">❄️</span><div><h4 class="font-medium text-cyan-400 text-sm">Thermal</h4><div class="text-[10px] text-text-muted">Base Heat</div></div></div>
+                     <div class="flex items-center gap-2"><span class="text-xl">❄️</span><div><h4 class="font-medium text-cyan-400 text-sm">{{ t('rigManage.thermal') }}</h4><div class="text-[10px] text-text-muted">{{ t('rigManage.baseHeat') }}</div></div></div>
                      <div class="text-right">
-                       <div class="font-mono text-cyan-400 text-sm">Lv {{ rigUpgrades.thermal.current_level }}</div>
+                       <div class="font-mono text-cyan-400 text-sm">{{ t('rigManage.lv') }} {{ rigUpgrades.thermal.current_level }}</div>
                        <div v-if="rigUpgrades.thermal.current_bonus > 0" class="font-mono text-xs text-status-success cursor-help" v-tooltip="t('rigManage.tooltips.upgradeThermalBonus', { value: rigUpgrades.thermal.current_bonus, abs: (rigBaseHeat * rigUpgrades.thermal.current_bonus / 100).toFixed(1) })">-{{ rigUpgrades.thermal.current_bonus }}% <span class="opacity-70">(-{{ (rigBaseHeat * rigUpgrades.thermal.current_bonus / 100).toFixed(1) }}°)</span></div>
                      </div>
                    </div>
                    <div v-if="rigUpgrades.thermal.can_upgrade" class="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
-                     <div class="text-xs text-text-muted">→ Lv {{ rigUpgrades.thermal.current_level + 1 }}: <span class="text-status-success cursor-help" v-tooltip="t('rigManage.tooltips.upgradeThermalBonus', { value: rigUpgrades.thermal.next_bonus, abs: (rigBaseHeat * rigUpgrades.thermal.next_bonus / 100).toFixed(1) })">-{{ rigUpgrades.thermal.next_bonus }}% (-{{ (rigBaseHeat * rigUpgrades.thermal.next_bonus / 100).toFixed(1) }}°)</span></div>
-                     <button @click="requestUpgrade('thermal')" :disabled="rig.is_active || processing || (authStore.player?.crypto_balance ?? 0) < rigUpgrades.thermal.next_cost" class="px-2 py-1 rounded text-xs font-medium bg-cyan-500 text-black hover:bg-cyan-400 flex items-center gap-1"><span>💎</span> {{ formatCrypto(rigUpgrades.thermal.next_cost) }}</button>
+                     <div class="text-xs text-text-muted">→ {{ t('rigManage.lv') }} {{ rigUpgrades.thermal.current_level + 1 }}: <span class="text-status-success cursor-help" v-tooltip="t('rigManage.tooltips.upgradeThermalBonus', { value: rigUpgrades.thermal.next_bonus, abs: (rigBaseHeat * rigUpgrades.thermal.next_bonus / 100).toFixed(1) })">-{{ rigUpgrades.thermal.next_bonus }}% (-{{ (rigBaseHeat * rigUpgrades.thermal.next_bonus / 100).toFixed(1) }}°)</span></div>
+                     <button @click="requestUpgrade('thermal')" :disabled="rig.is_active || processing || (authStore.player?.crypto_balance ?? 0) < rigUpgrades.thermal.next_cost" class="px-2 py-1 rounded text-xs font-medium bg-cyan-500 text-black hover:bg-cyan-400 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-cyan-500"><span>💎</span> {{ formatCrypto(rigUpgrades.thermal.next_cost) }}</button>
                    </div>
-                   <div v-else class="text-center text-xs text-text-muted mt-2">Max level reached</div>
+                   <div v-else class="text-center text-xs text-text-muted mt-2">{{ t('rigManage.maxLevelReachedShort') }}</div>
                  </div>
               </div>
 
@@ -1419,19 +1425,19 @@ function closeProcessingModal() {
 
             <!-- FOOTER: Maintenance -->
             <div class="pt-4 border-t border-border mt-2 space-y-3">
-               <h3 class="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2"><span>🛠️</span> Maintenance Zone</h3>
+               <h3 class="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2"><span>🛠️</span> {{ t('rigManage.maintenanceZone') }}</h3>
                
                <div class="grid grid-cols-1 gap-4">
                  <!-- Repair Box -->
                  <div v-if="nextRepairInfo" class="p-3 rounded-lg border border-border bg-bg-primary/30 flex items-center justify-between gap-4">
                    <div class="flex items-center gap-3">
                      <div class="bg-bg-tertiary p-2 rounded">
-                       <div class="text-[10px] text-text-muted">Next Repair</div>
+                       <div class="text-[10px] text-text-muted">{{ t('rigManage.nextRepairLabel') }}</div>
                        <div class="font-mono font-bold text-sm">{{ nextRepairInfo.number }}/{{ MAX_REPAIRS }}</div>
                      </div>
                      <div>
-                       <div class="text-xs text-text-muted">Cost: <span class="text-amber-400 font-mono">{{ nextRepairInfo.maxCost }} GC</span></div>
-                       <div class="text-xs text-text-muted">Bonus: <span class="text-status-success font-mono">+{{ nextRepairInfo.bonus }}%</span></div>
+                       <div class="text-xs text-text-muted">{{ t('rigManage.costLabel') }}: <span class="text-amber-400 font-mono">{{ nextRepairInfo.maxCost }} GC</span></div>
+                       <div class="text-xs text-text-muted">{{ t('rigManage.bonusLabel') }}: <span class="text-status-success font-mono">+{{ nextRepairInfo.bonus }}%</span></div>
                      </div>
                    </div>
                    <button @click="requestRepair" :disabled="!canRepair || !canAffordRepair || processing || isAtMaxCondition" class="px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-warning text-white hover:bg-status-warning/80">
@@ -1444,11 +1450,16 @@ function closeProcessingModal() {
                  </div>
 
                  <!-- Delete Zone -->
-                 <div class="p-3 rounded-lg border border-status-danger/20 bg-status-danger/5 flex items-center justify-between gap-4">
-                   <div class="text-xs text-status-danger/80 max-w-[200px]">{{ t('rigManage.deleteWarning') }}</div>
-                   <button @click="requestDelete" :disabled="rig.is_active || processing" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-status-danger/10 text-status-danger hover:bg-status-danger/20 border border-status-danger/20">
-                     {{ t('rigManage.deleteRig') }}
-                   </button>
+                 <div class="p-3 rounded-lg border border-status-danger/20 bg-status-danger/5">
+                   <div class="flex items-center justify-between gap-4">
+                     <div>
+                       <div class="text-xs text-status-danger/80 max-w-[200px]">{{ t('rigManage.deleteWarning') }}</div>
+                       <div class="text-[10px] text-status-warning mt-1">{{ t('slots.deleteWillConsumeUse', 'Quitar este rig consumir\u00e1 1 uso del slot.') }}</div>
+                     </div>
+                     <button @click="requestDelete" :disabled="rig.is_active || processing" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-status-danger/10 text-status-danger hover:bg-status-danger/20 border border-status-danger/20">
+                       {{ t('rigManage.deleteRig') }}
+                     </button>
+                   </div>
                  </div>
                </div>
             </div>

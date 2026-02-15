@@ -422,27 +422,27 @@ CREATE TABLE rig_slot_upgrades (
   description TEXT
 );
 
--- Slot prices: #2 GameCoin, #3 Crypto, #4+ RON (10 RON fixed)
+-- Slot prices: #2-#3 Crypto, #4+ RON (0.5 RON fixed)
 INSERT INTO rig_slot_upgrades (slot_number, price, currency, name, description) VALUES
-  (2, 500, 'gamecoin', 'Slot #2', 'slot2'),
-  (3, 1000, 'crypto', 'Slot #3', 'slot3'),
-  (4, 10, 'ron', 'Slot #4', 'slot4'),
-  (5, 10, 'ron', 'Slot #5', 'slot5'),
-  (6, 10, 'ron', 'Slot #6', 'expansion'),
-  (7, 10, 'ron', 'Slot #7', 'expansion'),
-  (8, 10, 'ron', 'Slot #8', 'medium'),
-  (9, 10, 'ron', 'Slot #9', 'medium'),
-  (10, 10, 'ron', 'Slot #10', 'large'),
-  (11, 10, 'ron', 'Slot #11', 'smallFarm'),
-  (12, 10, 'ron', 'Slot #12', 'smallFarm'),
-  (13, 10, 'ron', 'Slot #13', 'mediumFarm'),
-  (14, 10, 'ron', 'Slot #14', 'mediumFarm'),
-  (15, 10, 'ron', 'Slot #15', 'largeFarm'),
-  (16, 10, 'ron', 'Slot #16', 'largeFarm'),
-  (17, 10, 'ron', 'Slot #17', 'megaFarm'),
-  (18, 10, 'ron', 'Slot #18', 'megaFarm'),
-  (19, 10, 'ron', 'Slot #19', 'industrial'),
-  (20, 10, 'ron', 'Slot #20', 'maxPower')
+  (2, 10000, 'crypto', 'Slot #2', 'slot2'),
+  (3, 10000, 'crypto', 'Slot #3', 'slot3'),
+  (4, 0.5, 'ron', 'Slot #4', 'slot4'),
+  (5, 0.5, 'ron', 'Slot #5', 'slot5'),
+  (6, 0.5, 'ron', 'Slot #6', 'expansion'),
+  (7, 0.5, 'ron', 'Slot #7', 'expansion'),
+  (8, 0.5, 'ron', 'Slot #8', 'medium'),
+  (9, 0.5, 'ron', 'Slot #9', 'medium'),
+  (10, 0.5, 'ron', 'Slot #10', 'large'),
+  (11, 0.5, 'ron', 'Slot #11', 'smallFarm'),
+  (12, 0.5, 'ron', 'Slot #12', 'smallFarm'),
+  (13, 0.5, 'ron', 'Slot #13', 'mediumFarm'),
+  (14, 0.5, 'ron', 'Slot #14', 'mediumFarm'),
+  (15, 0.5, 'ron', 'Slot #15', 'largeFarm'),
+  (16, 0.5, 'ron', 'Slot #16', 'largeFarm'),
+  (17, 0.5, 'ron', 'Slot #17', 'megaFarm'),
+  (18, 0.5, 'ron', 'Slot #18', 'megaFarm'),
+  (19, 0.5, 'ron', 'Slot #19', 'industrial'),
+  (20, 0.5, 'ron', 'Slot #20', 'maxPower')
 ON CONFLICT (slot_number) DO NOTHING;
 
 -- =====================================================
@@ -508,6 +508,65 @@ ON CONFLICT (level) DO UPDATE SET
 UPDATE upgrade_costs SET hashrate_bonus = 50 WHERE hashrate_bonus > 50;
 UPDATE upgrade_costs SET efficiency_bonus = 50 WHERE efficiency_bonus > 50;
 UPDATE upgrade_costs SET thermal_bonus = 50 WHERE thermal_bonus > 50;
+
+-- =====================================================
+-- 9b. PLAYER SLOTS (Durabilidad de slots)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS player_slots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  slot_number INTEGER NOT NULL CHECK (slot_number >= 1 AND slot_number <= 20),
+  max_uses INTEGER NOT NULL CHECK (max_uses IN (2, 4)),
+  uses_remaining INTEGER NOT NULL CHECK (uses_remaining >= 0),
+  player_rig_id UUID REFERENCES player_rigs(id) ON DELETE SET NULL,
+  is_destroyed BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(player_id, slot_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_slots_player ON player_slots(player_id);
+
+-- Migración: Poblar player_slots para jugadores existentes
+DO $$
+DECLARE
+  v_player RECORD;
+  v_rig RECORD;
+  v_slot_num INTEGER;
+  v_is_premium BOOLEAN;
+  v_max_uses INTEGER;
+BEGIN
+  -- Solo ejecutar si la tabla está vacía (primera vez)
+  IF EXISTS (SELECT 1 FROM player_slots LIMIT 1) THEN
+    RETURN;
+  END IF;
+
+  FOR v_player IN SELECT * FROM players LOOP
+    v_is_premium := COALESCE(v_player.premium_until > NOW(), false);
+    v_max_uses := CASE WHEN v_is_premium THEN 3 ELSE 2 END;
+    v_slot_num := 1;
+
+    -- Asignar slots a rigs instalados
+    FOR v_rig IN
+      SELECT id FROM player_rigs
+      WHERE player_id = v_player.id
+      ORDER BY acquired_at ASC
+    LOOP
+      INSERT INTO player_slots (player_id, slot_number, max_uses, uses_remaining, player_rig_id)
+      VALUES (v_player.id, v_slot_num, v_max_uses, v_max_uses, v_rig.id)
+      ON CONFLICT (player_id, slot_number) DO NOTHING;
+      v_slot_num := v_slot_num + 1;
+    END LOOP;
+
+    -- Crear slots vacíos restantes
+    WHILE v_slot_num <= v_player.rig_slots LOOP
+      INSERT INTO player_slots (player_id, slot_number, max_uses, uses_remaining)
+      VALUES (v_player.id, v_slot_num, v_max_uses, v_max_uses)
+      ON CONFLICT (player_id, slot_number) DO NOTHING;
+      v_slot_num := v_slot_num + 1;
+    END LOOP;
+  END LOOP;
+END $$;
 
 -- =====================================================
 -- 10. RON WITHDRAWALS

@@ -116,11 +116,23 @@ interface RigBoost {
   tier: string;
 }
 
+interface SlotData {
+  id: string;
+  slot_number: number;
+  max_uses: number;
+  uses_remaining: number;
+  is_destroyed: boolean;
+  has_rig: boolean;
+  player_rig_id: string | null;
+  rig_name: string | null;
+}
+
 interface SlotInfo {
   current_slots: number;
   used_slots: number;
   available_slots: number;
   max_slots: number;
+  slots: SlotData[];
   next_upgrade: {
     slot_number: number;
     price: number;
@@ -170,6 +182,7 @@ const DEFAULT_SLOT_INFO: SlotInfo = {
   used_slots: 0,
   available_slots: 1,
   max_slots: 10,
+  slots: [],
   next_upgrade: {
     slot_number: 2,
     price: 1000,

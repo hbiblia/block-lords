@@ -589,6 +589,17 @@ CREATE POLICY "Costos de upgrade públicos"
   USING (true);
 
 -- =====================================================
+-- POLÍTICAS PARA PLAYER_SLOTS (Durabilidad de slots)
+-- =====================================================
+
+ALTER TABLE player_slots ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ver propios slots" ON player_slots;
+CREATE POLICY "Ver propios slots"
+  ON player_slots FOR SELECT
+  USING (player_id = auth.uid());
+
+-- =====================================================
 -- POLÍTICAS PARA RON_WITHDRAWALS (Retiros del jugador)
 -- =====================================================
 

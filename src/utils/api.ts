@@ -1024,9 +1024,10 @@ export async function getPlayerPityStats(playerId: string): Promise<any> {
 
 // === RON WITHDRAWALS ===
 
-export async function requestRonWithdrawal(playerId: string) {
+export async function requestRonWithdrawal(playerId: string, amount?: number) {
   const { data, error } = await supabase.rpc('request_ron_withdrawal', {
     p_player_id: playerId,
+    p_amount: amount ?? null,
   });
 
   if (error) throw error;

@@ -38,9 +38,17 @@ const showWithdrawModal = ref(false);
 const withdrawing = ref(false);
 const withdrawError = ref<string | null>(null);
 const withdrawalHistory = ref<any[]>([]);
+const withdrawAmount = ref<string>('');
+const withdrawPercents = [25, 50, 75, 100];
 const pendingWithdrawal = computed(() =>
   withdrawalHistory.value.find(w => w.status === 'pending' || w.status === 'processing')
 );
+const withdrawValue = computed(() => {
+  const val = parseFloat(withdrawAmount.value);
+  return isNaN(val) || val <= 0 ? 0 : Math.min(val, ronBalance.value);
+});
+const withdrawFee = computed(() => withdrawValue.value * withdrawalFeeRate.value);
+const withdrawNet = computed(() => withdrawValue.value - withdrawFee.value);
 
 // RON Reload/Deposit
 const showReloadModal = ref(false);
@@ -224,6 +232,7 @@ function copyWallet() {
 
 function openWithdrawModal() {
   if (!canWithdraw.value) return;
+  withdrawAmount.value = '';
   withdrawError.value = null;
   showWithdrawModal.value = true;
 }
@@ -231,6 +240,12 @@ function openWithdrawModal() {
 function closeWithdrawModal() {
   showWithdrawModal.value = false;
   withdrawError.value = null;
+  withdrawAmount.value = '';
+}
+
+function selectWithdrawPercent(percent: number) {
+  const amount = ronBalance.value * (percent / 100);
+  withdrawAmount.value = amount > 0 ? amount.toFixed(8).replace(/\.?0+$/, '') : '';
 }
 
 function openReloadModal() {
@@ -326,13 +341,13 @@ async function confirmReload() {
 }
 
 async function confirmWithdraw() {
-  if (withdrawing.value || !player.value || !canWithdraw.value) return;
+  if (withdrawing.value || !player.value || !canWithdraw.value || withdrawValue.value <= 0) return;
 
   withdrawing.value = true;
   withdrawError.value = null;
 
   try {
-    const result = await requestRonWithdrawal(player.value.id);
+    const result = await requestRonWithdrawal(player.value.id, withdrawValue.value);
 
     if (result.success) {
       playSound('success');
@@ -962,12 +977,36 @@ onUnmounted(() => {
     <Teleport to="body">
       <Transition name="modal">
         <div v-if="showWithdrawModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeWithdrawModal"></div>
           <div class="relative bg-bg-primary border border-amber-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl"
             @click.stop>
             <h3 class="text-lg font-bold mb-4 text-center text-amber-400">
               💎 {{ t('profile.withdraw.title', 'Retirar RON') }}
             </h3>
+
+            <!-- Amount input -->
+            <div class="mb-4">
+              <label class="text-sm text-text-muted block mb-2">{{ t('profile.withdraw.amount', 'Cantidad a retirar') }}</label>
+              <input v-model="withdrawAmount" type="number" :min="0.01" step="0.01" :max="ronBalance" placeholder="0.00"
+                class="w-full bg-bg-tertiary border border-border rounded-lg px-4 py-3 text-xl font-bold text-center focus:outline-none focus:border-amber-500 transition-colors" />
+            </div>
+
+            <!-- Quick percent buttons -->
+            <div class="grid grid-cols-4 gap-2 mb-4">
+              <button v-for="pct in withdrawPercents" :key="pct"
+                @click="selectWithdrawPercent(pct)"
+                :disabled="ronBalance <= 0"
+                :class="[
+                  'py-2 rounded-lg text-sm font-medium transition-colors',
+                  withdrawValue > 0 && Math.abs(withdrawValue - ronBalance * (pct / 100)) < 0.000001
+                    ? 'bg-amber-500 text-white'
+                    : ronBalance <= 0
+                      ? 'bg-bg-tertiary text-text-muted/30 cursor-not-allowed'
+                      : 'bg-bg-tertiary text-text-muted hover:bg-bg-tertiary/80'
+                ]">
+                {{ pct }}%
+              </button>
+            </div>
 
             <!-- Balance y desglose de comision -->
             <div class="bg-bg-tertiary rounded-xl p-4 mb-4 space-y-3">
@@ -975,20 +1014,22 @@ onUnmounted(() => {
                 <span class="text-sm text-text-muted">{{ t('profile.withdraw.available', 'Disponible') }}</span>
                 <span class="font-medium">{{ formatRon(ronBalance) }} RON</span>
               </div>
-              <div class="flex justify-between items-center"
+              <div v-if="withdrawValue > 0" class="flex justify-between items-center">
+                <span class="text-sm text-text-muted">{{ t('profile.withdraw.withdrawAmount', 'Monto a retirar') }}</span>
+                <span class="font-medium">{{ formatRon(withdrawValue) }} RON</span>
+              </div>
+              <div v-if="withdrawValue > 0" class="flex justify-between items-center"
                 :class="isPremium ? 'text-status-success' : 'text-status-danger'">
                 <span class="text-sm flex items-center gap-1">
                   {{ t('profile.withdraw.fee', 'Comision') }} ({{ withdrawalFeePercent }}%)
                   <span v-if="isPremium"
                     class="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">Premium</span>
                 </span>
-                <span class="font-medium">-{{ formatRon(ronBalance * withdrawalFeeRate) }} RON</span>
+                <span class="font-medium">-{{ formatRon(withdrawFee) }} RON</span>
               </div>
-              <div class="border-t border-border pt-3 flex justify-between items-center">
-                <span class="text-sm font-medium text-status-success">{{ t('profile.withdraw.youReceive', 'Recibiras')
-                  }}</span>
-                <span class="text-xl font-bold text-amber-400">{{ formatRon(ronBalance * (1 - withdrawalFeeRate)) }}
-                  RON</span>
+              <div v-if="withdrawValue > 0" class="border-t border-border pt-3 flex justify-between items-center">
+                <span class="text-sm font-medium text-status-success">{{ t('profile.withdraw.youReceive', 'Recibiras') }}</span>
+                <span class="text-xl font-bold text-amber-400">{{ formatRon(withdrawNet) }} RON</span>
               </div>
             </div>
 
@@ -1012,8 +1053,8 @@ onUnmounted(() => {
                 class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
                 {{ t('common.cancel') }}
               </button>
-              <button @click="confirmWithdraw" :disabled="withdrawing"
-                class="flex-1 py-2.5 rounded-lg font-semibold bg-amber-500 text-white hover:bg-amber-500/90 transition-colors disabled:opacity-50">
+              <button @click="confirmWithdraw" :disabled="withdrawing || withdrawValue <= 0"
+                class="flex-1 py-2.5 rounded-lg font-semibold bg-amber-500 text-white hover:bg-amber-500/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 <span v-if="withdrawing" class="flex items-center justify-center gap-2">
                   <span class="animate-spin">⏳</span>
                 </span>

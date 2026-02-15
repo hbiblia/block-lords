@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '2.2.0';
+const CURRENT_VERSION = '2.2.2';
 const STORAGE_KEY = 'lootmine-last-seen-version';
 
 const route = useRoute();
@@ -72,45 +72,20 @@ function closeModal() {
 
         <!-- Contenido scrollable -->
         <div class="space-y-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- Dashboard Unificado -->
-          <div class="p-3 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 border border-purple-500/30 rounded-lg">
+          <!-- Cap de mejoras al 50% -->
+          <div class="p-3 bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-lg">
             <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
-              �️ {{ t('updateModal.unifiedDashboard.title') }}
+              {{ t('updateModal.upgradeCap.title') }}
             </h3>
-            <p class="text-text-secondary text-sm" v-html="t('updateModal.unifiedDashboard.description')"></p>
+            <p class="text-text-secondary text-sm" v-html="t('updateModal.upgradeCap.description')"></p>
           </div>
 
-          <!-- Consumo en Tiempo Real -->
-          <div class="p-3 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-lg">
+          <!-- Durabilidad de slots -->
+          <div class="p-3 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 rounded-lg">
             <h3 class="text-lg font-bold text-text-primary mb-2 flex items-center gap-2">
-              📊 {{ t('updateModal.realTimeConsumption.title') }}
+              {{ t('updateModal.slotDurability.title') }}
             </h3>
-            <p class="text-text-secondary text-sm" v-html="t('updateModal.realTimeConsumption.description')"></p>
-          </div>
-
-          <!-- Mejoras -->
-          <div>
-            <h3 class="text-base font-semibold text-text-primary mb-2 flex items-center gap-2">
-              🔧 {{ t('updateModal.improvements.title') }}
-            </h3>
-            <ul class="space-y-2">
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.improvements.boostImpact')"></span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.improvements.activeEffects')"></span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.improvements.hashUnit')"></span>
-              </li>
-              <li class="flex items-start gap-2 text-text-secondary">
-                <span class="text-green-500 mt-1">✓</span>
-                <span v-html="t('updateModal.improvements.maintenance')"></span>
-              </li>
-            </ul>
+            <p class="text-text-secondary text-sm" v-html="t('updateModal.slotDurability.description')"></p>
           </div>
 
         </div>

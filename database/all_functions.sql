@@ -358,6 +358,7 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_player players%ROWTYPE;
+  v_starter_rig_id UUID;
 BEGIN
   -- Validar username
   IF LENGTH(p_username) < 3 OR LENGTH(p_username) > 20 THEN
@@ -379,7 +380,12 @@ BEGIN
 
   -- Dar rig inicial
   INSERT INTO player_rigs (player_id, rig_id, condition, is_active)
-  VALUES (p_user_id, 'basic_miner', 100, false);
+  VALUES (p_user_id, 'basic_miner', 100, false)
+  RETURNING id INTO v_starter_rig_id;
+
+  -- Crear slot #1 con durabilidad (free = 2 usos)
+  INSERT INTO player_slots (player_id, slot_number, max_uses, uses_remaining, player_rig_id)
+  VALUES (p_user_id, 1, 2, 2, v_starter_rig_id);
 
   -- Registrar transacción de bienvenida
   INSERT INTO transactions (player_id, type, amount, currency, description)
@@ -729,6 +735,9 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_rig RECORD;
+  v_slot RECORD;
+  v_slot_destroyed BOOLEAN := false;
+  v_uses_remaining INTEGER := 0;
 BEGIN
   SELECT pr.*, r.name as rig_name
   INTO v_rig
@@ -745,11 +754,42 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Debes apagar el rig antes de eliminarlo');
   END IF;
 
+  -- Buscar el slot de este rig
+  SELECT * INTO v_slot
+  FROM player_slots
+  WHERE player_rig_id = p_rig_id AND player_id = p_player_id AND NOT is_destroyed;
+
   -- Eliminar cooling instalado en el rig
   DELETE FROM rig_cooling WHERE player_rig_id = p_rig_id;
 
+  -- Eliminar boosts instalados en el rig
+  DELETE FROM rig_boosts WHERE player_rig_id = p_rig_id;
+
   -- Eliminar el rig
   DELETE FROM player_rigs WHERE id = p_rig_id;
+
+  -- Degradar durabilidad del slot
+  IF v_slot IS NOT NULL THEN
+    v_uses_remaining := v_slot.uses_remaining - 1;
+
+    IF v_uses_remaining <= 0 THEN
+      -- Slot destruido
+      UPDATE player_slots
+      SET uses_remaining = 0, is_destroyed = true, player_rig_id = NULL
+      WHERE id = v_slot.id;
+
+      -- Decrementar slots del jugador
+      UPDATE players SET rig_slots = GREATEST(0, rig_slots - 1) WHERE id = p_player_id;
+
+      v_slot_destroyed := true;
+      v_uses_remaining := 0;
+    ELSE
+      -- Decrementar usos, liberar slot
+      UPDATE player_slots
+      SET uses_remaining = v_uses_remaining, player_rig_id = NULL
+      WHERE id = v_slot.id;
+    END IF;
+  END IF;
 
   -- Registrar en transacciones
   INSERT INTO transactions (player_id, type, amount, currency, description)
@@ -758,7 +798,10 @@ BEGIN
   RETURN json_build_object(
     'success', true,
     'message', 'Rig eliminado correctamente',
-    'rig_name', v_rig.rig_name
+    'rig_name', v_rig.rig_name,
+    'slot_destroyed', v_slot_destroyed,
+    'slot_uses_remaining', v_uses_remaining,
+    'slot_number', COALESCE(v_slot.slot_number, 0)
   );
 END;
 $$;
@@ -866,8 +909,8 @@ DECLARE
   v_player players%ROWTYPE;
   v_rig rigs%ROWTYPE;
   v_inventory player_rig_inventory%ROWTYPE;
-  v_total_rigs INT;
   v_new_rig_id UUID;
+  v_available_slot RECORD;
 BEGIN
   -- Verificar jugador
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
@@ -890,16 +933,17 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
   END IF;
 
-  -- Verificar slots disponibles
-  SELECT COUNT(*) INTO v_total_rigs
-  FROM player_rigs
-  WHERE player_id = p_player_id;
+  -- Buscar slot disponible (no destruido, sin rig asignado)
+  SELECT * INTO v_available_slot
+  FROM player_slots
+  WHERE player_id = p_player_id AND NOT is_destroyed AND player_rig_id IS NULL
+  ORDER BY slot_number ASC
+  LIMIT 1;
 
-  IF v_total_rigs >= v_player.rig_slots THEN
+  IF v_available_slot IS NULL THEN
     RETURN json_build_object(
       'success', false,
       'error', 'No tienes slots disponibles. Compra más slots para agregar rigs.',
-      'slots_used', v_total_rigs,
       'slots_total', v_player.rig_slots
     );
   END IF;
@@ -916,30 +960,23 @@ BEGIN
 
   -- Crear el rig instalado
   INSERT INTO player_rigs (
-    player_id,
-    rig_id,
-    condition,
-    max_condition,
-    is_active,
-    times_repaired
+    player_id, rig_id, condition, max_condition, is_active, times_repaired
   )
-  VALUES (
-    p_player_id,
-    p_rig_id,
-    100,
-    100,
-    false,
-    0
-  )
+  VALUES (p_player_id, p_rig_id, 100, 100, false, 0)
   RETURNING id INTO v_new_rig_id;
 
-  -- Actualizar misión de cantidad de rigs (v_total_rigs + 1 porque acabamos de agregar uno)
+  -- Asignar rig al slot
+  UPDATE player_slots SET player_rig_id = v_new_rig_id WHERE id = v_available_slot.id;
+
+  -- Actualizar misión de cantidad de rigs
   PERFORM update_mission_progress(p_player_id, 'own_rigs', 1);
 
   RETURN json_build_object(
     'success', true,
     'rig_instance_id', v_new_rig_id,
     'rig', row_to_json(v_rig),
+    'slot_number', v_available_slot.slot_number,
+    'slot_uses_remaining', v_available_slot.uses_remaining,
     'message', 'Rig instalado correctamente'
   );
 END;
@@ -1076,6 +1113,7 @@ DECLARE
   v_player players%ROWTYPE;
   v_rigs_count INT;
   v_next_upgrade rig_slot_upgrades%ROWTYPE;
+  v_slots_data JSON;
 BEGIN
   -- Obtener jugador
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
@@ -1093,12 +1131,32 @@ BEGIN
   FROM rig_slot_upgrades
   WHERE slot_number = v_player.rig_slots + 1;
 
+  -- Obtener datos por slot para la barra visual
+  SELECT COALESCE(json_agg(
+    json_build_object(
+      'id', ps.id,
+      'slot_number', ps.slot_number,
+      'max_uses', ps.max_uses,
+      'uses_remaining', ps.uses_remaining,
+      'is_destroyed', ps.is_destroyed,
+      'has_rig', ps.player_rig_id IS NOT NULL,
+      'player_rig_id', ps.player_rig_id,
+      'rig_name', r.name
+    ) ORDER BY ps.slot_number
+  ), '[]'::JSON)
+  INTO v_slots_data
+  FROM player_slots ps
+  LEFT JOIN player_rigs pr ON pr.id = ps.player_rig_id
+  LEFT JOIN rigs r ON r.id = pr.rig_id
+  WHERE ps.player_id = p_player_id AND NOT ps.is_destroyed;
+
   RETURN json_build_object(
     'success', true,
     'current_slots', v_player.rig_slots,
     'used_slots', v_rigs_count,
     'available_slots', v_player.rig_slots - v_rigs_count,
     'max_slots', 20,
+    'slots', v_slots_data,
     'next_upgrade', CASE
       WHEN v_next_upgrade IS NOT NULL THEN json_build_object(
         'slot_number', v_next_upgrade.slot_number,
@@ -1212,12 +1270,38 @@ BEGIN
   SET rig_slots = v_new_slots
   WHERE id = p_player_id;
 
+  -- Buscar el menor slot_number disponible (gap de destruido o siguiente)
+  -- Si hay un slot destruido, reutilizar su número
+  DELETE FROM player_slots
+  WHERE player_id = p_player_id AND is_destroyed
+  AND slot_number = (
+    SELECT MIN(s) FROM generate_series(1, 20) s
+    WHERE NOT EXISTS (
+      SELECT 1 FROM player_slots ps
+      WHERE ps.player_id = p_player_id AND ps.slot_number = s AND NOT ps.is_destroyed
+    )
+  );
+
+  -- Crear el nuevo slot con durabilidad según premium
+  INSERT INTO player_slots (player_id, slot_number, max_uses, uses_remaining)
+  VALUES (
+    p_player_id,
+    (SELECT MIN(s) FROM generate_series(1, 20) s
+     WHERE NOT EXISTS (
+       SELECT 1 FROM player_slots ps
+       WHERE ps.player_id = p_player_id AND ps.slot_number = s
+     )),
+    CASE WHEN is_player_premium(p_player_id) THEN 3 ELSE 2 END,
+    CASE WHEN is_player_premium(p_player_id) THEN 3 ELSE 2 END
+  );
+
   RETURN json_build_object(
     'success', true,
     'new_slots', v_new_slots,
     'purchased', v_upgrade.name,
     'price_paid', v_upgrade.price,
-    'currency', v_upgrade.currency
+    'currency', v_upgrade.currency,
+    'slot_max_uses', CASE WHEN is_player_premium(p_player_id) THEN 3 ELSE 2 END
   );
 END;
 $$;
@@ -5720,27 +5804,31 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION request_ron_withdrawal(p_player_id UUID)
+CREATE OR REPLACE FUNCTION request_ron_withdrawal(p_player_id UUID, p_amount DECIMAL DEFAULT NULL)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_player players%ROWTYPE; v_pending_count INTEGER; v_withdrawal_id UUID;
   v_min_withdrawal DECIMAL := 0.01; v_fee_rate DECIMAL; v_fee DECIMAL; v_net_amount DECIMAL; v_is_premium BOOLEAN;
+  v_withdraw_amount DECIMAL;
 BEGIN
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF v_player.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
   IF v_player.ron_wallet IS NULL OR v_player.ron_wallet = '' THEN RETURN json_build_object('success', false, 'error', 'No tienes wallet'); END IF;
   IF COALESCE(v_player.ron_balance, 0) < v_min_withdrawal THEN RETURN json_build_object('success', false, 'error', 'Balance insuficiente'); END IF;
+  v_withdraw_amount := COALESCE(p_amount, v_player.ron_balance);
+  IF v_withdraw_amount <= 0 THEN RETURN json_build_object('success', false, 'error', 'Cantidad invalida'); END IF;
+  IF v_withdraw_amount > v_player.ron_balance THEN RETURN json_build_object('success', false, 'error', 'Balance insuficiente'); END IF;
   v_is_premium := is_player_premium(p_player_id);
   v_fee_rate := get_withdrawal_fee_rate(p_player_id);
-  v_fee := ROUND(v_player.ron_balance * v_fee_rate, 8);
-  v_net_amount := v_player.ron_balance - v_fee;
+  v_fee := ROUND(v_withdraw_amount * v_fee_rate, 8);
+  v_net_amount := v_withdraw_amount - v_fee;
   SELECT COUNT(*) INTO v_pending_count FROM ron_withdrawals WHERE player_id = p_player_id AND status IN ('pending', 'processing');
   IF v_pending_count > 0 THEN RETURN json_build_object('success', false, 'error', 'Ya tienes un retiro en proceso'); END IF;
   INSERT INTO ron_withdrawals (player_id, amount, fee, net_amount, wallet_address, status)
-  VALUES (p_player_id, v_player.ron_balance, v_fee, v_net_amount, v_player.ron_wallet, 'pending') RETURNING id INTO v_withdrawal_id;
-  UPDATE players SET ron_balance = 0 WHERE id = p_player_id;
+  VALUES (p_player_id, v_withdraw_amount, v_fee, v_net_amount, v_player.ron_wallet, 'pending') RETURNING id INTO v_withdrawal_id;
+  UPDATE players SET ron_balance = ron_balance - v_withdraw_amount WHERE id = p_player_id;
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'ron_withdrawal', -v_player.ron_balance, 'ron', 'Retiro de ' || v_net_amount || ' RON');
-  RETURN json_build_object('success', true, 'withdrawal_id', v_withdrawal_id, 'amount', v_player.ron_balance,
+  VALUES (p_player_id, 'ron_withdrawal', -v_withdraw_amount, 'ron', 'Retiro de ' || v_net_amount || ' RON');
+  RETURN json_build_object('success', true, 'withdrawal_id', v_withdrawal_id, 'amount', v_withdraw_amount,
     'fee', v_fee, 'fee_rate', v_fee_rate, 'net_amount', v_net_amount, 'wallet', v_player.ron_wallet, 'is_premium', v_is_premium);
 END;
 $$;
