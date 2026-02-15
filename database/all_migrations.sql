@@ -898,6 +898,35 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- =====================================================
+-- EXCHANGE RATE DINÁMICO
+-- =====================================================
+ALTER TABLE network_stats ADD COLUMN IF NOT EXISTS exchange_rate_crypto_gamecoin NUMERIC DEFAULT 25.0;
+ALTER TABLE network_stats ADD COLUMN IF NOT EXISTS exchange_rate_previous NUMERIC DEFAULT 25.0;
+ALTER TABLE network_stats ADD COLUMN IF NOT EXISTS exchange_rate_updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- =====================================================
+-- HISTORIAL DE EXCHANGE RATE (para gráfico)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS exchange_rate_history (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  rate NUMERIC NOT NULL,
+  block_height INTEGER,
+  recorded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_exchange_rate_history_recorded
+  ON exchange_rate_history(recorded_at DESC);
+
+ALTER TABLE exchange_rate_history ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY "exchange_rate_history_select"
+    ON exchange_rate_history FOR SELECT TO authenticated
+    USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- =====================================================
 -- NOTA: Las funciones están en all_functions.sql
 -- NOTA: Las políticas RLS están en all_rls_policies.sql
 -- =====================================================

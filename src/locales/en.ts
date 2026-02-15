@@ -210,6 +210,12 @@ export default {
     noRecentBlocks: 'No recent blocks',
     showBlocks: 'Show blocks',
     hideBlocks: 'Hide blocks',
+    rateChart: {
+      title: 'Exchange Rate',
+      refresh: 'Refresh chart',
+      blocks: 'blocks',
+      noData: 'No history data yet',
+    },
     you: 'You!',
     unknown: 'Unknown',
     yourStats: 'Your Statistics',

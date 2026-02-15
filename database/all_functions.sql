@@ -3043,9 +3043,14 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_player players%ROWTYPE;
-  v_exchange_rate NUMERIC := 50;  -- 1 crypto = 50 GameCoin
+  v_exchange_rate NUMERIC;
   v_gamecoin_received NUMERIC;
 BEGIN
+  -- Obtener rate dinámico actual
+  SELECT COALESCE(exchange_rate_crypto_gamecoin, 25.0)
+  INTO v_exchange_rate
+  FROM network_stats WHERE id = 'current';
+
   -- Validar cantidad
   IF p_crypto_amount <= 0 THEN
     RETURN json_build_object('success', false, 'error', 'La cantidad debe ser mayor a 0');
@@ -3136,17 +3141,49 @@ BEGIN
 END;
 $$;
 
--- Obtener tasas de exchange actuales
+-- Obtener tasas de exchange actuales (rate dinámico desde network_stats)
 CREATE OR REPLACE FUNCTION get_exchange_rates()
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+DECLARE
+  v_rate NUMERIC;
+  v_previous_rate NUMERIC;
+  v_updated_at TIMESTAMPTZ;
 BEGIN
+  SELECT
+    COALESCE(exchange_rate_crypto_gamecoin, 25.0),
+    COALESCE(exchange_rate_previous, 25.0),
+    exchange_rate_updated_at
+  INTO v_rate, v_previous_rate, v_updated_at
+  FROM network_stats WHERE id = 'current';
+
   RETURN json_build_object(
-    'crypto_to_gamecoin', 50,  -- 1 crypto = 50 GameCoin
-    'crypto_to_ron', 0.00001,  -- 100,000 crypto = 1 RON
-    'min_crypto_for_ron', 100000  -- Mínimo para convertir a RON
+    'crypto_to_gamecoin', COALESCE(v_rate, 25.0),
+    'crypto_to_gamecoin_previous', COALESCE(v_previous_rate, 25.0),
+    'crypto_to_ron', 0.00001,
+    'min_crypto_for_ron', 100000,
+    'rate_updated_at', v_updated_at
+  );
+END;
+$$;
+
+-- Obtener historial de exchange rate para gráfico
+CREATE OR REPLACE FUNCTION get_exchange_rate_history(p_limit INTEGER DEFAULT 50)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(h)), '[]'::json)
+    FROM (
+      SELECT rate, recorded_at
+      FROM exchange_rate_history
+      ORDER BY recorded_at DESC
+      LIMIT p_limit
+    ) h
   );
 END;
 $$;
@@ -7423,6 +7460,94 @@ BEGIN
 END;
 $$;
 
+-- Función: Actualizar exchange rate dinámico (llamada al cerrar cada bloque)
+-- Usa geometric random walk con mean reversion + factores económicos reales
+CREATE OR REPLACE FUNCTION update_exchange_rate()
+RETURNS NUMERIC
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current_rate NUMERIC;
+  v_new_rate NUMERIC;
+  v_mean_rate NUMERIC := 10.0;       -- Punto de equilibrio
+  v_volatility NUMERIC := 0.3;       -- Volatilidad por bloque (~15% cambio máximo)
+  v_reversion_speed NUMERIC := 0.05; -- Fuerza de mean reversion
+  v_min_rate NUMERIC := 2.0;
+  v_max_rate NUMERIC := 30.0;
+  v_change NUMERIC;
+  v_mean_reversion NUMERIC;
+  -- Factores económicos
+  v_recent_volume NUMERIC;
+  v_active_miners INTEGER;
+  v_exchange_pressure NUMERIC := 0;
+  v_supply_pressure NUMERIC := 0;
+BEGIN
+  -- Obtener rate actual
+  SELECT COALESCE(exchange_rate_crypto_gamecoin, 25.0)
+  INTO v_current_rate
+  FROM network_stats WHERE id = 'current';
+
+  -- === FACTORES ECONÓMICOS ===
+
+  -- 1. Presión de venta: volumen de exchanges en últimos 30 min
+  --    Mucho exchange → jugadores venden crypto → tasa BAJA
+  --    Poco exchange → jugadores acumulan → tasa SUBE
+  SELECT COALESCE(SUM(ABS(amount)), 0)
+  INTO v_recent_volume
+  FROM transactions
+  WHERE type IN ('crypto_to_gamecoin', 'crypto_to_ron')
+    AND created_at >= NOW() - INTERVAL '30 minutes';
+
+  -- 0 volumen = +0.02 (sube ~2%), 5000+ volumen = -0.05 (baja ~5%)
+  v_exchange_pressure := 0.02 - LEAST(0.07, v_recent_volume / 10000.0 * 0.07);
+
+  -- 2. Presión de oferta: más mineros activos = más crypto entrando = baja
+  SELECT COALESCE(active_miners, 0)
+  INTO v_active_miners
+  FROM network_stats WHERE id = 'current';
+
+  -- 0 mineros = 0, 20 mineros = -0.02 (max)
+  v_supply_pressure := -LEAST(0.02, v_active_miners * 0.001);
+
+  -- === CALCULAR NUEVA TASA ===
+
+  -- Componente aleatorio
+  v_change := (RANDOM() - 0.5) * v_volatility;
+
+  -- Componente de mean reversion (atrae hacia v_mean_rate)
+  v_mean_reversion := (LN(v_mean_rate) - LN(v_current_rate)) * v_reversion_speed;
+
+  -- Combinar: aleatorio + mean reversion + economía real
+  v_new_rate := v_current_rate * EXP(v_change + v_mean_reversion + v_exchange_pressure + v_supply_pressure);
+
+  -- Clampear entre min y max
+  v_new_rate := GREATEST(v_min_rate, LEAST(v_max_rate, v_new_rate));
+
+  -- Redondear a 3 decimales
+  v_new_rate := ROUND(v_new_rate, 3);
+
+  -- Guardar rate anterior y actualizar
+  UPDATE network_stats
+  SET exchange_rate_previous = exchange_rate_crypto_gamecoin,
+      exchange_rate_crypto_gamecoin = v_new_rate,
+      exchange_rate_updated_at = NOW()
+  WHERE id = 'current';
+
+  -- Registrar en historial para el gráfico
+  INSERT INTO exchange_rate_history (rate, recorded_at)
+  VALUES (v_new_rate, NOW());
+
+  -- Limpiar registros antiguos (mantener últimos 200)
+  DELETE FROM exchange_rate_history
+  WHERE id NOT IN (
+    SELECT id FROM exchange_rate_history ORDER BY recorded_at DESC LIMIT 200
+  );
+
+  RETURN v_new_rate;
+END;
+$$;
+
 -- Función: Cerrar bloque de minería y distribuir recompensas
 CREATE OR REPLACE FUNCTION close_mining_block(p_mining_block_id UUID)
 RETURNS JSON
@@ -7537,6 +7662,9 @@ BEGIN
 
   -- Crear nuevo bloque de minería
   PERFORM initialize_mining_block();
+
+  -- Actualizar exchange rate dinámico
+  PERFORM update_exchange_rate();
 
   -- Actualizar network_stats
   UPDATE network_stats
@@ -7960,6 +8088,10 @@ GRANT EXECUTE ON FUNCTION claim_block TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_all_blocks TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_all_blocks_with_ron TO authenticated;
 GRANT EXECUTE ON FUNCTION get_mining_estimate TO authenticated;
+
+-- Grants para exchange rate dinámico
+GRANT EXECUTE ON FUNCTION update_exchange_rate TO authenticated;
+GRANT EXECUTE ON FUNCTION get_exchange_rate_history TO authenticated;
 
 -- Grants para sistema de shares
 GRANT EXECUTE ON FUNCTION initialize_mining_block TO authenticated;

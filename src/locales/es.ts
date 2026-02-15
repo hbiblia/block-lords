@@ -210,6 +210,12 @@
     noRecentBlocks: 'No hay bloques recientes',
     showBlocks: 'Mostrar bloques',
     hideBlocks: 'Ocultar bloques',
+    rateChart: {
+      title: 'Tasa de Cambio',
+      refresh: 'Actualizar gráfico',
+      blocks: 'bloques',
+      noData: 'Sin datos de historial aún',
+    },
     you: '¡Tu!',
     unknown: 'Desconocido',
     yourStats: 'Tus Estadísticas',

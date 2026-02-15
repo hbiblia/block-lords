@@ -26,12 +26,36 @@ const amount = ref('');
 
 const rates = ref<{
   crypto_to_gamecoin: number;
+  crypto_to_gamecoin_previous: number;
   crypto_to_ron: number;
   min_crypto_for_ron: number;
+  rate_updated_at: string;
 } | null>(null);
 
 const cryptoBalance = computed(() => authStore.player?.crypto_balance ?? 0);
 const ronBalance = computed(() => authStore.player?.ron_balance ?? 0);
+
+const rateTrend = computed(() => {
+  if (!rates.value) return 'neutral';
+  const current = rates.value.crypto_to_gamecoin;
+  const previous = rates.value.crypto_to_gamecoin_previous;
+  if (current > previous) return 'up';
+  if (current < previous) return 'down';
+  return 'neutral';
+});
+
+const rateChangePercent = computed(() => {
+  if (!rates.value || !rates.value.crypto_to_gamecoin_previous) return 0;
+  const current = rates.value.crypto_to_gamecoin;
+  const previous = rates.value.crypto_to_gamecoin_previous;
+  return ((current - previous) / previous * 100);
+});
+
+function formatRate(rate: number): string {
+  if (rate >= 1) return rate.toFixed(2);
+  if (rate >= 0.01) return rate.toFixed(3);
+  return rate.toFixed(4);
+}
 
 const numericAmount = computed(() => {
   const val = parseFloat(amount.value);
@@ -203,8 +227,15 @@ onMounted(() => {
             <span v-if="loadingRates" class="inline-flex items-center gap-2">
               <span class="animate-spin w-4 h-4 border-2 border-accent-primary border-t-transparent rounded-full"></span>
             </span>
-            <span v-else-if="rates && activeTab === 'gamecoin'" class="text-status-warning font-medium">
-              1 ₿ = {{ rates.crypto_to_gamecoin }} 🪙
+            <span v-else-if="rates && activeTab === 'gamecoin'" class="font-medium">
+              <span class="text-status-warning">1 ₿ = {{ formatRate(rates.crypto_to_gamecoin) }} 🪙</span>
+              <span
+                v-if="rateTrend !== 'neutral'"
+                class="ml-2 text-xs font-bold"
+                :class="rateTrend === 'up' ? 'text-green-400' : 'text-red-400'"
+              >
+                {{ rateTrend === 'up' ? '▲' : '▼' }} {{ Math.abs(rateChangePercent).toFixed(1) }}%
+              </span>
             </span>
             <span v-else-if="rates" class="text-amber-400 font-medium">
               1,000 ₿ = {{ formatRon(1000 * rates.crypto_to_ron) }} RON
@@ -266,7 +297,7 @@ onMounted(() => {
           <div class="bg-bg-primary rounded-xl p-4">
             <div class="text-xs text-text-muted mb-2 text-center">{{ t('exchange.youWillReceive') }}</div>
             <div class="text-3xl font-bold text-center font-mono" :class="activeTab === 'gamecoin' ? 'text-status-warning' : 'text-amber-400'">
-              {{ activeTab === 'gamecoin' ? estimatedReceive.toFixed(2) : formatRon(estimatedReceive) }}
+              {{ activeTab === 'gamecoin' ? formatRate(estimatedReceive) : formatRon(estimatedReceive) }}
               <span class="text-lg">{{ activeTab === 'gamecoin' ? '🪙' : 'RON' }}</span>
             </div>
           </div>

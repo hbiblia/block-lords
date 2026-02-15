@@ -633,6 +633,11 @@ export async function getExchangeRates(): Promise<any> {
   return rpcWithRetry('get_exchange_rates');
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getExchangeRateHistory(limit = 50): Promise<any> {
+  return rpcWithRetry('get_exchange_rate_history', { p_limit: limit });
+}
+
 // === ENGAGEMENT (REGENERACIÓN PASIVA) ===
 
 export async function applyPassiveRegeneration(playerId: string) {
