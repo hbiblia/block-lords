@@ -57,6 +57,8 @@ export const useAuthStore = defineStore('auth', () => {
   const isServerOnline = ref(true);
   // Flag para indicar que la sesión se perdió (para mostrar indicador rojo)
   const sessionLost = ref(false);
+  // Flag para distinguir logout manual de sesión expirada
+  const isManualLogout = ref(false);
   // Latencia del último ping (en ms)
   const pingLatency = ref<number | null>(null);
 
@@ -315,6 +317,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     loading.value = true;
+    isManualLogout.value = true;
 
     // Detener verificación de sesión
     stopSessionCheck();
@@ -438,6 +441,12 @@ export const useAuthStore = defineStore('auth', () => {
         await fetchPlayer();
       }
     } else if (event === 'SIGNED_OUT') {
+      if (!isManualLogout.value) {
+        // Session expired automatically — reload the app
+        window.location.reload();
+        return;
+      }
+      isManualLogout.value = false;
       user.value = null;
       player.value = null;
       session.value = null;

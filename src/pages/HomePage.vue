@@ -14,7 +14,7 @@ const stats = ref<{
   totalPlayers: number;
   onlinePlayers: number;
   totalBlocks: number;
-  volume24h: number;
+  totalCryptoEmitted: number;
   difficulty: number;
 } | null>(null);
 
@@ -43,14 +43,14 @@ function formatNumber(num: number | undefined | null): string {
   return num.toLocaleString();
 }
 
-function formatVolume(num: number | undefined | null): string {
-  if (num == null) return '$0';
+function formatCryptoStat(num: number | undefined | null): string {
+  if (num == null) return '0 ₿';
   if (num >= 1000000) {
-    return '$' + (num / 1000000).toFixed(1) + 'M';
+    return (num / 1000000).toFixed(1) + 'M ₿';
   } else if (num >= 1000) {
-    return '$' + (num / 1000).toFixed(1) + 'K';
+    return (num / 1000).toFixed(1) + 'K ₿';
   }
-  return '$' + num.toFixed(0);
+  return num.toFixed(2) + ' ₿';
 }
 
 // Realtime subscription para network_stats
@@ -175,9 +175,9 @@ onUnmounted(() => {
         <div class="stat-card">
           <div class="stat-value text-status-warning">
             <template v-if="loadingStats">...</template>
-            <template v-else>{{ formatVolume(stats?.volume24h ?? 0) }}</template>
+            <template v-else>{{ formatCryptoStat(stats?.totalCryptoEmitted ?? 0) }}</template>
           </div>
-          <div class="stat-label">{{ t('home.stats.volume24h') }}</div>
+          <div class="stat-label">{{ t('home.stats.totalCryptoEmitted') }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value text-accent-secondary">

@@ -1379,7 +1379,7 @@ DECLARE
   v_total_players BIGINT;
   v_online_players BIGINT;
   v_total_blocks BIGINT;
-  v_volume_24h NUMERIC;
+  v_total_crypto_emitted NUMERIC;
   v_difficulty NUMERIC;
 BEGIN
   -- Total de jugadores registrados
@@ -1391,10 +1391,8 @@ BEGIN
   -- Total de bloques minados
   SELECT COUNT(*) INTO v_total_blocks FROM blocks;
 
-  -- Volumen de trades en 24h (suma de todo el valor comerciado)
-  SELECT COALESCE(SUM(total_value), 0) INTO v_volume_24h
-  FROM trades
-  WHERE created_at > NOW() - INTERVAL '24 hours';
+  -- Total de crypto emitida (suma de todo el crypto ganado por los jugadores)
+  SELECT COALESCE(SUM(total_crypto_earned), 0) INTO v_total_crypto_emitted FROM players;
 
   -- Dificultad actual
   SELECT COALESCE(difficulty, 1000) INTO v_difficulty
@@ -1404,7 +1402,7 @@ BEGIN
     'totalPlayers', v_total_players,
     'onlinePlayers', v_online_players,
     'totalBlocks', v_total_blocks,
-    'volume24h', v_volume_24h,
+    'totalCryptoEmitted', v_total_crypto_emitted,
     'difficulty', v_difficulty
   );
 END;

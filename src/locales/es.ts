@@ -96,7 +96,7 @@
     stats: {
       onlinePlayers: 'Jugadores Online',
       blocksMined: 'Bloques Minados',
-      volume24h: 'Volumen 24h',
+      totalCryptoEmitted: 'Crypto Emitida',
       difficulty: 'Dificultad',
     },
     topMiners: {
@@ -1326,6 +1326,12 @@
     verifyCaptcha: 'Completa el captcha para verificar que eres humano',
     claimVerified: 'Reclamar Recompensa',
     captchaRequired: 'Cada recompensa requiere verificación humana para reclamar',
+    confirmClaimAll: 'Confirmar Reclamar Todo',
+    confirmClaimAllDesc: 'Se descontarán {cost} RON de tu balance para reclamar {count} bloques.',
+    blocksToClaimLabel: 'Bloques',
+    costLabel: 'Costo',
+    rewardLabel: 'Recompensa',
+    confirmClaim: 'Confirmar',
   },
 
   reward: {

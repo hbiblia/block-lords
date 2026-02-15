@@ -160,14 +160,24 @@ function handleClose() {
 }
 
 // Claim all blocks with RON payment
-async function handleClaimAllWithRon() {
-  if (!canAffordRonClaim.value) return;
+const showConfirmClaimAll = ref(false);
 
+function handleClaimAllWithRon() {
+  if (!canAffordRonClaim.value) return;
+  showConfirmClaimAll.value = true;
+}
+
+async function confirmClaimAll() {
+  showConfirmClaimAll.value = false;
   const result = await pendingStore.claimAllWithRon();
   if (result) {
     playSound('reward');
     triggerConfetti();
   }
+}
+
+function cancelClaimAll() {
+  showConfirmClaimAll.value = false;
 }
 
 function getSelectedBlock() {
@@ -354,6 +364,42 @@ function initCaptchaAd() {
                 <span v-else class="text-status-error">
                   RON insuficiente (necesitas {{ pendingStore.totalRonCost.toFixed(4) }} RON, tienes {{ ronBalance.toFixed(4) }})
                 </span>
+              </div>
+            </div>
+
+            <!-- Confirm Claim All Modal -->
+            <div v-if="showConfirmClaimAll" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+              <div class="absolute inset-0 bg-black/60" @click="cancelClaimAll"></div>
+              <div class="relative bg-bg-primary border border-amber-500/50 rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
+                <div class="text-4xl mb-3">⚡</div>
+                <h3 class="text-lg font-bold mb-2">{{ t('blocks.confirmClaimAll') }}</h3>
+                <p class="text-sm text-text-muted mb-4">
+                  {{ t('blocks.confirmClaimAllDesc', { cost: pendingStore.totalRonCost.toFixed(4), count: pendingStore.count }) }}
+                </p>
+                <div class="bg-bg-secondary rounded-xl p-3 mb-4 space-y-1">
+                  <div class="flex justify-between text-sm">
+                    <span class="text-text-muted">{{ t('blocks.blocksToClaimLabel', 'Bloques') }}</span>
+                    <span class="font-medium">{{ pendingStore.count }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-text-muted">{{ t('blocks.costLabel', 'Costo') }}</span>
+                    <span class="font-medium text-amber-400">{{ pendingStore.totalRonCost.toFixed(4) }} RON</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-text-muted">{{ t('blocks.rewardLabel', 'Recompensa') }}</span>
+                    <span class="font-medium text-green-400">{{ formatCrypto(pendingStore.totalReward) }} ₿</span>
+                  </div>
+                </div>
+                <div class="flex gap-3">
+                  <button @click="cancelClaimAll"
+                    class="flex-1 py-2.5 rounded-xl bg-bg-tertiary text-text-muted hover:bg-bg-secondary transition-colors font-medium">
+                    {{ t('common.cancel') }}
+                  </button>
+                  <button @click="confirmClaimAll"
+                    class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 text-white font-bold hover:opacity-90 transition-opacity">
+                    {{ t('blocks.confirmClaim', 'Confirmar') }}
+                  </button>
+                </div>
               </div>
             </div>
 

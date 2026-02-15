@@ -96,7 +96,7 @@ export default {
     stats: {
       onlinePlayers: 'Online Players',
       blocksMined: 'Blocks Mined',
-      volume24h: '24h Volume',
+      totalCryptoEmitted: 'Crypto Emitted',
       difficulty: 'Difficulty',
     },
     topMiners: {
@@ -1326,6 +1326,12 @@ export default {
     verifyCaptcha: 'Complete the captcha to verify you are human',
     claimVerified: 'Claim Reward',
     captchaRequired: 'Each reward requires human verification to claim',
+    confirmClaimAll: 'Confirm Claim All',
+    confirmClaimAllDesc: '{cost} RON will be deducted from your balance to claim {count} blocks.',
+    blocksToClaimLabel: 'Blocks',
+    costLabel: 'Cost',
+    rewardLabel: 'Reward',
+    confirmClaim: 'Confirm',
   },
 
   reward: {
