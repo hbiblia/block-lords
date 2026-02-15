@@ -416,6 +416,74 @@ const isCoolingSufficient = computed(() => {
   return rigHeatGeneration.value <= 0.1;
 });
 
+// Detailed heat breakdown for tooltip
+const heatBreakdownTooltip = computed(() => {
+  const base = rigBaseHeat.value;
+  const thermalBonus = rigUpgradeThermalBonus.value;
+  const heatAfterUpgrade = base * (1 - thermalBonus / 100);
+  const cooling = totalCoolingPower.value;
+  const afterCooling = Math.max(0, heatAfterUpgrade - cooling);
+  const coolantPct = coolantBoostPercent.value;
+  const final = rigHeatGeneration.value;
+
+  const lines = [
+    `🔥 ${t('rigManage.coolantTooltip.baseHeat')}: ${base.toFixed(1)}°`,
+  ];
+  if (thermalBonus > 0) {
+    const reduction = base - heatAfterUpgrade;
+    lines.push(`🔧 Upgrade térmico: -${reduction.toFixed(1)}° (${thermalBonus}%) → ${heatAfterUpgrade.toFixed(1)}°`);
+  }
+  if (cooling > 0) {
+    lines.push(`❄️ Cooling total: -${cooling.toFixed(1)}° → ${afterCooling.toFixed(1)}°`);
+  }
+  if (coolantPct > 0) {
+    lines.push(`💧 Coolant boost: -${coolantPct}% → ${final.toFixed(1)}°`);
+  }
+  lines.push(`──────────────`);
+  lines.push(`🌡️ Calor final: ${final.toFixed(1)}°/t`);
+  if (cooling > 0) {
+    const excess = cooling - heatAfterUpgrade;
+    if (excess > 0) {
+      lines.push(`✅ Exceso cooling: +${excess.toFixed(1)}°`);
+    } else {
+      lines.push(`⚠️ Falta cooling: ${excess.toFixed(1)}°`);
+    }
+  }
+  return lines.join('\n');
+});
+
+/**
+ * Estimate remaining lifetime of a cooling item.
+ * Replicates backend formula from process_resource_decay:
+ * decay_per_tick = 0.5 + MAX(0, temp - 40) * 0.02 + MAX(0, power*0.3 - cooling) * 0.15
+ * Each tick = 1 minute (cron runs every 60s)
+ */
+function estimateCoolingLife(cooling: InstalledCooling): string {
+  const temp = props.rig?.temperature ?? 25;
+  const power = props.rig?.rig.power_consumption ?? 0;
+  const totalCool = totalCoolingPower.value;
+
+  const baseLoss = 0.5;
+  const tempPenalty = Math.max(0, temp - 40) * 0.02;
+  const heatExcess = Math.max(0, (power * 0.3) - totalCool) * 0.15;
+  const lossPerTick = baseLoss + tempPenalty + heatExcess;
+
+  if (lossPerTick <= 0) return '∞';
+
+  const remainingTicks = cooling.durability / lossPerTick;
+  const minutes = Math.round(remainingTicks);
+
+  if (minutes < 60) return `~${minutes}m`;
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hrs >= 24) {
+    const days = Math.floor(hrs / 24);
+    const remainHrs = hrs % 24;
+    return `~${days}d ${remainHrs}h`;
+  }
+  return `~${hrs}h ${mins.toString().padStart(2, '0')}m`;
+}
+
 // Internet consumption (with upgrades + boosts)
 // Mirrors heat logic: base * (1 - upgrade%) * (1 - boost%)
 const rigInternetConsumption = computed(() => {
@@ -981,10 +1049,11 @@ function closeProcessingModal() {
             ><template v-if="rig.rig.internet_consumption !== rigInternetConsumption">📡<span class="line-through text-blue-400/50">{{ rig.rig.internet_consumption }}</span> → {{ rigInternetConsumption.toFixed(1) }}/t</template><template v-else>📡{{ rig.rig.internet_consumption }}/t</template></span>
             <span>•</span>
             <span
-              v-tooltip="t('rigManage.tooltips.heat')"
+              v-tooltip="heatBreakdownTooltip"
               class="cursor-help"
               :class="rigBaseHeat !== rigHeatGeneration ? 'text-status-success' : 'text-orange-400'"
             ><template v-if="rigBaseHeat !== rigHeatGeneration">🔥<span class="line-through text-orange-400/50">{{ rigBaseHeat.toFixed(1) }}</span> → {{ rigHeatGeneration.toFixed(1) }}°/t</template><template v-else>🔥{{ rigHeatGeneration.toFixed(1) }}°/t</template></span>
+            <span v-if="totalCoolingPower > 0" class="text-cyan-400/80 text-[10px] font-mono">(❄️-{{ totalCoolingPower.toFixed(1) }}°)</span>
           </div>
           <!-- Status grid -->
           <div class="grid grid-cols-4 gap-3 text-center text-sm">
@@ -1132,8 +1201,10 @@ function closeProcessingModal() {
                             {{ getCoolingName(cooling.cooling_item_id, cooling.name) }}
                             <svg class="w-3 h-3 text-text-muted transition-transform" :class="expandedCoolingId === cooling.id ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                           </div>
-                          <div class="text-xs text-text-muted">
-                            ❄️ -{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}° <span class="text-text-muted/50">({{ cooling.cooling_power }}° base)</span>
+                          <div class="flex items-center gap-3 text-xs mt-0.5">
+                            <span class="text-cyan-300 font-mono" v-tooltip="'Potencia de enfriamiento efectiva según durabilidad actual'">❄️ -{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</span>
+                            <span class="text-yellow-400/70 font-mono" v-tooltip="'Consumo de energía extra por este cooler'">⚡{{ (cooling.energy_cost * cooling.durability / 100).toFixed(1) }}/t</span>
+                            <span v-if="rig?.is_active" class="text-text-muted/70 font-mono text-[10px]" v-tooltip="'Tiempo estimado de vida según temperatura y carga actuales'">⏱️{{ estimateCoolingLife(cooling) }}</span>
                           </div>
                         </div>
                       </div>
@@ -1147,9 +1218,28 @@ function closeProcessingModal() {
                       </div>
                     </div>
                     <!-- Detail -->
-                    <div v-if="expandedCoolingId === cooling.id" class="px-3 py-2 border-t border-cyan-500/20 bg-cyan-500/5 text-xs grid grid-cols-2 gap-2">
-                       <div><div class="text-text-muted mb-1">Potencia</div><div class="text-cyan-400 font-mono">-{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</div></div>
-                       <div><div class="text-text-muted mb-1">Consumo</div><div class="text-yellow-400 font-mono">⚡{{ (cooling.energy_cost * cooling.durability / 100).toFixed(1) }}/t</div></div>
+                    <div v-if="expandedCoolingId === cooling.id" class="px-3 py-2.5 border-t border-cyan-500/20 bg-cyan-500/5 text-xs space-y-2">
+                       <div class="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                         <div class="flex justify-between cursor-help" v-tooltip="'Capacidad real de enfriamiento, reducida por el desgaste'"><span class="text-text-muted">Potencia efectiva</span><span class="text-cyan-400 font-mono">-{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</span></div>
+                         <div class="flex justify-between cursor-help" v-tooltip="'Capacidad máxima al 100% de durabilidad'"><span class="text-text-muted">Potencia base</span><span class="text-cyan-300/60 font-mono">-{{ cooling.cooling_power }}°</span></div>
+                         <div class="flex justify-between cursor-help" v-tooltip="'Energía adicional que consume este cooler por tick'"><span class="text-text-muted">Consumo energía</span><span class="text-yellow-400 font-mono">⚡{{ (cooling.energy_cost * cooling.durability / 100).toFixed(1) }}/t</span></div>
+                         <div class="flex justify-between cursor-help" v-tooltip="'Grados enfriados por unidad de energía consumida'"><span class="text-text-muted">Eficiencia</span><span class="text-emerald-400 font-mono">{{ cooling.energy_cost > 0 ? (cooling.cooling_power / cooling.energy_cost).toFixed(2) : '∞' }} °/⚡</span></div>
+                       </div>
+                       <div v-if="totalCoolingPower > 0" class="flex justify-between border-t border-cyan-500/15 pt-1.5 cursor-help" v-tooltip="'Porcentaje del enfriamiento total del rig que aporta este cooler'">
+                         <span class="text-text-muted">% del cooling total</span>
+                         <span class="text-cyan-300 font-mono">{{ ((cooling.cooling_power * cooling.durability / 100) / totalCoolingPower * 100).toFixed(0) }}%</span>
+                       </div>
+                       <div class="flex items-center gap-2 border-t border-cyan-500/15 pt-1.5">
+                         <span class="text-text-muted cursor-help" v-tooltip="'Durabilidad restante. Baja más rápido con temperaturas altas o calor excesivo'">Durabilidad</span>
+                         <div class="flex-1 h-1.5 bg-black/30 rounded-full overflow-hidden">
+                           <div class="h-full rounded-full transition-all" :class="cooling.durability < 30 ? 'bg-status-danger' : cooling.durability < 60 ? 'bg-status-warning' : 'bg-cyan-400'" :style="{ width: `${cooling.durability}%` }"></div>
+                         </div>
+                         <span class="font-mono" :class="cooling.durability < 30 ? 'text-status-danger' : cooling.durability < 60 ? 'text-status-warning' : 'text-cyan-400'">{{ cooling.durability.toFixed(1) }}%</span>
+                       </div>
+                       <div v-if="rig?.is_active" class="flex justify-between border-t border-cyan-500/15 pt-1.5 cursor-help" v-tooltip="'Estimación basada en: desgaste base (0.5%/min) + penalización por temp. alta + exceso de calor'">
+                         <span class="text-text-muted">⏱️ Tiempo estimado vida</span>
+                         <span class="font-mono" :class="cooling.durability < 30 ? 'text-status-danger' : 'text-cyan-300'">{{ estimateCoolingLife(cooling) }}</span>
+                       </div>
                     </div>
                   </div>
                 </div>
