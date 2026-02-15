@@ -76,6 +76,14 @@ const confirmAction = ref<{
   };
 } | null>(null);
 
+// 4-digit confirmation code for card redemption
+const generatedCode = ref('');
+const inputCode = ref('');
+
+function generateConfirmCode(): string {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
 // Processing modal state
 const showProcessingModal = ref(false);
 const processingStatus = ref<'processing' | 'error'>('processing');
@@ -97,6 +105,8 @@ function requestRedeemCard(group: { card_id: string; card_type: 'energy' | 'inte
       cardAmount: group.amount,
     },
   };
+  generatedCode.value = generateConfirmCode();
+  inputCode.value = '';
   showConfirm.value = true;
 }
 
@@ -179,6 +189,8 @@ async function confirmUse() {
 function cancelUse() {
   showConfirm.value = false;
   confirmAction.value = null;
+  generatedCode.value = '';
+  inputCode.value = '';
 }
 
 function getTierColor(tier: string) {
@@ -316,19 +328,31 @@ function formatTimeRemaining(seconds: number): string {
       <!-- Modal -->
       <div class="relative w-full max-w-4xl h-[85vh] flex flex-col bg-bg-secondary border border-border rounded-xl overflow-hidden">
         <!-- Header -->
-        <div class="flex items-center justify-between p-4 border-b border-border">
-          <h2 class="text-lg font-semibold flex items-center gap-2">
-            <span>🎒</span>
-            <span>{{ t('inventory.title') }}</span>
-          </h2>
-          <button
-            @click="handleClose"
-            class="p-2 hover:bg-bg-tertiary rounded-lg transition-colors text-text-muted hover:text-white"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+        <div class="p-2 border-b border-border">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold flex items-center gap-2">
+              <span>🎒</span>
+              <span>{{ t('inventory.title') }}</span>
+            </h2>
+            <button
+              @click="handleClose"
+              class="p-2 hover:bg-bg-tertiary rounded-lg transition-colors text-text-muted hover:text-white"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div v-if="authStore.player" class="flex items-center gap-2 text-xs mt-2">
+            <span class="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20">
+              <span>⚡</span>
+              <span class="font-mono font-medium text-amber-400">{{ Math.floor(authStore.player.energy) }}/{{ authStore.player.max_energy }}</span>
+            </span>
+            <span class="flex items-center gap-1 px-2 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/20">
+              <span>📡</span>
+              <span class="font-mono font-medium text-cyan-400">{{ Math.floor(authStore.player.internet) }}/{{ authStore.player.max_internet }}</span>
+            </span>
+          </div>
         </div>
 
         <!-- Content -->
@@ -604,6 +628,31 @@ function formatTimeRemaining(seconds: number): string {
                 </span>
               </div>
             </div>
+
+            <!-- 4-digit confirmation code -->
+            <div class="bg-bg-primary rounded-lg p-4 mb-4">
+              <p class="text-text-muted text-xs text-center mb-2">{{ t('inventory.confirm.enterCode', 'Ingresa el código para confirmar') }}</p>
+              <div class="text-center mb-3">
+                <span class="font-mono text-2xl font-bold tracking-[0.3em] text-accent-primary">{{ generatedCode }}</span>
+              </div>
+              <input
+                v-model="inputCode"
+                type="text"
+                inputmode="numeric"
+                maxlength="4"
+                :placeholder="t('inventory.confirm.codePlaceholder', '----')"
+                class="w-full text-center font-mono text-xl tracking-[0.3em] py-2 px-3 rounded-lg bg-bg-secondary border transition-colors outline-none"
+                :class="inputCode.length === 4 && inputCode !== generatedCode
+                  ? 'border-status-danger focus:border-status-danger'
+                  : inputCode === generatedCode
+                    ? 'border-status-success focus:border-status-success'
+                    : 'border-border focus:border-accent-primary'"
+                @keyup.enter="inputCode === generatedCode && confirmUse()"
+              />
+              <p v-if="inputCode.length === 4 && inputCode !== generatedCode" class="text-status-danger text-xs text-center mt-1">
+                {{ t('inventory.confirm.codeError', 'Código incorrecto') }}
+              </p>
+            </div>
           </template>
 
           <!-- Rig Install Confirmation -->
@@ -634,7 +683,7 @@ function formatTimeRemaining(seconds: number): string {
             </button>
             <button
               @click="confirmUse"
-              :disabled="using"
+              :disabled="using || (confirmAction?.type === 'redeem' && inputCode !== generatedCode)"
               class="flex-1 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 bg-accent-primary text-white hover:bg-accent-primary/80"
             >
               {{ using ? t('common.processing') : t('common.confirm') }}

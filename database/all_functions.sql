@@ -3988,9 +3988,9 @@ DELETE FROM boost_items WHERE id IN ('autonomous_1h', 'autonomous_4h', 'autonomo
 
 INSERT INTO boost_items (id, name, description, boost_type, effect_value, secondary_value, duration_minutes, base_price, currency, tier, is_stackable, max_stack) VALUES
 -- Hashrate Boosters (crypto)
-('hashrate_small', 'Minor Hash Boost', '+15% hashrate for 1 hour', 'hashrate', 15, 0, 60, 500, 'crypto', 'basic', false, 1),
-('hashrate_medium', 'Hash Boost', '+30% hashrate for 12 hours', 'hashrate', 30, 0, 720, 1500, 'crypto', 'standard', false, 1),
-('hashrate_large', 'Mega Hash Boost', '+50% hashrate for 24 hours', 'hashrate', 50, 0, 1440, 4000, 'crypto', 'elite', false, 1),
+('hashrate_small', 'Minor Hash Boost', '+15% hashrate for 1 hour', 'hashrate', 15, 0, 60, 1500, 'crypto', 'basic', false, 1),
+('hashrate_medium', 'Hash Boost', '+30% hashrate for 12 hours', 'hashrate', 30, 0, 720, 4500, 'crypto', 'standard', false, 1),
+('hashrate_large', 'Mega Hash Boost', '+50% hashrate for 24 hours', 'hashrate', 50, 0, 1440, 12000, 'crypto', 'elite', false, 1),
 
 -- Energy Savers (crypto)
 ('energy_saver_small', 'Power Saver', '-20% energy consumption for 1 hour', 'energy_saver', 20, 0, 60, 400, 'crypto', 'basic', false, 1),
@@ -4003,9 +4003,9 @@ INSERT INTO boost_items (id, name, description, boost_type, effect_value, second
 ('bandwidth_large', 'Fiber Mode', '-50% internet consumption for 24 hours', 'bandwidth_optimizer', 50, 0, 1440, 3500, 'crypto', 'elite', false, 1),
 
 -- Overclock Mode (crypto - hashrate boost + energy penalty)
-('overclock_small', 'Overclock Lite', '+30% hashrate, +15% energy for 1 hour', 'overclock', 30, 15, 60, 600, 'crypto', 'basic', false, 1),
-('overclock_medium', 'Overclock Pro', '+50% hashrate, +25% energy for 12 hours', 'overclock', 50, 25, 720, 1800, 'crypto', 'standard', false, 1),
-('overclock_large', 'Overclock Max', '+75% hashrate, +35% energy for 24 hours', 'overclock', 75, 35, 1440, 5000, 'crypto', 'elite', false, 1),
+('overclock_small', 'Overclock Lite', '+30% hashrate, +25% energy for 1 hour', 'overclock', 30, 25, 60, 500, 'crypto', 'basic', false, 1),
+('overclock_medium', 'Overclock Pro', '+50% hashrate, +35% energy for 12 hours', 'overclock', 50, 35, 720, 1200, 'crypto', 'standard', false, 1),
+('overclock_large', 'Overclock Max', '+75% hashrate, +65% energy for 24 hours', 'overclock', 75, 65, 1440, 3500, 'crypto', 'elite', false, 1),
 
 -- Coolant Injection (crypto)
 ('coolant_small', 'Cooling Gel', '-25% temperature gain for 1 hour', 'coolant_injection', 25, 0, 60, 500, 'crypto', 'basic', false, 1),
