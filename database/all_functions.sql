@@ -7461,7 +7461,8 @@ END;
 $$;
 
 -- Función: Actualizar exchange rate dinámico (llamada al cerrar cada bloque)
--- Usa geometric random walk con mean reversion + factores económicos reales
+-- Simula comportamiento de crypto real: volatilidad alta, crashes con cascada,
+-- presión de venta por exchanges, y recuperación lenta
 CREATE OR REPLACE FUNCTION update_exchange_rate()
 RETURNS NUMERIC
 LANGUAGE plpgsql
@@ -7471,9 +7472,9 @@ DECLARE
   v_current_rate NUMERIC;
   v_new_rate NUMERIC;
   v_mean_rate NUMERIC := 10.0;       -- Punto de equilibrio
-  v_volatility NUMERIC := 0.3;       -- Volatilidad por bloque (~15% cambio máximo)
-  v_reversion_speed NUMERIC := 0.05; -- Fuerza de mean reversion
-  v_min_rate NUMERIC := 2.0;
+  v_volatility NUMERIC := 0.5;       -- Volatilidad alta (estilo crypto real)
+  v_reversion_speed NUMERIC := 0.02; -- Recuperación lenta (las caídas duran)
+  v_min_rate NUMERIC := 0.5;         -- Permite crashes del -95%
   v_max_rate NUMERIC := 30.0;
   v_change NUMERIC;
   v_mean_reversion NUMERIC;
@@ -7482,6 +7483,9 @@ DECLARE
   v_active_miners INTEGER;
   v_exchange_pressure NUMERIC := 0;
   v_supply_pressure NUMERIC := 0;
+  -- Momentum (efecto cascada)
+  v_rate_5_ago NUMERIC;
+  v_momentum NUMERIC := 0;
 BEGIN
   -- Obtener rate actual
   SELECT COALESCE(exchange_rate_crypto_gamecoin, 25.0)
@@ -7491,35 +7495,52 @@ BEGIN
   -- === FACTORES ECONÓMICOS ===
 
   -- 1. Presión de venta: volumen de exchanges en últimos 30 min
-  --    Mucho exchange → jugadores venden crypto → tasa BAJA
-  --    Poco exchange → jugadores acumulan → tasa SUBE
+  --    Mucho exchange → jugadores venden crypto → tasa BAJA (crash)
+  --    Poco exchange → jugadores acumulan → tasa SUBE leve
   SELECT COALESCE(SUM(ABS(amount)), 0)
   INTO v_recent_volume
   FROM transactions
   WHERE type IN ('crypto_to_gamecoin', 'crypto_to_ron')
     AND created_at >= NOW() - INTERVAL '30 minutes';
 
-  -- 0 volumen = +0.02 (sube ~2%), 5000+ volumen = -0.05 (baja ~5%)
-  v_exchange_pressure := 0.02 - LEAST(0.07, v_recent_volume / 10000.0 * 0.07);
+  -- Presión exponencial: ventas masivas causan crash desproporcionado
+  -- 0 vol = +0.02, 5000 vol = -0.08, 10000+ vol = -0.15
+  v_exchange_pressure := 0.02 - LEAST(0.17, POWER(v_recent_volume / 5000.0, 1.5) * 0.1);
 
   -- 2. Presión de oferta: más mineros activos = más crypto entrando = baja
   SELECT COALESCE(active_miners, 0)
   INTO v_active_miners
   FROM network_stats WHERE id = 'current';
 
-  -- 0 mineros = 0, 20 mineros = -0.02 (max)
-  v_supply_pressure := -LEAST(0.02, v_active_miners * 0.001);
+  -- 0 mineros = 0, 10 mineros = -0.01, 30+ mineros = -0.03
+  v_supply_pressure := -LEAST(0.03, v_active_miners * 0.001);
+
+  -- 3. Momentum/Cascada: si viene bajando, sigue bajando (efecto pánico)
+  --    Si viene subiendo, sigue subiendo (efecto FOMO)
+  SELECT rate INTO v_rate_5_ago
+  FROM exchange_rate_history
+  ORDER BY recorded_at DESC
+  OFFSET 4 LIMIT 1;
+
+  IF v_rate_5_ago IS NOT NULL AND v_rate_5_ago > 0 THEN
+    -- Tendencia reciente: positiva = subiendo, negativa = bajando
+    v_momentum := (v_current_rate - v_rate_5_ago) / v_rate_5_ago;
+    -- Amplificar 30%: caída del -10% en 5 bloques → empuje extra de -3%
+    v_momentum := v_momentum * 0.3;
+    -- Limitar entre -0.1 y +0.05 (crashes más fuertes que pumps)
+    v_momentum := GREATEST(-0.1, LEAST(0.05, v_momentum));
+  END IF;
 
   -- === CALCULAR NUEVA TASA ===
 
   -- Componente aleatorio
   v_change := (RANDOM() - 0.5) * v_volatility;
 
-  -- Componente de mean reversion (atrae hacia v_mean_rate)
+  -- Componente de mean reversion (atrae hacia v_mean_rate, pero lento)
   v_mean_reversion := (LN(v_mean_rate) - LN(v_current_rate)) * v_reversion_speed;
 
-  -- Combinar: aleatorio + mean reversion + economía real
-  v_new_rate := v_current_rate * EXP(v_change + v_mean_reversion + v_exchange_pressure + v_supply_pressure);
+  -- Combinar: aleatorio + mean reversion + economía + momentum
+  v_new_rate := v_current_rate * EXP(v_change + v_mean_reversion + v_exchange_pressure + v_supply_pressure + v_momentum);
 
   -- Clampear entre min y max
   v_new_rate := GREATEST(v_min_rate, LEAST(v_max_rate, v_new_rate));
