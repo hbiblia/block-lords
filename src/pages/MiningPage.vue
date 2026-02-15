@@ -890,7 +890,7 @@ onUnmounted(() => {
                 @click="openSlotDurabilityInfo(getSlotForRig(playerRig.id)!)">
                 <div v-for="i in getSlotForRig(playerRig.id)!.max_uses" :key="i"
                   class="flex-1 h-full transition-colors"
-                  :class="i <= getSlotForRig(playerRig.id)!.uses_remaining ? 'bg-emerald-500' : 'bg-gray-700/60'">
+                  :class="i <= getSlotForRig(playerRig.id)!.uses_remaining ? 'bg-cyan-500' : 'bg-gray-700/60'">
                 </div>
               </div>
               <div class="p-4">
@@ -1052,7 +1052,7 @@ onUnmounted(() => {
                 @click="openSlotDurabilityInfo(slot)">
                 <div v-for="i in slot.max_uses" :key="i"
                   class="flex-1 h-full transition-colors"
-                  :class="i <= slot.uses_remaining ? 'bg-emerald-500' : 'bg-gray-700/60'">
+                  :class="i <= slot.uses_remaining ? 'bg-cyan-500' : 'bg-gray-700/60'">
                 </div>
               </div>
               <div class="p-4 flex flex-col items-center justify-center h-full">
@@ -1299,11 +1299,11 @@ onUnmounted(() => {
             <div class="flex gap-px w-full h-3 rounded-lg overflow-hidden mb-3">
               <div v-for="i in slotDurabilityModalData.max_uses" :key="i"
                 class="flex-1 h-full transition-colors"
-                :class="i <= slotDurabilityModalData.uses_remaining ? 'bg-emerald-500' : 'bg-gray-700/60'">
+                :class="i <= slotDurabilityModalData.uses_remaining ? 'bg-cyan-500' : 'bg-gray-700/60'">
               </div>
             </div>
             <p class="text-center text-sm font-semibold mb-4"
-              :class="slotDurabilityModalData.uses_remaining <= 1 ? 'text-status-danger' : 'text-emerald-400'">
+              :class="slotDurabilityModalData.uses_remaining <= 1 ? 'text-status-danger' : 'text-cyan-400'">
               {{ t('slots.usesRemaining', { uses: slotDurabilityModalData.uses_remaining, max: slotDurabilityModalData.max_uses }) }}
             </p>
 
