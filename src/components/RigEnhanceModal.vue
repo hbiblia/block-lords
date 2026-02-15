@@ -422,34 +422,51 @@ const heatBreakdownTooltip = computed(() => {
   const thermalBonus = rigUpgradeThermalBonus.value;
   const heatAfterUpgrade = base * (1 - thermalBonus / 100);
   const cooling = totalCoolingPower.value;
-  const afterCooling = Math.max(0, heatAfterUpgrade - cooling);
-  const coolantPct = coolantBoostPercent.value;
+  // const afterCooling = Math.max(0, heatAfterUpgrade - cooling);
+  // const coolantPct = coolantBoostPercent.value;
   const final = rigHeatGeneration.value;
 
-  const lines = [
-    `🔥 ${t('rigManage.coolantTooltip.baseHeat')}: ${base.toFixed(1)}°`,
-  ];
+  let content = `<div class="text-xs text-left space-y-1 min-w-[180px]">`;
+  
+  // Base Heat
+  content += `<div class="flex justify-between gap-4"><span>🔥 ${t('rigManage.coolantTooltip.baseHeat')}:</span> <span class="font-mono">${base.toFixed(1)}°</span></div>`;
+  
+  // Thermal Upgrade
   if (thermalBonus > 0) {
     const reduction = base - heatAfterUpgrade;
-    lines.push(`🔧 Upgrade térmico: -${reduction.toFixed(1)}° (${thermalBonus}%) → ${heatAfterUpgrade.toFixed(1)}°`);
+    content += `<div class="flex justify-between gap-4 text-cyan-300"><span>🔧 Upgrade (${thermalBonus}%):</span> <span class="font-mono">-${reduction.toFixed(1)}°</span></div>`;
   }
+  
+  // Cooling
   if (cooling > 0) {
-    lines.push(`❄️ Cooling total: -${cooling.toFixed(1)}° → ${afterCooling.toFixed(1)}°`);
+    content += `<div class="flex justify-between gap-4 text-cyan-400"><span>❄️ Cooling:</span> <span class="font-mono">-${cooling.toFixed(1)}°</span></div>`;
   }
-  if (coolantPct > 0) {
-    lines.push(`💧 Coolant boost: -${coolantPct}% → ${final.toFixed(1)}°`);
+  
+  content += `<div class="my-1 border-t border-white/20"></div>`;
+  
+  const excess = cooling - heatAfterUpgrade;
+  
+  if (excess >= 0) {
+    // Sufficient cooling
+    content += `<div class="flex justify-between gap-4 font-bold text-emerald-400"><span>✅ Calor Final:</span> <span class="font-mono">0°</span></div>`;
+    content += `<div class="flex justify-between gap-4 text-emerald-300/60 text-[10px]"><span>Exceso:</span> <span class="font-mono">+${excess.toFixed(1)}°</span></div>`;
+  } else {
+    // Insufficient
+    // Final heat is basically abs(excess) (since heatAfterUpgrade > cooling)
+    // or rigHeatGeneration which includes coolant mult.
+    // Let's stick to simple math for tooltip display
+    const visibleFinal = Math.abs(excess); 
+    
+    content += `<div class="flex justify-between gap-4 font-bold text-orange-400"><span>🌡️ Calor Final:</span> <span class="font-mono">${visibleFinal.toFixed(1)}°</span></div>`;
+    content += `<div class="flex justify-between gap-4 text-status-danger text-[10px]"><span>Falta cooling:</span> <span class="font-mono">${excess.toFixed(1)}°</span></div>`;
   }
-  lines.push(`──────────────`);
-  lines.push(`🌡️ Calor final: ${final.toFixed(1)}°/t`);
-  if (cooling > 0) {
-    const excess = cooling - heatAfterUpgrade;
-    if (excess > 0) {
-      lines.push(`✅ Exceso cooling: +${excess.toFixed(1)}°`);
-    } else {
-      lines.push(`⚠️ Falta cooling: ${excess.toFixed(1)}°`);
-    }
-  }
-  return lines.join('\n');
+  
+  content += `</div>`;
+
+  return {
+    content,
+    html: true
+  };
 });
 
 /**
