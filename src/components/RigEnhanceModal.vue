@@ -485,11 +485,7 @@ function getBoostEffectText(boost: BoostItem | InstalledBoost): string {
   return text;
 }
 
-function getBoostTypeDescription(boostType: string): string {
-  const key = `market.boosts.types.${boostType}`;
-  const translated = t(key);
-  return translated !== key ? translated : '';
-}
+
 
 function formatTime(seconds: number): string {
   if (seconds <= 0) return '0:00';
