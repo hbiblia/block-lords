@@ -64,6 +64,14 @@ const DEFAULT_TIMEOUT = 15000;
 // Timeout para operaciones críticas: 30 segundos
 const CRITICAL_TIMEOUT = 30000;
 
+// Request deduplication: reuse in-flight promises for the same RPC call
+const inflightRequests = new Map<string, Promise<unknown>>();
+
+function getDedupeKey(fnName: string, params: Record<string, unknown>): string {
+  const paramStr = Object.keys(params).length > 0 ? JSON.stringify(params) : '';
+  return `${fnName}:${paramStr}`;
+}
+
 /**
  * Helper para llamadas RPC con retry automático y timeout
  * Reintenta en errores de red/timeout, no en errores de lógica de negocio
@@ -71,10 +79,26 @@ const CRITICAL_TIMEOUT = 30000;
 async function rpcWithRetry<T>(
   fnName: string,
   params: Record<string, unknown> = {},
-  options: { maxRetries?: number; critical?: boolean; timeout?: number } = {}
+  options: { maxRetries?: number; critical?: boolean; timeout?: number; dedupe?: boolean } = {}
 ): Promise<T> {
-  const { maxRetries = isTabLocked.value ? 0 : 3, critical = false, timeout } = options;
+  const { maxRetries: maxRetriesOpt, critical = false, timeout, dedupe = true } = options;
+
+  // Fast-fail: si la conexión está caída y la operación no es crítica, intentar solo 1 vez
+  let maxRetries = maxRetriesOpt ?? (isTabLocked.value ? 0 : 3);
+  if (!connectionState.isOnline && !critical) {
+    maxRetries = Math.min(maxRetries, 1);
+  }
+
   const timeoutMs = timeout ?? (critical ? CRITICAL_TIMEOUT : DEFAULT_TIMEOUT);
+
+  // Deduplication: if the same RPC is already in flight, reuse its promise
+  const dedupeKey = getDedupeKey(fnName, params);
+  if (dedupe) {
+    const existing = inflightRequests.get(dedupeKey);
+    if (existing) {
+      return existing as Promise<T>;
+    }
+  }
 
   const executeRpc = async () => {
     const rpcPromise = Promise.resolve(supabase.rpc(fnName, params));
@@ -103,68 +127,65 @@ async function rpcWithRetry<T>(
     }
   };
 
-  try {
-    // For critical operations, always retry
-    // For non-critical, only retry on network errors
-    if (critical) {
+  const promise = (async () => {
+    try {
+      // For critical operations, always retry
+      // For non-critical, only retry on network errors
+      if (critical) {
+        return await withRetry(executeRpc, {
+          maxRetries,
+          onRetry: (attempt, error) => {
+            console.warn(`[API] Retry ${attempt}/${maxRetries} for ${fnName}:`, error);
+            markConnectionIssue(error);
+          },
+        });
+      }
+
+      // Standard call with retry only for retryable errors
       return await withRetry(executeRpc, {
         maxRetries,
+        isRetryable: (error) => {
+          const errorObj = error as Record<string, unknown>;
+          const message = String(errorObj?.message || '').toLowerCase();
+
+          const nonRetryablePatterns = [
+            'insufficient', 'insuficiente', 'not found', 'no encontrado',
+            'already', 'ya existe', 'invalid', 'invalido', 'unauthorized', 'permission',
+          ];
+
+          if (nonRetryablePatterns.some(p => message.includes(p))) {
+            return false;
+          }
+
+          return isRetryableError(error);
+        },
         onRetry: (attempt, error) => {
           console.warn(`[API] Retry ${attempt}/${maxRetries} for ${fnName}:`, error);
-          // Marcar conexión como problemática inmediatamente
           markConnectionIssue(error);
         },
       });
+    } catch (error) {
+      const errorObj = error as Record<string, unknown>;
+      const message = String(errorObj?.message || '').toLowerCase();
+      if (
+        message.includes('timeout') ||
+        message.includes('network') ||
+        message.includes('fetch') ||
+        message.includes('connection')
+      ) {
+        connectionState.setOnline(false, message);
+      }
+      throw error;
+    } finally {
+      inflightRequests.delete(dedupeKey);
     }
+  })();
 
-    // Standard call with retry only for retryable errors
-    return await withRetry(executeRpc, {
-      maxRetries,
-      isRetryable: (error) => {
-        // Don't retry business logic errors (insufficient funds, etc.)
-        const errorObj = error as Record<string, unknown>;
-        const message = String(errorObj?.message || '').toLowerCase();
-
-        // These are NOT retryable (business logic errors)
-        const nonRetryablePatterns = [
-          'insufficient',
-          'insuficiente',
-          'not found',
-          'no encontrado',
-          'already',
-          'ya existe',
-          'invalid',
-          'invalido',
-          'unauthorized',
-          'permission',
-        ];
-
-        if (nonRetryablePatterns.some(p => message.includes(p))) {
-          return false;
-        }
-
-        return isRetryableError(error);
-      },
-      onRetry: (attempt, error) => {
-        console.warn(`[API] Retry ${attempt}/${maxRetries} for ${fnName}:`, error);
-        // Marcar conexión como problemática inmediatamente
-        markConnectionIssue(error);
-      },
-    });
-  } catch (error) {
-    // Marcar conexión como fallida si es error de red/timeout
-    const errorObj = error as Record<string, unknown>;
-    const message = String(errorObj?.message || '').toLowerCase();
-    if (
-      message.includes('timeout') ||
-      message.includes('network') ||
-      message.includes('fetch') ||
-      message.includes('connection')
-    ) {
-      connectionState.setOnline(false, message);
-    }
-    throw error;
+  if (dedupe) {
+    inflightRequests.set(dedupeKey, promise);
   }
+
+  return promise;
 }
 
 // === PING / HEALTH CHECK ===

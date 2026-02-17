@@ -4,7 +4,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuthStore } from './auth';
 import { useGiftsStore } from './gifts';
 import { isTabLocked } from '@/composables/useTabLock';
-import { updatePlayerHeartbeat } from '@/utils/api';
+import { updatePlayerHeartbeat, pingApi, connectionState } from '@/utils/api';
 
 export const useRealtimeStore = defineStore('realtime', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -65,19 +65,27 @@ export const useRealtimeStore = defineStore('realtime', () => {
     visibilityHandler = () => {
       if (isTabLocked.value) return;
       if (document.visibilityState === 'visible') {
-        const authStore = useAuthStore();
+        // Ping first: verify connection before firing all handlers
+        pingApi().then(({ success }) => {
+          if (!success) {
+            console.warn('Ping failed on tab return, skipping reconnection');
+            return;
+          }
 
-        if (authStore.player?.id) {
-          updatePlayerHeartbeat(authStore.player.id).catch(err => {
-            console.warn('Failed to update heartbeat on visibility change:', err);
-          });
-        }
+          const authStore = useAuthStore();
 
-        if (wasConnected.value && !connected.value) {
-          manualReconnect();
-        } else if (connected.value) {
-          checkAndReconnectStaleChannels();
-        }
+          if (authStore.player?.id) {
+            updatePlayerHeartbeat(authStore.player.id).catch(err => {
+              console.warn('Failed to update heartbeat on visibility change:', err);
+            });
+          }
+
+          if (wasConnected.value && !connected.value) {
+            manualReconnect();
+          } else if (connected.value) {
+            checkAndReconnectStaleChannels();
+          }
+        });
       }
     };
 
@@ -109,6 +117,8 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
     focusHandler = () => {
       if (isTabLocked.value) return;
+      // Skip if connection already verified offline (visibility handler runs first)
+      if (!connectionState.isOnline) return;
 
       const authStore = useAuthStore();
 

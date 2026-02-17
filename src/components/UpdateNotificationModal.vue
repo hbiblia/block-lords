@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { getActiveAnnouncements } from '@/utils/api'
+import { getActiveAnnouncements, connectionState } from '@/utils/api'
 import { playSound } from '@/utils/sounds'
 import { useAuthStore } from '@/stores/auth'
 
@@ -43,6 +43,8 @@ const currentMessage = computed(() => {
 })
 
 async function checkForUpdates() {
+  // No verificar si la conexión ya está fallando (evita pile-up de requests)
+  if (!connectionState.isOnline) return
   // Solo verificar si el usuario está autenticado
   if (!authStore.isAuthenticated) return
   // Si el UpdateModal (changelog) aún no fue descartado, no mostrar este toast.
