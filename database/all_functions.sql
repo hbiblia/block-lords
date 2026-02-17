@@ -1141,7 +1141,9 @@ BEGIN
       'is_destroyed', ps.is_destroyed,
       'has_rig', ps.player_rig_id IS NOT NULL,
       'player_rig_id', ps.player_rig_id,
-      'rig_name', r.name
+      'rig_name', r.name,
+      'tier', COALESCE(ps.tier, 'basic'),
+      'xp', COALESCE(ps.xp, 0)
     ) ORDER BY ps.slot_number
   ), '[]'::JSON)
   INTO v_slots_data
@@ -1612,20 +1614,24 @@ BEGIN
       -- >= 50%: eficiencia lineal (durability/100)
       -- < 50%: penalización adicional (durability/100 * durability/50)
       -- Esto hace que cooling degradado sea menos efectivo
+      -- Con mods: aplica bonus/penalización de cooling_power_mod y energy_cost_mod
       SELECT
-        COALESCE(SUM(ci.cooling_power * (
-          CASE WHEN rc.durability >= 50 THEN rc.durability / 100.0
-               ELSE (rc.durability / 100.0) * (rc.durability / 50.0)
-          END
-        )), 0),
-        COALESCE(SUM(ci.energy_cost * (
-          CASE WHEN rc.durability >= 50 THEN rc.durability / 100.0
-               ELSE (rc.durability / 100.0) * (rc.durability / 50.0)
-          END
-        )), 0)
+        COALESCE(SUM(
+          ci.cooling_power
+          * (1 + COALESCE((SELECT SUM((m->>'cooling_power_mod')::NUMERIC) FROM jsonb_array_elements(COALESCE(pci.mods, '[]'::jsonb)) m), 0) / 100.0)
+          * (CASE WHEN rc.durability >= 50 THEN rc.durability / 100.0
+                  ELSE (rc.durability / 100.0) * (rc.durability / 50.0) END)
+        ), 0),
+        COALESCE(SUM(
+          ci.energy_cost
+          * (1 + COALESCE((SELECT SUM((m->>'energy_cost_mod')::NUMERIC) FROM jsonb_array_elements(COALESCE(pci.mods, '[]'::jsonb)) m), 0) / 100.0)
+          * (CASE WHEN rc.durability >= 50 THEN rc.durability / 100.0
+                  ELSE (rc.durability / 100.0) * (rc.durability / 50.0) END)
+        ), 0)
       INTO v_rig_cooling_power, v_rig_cooling_energy
       FROM rig_cooling rc
       JOIN cooling_items ci ON ci.id = rc.cooling_item_id
+      LEFT JOIN player_cooling_items pci ON pci.id = rc.player_cooling_item_id
       WHERE rc.player_rig_id = v_rig.id AND rc.durability > 0;
 
       -- Calcular consumo de energía del rig:
@@ -1760,13 +1766,20 @@ BEGIN
       -- 2. El rig genera más calor del que el cooling puede manejar (exceso de calor)
       -- ~30 min de duración a temperatura normal (0.5% base = ~33 min)
       -- Exceso de calor = (power_consumption * 0.3) - cooling_power
-      UPDATE rig_cooling
-      SET durability = GREATEST(0, durability - (
-        0.5 +  -- Base
+      -- Con mods: durability_mod reduce/aumenta la velocidad de desgaste
+      UPDATE rig_cooling rc_upd
+      SET durability = GREATEST(0, rc_upd.durability - (
+        (0.5 +  -- Base
         (GREATEST(0, v_new_temp - 40) * 0.02) +  -- Por temperatura alta
-        (GREATEST(0, (v_rig.power_consumption * 0.3) - v_rig_cooling_power) * 0.15)  -- Por exceso de calor
+        (GREATEST(0, (v_rig.power_consumption * 0.3) - v_rig_cooling_power) * 0.15))  -- Por exceso de calor
+        * (1 - COALESCE((
+          SELECT SUM((m->>'durability_mod')::NUMERIC)
+          FROM player_cooling_items pci_dur,
+               jsonb_array_elements(pci_dur.mods) m
+          WHERE pci_dur.id = rc_upd.player_cooling_item_id
+        ), 0) / 100.0)
       ))
-      WHERE player_rig_id = v_rig.id AND durability > 0;
+      WHERE rc_upd.player_rig_id = v_rig.id AND rc_upd.durability > 0;
 
       -- Eliminar refrigeración agotada
       DELETE FROM rig_cooling WHERE player_rig_id = v_rig.id AND durability <= 0;
@@ -2589,7 +2602,8 @@ END;
 $$;
 
 -- Instalar refrigeración en un rig específico
-CREATE OR REPLACE FUNCTION install_cooling_to_rig(p_player_id UUID, p_rig_id UUID, p_cooling_id TEXT)
+-- p_player_cooling_item_id: UUID del item modded en player_cooling_items (NULL para items sin mods)
+CREATE OR REPLACE FUNCTION install_cooling_to_rig(p_player_id UUID, p_rig_id UUID, p_cooling_id TEXT, p_player_cooling_item_id UUID DEFAULT NULL)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -2599,8 +2613,11 @@ DECLARE
   v_cooling cooling_items%ROWTYPE;
   v_rig player_rigs%ROWTYPE;
   v_existing rig_cooling%ROWTYPE;
+  v_pci player_cooling_items%ROWTYPE;
   v_new_durability NUMERIC;
   v_max_durability NUMERIC := 200;  -- Cap máximo de durabilidad stackeada
+  v_slot_tier TEXT;
+  v_tier_order TEXT[] := ARRAY['basic', 'standard', 'advanced', 'elite'];
 BEGIN
   -- Verificar que el rig pertenece al jugador
   SELECT * INTO v_rig
@@ -2611,39 +2628,52 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Rig no encontrado');
   END IF;
 
-  -- Verificar que el item está en inventario
-  SELECT * INTO v_inventory_item
-  FROM player_inventory
-  WHERE player_id = p_player_id AND item_type = 'cooling' AND item_id = p_cooling_id;
-
-  IF v_inventory_item IS NULL OR v_inventory_item.quantity <= 0 THEN
-    RETURN json_build_object('success', false, 'error', 'No tienes este item en tu inventario');
-  END IF;
-
-  -- Obtener datos del item
+  -- Obtener datos del cooling item
   SELECT * INTO v_cooling FROM cooling_items WHERE id = p_cooling_id;
-
-  -- Verificar si este cooling ya está instalado en el rig
-  SELECT * INTO v_existing
-  FROM rig_cooling
-  WHERE player_rig_id = p_rig_id AND cooling_item_id = p_cooling_id;
-
-  -- Remover del inventario
-  IF v_inventory_item.quantity > 1 THEN
-    UPDATE player_inventory
-    SET quantity = quantity - 1
-    WHERE id = v_inventory_item.id;
-  ELSE
-    DELETE FROM player_inventory WHERE id = v_inventory_item.id;
+  IF v_cooling IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Cooling no encontrado');
   END IF;
 
-  IF v_existing IS NOT NULL THEN
-    -- Ya está instalado: stackear durabilidad (máximo 200%)
-    v_new_durability := LEAST(v_max_durability, v_existing.durability + 100);
+  -- Validar tier del slot vs tier del cooling
+  SELECT COALESCE(ps.tier, 'basic') INTO v_slot_tier
+  FROM player_slots ps
+  WHERE ps.player_rig_id = p_rig_id AND ps.player_id = p_player_id AND NOT ps.is_destroyed;
 
-    UPDATE rig_cooling
-    SET durability = v_new_durability
-    WHERE id = v_existing.id;
+  IF v_slot_tier IS NULL THEN
+    v_slot_tier := 'basic';
+  END IF;
+
+  IF array_position(v_tier_order, v_cooling.tier) > array_position(v_tier_order, v_slot_tier) THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'Cooling tier too high for this slot',
+      'cooling_tier', v_cooling.tier,
+      'slot_tier', v_slot_tier
+    );
+  END IF;
+
+  IF p_player_cooling_item_id IS NOT NULL THEN
+    -- MODDED: instalar desde player_cooling_items
+    SELECT * INTO v_pci
+    FROM player_cooling_items
+    WHERE id = p_player_cooling_item_id AND player_id = p_player_id AND cooling_item_id = p_cooling_id;
+
+    IF v_pci IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Item modded no encontrado');
+    END IF;
+
+    -- Verificar si ya hay un cooling del mismo tipo instalado (NO se permite stackear modded con otro)
+    SELECT * INTO v_existing
+    FROM rig_cooling
+    WHERE player_rig_id = p_rig_id AND cooling_item_id = p_cooling_id;
+
+    IF v_existing IS NOT NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Ya hay un cooling de este tipo instalado. Retíralo primero.');
+    END IF;
+
+    -- Insertar en rig_cooling con referencia al item modded
+    INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability, player_cooling_item_id)
+    VALUES (p_rig_id, p_cooling_id, 100, p_player_cooling_item_id);
 
     -- Marcar el rig como modificado
     UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
@@ -2653,29 +2683,76 @@ BEGIN
 
     RETURN json_build_object(
       'success', true,
-      'message', 'Durabilidad de refrigeración recargada',
+      'message', 'Refrigeración modded instalada en el rig',
       'item', row_to_json(v_cooling),
-      'new_durability', v_new_durability,
-      'stacked', true
-    );
-  ELSE
-    -- No está instalado: insertar nuevo
-    INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability)
-    VALUES (p_rig_id, p_cooling_id, 100);
-
-    -- Marcar el rig como modificado (evita penalización por quick toggle)
-    UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
-
-    -- Mission tracking
-    PERFORM update_mission_progress(p_player_id, 'install_cooling', 1);
-
-    RETURN json_build_object(
-      'success', true,
-      'message', 'Refrigeración instalada en el rig',
-      'item', row_to_json(v_cooling),
+      'mods', v_pci.mods,
       'new_durability', 100,
       'stacked', false
     );
+  ELSE
+    -- UNMODDED: flujo original desde player_inventory
+    SELECT * INTO v_inventory_item
+    FROM player_inventory
+    WHERE player_id = p_player_id AND item_type = 'cooling' AND item_id = p_cooling_id;
+
+    IF v_inventory_item IS NULL OR v_inventory_item.quantity <= 0 THEN
+      RETURN json_build_object('success', false, 'error', 'No tienes este item en tu inventario');
+    END IF;
+
+    -- Verificar si este cooling ya está instalado en el rig
+    SELECT * INTO v_existing
+    FROM rig_cooling
+    WHERE player_rig_id = p_rig_id AND cooling_item_id = p_cooling_id;
+
+    -- Remover del inventario
+    IF v_inventory_item.quantity > 1 THEN
+      UPDATE player_inventory
+      SET quantity = quantity - 1
+      WHERE id = v_inventory_item.id;
+    ELSE
+      DELETE FROM player_inventory WHERE id = v_inventory_item.id;
+    END IF;
+
+    IF v_existing IS NOT NULL THEN
+      -- Ya está instalado: stackear durabilidad (máximo 200%)
+      v_new_durability := LEAST(v_max_durability, v_existing.durability + 100);
+
+      UPDATE rig_cooling
+      SET durability = v_new_durability
+      WHERE id = v_existing.id;
+
+      -- Marcar el rig como modificado
+      UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+      -- Mission tracking
+      PERFORM update_mission_progress(p_player_id, 'install_cooling', 1);
+
+      RETURN json_build_object(
+        'success', true,
+        'message', 'Durabilidad de refrigeración recargada',
+        'item', row_to_json(v_cooling),
+        'new_durability', v_new_durability,
+        'stacked', true
+      );
+    ELSE
+      -- No está instalado: insertar nuevo
+      INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability)
+      VALUES (p_rig_id, p_cooling_id, 100);
+
+      -- Marcar el rig como modificado (evita penalización por quick toggle)
+      UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+      -- Mission tracking
+      PERFORM update_mission_progress(p_player_id, 'install_cooling', 1);
+
+      RETURN json_build_object(
+        'success', true,
+        'message', 'Refrigeración instalada en el rig',
+        'item', row_to_json(v_cooling),
+        'new_durability', 100,
+        'stacked', false
+      );
+    END IF;
   END IF;
 END;
 $$;
@@ -2691,9 +2768,27 @@ BEGIN
     SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
     FROM (
       SELECT rc.id, rc.cooling_item_id, rc.durability, rc.installed_at,
-             ci.name, ci.description, ci.cooling_power, ci.energy_cost, ci.tier
+             ci.name, ci.description, ci.cooling_power, ci.energy_cost, ci.tier,
+             rc.player_cooling_item_id,
+             COALESCE(pci.mods, '[]'::jsonb) as mods,
+             COALESCE(pci.mod_slots_used, 0) as mod_slots_used,
+             COALESCE(ci.max_mod_slots, 1) as max_mod_slots,
+             -- Stats efectivos con mods
+             ROUND(ci.cooling_power * (1 + COALESCE((
+               SELECT SUM((m->>'cooling_power_mod')::NUMERIC)
+               FROM jsonb_array_elements(COALESCE(pci.mods, '[]'::jsonb)) m
+             ), 0) / 100.0), 2) as effective_cooling_power,
+             ROUND(ci.energy_cost * (1 + COALESCE((
+               SELECT SUM((m->>'energy_cost_mod')::NUMERIC)
+               FROM jsonb_array_elements(COALESCE(pci.mods, '[]'::jsonb)) m
+             ), 0) / 100.0), 2) as effective_energy_cost,
+             ROUND(COALESCE((
+               SELECT SUM((m->>'durability_mod')::NUMERIC)
+               FROM jsonb_array_elements(COALESCE(pci.mods, '[]'::jsonb)) m
+             ), 0), 2) as total_durability_mod
       FROM rig_cooling rc
       JOIN cooling_items ci ON ci.id = rc.cooling_item_id
+      LEFT JOIN player_cooling_items pci ON pci.id = rc.player_cooling_item_id
       WHERE rc.player_rig_id = p_rig_id
       ORDER BY rc.installed_at DESC
     ) t
@@ -2717,11 +2812,47 @@ BEGIN
       SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
       FROM (
         SELECT pi.id as inventory_id, pi.quantity, pi.purchased_at,
-               ci.id, ci.name, ci.description, ci.cooling_power, ci.energy_cost, ci.base_price, ci.tier
+               ci.id, ci.name, ci.description, ci.cooling_power, ci.energy_cost, ci.base_price, ci.tier,
+               COALESCE(ci.max_mod_slots, 1) as max_mod_slots
         FROM player_inventory pi
         JOIN cooling_items ci ON ci.id = pi.item_id
         WHERE pi.player_id = p_player_id AND pi.item_type = 'cooling'
         ORDER BY pi.purchased_at DESC
+      ) t
+    ),
+    'modded_cooling', (
+      SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+      FROM (
+        SELECT pci.id as player_cooling_item_id, pci.cooling_item_id, pci.mods, pci.mod_slots_used, pci.created_at,
+               ci.name, ci.description, ci.cooling_power, ci.energy_cost, ci.base_price, ci.tier,
+               COALESCE(ci.max_mod_slots, 1) as max_mod_slots,
+               ROUND(ci.cooling_power * (1 + COALESCE((
+                 SELECT SUM((m->>'cooling_power_mod')::NUMERIC) FROM jsonb_array_elements(pci.mods) m
+               ), 0) / 100.0), 2) as effective_cooling_power,
+               ROUND(ci.energy_cost * (1 + COALESCE((
+                 SELECT SUM((m->>'energy_cost_mod')::NUMERIC) FROM jsonb_array_elements(pci.mods) m
+               ), 0) / 100.0), 2) as effective_energy_cost,
+               ROUND(COALESCE((
+                 SELECT SUM((m->>'durability_mod')::NUMERIC) FROM jsonb_array_elements(pci.mods) m
+               ), 0), 2) as total_durability_mod
+        FROM player_cooling_items pci
+        JOIN cooling_items ci ON ci.id = pci.cooling_item_id
+        WHERE pci.player_id = p_player_id
+        ORDER BY pci.created_at DESC
+      ) t
+    ),
+    'components', (
+      SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+      FROM (
+        SELECT pi.id as inventory_id, pi.quantity,
+               cc.id, cc.name, cc.description, cc.tier, cc.base_price,
+               cc.cooling_power_min, cc.cooling_power_max,
+               cc.energy_cost_min, cc.energy_cost_max,
+               cc.durability_min, cc.durability_max
+        FROM player_inventory pi
+        JOIN cooling_components cc ON cc.id = pi.item_id
+        WHERE pi.player_id = p_player_id AND pi.item_type = 'component' AND pi.quantity > 0
+        ORDER BY cc.base_price ASC
       ) t
     ),
     'cards', (
@@ -7582,6 +7713,12 @@ DECLARE
   v_player_reward NUMERIC;
   v_participants_count INTEGER := 0;
   v_rewards_distributed NUMERIC := 0;
+  v_xp_per_block INTEGER;
+  v_drop_multiplier NUMERIC;
+  v_mat RECORD;
+  v_roll NUMERIC;
+  v_materials_dropped JSONB;
+  v_pending_block_id UUID;
 BEGIN
   -- Obtener bloque de minería
   SELECT * INTO v_mining_block FROM mining_blocks WHERE id = p_mining_block_id;
@@ -7638,6 +7775,44 @@ BEGIN
     -- Mínimo 0.01 crypto si contribuyó
     v_player_reward := GREATEST(0.01, v_player_reward);
 
+    -- === SLOT XP SYSTEM ===
+    -- XP based on block type: Bronze=8, Silver=12, Gold=20
+    v_xp_per_block := CASE v_mining_block.block_type
+      WHEN 'gold' THEN 20
+      WHEN 'silver' THEN 12
+      ELSE 8
+    END;
+
+    -- Award XP to all non-destroyed slots that have a rig installed
+    UPDATE player_slots
+    SET xp = COALESCE(xp, 0) + v_xp_per_block
+    WHERE player_id = v_participant.player_id
+      AND NOT is_destroyed
+      AND player_rig_id IS NOT NULL;
+
+    -- === MATERIAL DROPS ===
+    v_drop_multiplier := CASE v_mining_block.block_type
+      WHEN 'gold' THEN 1.5
+      WHEN 'silver' THEN 1.2
+      ELSE 1.0
+    END;
+
+    v_materials_dropped := '[]'::JSONB;
+
+    FOR v_mat IN SELECT id, drop_chance, name, icon FROM materials LOOP
+      v_roll := RANDOM();
+      IF v_roll < (v_mat.drop_chance * v_drop_multiplier) THEN
+        INSERT INTO player_materials (player_id, material_id, quantity)
+        VALUES (v_participant.player_id, v_mat.id, 1)
+        ON CONFLICT (player_id, material_id)
+        DO UPDATE SET quantity = player_materials.quantity + 1;
+
+        v_materials_dropped := v_materials_dropped || jsonb_build_array(
+          jsonb_build_object('id', v_mat.id, 'name', v_mat.name, 'icon', v_mat.icon)
+        );
+      END IF;
+    END LOOP;
+
     -- Crear entrada en pending_blocks
     INSERT INTO pending_blocks (
       block_id,
@@ -7648,6 +7823,7 @@ BEGIN
       shares_contributed,
       total_block_shares,
       share_percentage,
+      materials_dropped,
       created_at
     ) VALUES (
       NULL,
@@ -7658,8 +7834,10 @@ BEGIN
       v_participant.shares_count,
       v_mining_block.total_shares,
       v_share_percentage,
+      v_materials_dropped,
       NOW()
-    );
+    )
+    RETURNING id INTO v_pending_block_id;
 
     v_rewards_distributed := v_rewards_distributed + v_player_reward;
 
@@ -11577,3 +11755,637 @@ ALTER TABLE pending_blocks DROP COLUMN IF EXISTS is_pity;
 
 -- Eliminar función de reset de mining streak (ya no se usa)
 DROP FUNCTION IF EXISTS reset_mining_streak(UUID);
+
+-- =====================================================
+-- COOLING MODDING SYSTEM (RPG Enchanting con Gacha)
+-- =====================================================
+
+-- Obtener todos los componentes de cooling (para el Market)
+CREATE OR REPLACE FUNCTION get_cooling_components()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT id, name, description, tier, base_price,
+             cooling_power_min, cooling_power_max,
+             energy_cost_min, energy_cost_max,
+             durability_min, durability_max
+      FROM cooling_components
+      ORDER BY base_price ASC
+    ) t
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_cooling_components TO authenticated;
+
+-- Comprar un componente de cooling
+CREATE OR REPLACE FUNCTION buy_cooling_component(p_player_id UUID, p_component_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_component cooling_components%ROWTYPE;
+BEGIN
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  SELECT * INTO v_component FROM cooling_components WHERE id = p_component_id;
+  IF v_component IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Componente no encontrado');
+  END IF;
+
+  IF v_player.gamecoin_balance < v_component.base_price THEN
+    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+  END IF;
+
+  UPDATE players
+  SET gamecoin_balance = gamecoin_balance - v_component.base_price
+  WHERE id = p_player_id;
+
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'component_purchase', -v_component.base_price, 'gamecoin',
+          'Compra de componente: ' || v_component.name);
+
+  INSERT INTO player_inventory (player_id, item_type, item_id)
+  VALUES (p_player_id, 'component', p_component_id)
+  ON CONFLICT (player_id, item_type, item_id)
+  DO UPDATE SET quantity = player_inventory.quantity + 1;
+
+  RETURN json_build_object(
+    'success', true,
+    'item', row_to_json(v_component),
+    'new_balance', v_player.gamecoin_balance - v_component.base_price,
+    'message', 'Componente agregado al inventario'
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION buy_cooling_component TO authenticated;
+
+-- Obtener componentes del inventario del jugador (con rangos)
+CREATE OR REPLACE FUNCTION get_cooling_component_inventory(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT pi.id as inventory_id, pi.quantity,
+             cc.id, cc.name, cc.description, cc.tier, cc.base_price,
+             cc.cooling_power_min, cc.cooling_power_max,
+             cc.energy_cost_min, cc.energy_cost_max,
+             cc.durability_min, cc.durability_max
+      FROM player_inventory pi
+      JOIN cooling_components cc ON cc.id = pi.item_id
+      WHERE pi.player_id = p_player_id AND pi.item_type = 'component' AND pi.quantity > 0
+      ORDER BY cc.base_price ASC
+    ) t
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_cooling_component_inventory TO authenticated;
+
+-- Obtener cooling items modded del jugador
+CREATE OR REPLACE FUNCTION get_player_cooling_items(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT pci.id, pci.cooling_item_id, pci.mods, pci.mod_slots_used, pci.created_at,
+             ci.name, ci.description, ci.cooling_power, ci.energy_cost, ci.tier,
+             COALESCE(ci.max_mod_slots, 1) as max_mod_slots,
+             -- Calcular stats efectivos
+             ROUND(ci.cooling_power * (1 + COALESCE((
+               SELECT SUM((m->>'cooling_power_mod')::NUMERIC)
+               FROM jsonb_array_elements(pci.mods) m
+             ), 0) / 100.0), 2) as effective_cooling_power,
+             ROUND(ci.energy_cost * (1 + COALESCE((
+               SELECT SUM((m->>'energy_cost_mod')::NUMERIC)
+               FROM jsonb_array_elements(pci.mods) m
+             ), 0) / 100.0), 2) as effective_energy_cost,
+             ROUND(COALESCE((
+               SELECT SUM((m->>'durability_mod')::NUMERIC)
+               FROM jsonb_array_elements(pci.mods) m
+             ), 0), 2) as total_durability_mod
+      FROM player_cooling_items pci
+      JOIN cooling_items ci ON ci.id = pci.cooling_item_id
+      WHERE pci.player_id = p_player_id
+      ORDER BY pci.created_at DESC
+    ) t
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_player_cooling_items TO authenticated;
+
+-- Instalar un mod (componente) en un cooling item
+-- p_source_type: 'inventory' = cooling sin mods (en player_inventory), 'modded' = cooling ya modded (en player_cooling_items)
+-- p_cooling_item_id: cooling_items.id si source='inventory', player_cooling_items.id si source='modded'
+CREATE OR REPLACE FUNCTION install_cooling_mod(
+  p_player_id UUID,
+  p_cooling_item_id TEXT,
+  p_component_id TEXT,
+  p_source_type TEXT DEFAULT 'inventory'
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_component cooling_components%ROWTYPE;
+  v_component_inv player_inventory%ROWTYPE;
+  v_cooling cooling_items%ROWTYPE;
+  v_pci_id UUID;
+  v_pci player_cooling_items%ROWTYPE;
+  v_max_slots INTEGER;
+  v_current_slots INTEGER;
+  v_inv player_inventory%ROWTYPE;
+  -- Rolled values
+  v_roll_cooling NUMERIC;
+  v_roll_energy NUMERIC;
+  v_roll_durability NUMERIC;
+  v_new_mod JSONB;
+  v_quality TEXT;
+  v_quality_percent NUMERIC;
+BEGIN
+  -- Validar jugador
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- Validar componente existe
+  SELECT * INTO v_component FROM cooling_components WHERE id = p_component_id;
+  IF v_component IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Componente no encontrado');
+  END IF;
+
+  -- Validar componente en inventario
+  SELECT * INTO v_component_inv
+  FROM player_inventory
+  WHERE player_id = p_player_id AND item_type = 'component' AND item_id = p_component_id;
+
+  IF v_component_inv IS NULL OR v_component_inv.quantity <= 0 THEN
+    RETURN json_build_object('success', false, 'error', 'No tienes este componente');
+  END IF;
+
+  IF p_source_type = 'inventory' THEN
+    -- Cooling viene de player_inventory (sin mods aún)
+    -- p_cooling_item_id es el cooling_items.id (ej: 'fan_basic')
+    SELECT * INTO v_cooling FROM cooling_items WHERE id = p_cooling_item_id;
+    IF v_cooling IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Cooling no encontrado');
+    END IF;
+
+    -- Verificar que tiene este cooling en inventario
+    SELECT * INTO v_inv
+    FROM player_inventory
+    WHERE player_id = p_player_id AND item_type = 'cooling' AND item_id = p_cooling_item_id;
+
+    IF v_inv IS NULL OR v_inv.quantity <= 0 THEN
+      RETURN json_build_object('success', false, 'error', 'No tienes este cooling en inventario');
+    END IF;
+
+    v_max_slots := COALESCE(v_cooling.max_mod_slots, 1);
+
+    -- Individualizar: sacar 1 del inventario y crear en player_cooling_items
+    IF v_inv.quantity > 1 THEN
+      UPDATE player_inventory SET quantity = quantity - 1 WHERE id = v_inv.id;
+    ELSE
+      DELETE FROM player_inventory WHERE id = v_inv.id;
+    END IF;
+
+    INSERT INTO player_cooling_items (player_id, cooling_item_id, mods, mod_slots_used)
+    VALUES (p_player_id, p_cooling_item_id, '[]'::jsonb, 0)
+    RETURNING id INTO v_pci_id;
+
+    v_current_slots := 0;
+
+  ELSIF p_source_type = 'modded' THEN
+    -- Cooling ya está en player_cooling_items
+    -- p_cooling_item_id es el player_cooling_items.id (UUID como text)
+    SELECT * INTO v_pci
+    FROM player_cooling_items
+    WHERE id = p_cooling_item_id::UUID AND player_id = p_player_id;
+
+    IF v_pci IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Item modded no encontrado');
+    END IF;
+
+    SELECT * INTO v_cooling FROM cooling_items WHERE id = v_pci.cooling_item_id;
+    v_max_slots := COALESCE(v_cooling.max_mod_slots, 1);
+    v_current_slots := v_pci.mod_slots_used;
+    v_pci_id := v_pci.id;
+
+  ELSE
+    RETURN json_build_object('success', false, 'error', 'Tipo de fuente inválido');
+  END IF;
+
+  -- Validar slots disponibles
+  IF v_current_slots >= v_max_slots THEN
+    RETURN json_build_object('success', false, 'error', 'No hay slots disponibles');
+  END IF;
+
+  -- SORTEAR valores aleatorios (gacha!)
+  v_roll_cooling := ROUND(
+    v_component.cooling_power_min + (random() * (v_component.cooling_power_max - v_component.cooling_power_min))
+  , 1);
+  v_roll_energy := ROUND(
+    v_component.energy_cost_min + (random() * (v_component.energy_cost_max - v_component.energy_cost_min))
+  , 1);
+  v_roll_durability := ROUND(
+    v_component.durability_min + (random() * (v_component.durability_max - v_component.durability_min))
+  , 1);
+
+  -- Construir mod object
+  v_new_mod := jsonb_build_object(
+    'component_id', p_component_id,
+    'slot', v_current_slots + 1,
+    'cooling_power_mod', v_roll_cooling,
+    'energy_cost_mod', v_roll_energy,
+    'durability_mod', v_roll_durability
+  );
+
+  -- Instalar el mod
+  UPDATE player_cooling_items
+  SET mods = mods || v_new_mod,
+      mod_slots_used = mod_slots_used + 1
+  WHERE id = v_pci_id;
+
+  -- Consumir componente del inventario
+  IF v_component_inv.quantity > 1 THEN
+    UPDATE player_inventory SET quantity = quantity - 1 WHERE id = v_component_inv.id;
+  ELSE
+    DELETE FROM player_inventory WHERE id = v_component_inv.id;
+  END IF;
+
+  -- Calcular calidad del roll (basado en el stat principal del componente)
+  -- Usamos el stat con mayor rango como referencia
+  v_quality_percent := 50; -- default
+  IF (v_component.cooling_power_max - v_component.cooling_power_min) > 0 THEN
+    v_quality_percent := ((v_roll_cooling - v_component.cooling_power_min) /
+      (v_component.cooling_power_max - v_component.cooling_power_min)) * 100;
+  ELSIF (v_component.energy_cost_max - v_component.energy_cost_min) < 0 THEN
+    -- Para energy_cost, menos es mejor, así que invertimos
+    v_quality_percent := ((v_component.energy_cost_max - v_roll_energy) /
+      (v_component.energy_cost_max - v_component.energy_cost_min)) * 100;
+  ELSIF (v_component.durability_max - v_component.durability_min) > 0 THEN
+    v_quality_percent := ((v_roll_durability - v_component.durability_min) /
+      (v_component.durability_max - v_component.durability_min)) * 100;
+  END IF;
+
+  IF v_quality_percent >= 80 THEN v_quality := 'excellent';
+  ELSIF v_quality_percent >= 55 THEN v_quality := 'good';
+  ELSIF v_quality_percent >= 35 THEN v_quality := 'average';
+  ELSIF v_quality_percent >= 15 THEN v_quality := 'poor';
+  ELSE v_quality := 'terrible';
+  END IF;
+
+  -- Mission tracking
+  PERFORM update_mission_progress(p_player_id, 'install_mod', 1);
+
+  RETURN json_build_object(
+    'success', true,
+    'player_cooling_item_id', v_pci_id,
+    'mod', v_new_mod,
+    'quality', v_quality,
+    'quality_percent', ROUND(v_quality_percent, 1),
+    'component', row_to_json(v_component),
+    'cooling', row_to_json(v_cooling),
+    'slots_used', v_current_slots + 1,
+    'max_slots', v_max_slots
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION install_cooling_mod TO authenticated;
+
+-- =====================================================
+-- SLOT TIER & XP FUNCTIONS
+-- =====================================================
+
+-- Upgrade slot tier (requires accumulated XP)
+CREATE OR REPLACE FUNCTION upgrade_slot_tier(p_player_id UUID, p_slot_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_slot player_slots%ROWTYPE;
+  v_required_xp INTEGER;
+  v_new_tier TEXT;
+BEGIN
+  SELECT * INTO v_slot FROM player_slots
+  WHERE id = p_slot_id AND player_id = p_player_id AND NOT is_destroyed;
+
+  IF v_slot IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Slot not found');
+  END IF;
+
+  CASE COALESCE(v_slot.tier, 'basic')
+    WHEN 'basic' THEN v_new_tier := 'standard'; v_required_xp := 500;
+    WHEN 'standard' THEN v_new_tier := 'advanced'; v_required_xp := 2000;
+    WHEN 'advanced' THEN v_new_tier := 'elite'; v_required_xp := 8000;
+    WHEN 'elite' THEN
+      RETURN json_build_object('success', false, 'error', 'Slot is already at max tier');
+    ELSE
+      RETURN json_build_object('success', false, 'error', 'Invalid tier');
+  END CASE;
+
+  IF COALESCE(v_slot.xp, 0) < v_required_xp THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', 'Insufficient XP',
+      'current_xp', COALESCE(v_slot.xp, 0),
+      'required_xp', v_required_xp
+    );
+  END IF;
+
+  UPDATE player_slots SET tier = v_new_tier WHERE id = p_slot_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'new_tier', v_new_tier,
+    'slot_number', v_slot.slot_number,
+    'xp', COALESCE(v_slot.xp, 0)
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION upgrade_slot_tier TO authenticated;
+
+-- =====================================================
+-- MATERIALS & FORGE FUNCTIONS
+-- =====================================================
+
+-- Get player materials
+CREATE OR REPLACE FUNCTION get_player_materials(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(json_build_object(
+      'material_id', pm.material_id,
+      'quantity', pm.quantity,
+      'name', m.name,
+      'rarity', m.rarity,
+      'icon', m.icon,
+      'drop_chance', m.drop_chance
+    ) ORDER BY
+      CASE m.rarity
+        WHEN 'common' THEN 1
+        WHEN 'uncommon' THEN 2
+        WHEN 'rare' THEN 3
+        WHEN 'epic' THEN 4
+      END
+    ), '[]'::JSON)
+    FROM player_materials pm
+    JOIN materials m ON m.id = pm.material_id
+    WHERE pm.player_id = p_player_id AND pm.quantity > 0
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_player_materials TO authenticated;
+
+-- Get all forge recipes with ingredients
+CREATE OR REPLACE FUNCTION get_forge_recipes()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(json_build_object(
+      'id', fr.id,
+      'name', fr.name,
+      'category', fr.category,
+      'result_type', fr.result_type,
+      'result_id', fr.result_id,
+      'result_value', fr.result_value,
+      'tier', fr.tier,
+      'icon', fr.icon,
+      'ingredients', (
+        SELECT COALESCE(json_agg(json_build_object(
+          'material_id', fri.material_id,
+          'quantity', fri.quantity,
+          'material_name', m.name,
+          'material_icon', m.icon,
+          'material_rarity', m.rarity
+        )), '[]'::JSON)
+        FROM forge_recipe_ingredients fri
+        JOIN materials m ON m.id = fri.material_id
+        WHERE fri.recipe_id = fr.id
+      )
+    ) ORDER BY
+      CASE fr.category
+        WHEN 'tier_kit' THEN 1
+        WHEN 'rig_enhancement' THEN 2
+        WHEN 'cooling' THEN 3
+        WHEN 'utility' THEN 4
+      END,
+      CASE fr.tier
+        WHEN 'basic' THEN 1
+        WHEN 'standard' THEN 2
+        WHEN 'advanced' THEN 3
+        WHEN 'elite' THEN 4
+      END
+    ), '[]'::JSON)
+    FROM forge_recipes fr
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_forge_recipes TO authenticated;
+
+-- Main crafting function
+CREATE OR REPLACE FUNCTION forge_craft_item(
+  p_player_id UUID,
+  p_recipe_id TEXT,
+  p_target_slot_id UUID DEFAULT NULL,
+  p_target_rig_id UUID DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_recipe forge_recipes%ROWTYPE;
+  v_ingredient RECORD;
+  v_player_qty INTEGER;
+  v_slot player_slots%ROWTYPE;
+  v_rig player_rigs%ROWTYPE;
+BEGIN
+  -- Get recipe
+  SELECT * INTO v_recipe FROM forge_recipes WHERE id = p_recipe_id;
+  IF v_recipe IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Recipe not found');
+  END IF;
+
+  -- Validate all ingredients are available
+  FOR v_ingredient IN
+    SELECT fri.material_id, fri.quantity, m.name as material_name
+    FROM forge_recipe_ingredients fri
+    JOIN materials m ON m.id = fri.material_id
+    WHERE fri.recipe_id = p_recipe_id
+  LOOP
+    SELECT COALESCE(quantity, 0) INTO v_player_qty
+    FROM player_materials
+    WHERE player_id = p_player_id AND material_id = v_ingredient.material_id;
+
+    IF COALESCE(v_player_qty, 0) < v_ingredient.quantity THEN
+      RETURN json_build_object(
+        'success', false,
+        'error', 'Insufficient materials',
+        'missing_material', v_ingredient.material_name,
+        'required', v_ingredient.quantity,
+        'available', COALESCE(v_player_qty, 0)
+      );
+    END IF;
+  END LOOP;
+
+  -- Deduct all ingredients
+  FOR v_ingredient IN
+    SELECT material_id, quantity FROM forge_recipe_ingredients WHERE recipe_id = p_recipe_id
+  LOOP
+    UPDATE player_materials
+    SET quantity = quantity - v_ingredient.quantity
+    WHERE player_id = p_player_id AND material_id = v_ingredient.material_id;
+  END LOOP;
+
+  -- Apply result based on type
+  IF v_recipe.result_type = 'xp_grant' THEN
+    -- Tier Kit: Grant XP to target slot
+    IF p_target_slot_id IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Target slot required for tier kit');
+    END IF;
+
+    SELECT * INTO v_slot FROM player_slots
+    WHERE id = p_target_slot_id AND player_id = p_player_id AND NOT is_destroyed;
+
+    IF v_slot IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Slot not found');
+    END IF;
+
+    UPDATE player_slots
+    SET xp = COALESCE(xp, 0) + v_recipe.result_value::INTEGER
+    WHERE id = p_target_slot_id;
+
+    RETURN json_build_object(
+      'success', true,
+      'type', 'xp_grant',
+      'xp_granted', v_recipe.result_value,
+      'slot_number', v_slot.slot_number,
+      'new_xp', COALESCE(v_slot.xp, 0) + v_recipe.result_value::INTEGER
+    );
+
+  ELSIF v_recipe.result_type = 'rig_boost' THEN
+    -- Rig Enhancement: Apply permanent boost
+    IF p_target_rig_id IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Target rig required for enhancement');
+    END IF;
+
+    SELECT * INTO v_rig FROM player_rigs
+    WHERE id = p_target_rig_id AND player_id = p_player_id;
+
+    IF v_rig IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Rig not found');
+    END IF;
+
+    IF p_recipe_id = 'hashrate_booster' THEN
+      UPDATE player_rigs
+      SET hashrate_level = LEAST(5, hashrate_level + 1)
+      WHERE id = p_target_rig_id;
+    ELSIF p_recipe_id = 'efficiency_module' THEN
+      UPDATE player_rigs
+      SET efficiency_level = LEAST(5, efficiency_level + 1)
+      WHERE id = p_target_rig_id;
+    ELSIF p_recipe_id = 'thermal_paste_pro' THEN
+      UPDATE player_rigs
+      SET thermal_level = LEAST(5, thermal_level + 1)
+      WHERE id = p_target_rig_id;
+    END IF;
+
+    RETURN json_build_object(
+      'success', true,
+      'type', 'rig_boost',
+      'boost_type', p_recipe_id,
+      'boost_value', v_recipe.result_value
+    );
+
+  ELSIF v_recipe.result_type = 'cooling_component' THEN
+    -- Add cooling component to player inventory
+    INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+    VALUES (p_player_id, 'component', v_recipe.result_id, 1)
+    ON CONFLICT (player_id, item_type, item_id)
+    DO UPDATE SET quantity = player_inventory.quantity + 1;
+
+    RETURN json_build_object(
+      'success', true,
+      'type', 'cooling_component',
+      'component_id', v_recipe.result_id
+    );
+
+  ELSIF v_recipe.result_type = 'slot_buff' THEN
+    IF p_recipe_id = 'durability_shield' THEN
+      -- +1 extra use to a slot
+      IF p_target_slot_id IS NULL THEN
+        RETURN json_build_object('success', false, 'error', 'Target slot required');
+      END IF;
+
+      SELECT * INTO v_slot FROM player_slots
+      WHERE id = p_target_slot_id AND player_id = p_player_id AND NOT is_destroyed;
+
+      IF v_slot IS NULL THEN
+        RETURN json_build_object('success', false, 'error', 'Slot not found');
+      END IF;
+
+      UPDATE player_slots
+      SET max_uses = max_uses + 1, uses_remaining = uses_remaining + 1
+      WHERE id = p_target_slot_id;
+
+      RETURN json_build_object(
+        'success', true,
+        'type', 'durability_shield',
+        'slot_number', v_slot.slot_number,
+        'new_max_uses', v_slot.max_uses + 1
+      );
+
+    ELSIF p_recipe_id = 'slot_protector' THEN
+      -- Slot Protector goes to inventory for later use
+      INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+      VALUES (p_player_id, 'slot_protector', 'slot_protector', 1)
+      ON CONFLICT (player_id, item_type, item_id)
+      DO UPDATE SET quantity = player_inventory.quantity + 1;
+
+      RETURN json_build_object(
+        'success', true,
+        'type', 'slot_protector'
+      );
+    END IF;
+  END IF;
+
+  RETURN json_build_object('success', false, 'error', 'Unknown recipe type');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION forge_craft_item TO authenticated;

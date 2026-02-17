@@ -104,7 +104,7 @@ function getCategoryIcon(category: typeof activeFilter.value): string {
 // Confirmation dialog state
 const showConfirm = ref(false);
 const confirmAction = ref<{
-  type: 'rig' | 'cooling' | 'card' | 'boost' | 'crypto_package';
+  type: 'rig' | 'cooling' | 'card' | 'boost' | 'crypto_package' | 'component';
   id: string;
   name: string;
   price: number;
@@ -304,6 +304,77 @@ function getCryptoPackageDescription(id: string): string {
   return pkg?.description ?? '';
 }
 
+// Component helpers
+const coolingComponents = computed(() => marketStore.coolingComponents);
+
+function getComponentName(id: string): string {
+  const key = `market.items.components.${id}.name`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  const comp = coolingComponents.value.find(c => c.id === id);
+  return comp?.name ?? id;
+}
+
+function getComponentDescription(id: string): string {
+  const key = `market.items.components.${id}.description`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  const comp = coolingComponents.value.find(c => c.id === id);
+  return comp?.description ?? '';
+}
+
+function getComponentOwned(id: string): number {
+  return marketStore.getComponentOwned(id);
+}
+
+function formatRange(min: number, max: number): string {
+  if (min === 0 && max === 0) return '';
+  const sMin = min > 0 ? `+${min}%` : `${min}%`;
+  const sMax = max > 0 ? `+${max}%` : `${max}%`;
+  return `${sMin} to ${sMax}`;
+}
+
+function rangeColor(min: number, max: number, isInverse = false): string {
+  if (isInverse) {
+    if (max <= 0) return 'text-emerald-400';
+    if (min >= 0) return 'text-rose-400';
+    return 'text-amber-400';
+  }
+  if (min >= 0) return 'text-emerald-400';
+  if (max <= 0) return 'text-rose-400';
+  return 'text-amber-400';
+}
+
+function requestBuyComponent(comp: { id: string; base_price: number; tier: string }) {
+  confirmAction.value = {
+    type: 'component',
+    id: comp.id,
+    name: getComponentName(comp.id),
+    price: comp.base_price,
+    description: `${comp.tier} component`,
+    currency: 'gamecoin',
+  };
+  showConfirm.value = true;
+}
+
+async function buyComponent(componentId: string) {
+  if (!authStore.player) return;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
+
+  const result = await marketStore.buyCoolingComponent(componentId);
+
+  if (result.success) {
+    closeProcessingModal();
+    toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
+    emit('purchased');
+  } else {
+    processingStatus.value = 'error';
+    processingError.value = result.error ?? t('market.processing.errorBuyingCooling');
+  }
+}
+
 async function loadData() {
   await marketStore.loadData();
 }
@@ -490,6 +561,8 @@ async function confirmPurchase() {
     await buyBoost(id);
   } else if (type === 'crypto_package') {
     await buyCryptoPackage(id);
+  } else if (type === 'component') {
+    await buyComponent(id);
   }
 
   confirmAction.value = null;
@@ -749,6 +822,76 @@ watch(() => props.show, (newVal) => {
                       :disabled="purchaseDisabled || balance < item.base_price"
                     >
                       {{ buying ? '...' : `${formatNumber(item.base_price)} 🪙` }}
+                    </button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Cooling Components -->
+              <template v-if="(activeFilter === 'all' || activeFilter === 'cooling') && coolingComponents.length > 0">
+                <!-- Section header within grid -->
+                <div v-if="activeFilter === 'cooling'" class="col-span-full">
+                  <div class="flex items-center gap-2 mb-1 mt-2">
+                    <span class="text-sm">🧩</span>
+                    <span class="text-sm font-medium text-text-muted">{{ t('market.components.title') }}</span>
+                  </div>
+                  <p class="text-[10px] sm:text-xs text-text-muted/70 mb-2">{{ t('market.components.description') }}</p>
+                </div>
+                <div
+                  v-for="comp in coolingComponents"
+                  :key="'comp-' + comp.id"
+                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col bg-bg-secondary transition-all hover:scale-[1.01]"
+                  :class="getTierBorder(comp.tier)"
+                >
+                  <div class="flex items-start justify-between mb-1.5 sm:mb-2">
+                    <div class="min-w-0 flex-1">
+                      <h4 class="font-medium text-xs sm:text-sm truncate">{{ getComponentName(comp.id) }}</h4>
+                      <p class="text-[10px] sm:text-xs uppercase" :class="getTierColor(comp.tier)">{{ comp.tier }}</p>
+                    </div>
+                    <span class="text-lg sm:text-2xl ml-1">🧩</span>
+                  </div>
+
+                  <!-- Stat Ranges -->
+                  <div class="space-y-1 mb-1 sm:mb-2 text-[10px] sm:text-xs">
+                    <div v-if="comp.cooling_power_min !== 0 || comp.cooling_power_max !== 0" class="flex items-center justify-between">
+                      <span class="text-text-muted">❄️ {{ t('market.components.coolingPower') }}</span>
+                      <span :class="rangeColor(comp.cooling_power_min, comp.cooling_power_max)">
+                        {{ formatRange(comp.cooling_power_min, comp.cooling_power_max) }}
+                      </span>
+                    </div>
+                    <div v-if="comp.energy_cost_min !== 0 || comp.energy_cost_max !== 0" class="flex items-center justify-between">
+                      <span class="text-text-muted">⚡ {{ t('market.components.energyCost') }}</span>
+                      <span :class="rangeColor(comp.energy_cost_min, comp.energy_cost_max, true)">
+                        {{ formatRange(comp.energy_cost_min, comp.energy_cost_max) }}
+                      </span>
+                    </div>
+                    <div v-if="comp.durability_min !== 0 || comp.durability_max !== 0" class="flex items-center justify-between">
+                      <span class="text-text-muted">🔧 {{ t('market.components.durability') }}</span>
+                      <span :class="rangeColor(comp.durability_min, comp.durability_max)">
+                        {{ formatRange(comp.durability_min, comp.durability_max) }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ getComponentDescription(comp.id) }}</p>
+
+                  <!-- Show owned quantity if any -->
+                  <div v-if="getComponentOwned(comp.id) > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
+                    <span class="px-1.5 sm:px-2 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-400">
+                      {{ getComponentOwned(comp.id) }} {{ t('market.cooling.inventory') }}
+                    </span>
+                  </div>
+
+                  <div class="mt-auto">
+                    <button
+                      @click="requestBuyComponent(comp)"
+                      class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
+                      :class="balance >= comp.base_price
+                        ? 'bg-fuchsia-500 text-white hover:bg-fuchsia-400'
+                        : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
+                      :disabled="purchaseDisabled || balance < comp.base_price"
+                    >
+                      {{ buying ? '...' : `${formatNumber(comp.base_price)} 🪙` }}
                     </button>
                   </div>
                 </div>

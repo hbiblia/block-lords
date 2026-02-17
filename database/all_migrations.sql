@@ -927,6 +927,166 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- =====================================================
+-- COOLING MODDING SYSTEM (RPG Enchanting con Gacha)
+-- =====================================================
+
+-- Tabla de componentes de cooling (items que se instalan en cooling)
+CREATE TABLE IF NOT EXISTS cooling_components (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  tier TEXT NOT NULL CHECK (tier IN ('basic', 'standard', 'advanced', 'elite')),
+  base_price NUMERIC NOT NULL CHECK (base_price > 0),
+  cooling_power_min NUMERIC DEFAULT 0,
+  cooling_power_max NUMERIC DEFAULT 0,
+  energy_cost_min NUMERIC DEFAULT 0,
+  energy_cost_max NUMERIC DEFAULT 0,
+  durability_min NUMERIC DEFAULT 0,
+  durability_max NUMERIC DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Mod slots por tier en cooling_items
+ALTER TABLE cooling_items ADD COLUMN IF NOT EXISTS max_mod_slots INTEGER DEFAULT 1;
+
+-- Items de cooling individuales con mods instalados
+-- Se crean cuando un cooling del inventario recibe su primer mod
+CREATE TABLE IF NOT EXISTS player_cooling_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  cooling_item_id TEXT NOT NULL REFERENCES cooling_items(id),
+  mods JSONB DEFAULT '[]'::jsonb,
+  mod_slots_used INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_cooling_items_player ON player_cooling_items(player_id);
+
+-- Referencia en rig_cooling para cooling items modded
+ALTER TABLE rig_cooling ADD COLUMN IF NOT EXISTS player_cooling_item_id UUID REFERENCES player_cooling_items(id) ON DELETE SET NULL;
+
+-- RLS para cooling_components (lectura pública para autenticados)
+ALTER TABLE cooling_components ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY "cooling_components_select"
+    ON cooling_components FOR SELECT TO authenticated
+    USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- RLS para player_cooling_items (solo dueño)
+ALTER TABLE player_cooling_items ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY "player_cooling_items_select"
+    ON player_cooling_items FOR SELECT TO authenticated
+    USING (player_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- =====================================================
+-- 12. SLOT TIER & XP SYSTEM
+-- =====================================================
+
+-- Agregar tier y xp a player_slots
+ALTER TABLE player_slots ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'basic'
+  CHECK (tier IN ('basic', 'standard', 'advanced', 'elite'));
+ALTER TABLE player_slots ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0;
+
+-- =====================================================
+-- 13. MATERIALS & FORGE SYSTEM
+-- =====================================================
+
+-- Tabla de materiales base
+CREATE TABLE IF NOT EXISTS materials (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  rarity TEXT NOT NULL CHECK (rarity IN ('common', 'uncommon', 'rare', 'epic')),
+  drop_chance NUMERIC NOT NULL CHECK (drop_chance > 0 AND drop_chance <= 1),
+  icon TEXT DEFAULT '🔩',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Materiales del jugador (inventario de materiales)
+CREATE TABLE IF NOT EXISTS player_materials (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  material_id TEXT NOT NULL REFERENCES materials(id),
+  quantity INTEGER DEFAULT 0 CHECK (quantity >= 0),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(player_id, material_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_materials_player ON player_materials(player_id);
+
+-- Recetas de la forja
+CREATE TABLE IF NOT EXISTS forge_recipes (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('tier_kit', 'rig_enhancement', 'cooling', 'utility')),
+  result_type TEXT NOT NULL,
+  result_id TEXT,
+  result_value NUMERIC DEFAULT 0,
+  tier TEXT DEFAULT 'basic' CHECK (tier IN ('basic', 'standard', 'advanced', 'elite')),
+  icon TEXT DEFAULT '🔨',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ingredientes de recetas
+CREATE TABLE IF NOT EXISTS forge_recipe_ingredients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipe_id TEXT NOT NULL REFERENCES forge_recipes(id) ON DELETE CASCADE,
+  material_id TEXT NOT NULL REFERENCES materials(id),
+  quantity INTEGER NOT NULL CHECK (quantity > 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_forge_recipe_ingredients_recipe ON forge_recipe_ingredients(recipe_id);
+
+-- Materiales dropeados en pending_blocks (para notificaciones)
+ALTER TABLE pending_blocks ADD COLUMN IF NOT EXISTS materials_dropped JSONB DEFAULT '[]';
+
+-- RLS para materials (lectura pública)
+ALTER TABLE materials ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY "materials_select"
+    ON materials FOR SELECT TO authenticated
+    USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- RLS para player_materials (solo dueño)
+ALTER TABLE player_materials ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY "player_materials_select"
+    ON player_materials FOR SELECT TO authenticated
+    USING (player_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- RLS para forge_recipes (lectura pública)
+ALTER TABLE forge_recipes ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY "forge_recipes_select"
+    ON forge_recipes FOR SELECT TO authenticated
+    USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- RLS para forge_recipe_ingredients (lectura pública)
+ALTER TABLE forge_recipe_ingredients ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY "forge_recipe_ingredients_select"
+    ON forge_recipe_ingredients FOR SELECT TO authenticated
+    USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- =====================================================
 -- NOTA: Las funciones están en all_functions.sql
 -- NOTA: Las políticas RLS están en all_rls_policies.sql
 -- =====================================================

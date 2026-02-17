@@ -92,6 +92,14 @@ interface CoolingItem {
   name: string;
   cooling_power: number;
   energy_cost: number;
+  // Modding system
+  player_cooling_item_id?: string;
+  mods?: Array<{ component_id: string; slot: number; cooling_power_mod: number; energy_cost_mod: number; durability_mod: number }>;
+  mod_slots_used?: number;
+  max_mod_slots?: number;
+  effective_cooling_power?: number;
+  effective_energy_cost?: number;
+  total_durability_mod?: number;
 }
 
 interface ActiveBoost {
@@ -125,6 +133,8 @@ interface SlotData {
   has_rig: boolean;
   player_rig_id: string | null;
   rig_name: string | null;
+  tier: string;
+  xp: number;
 }
 
 interface SlotInfo {

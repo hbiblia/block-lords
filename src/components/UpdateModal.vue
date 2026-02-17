@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '2.2.3';
+const CURRENT_VERSION = '2.3.0';
 const STORAGE_KEY = 'lootmine-last-seen-version';
 
 const route = useRoute();
@@ -63,60 +63,12 @@ function closeModal() {
 
         <!-- Contenido scrollable -->
         <div class="space-y-3 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- Cap de mejoras al 50% -->
+          <!-- Cooling Workshop / Modding System -->
           <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
             <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>⚙️</span> {{ t('updateModal.upgradeCap.title') }}
+              <span>🧪</span> {{ t('updateModal.coolingWorkshop.title') }}
             </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.upgradeCap.description')"></p>
-          </div>
-
-          <!-- Durabilidad de slots -->
-          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
-            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>🔋</span> {{ t('updateModal.slotDurability.title') }}
-            </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.slotDurability.description')"></p>
-          </div>
-
-          <!-- Confirmación de recarga -->
-          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
-            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>🔐</span> {{ t('updateModal.cardConfirmCode.title') }}
-            </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.cardConfirmCode.description')"></p>
-          </div>
-
-          <!-- Info de recursos en inventario -->
-          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
-            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>📦</span> {{ t('updateModal.inventoryResources.title') }}
-            </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.inventoryResources.description')"></p>
-          </div>
-
-          <!-- Precio de slots RON -->
-          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
-            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>🔷</span> {{ t('updateModal.slotPrice.title') }}
-            </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.slotPrice.description')"></p>
-          </div>
-
-          <!-- Contador de reparaciones -->
-          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
-            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>🔧</span> {{ t('updateModal.repairCounter.title') }}
-            </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.repairCounter.description')"></p>
-          </div>
-
-          <!-- Aumento de recompensas de bloques -->
-          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
-            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>💰</span> {{ t('updateModal.blockRewards.title') }}
-            </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.blockRewards.description')"></p>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.coolingWorkshop.description')"></p>
           </div>
 
         </div>

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { getPlayerInventory, getPlayerBoosts, getPlayerRigInventory, installRigFromInventory } from '@/utils/api';
+import { getPlayerInventory, getPlayerBoosts, getPlayerRigInventory, installRigFromInventory, getPlayerMaterials } from '@/utils/api';
 import { useAuthStore } from './auth';
 import { playSound } from '@/utils/sounds';
 
@@ -26,6 +26,49 @@ export interface CoolingItem {
   energy_cost: number;
   base_price: number;
   tier: string;
+  max_mod_slots: number;
+}
+
+export interface ModdedCoolingItem {
+  player_cooling_item_id: string;
+  cooling_item_id: string;
+  mods: CoolingMod[];
+  mod_slots_used: number;
+  max_mod_slots: number;
+  created_at: string;
+  name: string;
+  description: string;
+  cooling_power: number;
+  energy_cost: number;
+  base_price: number;
+  tier: string;
+  effective_cooling_power: number;
+  effective_energy_cost: number;
+  total_durability_mod: number;
+}
+
+export interface CoolingMod {
+  component_id: string;
+  slot: number;
+  cooling_power_mod: number;
+  energy_cost_mod: number;
+  durability_mod: number;
+}
+
+export interface CoolingComponentItem {
+  inventory_id: string;
+  quantity: number;
+  id: string;
+  name: string;
+  description: string;
+  tier: string;
+  base_price: number;
+  cooling_power_min: number;
+  cooling_power_max: number;
+  energy_cost_min: number;
+  energy_cost_max: number;
+  durability_min: number;
+  durability_max: number;
 }
 
 export interface CardItem {
@@ -64,12 +107,24 @@ export interface ActiveBoost {
   seconds_remaining: number;
 }
 
+export interface MaterialItem {
+  material_id: string;
+  quantity: number;
+  name: string;
+  rarity: 'common' | 'uncommon' | 'rare' | 'epic';
+  icon: string;
+  drop_chance: number;
+}
+
 export const useInventoryStore = defineStore('inventory', () => {
   const rigItems = ref<RigItem[]>([]);
   const coolingItems = ref<CoolingItem[]>([]);
+  const moddedCoolingItems = ref<ModdedCoolingItem[]>([]);
+  const componentItems = ref<CoolingComponentItem[]>([]);
   const cardItems = ref<CardItem[]>([]);
   const boostItems = ref<BoostItem[]>([]);
   const activeBoosts = ref<ActiveBoost[]>([]);
+  const materialItems = ref<MaterialItem[]>([]);
 
   const loading = ref(false);
   const installing = ref(false);
@@ -88,6 +143,8 @@ export const useInventoryStore = defineStore('inventory', () => {
     rigItems.value.reduce((sum, r) => sum + r.quantity, 0) +
     cardItems.value.length +
     coolingItems.value.length +
+    moddedCoolingItems.value.length +
+    componentItems.value.reduce((sum, c) => sum + c.quantity, 0) +
     boostItems.value.length
   );
 
@@ -119,10 +176,10 @@ export const useInventoryStore = defineStore('inventory', () => {
       const playerId = authStore.player.id;
 
       // Fetch all data in parallel with individual error handling
-      const [inventoryData, boostData, rigData] = await Promise.all([
+      const [inventoryData, boostData, rigData, materialsData] = await Promise.all([
         getPlayerInventory(playerId).catch(e => {
           console.error('Error fetching inventory:', e);
-          return { cards: [], cooling: [] };
+          return { cards: [], cooling: [], modded_cooling: [], components: [] };
         }),
         getPlayerBoosts(playerId).catch(e => {
           console.error('Error fetching boosts:', e);
@@ -132,13 +189,20 @@ export const useInventoryStore = defineStore('inventory', () => {
           console.error('Error fetching rig inventory:', e);
           return [];
         }),
+        getPlayerMaterials(playerId).catch(e => {
+          console.error('Error fetching materials:', e);
+          return [];
+        }),
       ]);
 
       cardItems.value = inventoryData?.cards || [];
       coolingItems.value = inventoryData?.cooling || [];
+      moddedCoolingItems.value = inventoryData?.modded_cooling || [];
+      componentItems.value = inventoryData?.components || [];
       boostItems.value = boostData?.inventory || [];
       activeBoosts.value = boostData?.active || [];
       rigItems.value = rigData || [];
+      materialItems.value = materialsData || [];
 
       loaded.value = true;
       lastLoadTime.value = Date.now();
@@ -189,9 +253,12 @@ export const useInventoryStore = defineStore('inventory', () => {
   function clear() {
     rigItems.value = [];
     coolingItems.value = [];
+    moddedCoolingItems.value = [];
+    componentItems.value = [];
     cardItems.value = [];
     boostItems.value = [];
     activeBoosts.value = [];
+    materialItems.value = [];
     loaded.value = false;
     lastLoadTime.value = 0;
   }
@@ -199,9 +266,12 @@ export const useInventoryStore = defineStore('inventory', () => {
   return {
     rigItems,
     coolingItems,
+    moddedCoolingItems,
+    componentItems,
     cardItems,
     boostItems,
     activeBoosts,
+    materialItems,
     loading,
     installing,
     loaded,

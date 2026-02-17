@@ -44,6 +44,21 @@ interface CoolingItem {
   tier: string;
 }
 
+interface ModdedCoolingItem {
+  player_cooling_item_id: string;
+  cooling_item_id: string;
+  name: string;
+  cooling_power: number;
+  energy_cost: number;
+  tier: string;
+  mods: Array<{ component_id: string; slot: number; cooling_power_mod: number; energy_cost_mod: number; durability_mod: number }>;
+  mod_slots_used: number;
+  max_mod_slots: number;
+  effective_cooling_power: number;
+  effective_energy_cost: number;
+  total_durability_mod: number;
+}
+
 interface InstalledCooling {
   id: string;
   cooling_item_id: string;
@@ -51,6 +66,14 @@ interface InstalledCooling {
   name: string;
   cooling_power: number;
   energy_cost: number;
+  // Mod fields
+  player_cooling_item_id?: string;
+  mods?: Array<{ component_id: string; slot: number; cooling_power_mod: number; energy_cost_mod: number; durability_mod: number }>;
+  mod_slots_used?: number;
+  max_mod_slots?: number;
+  effective_cooling_power?: number;
+  effective_energy_cost?: number;
+  total_durability_mod?: number;
 }
 
 interface BoostItem {
@@ -108,6 +131,7 @@ const processing = ref(false);
 
 // Inventory cooling items
 const coolingItems = ref<CoolingItem[]>([]);
+const moddedCoolingItems = ref<ModdedCoolingItem[]>([]);
 // Installed cooling on this rig
 const installedCooling = ref<InstalledCooling[]>([]);
 
@@ -135,6 +159,7 @@ const confirmAction = ref<{
     coolingName?: string;
     coolingPower?: number;
     coolingDurability?: number;
+    playerCoolingItemId?: string;
     boostId?: string;
     boostName?: string;
     boostEffect?: string;
@@ -227,6 +252,7 @@ async function loadData() {
     ]);
 
     coolingItems.value = inventory.cooling || [];
+    moddedCoolingItems.value = inventory.modded_cooling || [];
     installedCooling.value = cooling || [];
     boostItems.value = playerBoosts?.inventory || [];
     installedBoosts.value = rigBoosts || [];
@@ -392,9 +418,12 @@ const canAffordRepair = computed(() => {
   return (authStore.player.gamecoin_balance ?? 0) >= repairCost.value;
 });
 
-// Total cooling power installed (considering durability)
+// Total cooling power installed (considering durability and mods)
 const totalCoolingPower = computed(() => {
-  return installedCooling.value.reduce((sum, c) => sum + (c.cooling_power * c.durability / 100), 0);
+  return installedCooling.value.reduce((sum, c) => {
+    const power = c.effective_cooling_power ?? c.cooling_power;
+    return sum + (power * c.durability / 100);
+  }, 0);
 });
 
 // Coolant boost multiplier from active power-up (e.g. coolant_injection -60% => tempMult = 0.4)
@@ -694,10 +723,11 @@ function getCoolantImpactText(boost: InstalledBoost): string {
   const conditionPenalty = condition / 100;
   const hashrateRatio = tempPenalty * conditionPenalty;
 
-  // Total cooling power from installed cooling items
+  // Total cooling power from installed cooling items (using effective values if modded)
   const totalCoolingPower = installedCooling.value.reduce((sum, c) => {
+    const power = c.effective_cooling_power ?? c.cooling_power;
     const eff = c.durability >= 50 ? c.durability / 100 : (c.durability / 100) * (c.durability / 50);
-    return sum + c.cooling_power * eff;
+    return sum + power * eff;
   }, 0);
 
   // Thermal bonus from rig upgrades (percentage)
@@ -706,13 +736,13 @@ function getCoolantImpactText(boost: InstalledBoost): string {
   // Calculate heat generation WITHOUT this coolant (temp_mult = 1.0)
   let heatWithout: number;
   let baseHeat: number;
-  
+
   if (totalCoolingPower <= 0) {
     baseHeat = Math.min(pc * hashrateRatio * 1.0, 15);
   } else {
     baseHeat = pc * hashrateRatio * 0.8;
   }
-  
+
   const heatAfterUpgrade = baseHeat * (1 - thermalBonusPercent / 100);
   heatWithout = Math.max(0, heatAfterUpgrade - totalCoolingPower);
 
@@ -738,8 +768,9 @@ function getCoolantImpactTooltip(boost: InstalledBoost) {
   const hashrateRatio = tempPenalty * conditionPenalty;
 
   const coolingPower = installedCooling.value.reduce((sum, c) => {
+    const power = c.effective_cooling_power ?? c.cooling_power;
     const eff = c.durability >= 50 ? c.durability / 100 : (c.durability / 100) * (c.durability / 50);
-    return sum + c.cooling_power * eff;
+    return sum + power * eff;
   }, 0);
 
   // Thermal bonus from rig upgrades (percentage)
@@ -811,6 +842,41 @@ function getBoostName(id: string, fallbackName?: string): string {
   return fallbackName ?? id;
 }
 
+function getComponentName(id: string): string {
+  const key = `market.items.components.${id}.name`;
+  const translated = t(key);
+  return translated !== key ? translated : id;
+}
+
+function getEffectiveCoolingPower(cooling: InstalledCooling): number {
+  if (cooling.effective_cooling_power != null) {
+    return cooling.effective_cooling_power;
+  }
+  return cooling.cooling_power;
+}
+
+function getEffectiveEnergyCost(cooling: InstalledCooling): number {
+  if (cooling.effective_energy_cost != null) {
+    return cooling.effective_energy_cost;
+  }
+  return cooling.energy_cost;
+}
+
+// === SLOT TIER SYSTEM ===
+
+const currentSlot = computed(() => {
+  if (!props.rig) return null;
+  const slots = miningStore.slotInfo?.slots || [];
+  return slots.find(s => s.player_rig_id === props.rig!.id) ?? null;
+});
+
+const TIER_ORDER = ['basic', 'standard', 'advanced', 'elite'];
+
+function canInstallCoolingTier(coolingTier: string): boolean {
+  const slotTier = currentSlot.value?.tier ?? 'basic';
+  return TIER_ORDER.indexOf(coolingTier) <= TIER_ORDER.indexOf(slotTier);
+}
+
 // Request actions
 function requestInstallCooling(cooling: CoolingItem) {
   confirmAction.value = {
@@ -819,6 +885,19 @@ function requestInstallCooling(cooling: CoolingItem) {
       coolingId: cooling.id,
       coolingName: getCoolingName(cooling.id),
       coolingPower: cooling.cooling_power,
+    },
+  };
+  showConfirm.value = true;
+}
+
+function requestInstallModdedCooling(cooling: ModdedCoolingItem) {
+  confirmAction.value = {
+    type: 'install',
+    data: {
+      coolingId: cooling.cooling_item_id,
+      coolingName: getCoolingName(cooling.cooling_item_id, cooling.name),
+      coolingPower: cooling.effective_cooling_power,
+      playerCoolingItemId: cooling.player_cooling_item_id,
     },
   };
   showConfirm.value = true;
@@ -959,7 +1038,7 @@ async function confirmUse() {
     let result;
 
     if (type === 'install' && data.coolingId) {
-      result = await installCoolingToRig(authStore.player.id, props.rig.id, data.coolingId);
+      result = await installCoolingToRig(authStore.player.id, props.rig.id, data.coolingId, data.playerCoolingItemId);
     } else if (type === 'boost' && data.boostId) {
       result = await installBoostToRig(authStore.player.id, props.rig.id, data.boostId);
     } else if (type === 'delete') {
@@ -1157,18 +1236,19 @@ function closeProcessingModal() {
                 <!-- Cooling effects -->
                 <div v-for="cooling in installedCooling" :key="'eff-cool-' + cooling.id"
                   v-tooltip="t('rigManage.tooltips.coolingEffect', {
-                    power: cooling.cooling_power,
+                    power: getEffectiveCoolingPower(cooling),
                     durability: cooling.durability.toFixed(0),
-                    effective: (cooling.cooling_power * cooling.durability / 100).toFixed(1),
-                    energy: cooling.energy_cost
+                    effective: (getEffectiveCoolingPower(cooling) * cooling.durability / 100).toFixed(1),
+                    energy: getEffectiveEnergyCost(cooling)
                   })"
                   class="flex items-center justify-between text-xs px-2 py-1 rounded bg-cyan-500/5 cursor-help">
                   <div class="flex items-center gap-1.5">
                     <span class="text-cyan-400">❄️</span>
                     <span class="text-cyan-300">{{ getCoolingName(cooling.cooling_item_id) }}</span>
+                    <span v-if="cooling.mods && cooling.mods.length > 0" class="text-[9px] text-fuchsia-400">🧩{{ cooling.mods.length }}</span>
                   </div>
                   <div class="flex items-center gap-2 font-mono">
-                    <span class="text-cyan-400">-{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</span>
+                    <span class="text-cyan-400">-{{ (getEffectiveCoolingPower(cooling) * cooling.durability / 100).toFixed(1) }}°</span>
                     <span class="text-[10px]" :class="cooling.durability < 30 ? 'text-status-danger' : cooling.durability < 60 ? 'text-status-warning' : 'text-text-muted/60'">
                       {{ cooling.durability.toFixed(0) }}%
                     </span>
@@ -1246,11 +1326,13 @@ function closeProcessingModal() {
                         <div class="flex-1 min-w-0">
                           <div class="font-medium text-cyan-400 text-sm flex items-center gap-1">
                             {{ getCoolingName(cooling.cooling_item_id, cooling.name) }}
+                            <span v-if="cooling.mods && cooling.mods.length > 0" class="px-1 py-0.5 rounded text-[9px] bg-fuchsia-500/30 text-fuchsia-300 border border-fuchsia-500/40">🧩 {{ cooling.mod_slots_used }}/{{ cooling.max_mod_slots }}</span>
                             <svg class="w-3 h-3 text-text-muted transition-transform" :class="expandedCoolingId === cooling.id ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                           </div>
                           <div class="flex items-center gap-3 text-xs mt-0.5">
-                            <span class="text-cyan-300 font-mono" v-tooltip="t('rigManage.coolingDetail.effectivePowerTip')">❄️ -{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</span>
-                            <span class="text-yellow-400/70 font-mono" v-tooltip="t('rigManage.coolingDetail.energyCostTip')">⚡{{ (cooling.energy_cost * cooling.durability / 100).toFixed(1) }}/t</span>
+                            <span class="text-cyan-300 font-mono" v-tooltip="t('rigManage.coolingDetail.effectivePowerTip')">❄️ -{{ (getEffectiveCoolingPower(cooling) * cooling.durability / 100).toFixed(1) }}°</span>
+                            <span class="text-yellow-400/70 font-mono" v-tooltip="t('rigManage.coolingDetail.energyCostTip')">⚡{{ (getEffectiveEnergyCost(cooling) * cooling.durability / 100).toFixed(1) }}/t</span>
+                            <span v-if="cooling.total_durability_mod" class="font-mono text-[10px]" :class="cooling.total_durability_mod > 0 ? 'text-emerald-400/70' : 'text-rose-400/70'">🔧{{ cooling.total_durability_mod > 0 ? '+' : '' }}{{ cooling.total_durability_mod.toFixed(0) }}%</span>
                             <span v-if="rig?.is_active" class="text-text-muted/70 font-mono text-[10px]" v-tooltip="t('rigManage.coolingDetail.estimatedLifeTip')">⏱️{{ estimateCoolingLife(cooling) }}</span>
                           </div>
                         </div>
@@ -1267,14 +1349,24 @@ function closeProcessingModal() {
                     <!-- Detail -->
                     <div v-if="expandedCoolingId === cooling.id" class="px-3 py-2.5 border-t border-cyan-500/20 bg-cyan-500/5 text-xs space-y-2">
                        <div class="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                         <div class="flex justify-between cursor-help" v-tooltip="t('rigManage.coolingDetail.effectivePowerTip')"><span class="text-text-muted">{{ t('rigManage.coolingDetail.effectivePower') }}</span><span class="text-cyan-400 font-mono">-{{ (cooling.cooling_power * cooling.durability / 100).toFixed(1) }}°</span></div>
+                         <div class="flex justify-between cursor-help" v-tooltip="t('rigManage.coolingDetail.effectivePowerTip')"><span class="text-text-muted">{{ t('rigManage.coolingDetail.effectivePower') }}</span><span class="text-cyan-400 font-mono">-{{ (getEffectiveCoolingPower(cooling) * cooling.durability / 100).toFixed(1) }}°</span></div>
                          <div class="flex justify-between cursor-help" v-tooltip="t('rigManage.coolantTooltip.basePower')"><span class="text-text-muted">{{ t('rigManage.coolingDetail.basePower') }}</span><span class="text-cyan-300/60 font-mono">-{{ cooling.cooling_power }}°</span></div>
-                         <div class="flex justify-between cursor-help" v-tooltip="t('rigManage.coolingDetail.energyCostTip')"><span class="text-text-muted">{{ t('rigManage.coolingDetail.energyConsumption') }}</span><span class="text-yellow-400 font-mono">⚡{{ (cooling.energy_cost * cooling.durability / 100).toFixed(1) }}/t</span></div>
-                         <div class="flex justify-between cursor-help" v-tooltip="t('rigManage.coolingDetail.efficiencyLabel')"><span class="text-text-muted">{{ t('rigManage.coolingDetail.efficiencyLabel') }}</span><span class="text-emerald-400 font-mono">{{ cooling.energy_cost > 0 ? (cooling.cooling_power / cooling.energy_cost).toFixed(2) : '∞' }} °/⚡</span></div>
+                         <div class="flex justify-between cursor-help" v-tooltip="t('rigManage.coolingDetail.energyCostTip')"><span class="text-text-muted">{{ t('rigManage.coolingDetail.energyConsumption') }}</span><span class="text-yellow-400 font-mono">⚡{{ (getEffectiveEnergyCost(cooling) * cooling.durability / 100).toFixed(1) }}/t</span></div>
+                         <div class="flex justify-between cursor-help" v-tooltip="t('rigManage.coolingDetail.efficiencyLabel')"><span class="text-text-muted">{{ t('rigManage.coolingDetail.efficiencyLabel') }}</span><span class="text-emerald-400 font-mono">{{ getEffectiveEnergyCost(cooling) > 0 ? (getEffectiveCoolingPower(cooling) / getEffectiveEnergyCost(cooling)).toFixed(2) : '∞' }} °/⚡</span></div>
+                       </div>
+                       <!-- Mods Section -->
+                       <div v-if="cooling.mods && cooling.mods.length > 0" class="border-t border-cyan-500/15 pt-1.5">
+                         <div class="text-[10px] text-fuchsia-400 font-semibold mb-1">🧩 Mods ({{ cooling.mod_slots_used }}/{{ cooling.max_mod_slots }})</div>
+                         <div v-for="(mod, idx) in cooling.mods" :key="idx" class="flex items-center gap-2 py-0.5">
+                           <span class="text-fuchsia-300 text-[10px]">{{ getComponentName(mod.component_id) }}</span>
+                           <span v-if="mod.cooling_power_mod !== 0" class="font-mono text-[10px]" :class="mod.cooling_power_mod > 0 ? 'text-emerald-400' : 'text-rose-400'">❄️{{ mod.cooling_power_mod > 0 ? '+' : '' }}{{ mod.cooling_power_mod.toFixed(1) }}%</span>
+                           <span v-if="mod.energy_cost_mod !== 0" class="font-mono text-[10px]" :class="mod.energy_cost_mod < 0 ? 'text-emerald-400' : 'text-rose-400'">⚡{{ mod.energy_cost_mod > 0 ? '+' : '' }}{{ mod.energy_cost_mod.toFixed(1) }}%</span>
+                           <span v-if="mod.durability_mod !== 0" class="font-mono text-[10px]" :class="mod.durability_mod > 0 ? 'text-emerald-400' : 'text-rose-400'">🔧{{ mod.durability_mod > 0 ? '+' : '' }}{{ mod.durability_mod.toFixed(1) }}%</span>
+                         </div>
                        </div>
                        <div v-if="totalCoolingPower > 0" class="flex justify-between border-t border-cyan-500/15 pt-1.5 cursor-help" v-tooltip="t('rigManage.coolingDetail.coolingShare')">
                          <span class="text-text-muted">{{ t('rigManage.coolingDetail.coolingShare') }}</span>
-                         <span class="text-cyan-300 font-mono">{{ ((cooling.cooling_power * cooling.durability / 100) / totalCoolingPower * 100).toFixed(0) }}%</span>
+                         <span class="text-cyan-300 font-mono">{{ ((getEffectiveCoolingPower(cooling) * cooling.durability / 100) / totalCoolingPower * 100).toFixed(0) }}%</span>
                        </div>
                        <div class="flex items-center gap-2 border-t border-cyan-500/15 pt-1.5">
                          <span class="text-text-muted cursor-help" v-tooltip="t('rigManage.coolingDetail.durabilityTip')">{{ t('rigManage.coolingDetail.durabilityLabel') }}</span>
@@ -1314,26 +1406,43 @@ function closeProcessingModal() {
               </div>
 
               <!-- Available Inventory -->
-              <div v-if="(installedCooling.length > 0 || installedBoosts.length > 0) && (coolingItems.length > 0 || boostItems.length > 0)" class="border-t border-border my-2"></div>
+              <div v-if="(installedCooling.length > 0 || installedBoosts.length > 0) && (coolingItems.length > 0 || moddedCoolingItems.length > 0 || boostItems.length > 0)" class="border-t border-border my-2"></div>
               
-              <div v-if="coolingItems.length === 0 && boostItems.length === 0 && installedCooling.length === 0 && installedBoosts.length === 0" class="text-center py-8 border border-dashed border-border rounded-lg">
+              <div v-if="coolingItems.length === 0 && moddedCoolingItems.length === 0 && boostItems.length === 0 && installedCooling.length === 0 && installedBoosts.length === 0" class="text-center py-8 border border-dashed border-border rounded-lg">
                 <div class="text-4xl mb-3 opacity-50">📦</div>
                 <p class="text-text-muted text-sm">{{ t('rigManage.noItemsInInventory', 'No tienes items') }}</p>
                 <button class="mt-2 text-xs text-accent-primary hover:underline">{{ t('rigManage.buyInMarket', 'Ir al Market') }}</button>
               </div>
 
               <div v-else class="space-y-3">
-                 <div v-if="coolingItems.length > 0" class="space-y-2">
+                 <div v-if="coolingItems.length > 0 || moddedCoolingItems.length > 0" class="space-y-2">
                    <h4 class="text-xs font-bold text-text-muted uppercase tracking-wider">{{ t('rigManage.availableCooling') }}</h4>
-                   <div v-for="item in coolingItems" :key="item.id" class="flex items-center justify-between w-full p-2 rounded-lg border bg-bg-tertiary" :class="getTierBg(item.tier)">
+                   <!-- Unmodded cooling -->
+                   <div v-for="item in coolingItems" :key="item.id" class="flex items-center justify-between w-full p-2 rounded-lg border bg-bg-tertiary" :class="[getTierBg(item.tier), !canInstallCoolingTier(item.tier) ? 'opacity-50' : '']">
                      <div class="flex items-center gap-2">
                        <span class="text-xl">❄️</span>
                        <div>
                          <div class="font-medium text-sm" :class="getTierColor(item.tier)">{{ getCoolingName(item.id) }}</div>
                          <div class="text-[10px] text-text-muted">❄️-{{ item.cooling_power }}° • x{{ item.quantity }}</div>
+                         <div v-if="!canInstallCoolingTier(item.tier)" class="text-[9px] text-rose-400">{{ t('slotTier.tierRequired', { tier: item.tier }) }}</div>
                        </div>
                      </div>
-                     <button @click="requestInstallCooling(item)" :disabled="rig.is_active || processing" class="px-2 py-1 rounded text-xs font-medium bg-cyan-500 text-white hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-cyan-500">{{ t('rigManage.install') }}</button>
+                     <button @click="requestInstallCooling(item)" :disabled="rig.is_active || processing || !canInstallCoolingTier(item.tier)" class="px-2 py-1 rounded text-xs font-medium bg-cyan-500 text-white hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-cyan-500">{{ t('rigManage.install') }}</button>
+                   </div>
+                   <!-- Modded cooling -->
+                   <div v-for="item in moddedCoolingItems" :key="'modded-' + item.player_cooling_item_id" class="flex items-center justify-between w-full p-2 rounded-lg border bg-bg-tertiary" :class="[getTierBg(item.tier), !canInstallCoolingTier(item.tier) ? 'opacity-50' : '']">
+                     <div class="flex items-center gap-2">
+                       <span class="text-xl">❄️</span>
+                       <div>
+                         <div class="font-medium text-sm flex items-center gap-1" :class="getTierColor(item.tier)">
+                           {{ getCoolingName(item.cooling_item_id, item.name) }}
+                           <span class="px-1 py-0.5 rounded text-[9px] bg-fuchsia-500/30 text-fuchsia-300">🧩{{ item.mod_slots_used }}</span>
+                         </div>
+                         <div class="text-[10px] text-text-muted">❄️-{{ item.effective_cooling_power.toFixed(1) }}° ⚡{{ item.effective_energy_cost.toFixed(1) }}/t</div>
+                         <div v-if="!canInstallCoolingTier(item.tier)" class="text-[9px] text-rose-400">{{ t('slotTier.tierRequired', { tier: item.tier }) }}</div>
+                       </div>
+                     </div>
+                     <button @click="requestInstallModdedCooling(item)" :disabled="rig.is_active || processing || !canInstallCoolingTier(item.tier)" class="px-2 py-1 rounded text-xs font-medium bg-fuchsia-500 text-white hover:bg-fuchsia-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-fuchsia-500">{{ t('rigManage.install') }}</button>
                    </div>
                  </div>
                  <div v-if="boostItems.length > 0" class="space-y-2">

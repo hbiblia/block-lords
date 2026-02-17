@@ -33,6 +33,7 @@ const showMarket = ref(false);
 const showInventory = ref(false);
 const showExchange = ref(false);
 const showDefense = ref(false);
+const showForge = ref(false);
 
 function openMarket() {
   showMarket.value = true;
@@ -45,6 +46,9 @@ function openInventory() {
 }
 function openDefense() {
   showDefense.value = true;
+}
+function openForge() {
+  showForge.value = true;
 }
 
 import NavBar from '@/components/NavBar.vue';
@@ -60,6 +64,7 @@ import InventoryModal from '@/components/InventoryModal.vue';
 import ExchangeModal from '@/components/ExchangeModal.vue';
 import GiftModal from '@/components/GiftModal.vue';
 import DefenseModal from '@/components/DefenseModal.vue';
+import ForgeModal from '@/components/ForgeModal.vue';
 import RewardCelebration from '@/components/RewardCelebration.vue';
 
 const authStore = useAuthStore();
@@ -370,6 +375,13 @@ async function handleConnectionClick() {
       @used="handleInventoryUsed"
     />
 
+    <!-- Forge Modal -->
+    <ForgeModal
+      :show="showForge"
+      @close="showForge = false"
+      @crafted="handleInventoryUsed"
+    />
+
     <!-- Gift Modal -->
     <GiftModal />
 
@@ -471,6 +483,12 @@ async function handleConnectionClick() {
             <span class="mobile-action-label">{{ t('mining.exchange', 'Exchange') }}</span>
           </button>
 
+          <!-- Forge -->
+          <button @click="openForge" class="mobile-action-btn">
+            <span class="text-xl">🔨</span>
+            <span class="mobile-action-label">{{ t('forge.title', 'Forge') }}</span>
+          </button>
+
           <!-- Inventory -->
           <button @click="openInventory" class="mobile-action-btn">
             <span class="text-xl">🎒</span>
@@ -535,6 +553,20 @@ async function handleConnectionClick() {
           <div class="text-left">
             <div class="text-xs font-semibold text-slate-200">{{ t('nav.exchange') }}</div>
             <div class="text-[10px] text-slate-400">{{ t('exchange.convertCrypto') }}</div>
+          </div>
+        </button>
+
+        <!-- Forge Button -->
+        <button
+          @click="openForge"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
+        >
+          <div class="w-8 h-8 rounded-md flex items-center justify-center">
+            <span class="text-lg">🔨</span>
+          </div>
+          <div class="text-left">
+            <div class="text-xs font-semibold text-slate-200">{{ t('forge.title', 'Forge') }}</div>
+            <div class="text-[10px] text-slate-400">{{ t('forge.subtitle', 'Craft upgrades') }}</div>
           </div>
         </button>
 

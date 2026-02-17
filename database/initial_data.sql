@@ -159,3 +159,178 @@ ON CONFLICT (id) DO UPDATE SET
   bonus_percent = EXCLUDED.bonus_percent,
   tier = EXCLUDED.tier,
   is_featured = EXCLUDED.is_featured;
+
+-- =====================================================
+-- Cooling mod slots por tier
+-- =====================================================
+UPDATE cooling_items SET max_mod_slots = 1 WHERE tier = 'basic';
+UPDATE cooling_items SET max_mod_slots = 2 WHERE tier = 'standard';
+UPDATE cooling_items SET max_mod_slots = 3 WHERE tier = 'advanced';
+UPDATE cooling_items SET max_mod_slots = 4 WHERE tier = 'elite';
+
+-- =====================================================
+-- Cooling Components (15 componentes RPG-style)
+-- Rangos: min/max para cada stat. Al instalar, se sortea un valor aleatorio.
+-- cooling_power: % cambio en potencia (positivo = mejor)
+-- energy_cost: % cambio en consumo (positivo = más caro = peor)
+-- durability: % cambio en velocidad de desgaste (positivo = más lento = mejor)
+-- =====================================================
+INSERT INTO cooling_components (id, name, description, tier, base_price, cooling_power_min, cooling_power_max, energy_cost_min, energy_cost_max, durability_min, durability_max)
+VALUES
+  -- Performance: mejoran cooling_power
+  ('thermal_paste', 'thermal_paste', 'thermal_paste_desc', 'basic', 100, 5, 20, 0, 0, 0, 0),
+  ('copper_heat_pipes', 'copper_heat_pipes', 'copper_heat_pipes_desc', 'standard', 350, 10, 30, 0, 15, 0, 0),
+  ('liquid_metal_compound', 'liquid_metal_compound', 'liquid_metal_compound_desc', 'advanced', 1200, 20, 45, 0, 0, -30, -10),
+  ('cryo_catalyst', 'cryo_catalyst', 'cryo_catalyst_desc', 'elite', 4500, 30, 70, 10, 35, -40, -15),
+  -- Efficiency: reducen energy_cost
+  ('wire_harness', 'wire_harness', 'wire_harness_desc', 'basic', 80, 0, 0, -20, -5, 0, 0),
+  ('voltage_regulator', 'voltage_regulator', 'voltage_regulator_desc', 'standard', 400, -5, 5, -30, -10, 0, 0),
+  ('silent_bearings', 'silent_bearings', 'silent_bearings_desc', 'advanced', 1000, -10, 5, -40, -15, 0, 0),
+  ('power_optimizer', 'power_optimizer', 'power_optimizer_desc', 'elite', 3500, 0, 0, -50, -25, -5, 10),
+  -- Durability: mejoran durabilidad
+  ('rubber_gaskets', 'rubber_gaskets', 'rubber_gaskets_desc', 'basic', 80, 0, 0, 0, 0, 5, 25),
+  ('insulation_wrap', 'insulation_wrap', 'insulation_wrap_desc', 'standard', 300, -15, -5, 0, 0, 10, 35),
+  ('ceramic_coating', 'ceramic_coating', 'ceramic_coating_desc', 'advanced', 900, 0, 0, 5, 15, 20, 45),
+  ('diamond_shell', 'diamond_shell', 'diamond_shell_desc', 'elite', 5000, -5, 10, 5, 20, 30, 60),
+  -- Hybrid / Gamble: múltiples stats, rangos amplios
+  ('nano_coolant_fluid', 'nano_coolant_fluid', 'nano_coolant_fluid_desc', 'advanced', 1500, 5, 30, -5, 20, 5, 20),
+  ('overclocked_motor', 'overclocked_motor', 'overclocked_motor_desc', 'elite', 6000, 25, 55, 15, 40, -40, -20),
+  ('quantum_heatsink', 'quantum_heatsink', 'quantum_heatsink_desc', 'elite', 8000, -15, 60, -25, 30, -30, 40)
+ON CONFLICT (id) DO UPDATE SET
+  tier = EXCLUDED.tier,
+  base_price = EXCLUDED.base_price,
+  cooling_power_min = EXCLUDED.cooling_power_min,
+  cooling_power_max = EXCLUDED.cooling_power_max,
+  energy_cost_min = EXCLUDED.energy_cost_min,
+  energy_cost_max = EXCLUDED.energy_cost_max,
+  durability_min = EXCLUDED.durability_min,
+  durability_max = EXCLUDED.durability_max;
+
+-- =====================================================
+-- Materials (4 tipos de materiales dropeables al minar)
+-- =====================================================
+INSERT INTO materials (id, name, rarity, drop_chance, icon) VALUES
+  ('copper_fragment', 'copper_fragment', 'common', 0.35, '🔩'),
+  ('silicon_chip', 'silicon_chip', 'uncommon', 0.18, '💾'),
+  ('carbon_fiber', 'carbon_fiber', 'rare', 0.07, '🧬'),
+  ('quantum_shard', 'quantum_shard', 'epic', 0.02, '💠')
+ON CONFLICT (id) DO UPDATE SET
+  rarity = EXCLUDED.rarity,
+  drop_chance = EXCLUDED.drop_chance,
+  icon = EXCLUDED.icon;
+
+-- =====================================================
+-- Forge Recipes
+-- =====================================================
+
+-- A) Tier Kits (aceleran progresión XP de slots)
+INSERT INTO forge_recipes (id, name, category, result_type, result_value, tier, icon) VALUES
+  ('tier_kit_standard', 'tier_kit_standard', 'tier_kit', 'xp_grant', 200, 'standard', '📦'),
+  ('tier_kit_advanced', 'tier_kit_advanced', 'tier_kit', 'xp_grant', 500, 'advanced', '📦'),
+  ('tier_kit_elite', 'tier_kit_elite', 'tier_kit', 'xp_grant', 1500, 'elite', '📦')
+ON CONFLICT (id) DO UPDATE SET
+  result_value = EXCLUDED.result_value,
+  tier = EXCLUDED.tier;
+
+-- B) Rig Enhancements (mejoras permanentes al rig)
+INSERT INTO forge_recipes (id, name, category, result_type, result_value, tier, icon) VALUES
+  ('hashrate_booster', 'hashrate_booster', 'rig_enhancement', 'rig_boost', 3, 'basic', '⚡'),
+  ('efficiency_module', 'efficiency_module', 'rig_enhancement', 'rig_boost', 5, 'standard', '🔋'),
+  ('thermal_paste_pro', 'thermal_paste_pro', 'rig_enhancement', 'rig_boost', 5, 'standard', '🌡️')
+ON CONFLICT (id) DO UPDATE SET
+  result_value = EXCLUDED.result_value,
+  tier = EXCLUDED.tier;
+
+-- C) Cooling Components (los 15 del market, crafteables)
+INSERT INTO forge_recipes (id, name, category, result_type, result_id, tier, icon) VALUES
+  -- Basic
+  ('craft_thermal_paste', 'craft_thermal_paste', 'cooling', 'cooling_component', 'thermal_paste', 'basic', '🧪'),
+  ('craft_wire_harness', 'craft_wire_harness', 'cooling', 'cooling_component', 'wire_harness', 'basic', '🔌'),
+  ('craft_rubber_gaskets', 'craft_rubber_gaskets', 'cooling', 'cooling_component', 'rubber_gaskets', 'basic', '⭕'),
+  -- Standard
+  ('craft_copper_heat_pipes', 'craft_copper_heat_pipes', 'cooling', 'cooling_component', 'copper_heat_pipes', 'standard', '🔧'),
+  ('craft_voltage_regulator', 'craft_voltage_regulator', 'cooling', 'cooling_component', 'voltage_regulator', 'standard', '🔌'),
+  ('craft_insulation_wrap', 'craft_insulation_wrap', 'cooling', 'cooling_component', 'insulation_wrap', 'standard', '🧱'),
+  -- Advanced
+  ('craft_liquid_metal_compound', 'craft_liquid_metal_compound', 'cooling', 'cooling_component', 'liquid_metal_compound', 'advanced', '💧'),
+  ('craft_silent_bearings', 'craft_silent_bearings', 'cooling', 'cooling_component', 'silent_bearings', 'advanced', '⚙️'),
+  ('craft_ceramic_coating', 'craft_ceramic_coating', 'cooling', 'cooling_component', 'ceramic_coating', 'advanced', '🛡️'),
+  ('craft_nano_coolant_fluid', 'craft_nano_coolant_fluid', 'cooling', 'cooling_component', 'nano_coolant_fluid', 'advanced', '🧊'),
+  -- Elite
+  ('craft_cryo_catalyst', 'craft_cryo_catalyst', 'cooling', 'cooling_component', 'cryo_catalyst', 'elite', '❄️'),
+  ('craft_power_optimizer', 'craft_power_optimizer', 'cooling', 'cooling_component', 'power_optimizer', 'elite', '⚡'),
+  ('craft_diamond_shell', 'craft_diamond_shell', 'cooling', 'cooling_component', 'diamond_shell', 'elite', '💎'),
+  ('craft_overclocked_motor', 'craft_overclocked_motor', 'cooling', 'cooling_component', 'overclocked_motor', 'elite', '🔥'),
+  ('craft_quantum_heatsink', 'craft_quantum_heatsink', 'cooling', 'cooling_component', 'quantum_heatsink', 'elite', '💠')
+ON CONFLICT (id) DO UPDATE SET
+  result_id = EXCLUDED.result_id,
+  tier = EXCLUDED.tier;
+
+-- D) Utility Items
+INSERT INTO forge_recipes (id, name, category, result_type, result_value, tier, icon) VALUES
+  ('durability_shield', 'durability_shield', 'utility', 'slot_buff', 1, 'advanced', '🛡️'),
+  ('slot_protector', 'slot_protector', 'utility', 'slot_buff', 0, 'standard', '🔒')
+ON CONFLICT (id) DO UPDATE SET
+  result_value = EXCLUDED.result_value,
+  tier = EXCLUDED.tier;
+
+-- =====================================================
+-- Forge Recipe Ingredients
+-- =====================================================
+
+-- Limpiar ingredientes existentes para re-insertar
+DELETE FROM forge_recipe_ingredients WHERE recipe_id IN (
+  SELECT id FROM forge_recipes
+);
+
+INSERT INTO forge_recipe_ingredients (recipe_id, material_id, quantity) VALUES
+  -- Tier Kits
+  ('tier_kit_standard', 'copper_fragment', 5),
+  ('tier_kit_standard', 'silicon_chip', 2),
+  ('tier_kit_advanced', 'silicon_chip', 3),
+  ('tier_kit_advanced', 'carbon_fiber', 2),
+  ('tier_kit_elite', 'carbon_fiber', 2),
+  ('tier_kit_elite', 'quantum_shard', 1),
+  -- Rig Enhancements
+  ('hashrate_booster', 'copper_fragment', 4),
+  ('hashrate_booster', 'silicon_chip', 1),
+  ('efficiency_module', 'silicon_chip', 3),
+  ('efficiency_module', 'carbon_fiber', 1),
+  ('thermal_paste_pro', 'copper_fragment', 2),
+  ('thermal_paste_pro', 'silicon_chip', 2),
+  -- Cooling Components - Basic (3 Copper each)
+  ('craft_thermal_paste', 'copper_fragment', 3),
+  ('craft_wire_harness', 'copper_fragment', 3),
+  ('craft_rubber_gaskets', 'copper_fragment', 3),
+  -- Cooling Components - Standard
+  ('craft_copper_heat_pipes', 'copper_fragment', 5),
+  ('craft_copper_heat_pipes', 'silicon_chip', 2),
+  ('craft_voltage_regulator', 'copper_fragment', 4),
+  ('craft_voltage_regulator', 'silicon_chip', 3),
+  ('craft_insulation_wrap', 'copper_fragment', 4),
+  ('craft_insulation_wrap', 'silicon_chip', 2),
+  -- Cooling Components - Advanced
+  ('craft_liquid_metal_compound', 'silicon_chip', 3),
+  ('craft_liquid_metal_compound', 'carbon_fiber', 2),
+  ('craft_silent_bearings', 'silicon_chip', 3),
+  ('craft_silent_bearings', 'carbon_fiber', 2),
+  ('craft_ceramic_coating', 'silicon_chip', 2),
+  ('craft_ceramic_coating', 'carbon_fiber', 3),
+  ('craft_nano_coolant_fluid', 'silicon_chip', 4),
+  ('craft_nano_coolant_fluid', 'carbon_fiber', 2),
+  -- Cooling Components - Elite
+  ('craft_cryo_catalyst', 'carbon_fiber', 2),
+  ('craft_cryo_catalyst', 'quantum_shard', 1),
+  ('craft_power_optimizer', 'carbon_fiber', 2),
+  ('craft_power_optimizer', 'quantum_shard', 1),
+  ('craft_diamond_shell', 'carbon_fiber', 3),
+  ('craft_diamond_shell', 'quantum_shard', 1),
+  ('craft_overclocked_motor', 'carbon_fiber', 2),
+  ('craft_overclocked_motor', 'quantum_shard', 2),
+  ('craft_quantum_heatsink', 'carbon_fiber', 3),
+  ('craft_quantum_heatsink', 'quantum_shard', 3),
+  -- Utility
+  ('durability_shield', 'carbon_fiber', 1),
+  ('durability_shield', 'quantum_shard', 1),
+  ('slot_protector', 'copper_fragment', 5),
+  ('slot_protector', 'silicon_chip', 3);

@@ -53,6 +53,20 @@ interface BoostItem {
   tier: string;
 }
 
+export interface CoolingComponent {
+  id: string;
+  name: string;
+  description: string;
+  tier: string;
+  base_price: number;
+  cooling_power_min: number;
+  cooling_power_max: number;
+  energy_cost_min: number;
+  energy_cost_max: number;
+  durability_min: number;
+  durability_max: number;
+}
+
 interface CoolingQuantity {
   installed: number;
   inventory: number;
@@ -146,9 +160,13 @@ export const useMarketStore = defineStore('market', () => {
   const boostItems = ref<BoostItem[]>(cached?.boostItems ?? DEFAULT_BOOSTS);
   const cryptoPackages = ref<CryptoPackage[]>(cached?.cryptoPackages ?? DEFAULT_CRYPTO_PACKAGES);
 
+  // Cooling components catalog
+  const coolingComponents = ref<CoolingComponent[]>([]);
+
   // Player quantities
   const rigQuantities = ref<Record<string, RigQuantity>>({});
   const coolingQuantities = ref<Record<string, CoolingQuantity>>({});
+  const componentQuantities = ref<Record<string, number>>({});
   const cardQuantities = ref<Record<string, number>>({});
   const boostQuantities = ref<Record<string, number>>({});
 
@@ -213,6 +231,10 @@ export const useMarketStore = defineStore('market', () => {
     return boostQuantities.value[id] || 0;
   }
 
+  function getComponentOwned(id: string): number {
+    return componentQuantities.value[id] || 0;
+  }
+
   // Track if we've already fetched from server this session
   const catalogsFetched = ref(false);
 
@@ -222,12 +244,13 @@ export const useMarketStore = defineStore('market', () => {
 
     loadingCatalogs.value = true;
     try {
-      const [rigsRes, coolingRes, cardsRes, boostsRes, cryptoRes] = await Promise.all([
+      const [rigsRes, coolingRes, cardsRes, boostsRes, cryptoRes, componentsRes] = await Promise.all([
         supabase.from('rigs').select('*').order('base_price', { ascending: true }),
         supabase.from('cooling_items').select('*').order('base_price', { ascending: true }),
         supabase.from('prepaid_cards').select('*').order('base_price', { ascending: true }),
         supabase.from('boost_items').select('*').order('boost_type').order('base_price', { ascending: true }),
         supabase.rpc('get_crypto_packages'),
+        supabase.rpc('get_cooling_components'),
       ]);
 
       rigs.value = rigsRes.data ?? [];
@@ -235,6 +258,7 @@ export const useMarketStore = defineStore('market', () => {
       prepaidCards.value = cardsRes.data ?? [];
       boostItems.value = boostsRes.data ?? [];
       cryptoPackages.value = cryptoRes.data ?? [];
+      coolingComponents.value = componentsRes.data ?? [];
       catalogsFetched.value = true;
 
       // Save to localStorage cache
@@ -261,13 +285,14 @@ export const useMarketStore = defineStore('market', () => {
     const playerId = authStore.player.id;
 
     try {
-      const [playerRigsRes, rigInventoryRes, playerCoolingRes, inventoryCoolingRes, inventoryCardsRes, inventoryBoostsRes] = await Promise.all([
+      const [playerRigsRes, rigInventoryRes, playerCoolingRes, inventoryCoolingRes, inventoryCardsRes, inventoryBoostsRes, inventoryComponentsRes] = await Promise.all([
         supabase.from('player_rigs').select('rig_id').eq('player_id', playerId),
         supabase.from('player_rig_inventory').select('rig_id, quantity').eq('player_id', playerId),
         supabase.from('player_cooling').select('cooling_item_id').eq('player_id', playerId),
         supabase.from('player_inventory').select('item_id, quantity').eq('player_id', playerId).eq('item_type', 'cooling'),
         supabase.from('player_cards').select('card_id').eq('player_id', playerId).eq('is_redeemed', false),
         supabase.from('player_boosts').select('boost_id, quantity').eq('player_id', playerId),
+        supabase.from('player_inventory').select('item_id, quantity').eq('player_id', playerId).eq('item_type', 'component'),
       ]);
 
       // Build rig quantities map (installed + inventory)
@@ -315,6 +340,13 @@ export const useMarketStore = defineStore('market', () => {
         boostQty[b.boost_id] = (boostQty[b.boost_id] || 0) + (b.quantity || 1);
       }
       boostQuantities.value = boostQty;
+
+      // Build component quantities map
+      const compQty: Record<string, number> = {};
+      for (const c of inventoryComponentsRes.data ?? []) {
+        compQty[c.item_id] = (compQty[c.item_id] || 0) + (c.quantity || 1);
+      }
+      componentQuantities.value = compQty;
     } catch (e) {
       console.error('Error loading player quantities:', e);
     } finally {
@@ -444,6 +476,39 @@ export const useMarketStore = defineStore('market', () => {
       return { success: false, error: data?.error ?? 'Error buying cooling' };
     } catch (e) {
       console.error('Error buying cooling:', e);
+      playSound('error');
+      return { success: false, error: 'Connection error' };
+    } finally {
+      buying.value = false;
+    }
+  }
+
+  async function buyCoolingComponent(componentId: string): Promise<{ success: boolean; error?: string }> {
+    const authStore = useAuthStore();
+    if (!authStore.player) return { success: false, error: 'No player' };
+
+    buying.value = true;
+    try {
+      const { data, error } = await supabase.rpc('buy_cooling_component', {
+        p_player_id: authStore.player.id,
+        p_component_id: componentId,
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        await loadPlayerQuantities();
+        await authStore.fetchPlayer();
+        const inventoryStore = useInventoryStore();
+        inventoryStore.refresh();
+        playSound('purchase');
+        return { success: true };
+      }
+
+      playSound('error');
+      return { success: false, error: data?.error ?? 'Error buying component' };
+    } catch (e) {
+      console.error('Error buying cooling component:', e);
       playSound('error');
       return { success: false, error: 'Connection error' };
     } finally {
@@ -598,6 +663,7 @@ export const useMarketStore = defineStore('market', () => {
   function clearState() {
     rigQuantities.value = {};
     coolingQuantities.value = {};
+    componentQuantities.value = {};
     cardQuantities.value = {};
     boostQuantities.value = {};
     // Keep catalogs loaded
@@ -607,6 +673,7 @@ export const useMarketStore = defineStore('market', () => {
     // Catalogs
     rigs,
     coolingItems,
+    coolingComponents,
     prepaidCards,
     boostItems,
     cryptoPackages,
@@ -624,6 +691,7 @@ export const useMarketStore = defineStore('market', () => {
     // Getters
     getRigOwned,
     getCoolingOwned,
+    getComponentOwned,
     getCardOwned,
     getBoostOwned,
 
@@ -634,6 +702,7 @@ export const useMarketStore = defineStore('market', () => {
     buyRig,
     confirmRonRigPurchase,
     buyCooling,
+    buyCoolingComponent,
     buyCard,
     buyBoost,
     buyCryptoPackage,

@@ -539,12 +539,16 @@ export async function installRigFromInventory(playerId: string, rigId: string): 
 }
 
 // Instalar cooling en un rig específico
-export async function installCoolingToRig(playerId: string, rigId: string, coolingId: string) {
-  const { data, error } = await supabase.rpc('install_cooling_to_rig', {
+export async function installCoolingToRig(playerId: string, rigId: string, coolingId: string, playerCoolingItemId?: string) {
+  const params: Record<string, unknown> = {
     p_player_id: playerId,
     p_rig_id: rigId,
     p_cooling_id: coolingId,
-  });
+  };
+  if (playerCoolingItemId) {
+    params.p_player_cooling_item_id = playerCoolingItemId;
+  }
+  const { data, error } = await supabase.rpc('install_cooling_to_rig', params);
 
   if (error) throw error;
   return data;
@@ -563,6 +567,56 @@ export async function buyCooling(playerId: string, coolingId: string) {
   const { data, error } = await supabase.rpc('buy_cooling', {
     p_player_id: playerId,
     p_cooling_id: coolingId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// =====================================================
+// COOLING MODDING SYSTEM
+// =====================================================
+
+// Obtener todos los componentes de cooling (para el Market)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getCoolingComponents(): Promise<any> {
+  return rpcWithRetry('get_cooling_components', {});
+}
+
+// Comprar un componente de cooling
+export async function buyCoolingComponent(playerId: string, componentId: string) {
+  const { data, error } = await supabase.rpc('buy_cooling_component', {
+    p_player_id: playerId,
+    p_component_id: componentId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Obtener componentes del inventario del jugador
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getCoolingComponentInventory(playerId: string): Promise<any> {
+  return rpcWithRetry('get_cooling_component_inventory', {
+    p_player_id: playerId,
+  });
+}
+
+// Obtener cooling items modded del jugador
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerCoolingItems(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_cooling_items', {
+    p_player_id: playerId,
+  });
+}
+
+// Instalar un mod (componente) en un cooling item
+export async function installCoolingMod(playerId: string, coolingItemId: string, componentId: string, sourceType: 'inventory' | 'modded') {
+  const { data, error } = await supabase.rpc('install_cooling_mod', {
+    p_player_id: playerId,
+    p_cooling_item_id: coolingItemId,
+    p_component_id: componentId,
+    p_source_type: sourceType,
   });
 
   if (error) throw error;
@@ -602,6 +656,52 @@ export async function buyRigSlot(playerId: string) {
     p_player_id: playerId,
   });
 
+  if (error) throw error;
+  return data;
+}
+
+// === SLOT TIER ===
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function upgradeSlotTier(playerId: string, slotId: string): Promise<any> {
+  const { data, error } = await supabase.rpc('upgrade_slot_tier', {
+    p_player_id: playerId,
+    p_slot_id: slotId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// === MATERIALS & FORGE ===
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerMaterials(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_materials', {
+    p_player_id: playerId,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getForgeRecipes(): Promise<any> {
+  return rpcWithRetry('get_forge_recipes');
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function forgeCraftItem(
+  playerId: string,
+  recipeId: string,
+  targetSlotId?: string,
+  targetRigId?: string
+): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const params: Record<string, any> = {
+    p_player_id: playerId,
+    p_recipe_id: recipeId,
+  };
+  if (targetSlotId) params.p_target_slot_id = targetSlotId;
+  if (targetRigId) params.p_target_rig_id = targetRigId;
+
+  const { data, error } = await supabase.rpc('forge_craft_item', params);
   if (error) throw error;
   return data;
 }
