@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '2.3.0';
+const CURRENT_VERSION = '2.4.0';
 const STORAGE_KEY = 'lootmine-last-seen-version';
 
 const route = useRoute();
@@ -63,12 +63,28 @@ function closeModal() {
 
         <!-- Contenido scrollable -->
         <div class="space-y-3 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- Cooling Workshop / Modding System -->
+          <!-- Slot Tier & XP -->
           <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
             <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>🧪</span> {{ t('updateModal.coolingWorkshop.title') }}
+              <span>⭐</span> {{ t('updateModal.slotTierXp.title') }}
             </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.coolingWorkshop.description')"></p>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.slotTierXp.description')"></p>
+          </div>
+
+          <!-- Material Drops -->
+          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
+            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+              <span>⛏️</span> {{ t('updateModal.materialDrops.title') }}
+            </h3>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.materialDrops.description')"></p>
+          </div>
+
+          <!-- Forge -->
+          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
+            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+              <span>🔨</span> {{ t('updateModal.forge.title') }}
+            </h3>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.forge.description')"></p>
           </div>
 
         </div>

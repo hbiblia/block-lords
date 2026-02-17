@@ -1935,6 +1935,18 @@ export default {
       title: 'Cooling Workshop',
       description: 'New <strong class="text-fuchsia-400">Cooling Workshop</strong> system! Buy <strong class="text-cyan-400">components</strong> in the Market and install them into your cooling items from the Inventory. Each component has <strong class="text-amber-400">random stat ranges</strong> — values are rolled on install (gacha style). Mods can boost or reduce Cooling Power, Energy Cost, and Durability. Mods are <strong class="text-red-400">permanent</strong> and cannot be removed. Slots per tier: Basic (1), Standard (2), Advanced (3), Elite (4).',
     },
+    slotTierXp: {
+      title: 'Slot Tier & XP System',
+      description: 'Slots now have <strong class="text-emerald-400">tiers</strong> and <strong class="text-sky-400">XP</strong>! Each mined block grants XP to your active slots (🥉8, 🥈12, 🥇20). Accumulate XP to upgrade: <strong class="text-emerald-400">Basic</strong> → <strong class="text-sky-400">Standard (500)</strong> → <strong class="text-fuchsia-400">Advanced (2,000)</strong> → <strong class="text-amber-400">Elite (8,000)</strong>. Higher tier slots accept higher tier cooling. <strong class="text-red-400">Warning:</strong> destroying a slot loses ALL XP and tier progress!',
+    },
+    materialDrops: {
+      title: 'Material Drops',
+      description: 'Mining now drops <strong class="text-amber-400">crafting materials</strong>! Each closed block has a chance to drop: <strong class="text-emerald-400">🔩 Copper Fragment (35%)</strong>, <strong class="text-sky-400">💾 Silicon Chip (18%)</strong>, <strong class="text-fuchsia-400">🧬 Carbon Fiber (7%)</strong>, <strong class="text-amber-400">💠 Quantum Shard (2%)</strong>. Gold blocks give 1.5x and Silver 1.2x drop rates. Check your materials in the Inventory.',
+    },
+    forge: {
+      title: 'The Forge',
+      description: 'New <strong class="text-orange-400">Forge</strong> system! Craft items from mined materials: <strong class="text-sky-400">Tier Kits</strong> to boost slot XP, <strong class="text-yellow-400">Rig Enhancements</strong> for permanent rig bonuses, <strong class="text-cyan-400">Cooling Components</strong> (F2P path to all 15 components!), and <strong class="text-fuchsia-400">Utilities</strong> like Durability Shield (+1 slot use) and Slot Protector (prevents destruction). Access it from the 🔨 Forge button.',
+    },
     button: 'Got it!',
   },
 

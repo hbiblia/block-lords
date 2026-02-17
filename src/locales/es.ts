@@ -1935,6 +1935,18 @@
       title: 'Taller de Cooling',
       description: '¡Nuevo sistema de <strong class="text-fuchsia-400">Taller de Cooling</strong>! Compra <strong class="text-cyan-400">componentes</strong> en el Mercado e instálalos en tus cooling desde el Inventario. Cada componente tiene <strong class="text-amber-400">rangos de stats aleatorios</strong> — los valores se sortean al instalar (estilo gacha). Los mods pueden mejorar o reducir Potencia de Enfriamiento, Costo Energético y Durabilidad. Los mods son <strong class="text-red-400">permanentes</strong> y no se pueden remover. Slots por tier: Basic (1), Standard (2), Advanced (3), Elite (4).',
     },
+    slotTierXp: {
+      title: 'Sistema de Tier y XP de Slots',
+      description: '¡Los slots ahora tienen <strong class="text-emerald-400">tiers</strong> y <strong class="text-sky-400">XP</strong>! Cada bloque minado otorga XP a tus slots activos (🥉8, 🥈12, 🥇20). Acumula XP para subir de tier: <strong class="text-emerald-400">Basic</strong> → <strong class="text-sky-400">Standard (500)</strong> → <strong class="text-fuchsia-400">Advanced (2,000)</strong> → <strong class="text-amber-400">Elite (8,000)</strong>. Slots de tier alto aceptan cooling de tier alto. <strong class="text-red-400">Advertencia:</strong> ¡destruir un slot pierde TODO el XP y progreso de tier!',
+    },
+    materialDrops: {
+      title: 'Materiales al Minar',
+      description: '¡La minería ahora dropea <strong class="text-amber-400">materiales de crafteo</strong>! Cada bloque cerrado puede dropear: <strong class="text-emerald-400">🔩 Fragmento de Cobre (35%)</strong>, <strong class="text-sky-400">💾 Chip de Silicio (18%)</strong>, <strong class="text-fuchsia-400">🧬 Fibra de Carbono (7%)</strong>, <strong class="text-amber-400">💠 Fragmento Cuántico (2%)</strong>. Bloques Gold dan 1.5x y Silver 1.2x de probabilidad. Revisa tus materiales en el Inventario.',
+    },
+    forge: {
+      title: 'La Forja',
+      description: '¡Nuevo sistema de <strong class="text-orange-400">Forja</strong>! Craftea items con materiales minados: <strong class="text-sky-400">Kits de Tier</strong> para acelerar XP de slots, <strong class="text-yellow-400">Mejoras de Rig</strong> para bonificaciones permanentes, <strong class="text-cyan-400">Componentes de Cooling</strong> (¡camino F2P a los 15 componentes!), y <strong class="text-fuchsia-400">Utilidades</strong> como Escudo de Durabilidad (+1 uso de slot) y Protector de Slot (previene destrucción). Accede desde el botón 🔨 Forja.',
+    },
     button: '¡Entendido!',
   },
 
