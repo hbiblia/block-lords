@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, ref, provide, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 import { useStreakStore } from '@/stores/streak';
@@ -12,6 +13,7 @@ import { useDefenseStore } from '@/stores/defense';
 import { formatCompact } from '@/utils/format';
 
 const { t } = useI18n();
+const route = useRoute();
 
 // Ad blocker detection
 const showAdBlockAlert = ref(false);
@@ -301,7 +303,7 @@ async function handleConnectionClick() {
         leave-from-class="opacity-100"
         leave-to-class="opacity-0"
       >
-        <div v-if="showAdBlockAlert" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+        <div v-if="showAdBlockAlert && route.path === '/mining'" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
           <div class="bg-bg-secondary border border-border/40 rounded-2xl p-6 max-w-md w-full shadow-2xl my-auto">
             <div class="text-center">
               <div class="text-4xl mb-3">🛡️</div>
