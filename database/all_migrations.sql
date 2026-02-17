@@ -994,6 +994,17 @@ ALTER TABLE player_slots ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'basic'
   CHECK (tier IN ('basic', 'standard', 'advanced', 'elite'));
 ALTER TABLE player_slots ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0;
 
+-- Migración: Sincronizar tier del slot con el tier del rig instalado
+-- Para jugadores existentes cuyo rig tiene un tier superior al slot
+UPDATE player_slots ps
+SET tier = r.tier
+FROM player_rigs pr
+JOIN rigs r ON r.id = pr.rig_id
+WHERE ps.player_rig_id = pr.id
+  AND ps.is_destroyed = false
+  AND array_position(ARRAY['basic','standard','advanced','elite'], r.tier)
+    > array_position(ARRAY['basic','standard','advanced','elite'], ps.tier);
+
 -- =====================================================
 -- 13. MATERIALS & FORGE SYSTEM
 -- =====================================================
