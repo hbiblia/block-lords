@@ -523,6 +523,18 @@ export async function installCoolingFromInventory(playerId: string, coolingId: s
   return data;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function deleteInventoryItem(playerId: string, itemType: string, itemId: string, quantity: number = 1): Promise<any> {
+  const { data, error } = await supabase.rpc('delete_inventory_item', {
+    p_player_id: playerId,
+    p_item_type: itemType,
+    p_item_id: itemId,
+    p_quantity: quantity,
+  });
+  if (error) throw error;
+  return data;
+}
+
 // === RIG INVENTORY ===
 
 // Obtener rigs en inventario del jugador

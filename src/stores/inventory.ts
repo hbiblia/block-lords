@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { getPlayerInventory, getPlayerBoosts, getPlayerRigInventory, installRigFromInventory, getPlayerMaterials } from '@/utils/api';
+import { getPlayerInventory, getPlayerBoosts, getPlayerRigInventory, installRigFromInventory, getPlayerMaterials, deleteInventoryItem } from '@/utils/api';
 import { useAuthStore } from './auth';
 import { playSound } from '@/utils/sounds';
 
@@ -148,6 +148,24 @@ export const useInventoryStore = defineStore('inventory', () => {
     boostItems.value.length
   );
 
+  // Inventory slot system: count unique item types (1 type = 1 slot)
+  const slotsUsed = computed(() =>
+    rigItems.value.length +
+    new Set(cardItems.value.map(c => c.card_id)).size +
+    coolingItems.value.length +
+    moddedCoolingItems.value.length +
+    componentItems.value.length +
+    boostItems.value.length +
+    materialItems.value.length
+  );
+
+  const maxSlots = computed(() => {
+    const authStore = useAuthStore();
+    const p = authStore.player;
+    if (p?.premium_until && new Date(p.premium_until) > new Date()) return 20;
+    return 10;
+  });
+
   async function fetchInventory(force = false) {
     const authStore = useAuthStore();
 
@@ -244,6 +262,35 @@ export const useInventoryStore = defineStore('inventory', () => {
     }
   }
 
+  const deleting = ref(false);
+
+  // Delete/discard item from inventory
+  async function deleteItem(itemType: string, itemId: string, quantity: number = 1): Promise<{ success: boolean; error?: string }> {
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) return { success: false, error: 'No player' };
+
+    deleting.value = true;
+
+    try {
+      const result = await deleteInventoryItem(authStore.player.id, itemType, itemId, quantity);
+
+      if (result?.success) {
+        await fetchInventory(true);
+        playSound('success');
+        return { success: true };
+      }
+
+      playSound('error');
+      return { success: false, error: result?.error || 'Error eliminando item' };
+    } catch (e) {
+      console.error('Error deleting item:', e);
+      playSound('error');
+      return { success: false, error: 'Error de conexión' };
+    } finally {
+      deleting.value = false;
+    }
+  }
+
   // Force refresh after an action (redeem card, etc.)
   async function refresh() {
     return fetchInventory(true);
@@ -274,11 +321,15 @@ export const useInventoryStore = defineStore('inventory', () => {
     materialItems,
     loading,
     installing,
+    deleting,
     loaded,
     totalItems,
+    slotsUsed,
+    maxSlots,
     hasCachedData,
     fetchInventory,
     installRig,
+    deleteItem,
     refresh,
     clear,
   };

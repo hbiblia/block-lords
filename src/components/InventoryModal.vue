@@ -23,6 +23,18 @@ const emit = defineEmits<{
 
 const using = ref(false);
 
+// --- Selection state ---
+const selectedItem = ref<{ type: string; id: string } | null>(null);
+
+function selectItem(type: string, id: string) {
+  if (selectedItem.value?.type === type && selectedItem.value?.id === id) {
+    selectedItem.value = null;
+  } else {
+    selectedItem.value = { type, id };
+  }
+  playSound('click');
+}
+
 // Workshop modal state
 const showWorkshop = ref(false);
 const workshopItem = ref<CoolingItem | ModdedCoolingItem | null>(null);
@@ -39,7 +51,6 @@ function closeWorkshop() {
 }
 
 function onModded() {
-  // Refresh inventory after modding
   inventoryStore.refresh();
 }
 
@@ -64,10 +75,11 @@ const groupedCards = computed(() => {
 });
 
 // Fetch inventory when modal opens
-watch(() => props.show, (isOpen) => {
+watch(() => props.show, async (isOpen) => {
   if (isOpen) {
-    // Fetch inventory (will use cache if available)
-    inventoryStore.fetchInventory();
+    await inventoryStore.fetchInventory();
+  } else {
+    selectedItem.value = null;
   }
 });
 
@@ -79,7 +91,7 @@ function handleClose() {
 // Confirmation dialog state
 const showConfirm = ref(false);
 const confirmAction = ref<{
-  type: 'redeem' | 'install_rig';
+  type: 'redeem' | 'install_rig' | 'delete_item';
   data: {
     cardCode?: string;
     cardName?: string;
@@ -87,6 +99,11 @@ const confirmAction = ref<{
     cardAmount?: number;
     rigId?: string;
     rigName?: string;
+    deleteItemType?: string;
+    deleteItemId?: string;
+    deleteItemName?: string;
+    deleteQuantity?: number;
+    deleteMaxQuantity?: number;
   };
 } | null>(null);
 
@@ -133,6 +150,44 @@ function requestInstallRig(rig: { rig_id: string; name: string }) {
     },
   };
   showConfirm.value = true;
+}
+
+// Delete quantity selector
+const deleteQtyInput = ref(1);
+
+function requestDeleteItem(itemType: string, itemId: string, itemName: string, maxQuantity: number = 1) {
+  confirmAction.value = {
+    type: 'delete_item',
+    data: {
+      deleteItemType: itemType,
+      deleteItemId: itemId,
+      deleteItemName: itemName,
+      deleteQuantity: 1,
+      deleteMaxQuantity: maxQuantity,
+    },
+  };
+  deleteQtyInput.value = maxQuantity > 1 ? 1 : 1;
+  showConfirm.value = true;
+}
+
+async function handleDeleteItem(itemType: string, itemId: string, quantity: number) {
+  if (!authStore.player || using.value) return;
+  using.value = true;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
+
+  const result = await inventoryStore.deleteItem(itemType, itemId, quantity);
+
+  if (result.success) {
+    closeProcessingModal();
+    selectedItem.value = null;
+  } else {
+    processingStatus.value = 'error';
+    processingError.value = result.error || t('inventory.processing.errorDeleteItem', 'Error eliminando item');
+  }
+
+  using.value = false;
 }
 
 async function handleInstallRig(rigId: string) {
@@ -195,6 +250,8 @@ async function confirmUse() {
     await handleRedeemCard(data.cardCode);
   } else if (type === 'install_rig' && data.rigId) {
     await handleInstallRig(data.rigId);
+  } else if (type === 'delete_item' && data.deleteItemType && data.deleteItemId) {
+    await handleDeleteItem(data.deleteItemType, data.deleteItemId, deleteQtyInput.value);
   }
 
   confirmAction.value = null;
@@ -214,26 +271,6 @@ function getTierColor(tier: string) {
     case 'standard': return 'text-sky-400';
     case 'basic': return 'text-emerald-400';
     default: return 'text-text-muted';
-  }
-}
-
-function getTierBg(tier: string) {
-  switch (tier) {
-    case 'elite': return 'bg-amber-500/10';
-    case 'advanced': return 'bg-fuchsia-500/10';
-    case 'standard': return 'bg-sky-500/10';
-    case 'basic': return 'bg-emerald-500/10';
-    default: return 'bg-bg-tertiary';
-  }
-}
-
-function getTierBorder(tier: string) {
-  switch (tier) {
-    case 'elite': return 'border-amber-500/40';
-    case 'advanced': return 'border-fuchsia-500/40';
-    case 'standard': return 'border-sky-500/40';
-    case 'basic': return 'border-emerald-500/40';
-    default: return 'border-border';
   }
 }
 
@@ -348,6 +385,149 @@ function formatTimeRemaining(seconds: number): string {
   }
   return `${mins}m`;
 }
+
+// --- Unified inventory grid ---
+type ItemSlot =
+  | { type: 'rig'; id: string; icon: string; label: string; badge: string; tier: string }
+  | { type: 'card'; id: string; icon: string; label: string; badge: string; tier: string; cardType: string }
+  | { type: 'cooling'; id: string; icon: string; label: string; badge: string; tier: string }
+  | { type: 'modded_cooling'; id: string; icon: string; label: string; badge: string; tier: string }
+  | { type: 'material'; id: string; icon: string; label: string; badge: string; rarity: string }
+  | { type: 'component'; id: string; icon: string; label: string; badge: string; tier: string }
+  | { type: 'boost'; id: string; icon: string; label: string; badge: string; tier: string };
+
+const allItems = computed<ItemSlot[]>(() => [
+  ...inventoryStore.rigItems.map(r => ({
+    type: 'rig' as const, id: r.rig_id, icon: '⛏️',
+    label: getRigName(r.rig_id, r.name), badge: `x${r.quantity}`, tier: r.tier,
+  })),
+  ...groupedCards.value.map(g => ({
+    type: 'card' as const, id: g.card_id,
+    icon: g.card_type === 'combo' ? '⚡📡' : g.card_type === 'energy' ? '⚡' : '📡',
+    label: `+${g.amount}${g.card_type === 'combo' ? '' : '%'}`, badge: `x${g.codes.length}`,
+    tier: g.tier, cardType: g.card_type,
+  })),
+  ...inventoryStore.coolingItems.map(c => ({
+    type: 'cooling' as const, id: c.inventory_id, icon: '❄️',
+    label: `-${c.cooling_power}°`, badge: `x${c.quantity}`, tier: c.tier,
+  })),
+  ...inventoryStore.moddedCoolingItems.map(c => ({
+    type: 'modded_cooling' as const, id: c.player_cooling_item_id, icon: '❄️',
+    label: `-${c.effective_cooling_power.toFixed(1)}°`, badge: `${c.mod_slots_used}/${c.max_mod_slots}`, tier: c.tier,
+  })),
+  ...inventoryStore.materialItems.map(m => ({
+    type: 'material' as const, id: m.material_id, icon: m.icon,
+    label: getMaterialName(m.name), badge: `x${m.quantity}`, rarity: m.rarity,
+  })),
+  ...inventoryStore.componentItems.map(c => ({
+    type: 'component' as const, id: c.id, icon: '🧩',
+    label: getComponentName(c.id, c.name), badge: `x${c.quantity}`, tier: c.tier,
+  })),
+  ...inventoryStore.boostItems.map(b => ({
+    type: 'boost' as const, id: b.boost_id, icon: getBoostIcon(b.boost_type),
+    label: getBoostName(b.boost_id), badge: `x${b.quantity}`, tier: b.tier,
+  })),
+]);
+
+const emptySlots = computed(() => Math.max(0, inventoryStore.maxSlots - allItems.value.length));
+
+const capacityPercentage = computed(() =>
+  Math.min(100, Math.round((inventoryStore.slotsUsed / inventoryStore.maxSlots) * 100))
+);
+
+// Slot border color by item type
+function getSlotBorder(item: ItemSlot): string {
+  switch (item.type) {
+    case 'rig': return 'border-amber-500/50';
+    case 'card': return item.cardType === 'energy' ? 'border-emerald-500/50' : item.cardType === 'combo' ? 'border-emerald-500/50' : 'border-emerald-500/50';
+    case 'cooling':
+    case 'modded_cooling': return 'border-cyan-500/50';
+    case 'material':
+    case 'component': return 'border-fuchsia-500/50';
+    case 'boost': return 'border-orange-500/50';
+    default: return 'border-border';
+  }
+}
+
+function getSlotBg(item: ItemSlot): string {
+  switch (item.type) {
+    case 'rig': return 'bg-amber-500/8';
+    case 'card': return 'bg-emerald-500/8';
+    case 'cooling':
+    case 'modded_cooling': return 'bg-cyan-500/8';
+    case 'material':
+    case 'component': return 'bg-fuchsia-500/8';
+    case 'boost': return 'bg-orange-500/8';
+    default: return 'bg-bg-tertiary';
+  }
+}
+
+function getSlotLabelColor(item: ItemSlot): string {
+  switch (item.type) {
+    case 'rig': return 'text-amber-400';
+    case 'card': return 'text-emerald-400';
+    case 'cooling':
+    case 'modded_cooling': return 'text-cyan-400';
+    case 'material': return 'rarity' in item ? getRarityColor(item.rarity) : 'text-fuchsia-400';
+    case 'component': return 'text-fuchsia-400';
+    case 'boost': return 'text-orange-400';
+    default: return 'text-text-muted';
+  }
+}
+
+function getSlotTierLetter(item: ItemSlot): string {
+  if ('tier' in item) return item.tier.charAt(0).toUpperCase();
+  if ('rarity' in item) return item.rarity.charAt(0).toUpperCase();
+  return '';
+}
+
+function getSlotTierColor(item: ItemSlot): string {
+  if ('tier' in item) return getTierColor(item.tier);
+  if ('rarity' in item) return getRarityColor(item.rarity);
+  return 'text-text-muted';
+}
+
+// --- Selected item resolvers ---
+const selectedRig = computed(() => {
+  if (selectedItem.value?.type !== 'rig') return null;
+  return inventoryStore.rigItems.find(r => r.rig_id === selectedItem.value!.id) ?? null;
+});
+
+const selectedCard = computed(() => {
+  if (selectedItem.value?.type !== 'card') return null;
+  return groupedCards.value.find(g => g.card_id === selectedItem.value!.id) ?? null;
+});
+
+const selectedCooling = computed(() => {
+  if (selectedItem.value?.type !== 'cooling' && selectedItem.value?.type !== 'modded_cooling') return null;
+  const id = selectedItem.value!.id;
+  if (selectedItem.value!.type === 'cooling') {
+    const unmodded = inventoryStore.coolingItems.find(c => c.inventory_id === id);
+    if (unmodded) return { item: unmodded, modded: false as const };
+  } else {
+    const modded = inventoryStore.moddedCoolingItems.find(c => c.player_cooling_item_id === id);
+    if (modded) return { item: modded, modded: true as const };
+  }
+  return null;
+});
+
+const selectedMaterial = computed(() => {
+  if (selectedItem.value?.type !== 'material' && selectedItem.value?.type !== 'component') return null;
+  const id = selectedItem.value!.id;
+  if (selectedItem.value!.type === 'material') {
+    const mat = inventoryStore.materialItems.find(m => m.material_id === id);
+    if (mat) return { item: mat, kind: 'material' as const };
+  } else {
+    const comp = inventoryStore.componentItems.find(c => c.id === id);
+    if (comp) return { item: comp, kind: 'component' as const };
+  }
+  return null;
+});
+
+const selectedBoost = computed(() => {
+  if (selectedItem.value?.type !== 'boost') return null;
+  return inventoryStore.boostItems.find(b => b.boost_id === selectedItem.value!.id) ?? null;
+});
 </script>
 
 <template>
@@ -392,363 +572,297 @@ function formatTimeRemaining(seconds: number): string {
           </div>
         </div>
 
-        <!-- Content -->
-        <div class="flex-1 overflow-y-auto p-4 space-y-6">
-          <!-- Loading (only on first load) -->
-          <div v-if="inventoryStore.loading && !inventoryStore.loaded" class="text-center py-16">
-            <div class="w-8 h-8 mx-auto mb-4 border-2 border-accent-primary border-t-transparent rounded-full animate-spin"></div>
-            <p class="text-text-muted text-sm">{{ t('inventory.loading') }}</p>
+        <!-- Capacity Bar -->
+        <div class="px-3 py-1.5 border-b border-border/30 flex items-center gap-2">
+          <span class="text-xs text-text-muted">🎒</span>
+          <div class="flex-1 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+            <div
+              class="h-full rounded-full transition-all duration-300"
+              :class="capacityPercentage > 90 ? 'bg-status-danger' : capacityPercentage > 70 ? 'bg-status-warning' : 'bg-accent-primary'"
+              :style="{ width: capacityPercentage + '%' }"
+            ></div>
+          </div>
+          <span class="text-xs font-mono" :class="capacityPercentage > 90 ? 'text-status-danger' : 'text-text-muted'">
+            {{ inventoryStore.slotsUsed }}/{{ inventoryStore.maxSlots }}
+          </span>
+        </div>
+
+        <!-- Active Boosts Bar -->
+        <div v-if="inventoryStore.activeBoosts.length > 0" class="px-3 pt-2 pb-1 border-b border-border/30">
+          <div class="flex flex-wrap gap-1.5">
+            <div
+              v-for="boost in inventoryStore.activeBoosts"
+              :key="boost.id"
+              class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/30 text-xs"
+            >
+              <span class="font-medium text-amber-400">{{ getBoostName(boost.boost_id) }}</span>
+              <span class="text-[10px] text-text-muted">{{ formatTimeRemaining(boost.seconds_remaining) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+          <!-- Loading -->
+          <div v-if="inventoryStore.loading && !inventoryStore.loaded" class="flex-1 flex items-center justify-center">
+            <div class="text-center">
+              <div class="w-8 h-8 mx-auto mb-4 border-2 border-accent-primary border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-text-muted text-sm">{{ t('inventory.loading') }}</p>
+            </div>
           </div>
 
+          <!-- Inventory Grid -->
           <template v-else>
-            <!-- Empty state -->
-            <div v-if="inventoryStore.totalItems === 0" class="text-center py-16">
-              <div class="text-5xl mb-4 opacity-50">🎒</div>
-              <p class="text-text-muted">{{ t('inventory.empty', 'Tu inventario está vacío') }}</p>
-              <p class="text-text-muted/70 text-sm mt-1">{{ t('inventory.emptyHint', 'Compra items en el mercado') }}</p>
+            <div class="flex-1 overflow-y-auto p-3">
+              <div class="grid grid-cols-5 sm:grid-cols-8 gap-1.5">
+                <!-- Filled slots -->
+                <button
+                  v-for="item in allItems"
+                  :key="item.type + '-' + item.id"
+                  @click="selectItem(item.type, item.id)"
+                  class="aspect-square rounded-md border p-0.5 flex flex-col items-center justify-center relative transition-all duration-150 cursor-pointer"
+                  :class="[
+                    getSlotBorder(item), getSlotBg(item),
+                    selectedItem?.type === item.type && selectedItem?.id === item.id
+                      ? 'ring-2 ring-accent-primary scale-105 shadow-glow'
+                      : 'hover:scale-[1.02] hover:brightness-110'
+                  ]"
+                >
+                  <span class="absolute top-0 left-0.5 text-[7px] uppercase font-bold" :class="getSlotTierColor(item)">{{ getSlotTierLetter(item) }}</span>
+                  <span v-if="item.type === 'modded_cooling'" class="absolute top-0 right-0 text-[7px] bg-fuchsia-500/40 text-fuchsia-300 rounded px-0.5">🔧</span>
+                  <span class="text-lg sm:text-xl leading-none">{{ item.icon }}</span>
+                  <span class="text-[7px] sm:text-[8px] truncate w-full text-center leading-tight" :class="getSlotLabelColor(item)">{{ item.label }}</span>
+                  <span class="absolute bottom-0 right-0.5 text-[8px] font-mono font-bold text-white bg-black/50 px-0.5 rounded">{{ item.badge }}</span>
+                </button>
+
+                <!-- Empty slots -->
+                <div
+                  v-for="n in emptySlots"
+                  :key="'empty-' + n"
+                  class="aspect-square rounded-md border border-dashed border-border/20 bg-white/[0.02]"
+                ></div>
+              </div>
             </div>
 
-            <template v-else>
-              <!-- Active Boosts Bar -->
-              <div v-if="inventoryStore.activeBoosts.length > 0" class="mb-4">
-                <h3 class="text-xs sm:text-sm font-medium text-text-muted mb-1.5 sm:mb-2">{{ t('inventory.boosts.active') }}</h3>
-                <div class="flex flex-wrap gap-1.5 sm:gap-2">
-                  <div
-                    v-for="boost in inventoryStore.activeBoosts"
-                    :key="boost.id"
-                    class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30"
-                  >
-                    <span class="text-xs sm:text-sm font-medium text-amber-400">{{ getBoostName(boost.boost_id) }}</span>
-                    <span class="text-[10px] sm:text-xs text-text-muted">{{ formatTimeRemaining(boost.seconds_remaining) }}</span>
+            <!-- Detail Panel -->
+            <div
+              v-if="selectedItem"
+              class="shrink-0 border-t border-border/50 bg-bg-primary/80 backdrop-blur-sm p-3 sm:p-4 max-h-[40%] overflow-y-auto animate-slide-up"
+            >
+              <!-- Rig Detail -->
+              <template v-if="selectedRig">
+                <div class="flex items-start gap-3">
+                  <div class="text-3xl sm:text-4xl">⛏️</div>
+                  <div class="flex-1 min-w-0">
+                    <h4 class="font-bold text-sm sm:text-base" :class="getTierColor(selectedRig.tier)">{{ getRigName(selectedRig.rig_id, selectedRig.name) }}</h4>
+                    <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ selectedRig.tier }} Rig</p>
+                  </div>
+                  <span class="text-xs font-mono text-text-muted">x{{ selectedRig.quantity }}</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-2">
+                  <div class="text-center p-1.5 rounded bg-bg-secondary">
+                    <div class="text-[10px] text-text-muted">Hashrate</div>
+                    <div class="font-mono font-bold text-sm text-accent-primary">{{ formatNumber(selectedRig.hashrate) }} H/s</div>
+                  </div>
+                  <div class="text-center p-1.5 rounded bg-bg-secondary">
+                    <div class="text-[10px] text-text-muted">⚡ Power</div>
+                    <div class="font-mono font-bold text-sm text-amber-400">{{ selectedRig.power_consumption }}/t</div>
+                  </div>
+                  <div class="text-center p-1.5 rounded bg-bg-secondary">
+                    <div class="text-[10px] text-text-muted">📡 Internet</div>
+                    <div class="font-mono font-bold text-sm text-cyan-400">{{ selectedRig.internet_consumption }}/t</div>
                   </div>
                 </div>
-              </div>
-
-              <!-- Rigs Section -->
-              <div v-if="inventoryStore.rigItems.length > 0">
-                <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
-                  <span>⛏️</span>
-                  {{ t('inventory.tabs.rigs', 'Rigs') }}
-                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-accent-primary/30 text-accent-primary">
-                    {{ inventoryStore.rigItems.reduce((sum, r) => sum + r.quantity, 0) }}
-                  </span>
-                </h3>
-                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                  <div
-                    v-for="rig in inventoryStore.rigItems"
-                    :key="rig.rig_id"
-                    class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
-                    :class="[getTierBorder(rig.tier), getTierBg(rig.tier)]"
+                <div class="flex gap-2 mt-3">
+                  <button
+                    @click="requestInstallRig(selectedRig)"
+                    :disabled="using || inventoryStore.installing"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-accent-primary text-white hover:bg-accent-primary/80"
                   >
-                    <div class="flex items-start justify-between mb-2 sm:mb-3">
-                      <div class="min-w-0 flex-1">
-                        <h4 class="font-medium text-xs sm:text-sm truncate" :class="getTierColor(rig.tier)">{{ getRigName(rig.rig_id, rig.name) }}</h4>
-                        <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ rig.tier }}</p>
-                      </div>
-                      <span class="text-lg sm:text-2xl ml-1">⛏️</span>
-                    </div>
-
-                    <div class="flex items-center justify-between mb-1 sm:mb-2">
-                      <span class="text-[10px] sm:text-xs text-text-muted">Hashrate</span>
-                      <span class="font-mono font-bold text-sm sm:text-lg text-accent-primary">{{ formatNumber(rig.hashrate) }} H/s</span>
-                    </div>
-
-                    <div class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
-                      <span>⚡{{ rig.power_consumption }}/t</span>
-                      <span>•</span>
-                      <span>📡{{ rig.internet_consumption }}/t</span>
-                      <span class="ml-auto font-medium">x{{ rig.quantity }}</span>
-                    </div>
-
-                    <div class="mt-auto">
-                      <button
-                        @click="requestInstallRig(rig)"
-                        :disabled="using || inventoryStore.installing"
-                        class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50 bg-accent-primary text-white hover:bg-accent-primary/80"
-                      >
-                        {{ inventoryStore.installing ? '...' : t('inventory.rigs.install', 'Instalar') }}
-                      </button>
-                    </div>
-                  </div>
+                    {{ inventoryStore.installing ? '...' : t('inventory.rigs.install', 'Instalar') }}
+                  </button>
+                  <button
+                    @click="requestDeleteItem('rig', selectedRig.rig_id, getRigName(selectedRig.rig_id, selectedRig.name), selectedRig.quantity)"
+                    :disabled="using"
+                    class="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
+                    :title="t('inventory.delete.button', 'Descartar')"
+                  >
+                    🗑️
+                  </button>
                 </div>
-              </div>
+              </template>
 
-              <!-- Prepaid Cards Section -->
-              <div v-if="groupedCards.length > 0">
-                <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
-                  <span>💳</span>
-                  {{ t('inventory.tabs.cards', 'Tarjetas') }}
-                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-amber-500/30 text-amber-400">
-                    {{ inventoryStore.cardItems.length }}
-                  </span>
-                </h3>
-                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                  <div
-                    v-for="group in groupedCards"
-                    :key="group.card_id"
-                    class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
-                    :class="group.card_type === 'combo'
-                      ? 'bg-gradient-to-br from-amber-500/10 to-cyan-500/10 border-amber-500/20'
-                      : group.card_type === 'energy'
-                        ? 'bg-amber-500/10 border-amber-500/30'
-                        : 'bg-cyan-500/10 border-cyan-500/30'"
-                  >
-                    <div class="flex items-start justify-between mb-2 sm:mb-3">
-                      <div class="min-w-0 flex-1">
-                        <h4 class="font-medium text-xs sm:text-sm truncate" :class="group.card_type === 'combo' ? 'text-white' : group.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">{{ getCardName(group.card_id) }}</h4>
-                        <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ group.tier }}</p>
-                      </div>
-                      <span class="text-lg sm:text-2xl ml-1">{{ group.card_type === 'combo' ? '⚡📡' : group.card_type === 'energy' ? '⚡' : '📡' }}</span>
+              <!-- Card Detail -->
+              <template v-if="selectedCard">
+                <div class="flex items-start gap-3">
+                  <div class="text-3xl sm:text-4xl">{{ selectedCard.card_type === 'combo' ? '⚡📡' : selectedCard.card_type === 'energy' ? '⚡' : '📡' }}</div>
+                  <div class="flex-1 min-w-0">
+                    <h4 class="font-bold text-sm sm:text-base" :class="selectedCard.card_type === 'combo' ? 'text-white' : selectedCard.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">{{ getCardName(selectedCard.card_id) }}</h4>
+                    <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ selectedCard.tier }}</p>
+                  </div>
+                  <span class="text-xs font-mono text-text-muted">x{{ selectedCard.codes.length }}</span>
+                </div>
+                <div class="mt-2 space-y-1">
+                  <template v-if="selectedCard.card_type === 'combo'">
+                    <div class="flex justify-between text-xs"><span class="text-text-muted">⚡ {{ t('welcome.energy', 'Energía') }}</span><span class="font-mono font-bold text-amber-400">+{{ selectedCard.amount }}</span></div>
+                    <div class="flex justify-between text-xs"><span class="text-text-muted">📡 {{ t('welcome.internet', 'Internet') }}</span><span class="font-mono font-bold text-cyan-400">+{{ selectedCard.amount }}</span></div>
+                  </template>
+                  <template v-else>
+                    <div class="flex justify-between text-xs">
+                      <span class="text-text-muted">{{ selectedCard.card_type === 'energy' ? t('welcome.energy', 'Energía') : t('welcome.internet', 'Internet') }}</span>
+                      <span class="font-mono font-bold" :class="selectedCard.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">+{{ selectedCard.amount }}%</span>
                     </div>
+                  </template>
+                </div>
+                <div class="flex gap-2 mt-3">
+                  <button
+                    @click="requestRedeemCard(selectedCard)"
+                    :disabled="using"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    :class="selectedCard.card_type === 'combo'
+                      ? 'bg-gradient-to-r from-amber-500 to-cyan-500 text-white hover:from-amber-400 hover:to-cyan-400'
+                      : selectedCard.card_type === 'energy'
+                        ? 'bg-amber-500 text-white hover:bg-amber-400'
+                        : 'bg-cyan-500 text-white hover:bg-cyan-400'"
+                  >
+                    {{ using ? '...' : t('inventory.cards.recharge') }}
+                  </button>
+                  <button
+                    @click="requestDeleteItem('card', selectedCard.card_id, getCardName(selectedCard.card_id), selectedCard.codes.length)"
+                    :disabled="using"
+                    class="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
+                    :title="t('inventory.delete.button', 'Descartar')"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </template>
 
-                    <!-- Combo: show both resources -->
-                    <template v-if="group.card_type === 'combo'">
-                      <div class="space-y-1 mb-1 sm:mb-2">
-                        <div class="flex items-center justify-between">
-                          <span class="text-[10px] sm:text-xs text-text-muted">⚡ {{ t('welcome.energy', 'Energía') }}</span>
-                          <span class="font-mono font-bold text-xs sm:text-sm text-amber-400">+{{ group.amount }}</span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                          <span class="text-[10px] sm:text-xs text-text-muted">📡 {{ t('welcome.internet', 'Internet') }}</span>
-                          <span class="font-mono font-bold text-xs sm:text-sm text-cyan-400">+{{ group.amount }}</span>
-                        </div>
-                      </div>
+              <!-- Cooling Detail -->
+              <template v-if="selectedCooling">
+                <div class="flex items-start gap-3">
+                  <div class="text-3xl sm:text-4xl">❄️</div>
+                  <div class="flex-1 min-w-0">
+                    <template v-if="!selectedCooling.modded">
+                      <h4 class="font-bold text-sm sm:text-base" :class="getTierColor(selectedCooling.item.tier)">{{ getCoolingName(selectedCooling.item.id) }}</h4>
+                      <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ selectedCooling.item.tier }} · {{ selectedCooling.item.max_mod_slots || 1 }} slots</p>
                     </template>
-                    <!-- Single resource -->
                     <template v-else>
-                      <div class="flex items-center justify-between mb-1 sm:mb-2">
-                        <span class="text-[10px] sm:text-xs text-text-muted">{{ group.card_type === 'energy' ? t('welcome.energy', 'Energía') : t('welcome.internet', 'Internet') }}</span>
-                        <span class="font-mono font-bold text-sm sm:text-lg" :class="group.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">
-                          +{{ group.amount }}%
-                        </span>
-                      </div>
+                      <h4 class="font-bold text-sm sm:text-base" :class="getTierColor(selectedCooling.item.tier)">{{ getCoolingName(selectedCooling.item.cooling_item_id, selectedCooling.item.name) }}</h4>
+                      <p class="text-[10px] sm:text-xs text-fuchsia-400 uppercase">{{ t('inventory.cooling.modded') }} · 🧩 {{ selectedCooling.item.mod_slots_used }}/{{ selectedCooling.item.max_mod_slots }}</p>
                     </template>
-
-                    <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
-                      <span>{{ group.card_type === 'combo' ? '⚡📡' : group.card_type === 'energy' ? '⚡' : '📡' }} {{ t('inventory.tabs.cards', 'Tarjetas') }}</span>
-                      <span class="font-medium">x{{ group.codes.length }}</span>
-                    </div>
-
-                    <div class="mt-auto">
-                      <button
-                        @click="requestRedeemCard(group)"
-                        :disabled="using"
-                        class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
-                        :class="group.card_type === 'combo'
-                          ? 'bg-gradient-to-r from-amber-500 to-cyan-500 text-white hover:from-amber-400 hover:to-cyan-400'
-                          : group.card_type === 'energy'
-                            ? 'bg-amber-500 text-white hover:bg-amber-400'
-                            : 'bg-cyan-500 text-white hover:bg-cyan-400'"
-                      >
-                        {{ using ? '...' : t('inventory.cards.recharge') }}
-                      </button>
-                    </div>
+                  </div>
+                  <span v-if="!selectedCooling.modded" class="text-xs font-mono text-text-muted">x{{ selectedCooling.item.quantity }}</span>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                  <div class="text-center p-1.5 rounded bg-bg-secondary">
+                    <div class="text-[10px] text-text-muted">{{ t('inventory.cooling.power', 'Potencia') }}</div>
+                    <div class="font-mono font-bold text-sm text-cyan-400">-{{ selectedCooling.modded ? selectedCooling.item.effective_cooling_power.toFixed(1) : selectedCooling.item.cooling_power }}°</div>
+                  </div>
+                  <div class="text-center p-1.5 rounded bg-bg-secondary">
+                    <div class="text-[10px] text-text-muted">⚡ Cost</div>
+                    <div class="font-mono font-bold text-sm text-amber-400">+{{ selectedCooling.modded ? selectedCooling.item.effective_energy_cost.toFixed(1) : selectedCooling.item.energy_cost }}/t</div>
+                  </div>
+                  <div v-if="selectedCooling.modded && selectedCooling.item.total_durability_mod !== 0" class="text-center p-1.5 rounded bg-bg-secondary">
+                    <div class="text-[10px] text-text-muted">🔧 Durability</div>
+                    <div class="font-mono font-bold text-sm" :class="selectedCooling.item.total_durability_mod > 0 ? 'text-emerald-400' : 'text-rose-400'">{{ selectedCooling.item.total_durability_mod > 0 ? '+' : '' }}{{ selectedCooling.item.total_durability_mod.toFixed(1) }}%</div>
                   </div>
                 </div>
-              </div>
-
-              <!-- Cooling Section -->
-              <div v-if="inventoryStore.coolingItems.length > 0 || inventoryStore.moddedCoolingItems.length > 0">
-                <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
-                  <span>❄️</span>
-                  {{ t('inventory.tabs.cooling', 'Enfriamiento') }}
-                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-cyan-500/30 text-cyan-400">
-                    {{ inventoryStore.coolingItems.length + inventoryStore.moddedCoolingItems.length }}
-                  </span>
-                </h3>
-                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                  <!-- Unmodded Cooling Items -->
-                  <div
-                    v-for="item in inventoryStore.coolingItems"
-                    :key="item.inventory_id"
-                    class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full"
-                    :class="[getTierBorder(item.tier), getTierBg(item.tier)]"
+                <div class="flex gap-2 mt-3">
+                  <button
+                    @click="openWorkshop(selectedCooling.item)"
+                    :disabled="selectedCooling.modded && selectedCooling.item.mod_slots_used >= selectedCooling.item.max_mod_slots"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    :class="(!selectedCooling.modded || selectedCooling.item.mod_slots_used < selectedCooling.item.max_mod_slots)
+                      ? 'bg-fuchsia-600 hover:bg-fuchsia-500 text-white'
+                      : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                   >
-                    <div class="flex items-start justify-between mb-2 sm:mb-3">
-                      <div class="min-w-0 flex-1">
-                        <h4 class="font-medium text-xs sm:text-sm truncate" :class="getTierColor(item.tier)">{{ getCoolingName(item.id) }}</h4>
-                        <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ item.tier }} · {{ item.max_mod_slots || 1 }} slots</p>
-                      </div>
-                      <span class="text-lg sm:text-2xl ml-1">❄️</span>
-                    </div>
+                    🔧 {{ (!selectedCooling.modded || selectedCooling.item.mod_slots_used < selectedCooling.item.max_mod_slots) ? t('inventory.cooling.modify') : t('workshop.slotsFull') }}
+                  </button>
+                  <button
+                    @click="selectedCooling.modded
+                      ? requestDeleteItem('modded_cooling', selectedCooling.item.player_cooling_item_id, getCoolingName(selectedCooling.item.cooling_item_id, selectedCooling.item.name))
+                      : requestDeleteItem('cooling', selectedCooling.item.inventory_id, getCoolingName(selectedCooling.item.id), selectedCooling.item.quantity)"
+                    :disabled="using"
+                    class="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
+                    :title="t('inventory.delete.button', 'Descartar')"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </template>
 
-                    <div class="flex items-center justify-between mb-1 sm:mb-2">
-                      <span class="text-[10px] sm:text-xs text-text-muted">{{ t('inventory.cooling.power', 'Potencia') }}</span>
-                      <span class="font-mono font-bold text-sm sm:text-lg text-cyan-400">-{{ item.cooling_power }}°</span>
+              <!-- Material / Component Detail -->
+              <template v-if="selectedMaterial">
+                <template v-if="selectedMaterial.kind === 'material'">
+                  <div class="flex items-start gap-3">
+                    <div class="text-3xl sm:text-4xl">{{ selectedMaterial.item.icon }}</div>
+                    <div class="flex-1 min-w-0">
+                      <h4 class="font-bold text-sm sm:text-base" :class="getRarityColor(selectedMaterial.item.rarity)">{{ getMaterialName(selectedMaterial.item.name) }}</h4>
+                      <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ selectedMaterial.item.rarity }}</p>
                     </div>
-
-                    <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
-                      <span>⚡ +{{ item.energy_cost }}/t</span>
-                      <span class="font-medium">x{{ item.quantity }}</span>
-                    </div>
-
-                    <div class="mt-auto flex gap-1.5">
-                      <button
-                        @click="openWorkshop(item)"
-                        class="flex-1 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors bg-fuchsia-600 hover:bg-fuchsia-500 text-white"
-                      >
-                        🔧 {{ t('inventory.cooling.modify') }}
-                      </button>
-                    </div>
+                    <span class="text-xs font-mono text-text-muted">x{{ selectedMaterial.item.quantity }}</span>
                   </div>
-
-                  <!-- Modded Cooling Items -->
-                  <div
-                    v-for="item in inventoryStore.moddedCoolingItems"
-                    :key="item.player_cooling_item_id"
-                    class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full relative"
-                    :class="[getTierBorder(item.tier), getTierBg(item.tier)]"
+                  <p class="text-[10px] sm:text-xs text-text-muted/70 italic mt-2">{{ t('inventory.materials.description') }}</p>
+                  <button
+                    @click="requestDeleteItem('material', selectedMaterial.item.material_id, getMaterialName(selectedMaterial.item.name), selectedMaterial.item.quantity)"
+                    :disabled="using"
+                    class="w-full mt-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
                   >
-                    <!-- Modded badge -->
-                    <div class="absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-[9px] bg-fuchsia-500/30 text-fuchsia-300 border border-fuchsia-500/40">
-                      🧩 {{ item.mod_slots_used }}/{{ item.max_mod_slots }}
+                    🗑️ {{ t('inventory.delete.button', 'Descartar') }}
+                  </button>
+                </template>
+                <template v-else>
+                  <div class="flex items-start gap-3">
+                    <div class="text-3xl sm:text-4xl">🧩</div>
+                    <div class="flex-1 min-w-0">
+                      <h4 class="font-bold text-sm sm:text-base" :class="getTierColor(selectedMaterial.item.tier)">{{ getComponentName(selectedMaterial.item.id, selectedMaterial.item.name) }}</h4>
+                      <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ selectedMaterial.item.tier }}</p>
                     </div>
+                    <span class="text-xs font-mono text-text-muted">x{{ selectedMaterial.item.quantity }}</span>
+                  </div>
+                  <p class="text-[10px] sm:text-xs text-text-muted/70 italic mt-2">{{ t('inventory.components.description') }}</p>
+                  <button
+                    @click="requestDeleteItem('component', selectedMaterial.item.id, getComponentName(selectedMaterial.item.id, selectedMaterial.item.name), selectedMaterial.item.quantity)"
+                    :disabled="using"
+                    class="w-full mt-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
+                  >
+                    🗑️ {{ t('inventory.delete.button', 'Descartar') }}
+                  </button>
+                </template>
+              </template>
 
-                    <div class="flex items-start justify-between mb-2 sm:mb-3">
-                      <div class="min-w-0 flex-1">
-                        <h4 class="font-medium text-xs sm:text-sm truncate" :class="getTierColor(item.tier)">{{ getCoolingName(item.cooling_item_id, item.name) }}</h4>
-                        <p class="text-[10px] sm:text-xs text-fuchsia-400 uppercase">{{ t('inventory.cooling.modded') }}</p>
-                      </div>
-                      <span class="text-lg sm:text-2xl ml-1">❄️</span>
-                    </div>
-
-                    <div class="flex items-center justify-between mb-0.5">
-                      <span class="text-[10px] sm:text-xs text-text-muted">{{ t('inventory.cooling.power', 'Potencia') }}</span>
-                      <span class="font-mono font-bold text-sm sm:text-lg text-cyan-400">-{{ item.effective_cooling_power.toFixed(1) }}°</span>
-                    </div>
-                    <div v-if="item.effective_cooling_power !== item.cooling_power" class="text-right text-[9px] text-emerald-400 mb-1">
-                      {{ item.effective_cooling_power > item.cooling_power ? '+' : '' }}{{ (((item.effective_cooling_power - item.cooling_power) / item.cooling_power) * 100).toFixed(1) }}%
-                    </div>
-
-                    <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
-                      <span>⚡ +{{ item.effective_energy_cost.toFixed(1) }}/t</span>
-                      <span v-if="item.total_durability_mod !== 0" class="font-medium" :class="item.total_durability_mod > 0 ? 'text-emerald-400' : 'text-rose-400'">
-                        🔧 {{ item.total_durability_mod > 0 ? '+' : '' }}{{ item.total_durability_mod.toFixed(1) }}%
-                      </span>
-                    </div>
-
-                    <div class="mt-auto flex gap-1.5">
-                      <button
-                        @click="openWorkshop(item)"
-                        :disabled="item.mod_slots_used >= item.max_mod_slots"
-                        class="flex-1 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
-                        :class="item.mod_slots_used < item.max_mod_slots
-                          ? 'bg-fuchsia-600 hover:bg-fuchsia-500 text-white'
-                          : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-                      >
-                        🔧 {{ item.mod_slots_used < item.max_mod_slots ? t('inventory.cooling.modify') : t('workshop.slotsFull') }}
-                      </button>
-                    </div>
+              <!-- Boost Detail -->
+              <template v-if="selectedBoost">
+                <div class="flex items-start gap-3">
+                  <div class="text-3xl sm:text-4xl">{{ getBoostIcon(selectedBoost.boost_type) }}</div>
+                  <div class="flex-1 min-w-0">
+                    <h4 class="font-bold text-sm sm:text-base text-amber-400">{{ getBoostName(selectedBoost.boost_id) }}</h4>
+                    <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ selectedBoost.tier }}</p>
+                  </div>
+                  <span class="text-xs font-mono text-text-muted">x{{ selectedBoost.quantity }}</span>
+                </div>
+                <p class="text-xs text-text-muted mt-1">{{ getBoostTypeDescription(selectedBoost.boost_type) }}</p>
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                  <div class="text-center p-1.5 rounded bg-bg-secondary">
+                    <div class="text-[10px] text-text-muted">{{ t('market.boosts.effect') }}</div>
+                    <div class="font-mono font-bold text-sm text-amber-400">{{ formatBoostEffect(selectedBoost) }}</div>
+                  </div>
+                  <div class="text-center p-1.5 rounded bg-bg-secondary">
+                    <div class="text-[10px] text-text-muted">Duration</div>
+                    <div class="font-mono font-bold text-sm text-white">{{ formatDuration(selectedBoost.duration_minutes) }}</div>
                   </div>
                 </div>
-              </div>
-
-              <!-- Materials Section -->
-              <div v-if="inventoryStore.materialItems.length > 0">
-                <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
-                  <span>⛏️</span>
-                  {{ t('inventory.materials.title') }}
-                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-orange-500/30 text-orange-400">
-                    {{ inventoryStore.materialItems.reduce((sum, m) => sum + m.quantity, 0) }}
-                  </span>
-                </h3>
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div
-                    v-for="mat in inventoryStore.materialItems"
-                    :key="mat.material_id"
-                    class="rounded-lg border p-2.5 bg-white/5 border-border/30"
-                  >
-                    <div class="flex items-center gap-2 mb-1">
-                      <span class="text-lg">{{ mat.icon }}</span>
-                      <div class="min-w-0 flex-1">
-                        <h4 class="font-medium text-xs truncate" :class="getRarityColor(mat.rarity)">{{ getMaterialName(mat.name) }}</h4>
-                        <span class="text-[10px] uppercase text-text-muted">{{ mat.rarity }}</span>
-                      </div>
-                    </div>
-                    <div class="text-right font-mono font-bold text-sm text-text-primary">x{{ mat.quantity }}</div>
-                  </div>
-                </div>
-                <p class="text-[10px] sm:text-xs text-text-muted/70 italic mt-2">
-                  {{ t('inventory.materials.description') }}
-                </p>
-              </div>
-
-              <!-- Components Section -->
-              <div v-if="inventoryStore.componentItems.length > 0">
-                <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
-                  <span>🧩</span>
-                  {{ t('inventory.components.title') }}
-                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-fuchsia-500/30 text-fuchsia-400">
-                    {{ inventoryStore.componentItems.reduce((sum, c) => sum + c.quantity, 0) }}
-                  </span>
-                </h3>
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
-                  <div
-                    v-for="comp in inventoryStore.componentItems"
-                    :key="comp.id"
-                    class="rounded-lg border p-2.5 sm:p-3"
-                    :class="[getTierBorder(comp.tier), getTierBg(comp.tier)]"
-                  >
-                    <div class="flex items-start justify-between mb-1">
-                      <h4 class="font-medium text-xs truncate" :class="getTierColor(comp.tier)">{{ getComponentName(comp.id, comp.name) }}</h4>
-                      <span class="text-sm ml-1">🧩</span>
-                    </div>
-                    <div class="flex items-center justify-between text-[10px] text-text-muted">
-                      <span class="uppercase">{{ comp.tier }}</span>
-                      <span class="font-medium">x{{ comp.quantity }}</span>
-                    </div>
-                  </div>
-                </div>
-                <p class="text-[10px] sm:text-xs text-text-muted/70 italic mt-2">
-                  {{ t('inventory.components.description') }}
-                </p>
-              </div>
-
-              <!-- Boosts Section -->
-              <div v-if="inventoryStore.boostItems.length > 0">
-                <h3 class="text-sm font-medium text-text-muted mb-3 flex items-center gap-2">
-                  <span>🚀</span>
-                  Boosts
-                  <span class="px-1.5 py-0.5 rounded-full text-xs bg-amber-500/30 text-amber-400">
-                    {{ inventoryStore.boostItems.length }}
-                  </span>
-                </h3>
-                <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                  <div
-                    v-for="boost in inventoryStore.boostItems"
-                    :key="boost.id"
-                    class="rounded-lg border p-2.5 sm:p-4 flex flex-col h-full bg-amber-500/10 border-amber-500/30"
-                  >
-                    <div class="flex items-start justify-between mb-1 sm:mb-2">
-                      <div class="min-w-0 flex-1">
-                        <h4 class="font-medium text-xs sm:text-sm text-amber-400 truncate">{{ getBoostName(boost.boost_id) }}</h4>
-                        <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ boost.tier }}</p>
-                      </div>
-                      <span class="text-lg sm:text-2xl ml-1">{{ getBoostIcon(boost.boost_type) }}</span>
-                    </div>
-
-                    <!-- Boost type description (hidden on mobile) -->
-                    <p class="hidden sm:block text-xs text-text-muted mb-2">{{ getBoostTypeDescription(boost.boost_type) }}</p>
-
-                    <div class="flex items-center justify-between mb-0.5 sm:mb-1">
-                      <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.boosts.effect') }}</span>
-                      <span class="font-mono font-bold text-xs sm:text-sm text-amber-400">{{ formatBoostEffect(boost) }}</span>
-                    </div>
-
-                    <div class="flex items-center justify-between text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
-                      <span>{{ formatDuration(boost.duration_minutes) }}</span>
-                      <span class="font-medium">x{{ boost.quantity }}</span>
-                    </div>
-
-                    <div class="mt-auto">
-                      <p class="text-[10px] sm:text-xs text-text-muted/70 italic text-center py-1 sm:py-2">
-                        {{ t('inventory.boosts.installHint', 'Instalar desde gestion de rig') }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
+                <p class="text-[10px] sm:text-xs text-text-muted/70 italic text-center mt-2">{{ t('inventory.boosts.installHint', 'Instalar desde gestion de rig') }}</p>
+                <button
+                  @click="requestDeleteItem('boost', selectedBoost.boost_id, getBoostName(selectedBoost.boost_id), selectedBoost.quantity)"
+                  :disabled="using"
+                  class="w-full mt-2 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
+                >
+                  🗑️ {{ t('inventory.delete.button', 'Descartar') }}
+                </button>
+              </template>
+            </div>
           </template>
         </div>
       </div>
@@ -825,6 +939,52 @@ function formatTimeRemaining(seconds: number): string {
             </div>
           </template>
 
+          <!-- Delete Item Confirmation -->
+          <template v-else-if="confirmAction.type === 'delete_item'">
+            <div class="text-center mb-4">
+              <div class="text-4xl mb-3">🗑️</div>
+              <h3 class="text-lg font-bold text-status-danger mb-1">{{ t('inventory.delete.title', 'Descartar Item') }}</h3>
+              <p class="text-text-muted text-sm">{{ t('inventory.delete.warning', 'Esta acción no se puede deshacer') }}</p>
+            </div>
+
+            <div class="bg-bg-primary rounded-lg p-4 mb-4">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Item</span>
+                <span class="font-medium text-white">{{ confirmAction.data.deleteItemName }}</span>
+              </div>
+              <!-- Quantity selector for stackable items -->
+              <div v-if="(confirmAction.data.deleteMaxQuantity ?? 1) > 1" class="mt-3">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-text-muted text-sm">{{ t('inventory.delete.quantity', 'Cantidad') }}</span>
+                  <span class="font-mono text-sm text-white">{{ deleteQtyInput }} / {{ confirmAction.data.deleteMaxQuantity }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="deleteQtyInput = Math.max(1, deleteQtyInput - 1)"
+                    class="w-8 h-8 rounded bg-bg-secondary border border-border text-white hover:bg-bg-tertiary transition-colors"
+                  >-</button>
+                  <input
+                    v-model.number="deleteQtyInput"
+                    type="range"
+                    :min="1"
+                    :max="confirmAction.data.deleteMaxQuantity"
+                    class="flex-1 accent-status-danger"
+                  />
+                  <button
+                    @click="deleteQtyInput = Math.min(confirmAction.data.deleteMaxQuantity ?? 1, deleteQtyInput + 1)"
+                    class="w-8 h-8 rounded bg-bg-secondary border border-border text-white hover:bg-bg-tertiary transition-colors"
+                  >+</button>
+                </div>
+                <button
+                  @click="deleteQtyInput = confirmAction.data.deleteMaxQuantity ?? 1"
+                  class="w-full mt-1 text-xs text-status-danger/70 hover:text-status-danger transition-colors"
+                >
+                  {{ t('inventory.delete.all', 'Seleccionar todo') }}
+                </button>
+              </div>
+            </div>
+          </template>
+
           <div class="flex gap-3">
             <button
               @click="cancelUse"
@@ -835,7 +995,10 @@ function formatTimeRemaining(seconds: number): string {
             <button
               @click="confirmUse"
               :disabled="using || (confirmAction?.type === 'redeem' && inputCode !== generatedCode)"
-              class="flex-1 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 bg-accent-primary text-white hover:bg-accent-primary/80"
+              class="flex-1 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+              :class="confirmAction?.type === 'delete_item'
+                ? 'bg-status-danger text-white hover:bg-status-danger/80'
+                : 'bg-accent-primary text-white hover:bg-accent-primary/80'"
             >
               {{ using ? t('common.processing') : t('common.confirm') }}
             </button>

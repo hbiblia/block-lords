@@ -851,6 +851,17 @@ BEGIN
 
   -- SIN RESTRICCIÓN DE DUPLICADOS - puede comprar múltiples del mismo tipo
 
+  -- Check inventory capacity
+  IF NOT EXISTS (SELECT 1 FROM player_rig_inventory WHERE player_id = p_player_id AND rig_id = p_rig_id AND quantity > 0) THEN
+    IF count_inventory_slots(p_player_id) >= get_max_inventory_slots(p_player_id) THEN
+      RETURN json_build_object('success', false, 'error', 'inventory_full');
+    END IF;
+  ELSE
+    IF (SELECT quantity FROM player_rig_inventory WHERE player_id = p_player_id AND rig_id = p_rig_id) >= 10 THEN
+      RETURN json_build_object('success', false, 'error', 'stack_full');
+    END IF;
+  END IF;
+
   -- Manejar según la moneda del rig
   IF v_rig.currency = 'gamecoin' THEN
     IF v_player.gamecoin_balance < v_rig.base_price THEN
@@ -2576,6 +2587,17 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Item de refrigeración no encontrado');
   END IF;
 
+  -- Check inventory capacity
+  IF NOT EXISTS (SELECT 1 FROM player_inventory WHERE player_id = p_player_id AND item_type = 'cooling' AND item_id = p_cooling_id AND quantity > 0) THEN
+    IF count_inventory_slots(p_player_id) >= get_max_inventory_slots(p_player_id) THEN
+      RETURN json_build_object('success', false, 'error', 'inventory_full');
+    END IF;
+  ELSE
+    IF (SELECT quantity FROM player_inventory WHERE player_id = p_player_id AND item_type = 'cooling' AND item_id = p_cooling_id) >= 10 THEN
+      RETURN json_build_object('success', false, 'error', 'stack_full');
+    END IF;
+  END IF;
+
   -- Verificar balance
   IF v_player.gamecoin_balance < v_cooling.base_price THEN
     RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
@@ -2999,6 +3021,17 @@ BEGIN
 
   -- Obtener moneda (default gamecoin para compatibilidad)
   v_currency := COALESCE(v_card.currency, 'gamecoin');
+
+  -- Check inventory capacity
+  IF NOT EXISTS (SELECT 1 FROM player_cards WHERE player_id = p_player_id AND card_id = p_card_id AND is_redeemed = false) THEN
+    IF count_inventory_slots(p_player_id) >= get_max_inventory_slots(p_player_id) THEN
+      RETURN json_build_object('success', false, 'error', 'inventory_full');
+    END IF;
+  ELSE
+    IF (SELECT COUNT(*) FROM player_cards WHERE player_id = p_player_id AND card_id = p_card_id AND is_redeemed = false) >= 10 THEN
+      RETURN json_build_object('success', false, 'error', 'stack_full');
+    END IF;
+  END IF;
 
   -- Verificar balance según la moneda
   IF v_currency = 'crypto' THEN
@@ -4303,6 +4336,17 @@ BEGIN
   SELECT * INTO v_boost FROM boost_items WHERE id = p_boost_id;
   IF v_boost IS NULL THEN
     RETURN json_build_object('success', false, 'error', 'Boost not found');
+  END IF;
+
+  -- Check inventory capacity
+  IF NOT EXISTS (SELECT 1 FROM player_boosts WHERE player_id = p_player_id AND boost_id = p_boost_id AND quantity > 0) THEN
+    IF count_inventory_slots(p_player_id) >= get_max_inventory_slots(p_player_id) THEN
+      RETURN json_build_object('success', false, 'error', 'inventory_full');
+    END IF;
+  ELSE
+    IF (SELECT quantity FROM player_boosts WHERE player_id = p_player_id AND boost_id = p_boost_id) >= 10 THEN
+      RETURN json_build_object('success', false, 'error', 'stack_full');
+    END IF;
   END IF;
 
   -- Verificar balance según moneda
@@ -11857,6 +11901,17 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Componente no encontrado');
   END IF;
 
+  -- Check inventory capacity
+  IF NOT EXISTS (SELECT 1 FROM player_inventory WHERE player_id = p_player_id AND item_type = 'component' AND item_id = p_component_id AND quantity > 0) THEN
+    IF count_inventory_slots(p_player_id) >= get_max_inventory_slots(p_player_id) THEN
+      RETURN json_build_object('success', false, 'error', 'inventory_full');
+    END IF;
+  ELSE
+    IF (SELECT quantity FROM player_inventory WHERE player_id = p_player_id AND item_type = 'component' AND item_id = p_component_id) >= 10 THEN
+      RETURN json_build_object('success', false, 'error', 'stack_full');
+    END IF;
+  END IF;
+
   IF v_player.gamecoin_balance < v_component.base_price THEN
     RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
   END IF;
@@ -12443,3 +12498,210 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION forge_craft_item TO authenticated;
+
+-- =====================================================
+-- INVENTORY SLOT LIMIT HELPERS
+-- =====================================================
+
+-- Count total occupied slots across all inventory tables
+CREATE OR REPLACE FUNCTION count_inventory_slots(p_player_id UUID)
+RETURNS INTEGER
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT (
+    (SELECT COUNT(*)::INTEGER FROM player_rig_inventory WHERE player_id = p_player_id AND quantity > 0) +
+    (SELECT COUNT(*)::INTEGER FROM player_inventory WHERE player_id = p_player_id AND quantity > 0) +
+    (SELECT COUNT(DISTINCT card_id)::INTEGER FROM player_cards WHERE player_id = p_player_id AND is_redeemed = false) +
+    (SELECT COUNT(*)::INTEGER FROM player_boosts WHERE player_id = p_player_id AND quantity > 0) +
+    (SELECT COUNT(*)::INTEGER FROM player_materials WHERE player_id = p_player_id AND quantity > 0) +
+    (SELECT COUNT(*)::INTEGER FROM player_cooling_items WHERE player_id = p_player_id)
+  );
+$$;
+
+-- Get max inventory slots: 10 free, 20 premium
+CREATE OR REPLACE FUNCTION get_max_inventory_slots(p_player_id UUID)
+RETURNS INTEGER
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT CASE WHEN is_player_premium(p_player_id) THEN 20 ELSE 10 END;
+$$;
+
+-- =====================================================
+-- DELETE INVENTORY ITEM
+-- =====================================================
+-- Allows players to discard items from their inventory
+-- Supports: cooling, component, rig, boost, material, modded_cooling, card
+CREATE OR REPLACE FUNCTION delete_inventory_item(
+  p_player_id UUID,
+  p_item_type TEXT,
+  p_item_id TEXT,
+  p_quantity INTEGER DEFAULT 1
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current_qty INTEGER;
+  v_deleted INTEGER;
+  v_item_name TEXT;
+BEGIN
+  -- Validate quantity
+  IF p_quantity < 1 THEN
+    RETURN json_build_object('success', false, 'error', 'Cantidad inválida');
+  END IF;
+
+  IF p_item_type = 'cooling' THEN
+    -- Cooling items from player_inventory (unmodded)
+    SELECT quantity INTO v_current_qty
+    FROM player_inventory
+    WHERE id = p_item_id::UUID AND player_id = p_player_id AND item_type = 'cooling';
+
+    IF v_current_qty IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Item no encontrado');
+    END IF;
+
+    v_deleted := LEAST(p_quantity, v_current_qty);
+
+    IF p_quantity >= v_current_qty THEN
+      DELETE FROM player_inventory
+      WHERE id = p_item_id::UUID AND player_id = p_player_id AND item_type = 'cooling';
+    ELSE
+      UPDATE player_inventory
+      SET quantity = quantity - p_quantity
+      WHERE id = p_item_id::UUID AND player_id = p_player_id AND item_type = 'cooling';
+    END IF;
+
+  ELSIF p_item_type = 'modded_cooling' THEN
+    -- Modded cooling from player_cooling_items (not installed in any rig)
+    IF NOT EXISTS (
+      SELECT 1 FROM player_cooling_items
+      WHERE id = p_item_id::UUID AND player_id = p_player_id
+    ) THEN
+      RETURN json_build_object('success', false, 'error', 'Item no encontrado');
+    END IF;
+
+    -- Check it's not installed in a rig
+    IF EXISTS (
+      SELECT 1 FROM rig_cooling WHERE player_cooling_item_id = p_item_id::UUID
+    ) THEN
+      RETURN json_build_object('success', false, 'error', 'Desinstala el cooling del rig primero');
+    END IF;
+
+    DELETE FROM player_cooling_items
+    WHERE id = p_item_id::UUID AND player_id = p_player_id;
+    v_deleted := 1;
+
+  ELSIF p_item_type = 'component' THEN
+    -- Components from player_inventory
+    SELECT quantity INTO v_current_qty
+    FROM player_inventory
+    WHERE id = p_item_id::UUID AND player_id = p_player_id AND item_type = 'component';
+
+    IF v_current_qty IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Item no encontrado');
+    END IF;
+
+    v_deleted := LEAST(p_quantity, v_current_qty);
+
+    IF p_quantity >= v_current_qty THEN
+      DELETE FROM player_inventory
+      WHERE id = p_item_id::UUID AND player_id = p_player_id AND item_type = 'component';
+    ELSE
+      UPDATE player_inventory
+      SET quantity = quantity - p_quantity
+      WHERE id = p_item_id::UUID AND player_id = p_player_id AND item_type = 'component';
+    END IF;
+
+  ELSIF p_item_type = 'rig' THEN
+    -- Rigs from player_rig_inventory (uninstalled rigs)
+    SELECT quantity INTO v_current_qty
+    FROM player_rig_inventory
+    WHERE player_id = p_player_id AND rig_id = p_item_id;
+
+    IF v_current_qty IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Item no encontrado');
+    END IF;
+
+    v_deleted := LEAST(p_quantity, v_current_qty);
+
+    IF p_quantity >= v_current_qty THEN
+      DELETE FROM player_rig_inventory
+      WHERE player_id = p_player_id AND rig_id = p_item_id;
+    ELSE
+      UPDATE player_rig_inventory
+      SET quantity = quantity - p_quantity
+      WHERE player_id = p_player_id AND rig_id = p_item_id;
+    END IF;
+
+  ELSIF p_item_type = 'boost' THEN
+    -- Boosts from player_boosts
+    SELECT quantity INTO v_current_qty
+    FROM player_boosts
+    WHERE player_id = p_player_id AND boost_id = p_item_id;
+
+    IF v_current_qty IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Item no encontrado');
+    END IF;
+
+    v_deleted := LEAST(p_quantity, v_current_qty);
+
+    IF p_quantity >= v_current_qty THEN
+      DELETE FROM player_boosts
+      WHERE player_id = p_player_id AND boost_id = p_item_id;
+    ELSE
+      UPDATE player_boosts
+      SET quantity = quantity - p_quantity
+      WHERE player_id = p_player_id AND boost_id = p_item_id;
+    END IF;
+
+  ELSIF p_item_type = 'material' THEN
+    -- Materials from player_materials
+    SELECT quantity INTO v_current_qty
+    FROM player_materials
+    WHERE player_id = p_player_id AND material_id = p_item_id;
+
+    IF v_current_qty IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Item no encontrado');
+    END IF;
+
+    v_deleted := LEAST(p_quantity, v_current_qty);
+
+    IF p_quantity >= v_current_qty THEN
+      DELETE FROM player_materials
+      WHERE player_id = p_player_id AND material_id = p_item_id;
+    ELSE
+      UPDATE player_materials
+      SET quantity = quantity - p_quantity
+      WHERE player_id = p_player_id AND material_id = p_item_id;
+    END IF;
+
+  ELSIF p_item_type = 'card' THEN
+    -- Cards: delete one specific unredeemed card
+    IF NOT EXISTS (
+      SELECT 1 FROM player_cards
+      WHERE player_id = p_player_id AND card_id = p_item_id AND is_redeemed = false
+    ) THEN
+      RETURN json_build_object('success', false, 'error', 'Item no encontrado');
+    END IF;
+
+    -- Delete only one card of this type
+    DELETE FROM player_cards
+    WHERE id = (
+      SELECT id FROM player_cards
+      WHERE player_id = p_player_id AND card_id = p_item_id AND is_redeemed = false
+      LIMIT 1
+    );
+    v_deleted := 1;
+
+  ELSE
+    RETURN json_build_object('success', false, 'error', 'Tipo de item no válido');
+  END IF;
+
+  RETURN json_build_object('success', true, 'deleted', v_deleted);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION delete_inventory_item TO authenticated;

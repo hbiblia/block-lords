@@ -785,6 +785,13 @@
       noBoosts: 'No tienes boosts. Cómpralos en el mercado.',
       installHint: 'Activa boosts desde tu inventario para mejorar el rendimiento de minería.',
     },
+    delete: {
+      button: 'Descartar',
+      title: 'Descartar Item',
+      warning: 'Esta acción no se puede deshacer',
+      quantity: 'Cantidad',
+      all: 'Seleccionar todo',
+    },
     processing: {
       title: 'Procesando Acción',
       wait: 'Por favor espera mientras procesamos tu acción...',
@@ -797,6 +804,7 @@
       errorRepairRig: 'Error al reparar rig. Por favor intenta de nuevo.',
       errorDeleteRig: 'Error al eliminar rig. Por favor intenta de nuevo.',
       errorActivatingBoost: 'Error al activar boost. Por favor intenta de nuevo.',
+      errorDeleteItem: 'Error al descartar item. Por favor intenta de nuevo.',
     },
     confirm: {
       installCooling: 'Instalar Refrigeración',
@@ -1950,6 +1958,14 @@
     forge: {
       title: 'La Forja',
       description: '¡Nuevo sistema de <strong class="text-orange-400">Forja</strong>! Craftea items con materiales minados: <strong class="text-sky-400">Kits de Tier</strong> para acelerar XP de slots, <strong class="text-yellow-400">Mejoras de Rig</strong> para bonificaciones permanentes, <strong class="text-cyan-400">Componentes de Cooling</strong> (¡camino F2P a los 15 componentes!), y <strong class="text-fuchsia-400">Utilidades</strong> como Escudo de Durabilidad (+1 uso de slot) y Protector de Slot (previene destrucción). Accede desde el botón 🔨 Forja.',
+    },
+    newInventory: {
+      title: 'Nuevo Inventario',
+      description: 'El inventario fue <strong class="text-amber-400">rediseñado completamente</strong>. Ahora muestra todos tus items en una <strong class="text-cyan-400">grilla unificada</strong> con barra de capacidad. Cada tipo de item ocupa <strong class="text-amber-400">1 slot</strong>. Límite: <strong class="text-blue-400">10 slots Free</strong> / <strong class="text-amber-400">20 slots Premium</strong>. Toca un item para ver sus detalles y acciones.',
+    },
+    deleteItems: {
+      title: 'Eliminar Items del Inventario',
+      description: 'Ahora puedes <strong class="text-red-400">eliminar items</strong> directamente desde tu inventario. Selecciona un item, haz clic en 🗑️ y confirma la cantidad a descartar. Funciona con todos los tipos: rigs, coolings, componentes, boosts, materiales y tarjetas.',
     },
     button: '¡Entendido!',
   },

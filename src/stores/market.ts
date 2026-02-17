@@ -405,6 +405,16 @@ export const useMarketStore = defineStore('market', () => {
         };
       }
 
+      // Handle inventory capacity errors
+      if (data?.error === 'inventory_full') {
+        playSound('error');
+        return { success: false, error: 'Inventario lleno' };
+      }
+      if (data?.error === 'stack_full') {
+        playSound('error');
+        return { success: false, error: 'Stack máximo alcanzado (10)' };
+      }
+
       playSound('error');
       return { success: false, error: data?.error ?? 'Error buying rig' };
     } catch (e) {
@@ -472,6 +482,16 @@ export const useMarketStore = defineStore('market', () => {
         return { success: true };
       }
 
+      // Handle inventory capacity errors
+      if (data?.error === 'inventory_full') {
+        playSound('error');
+        return { success: false, error: 'Inventario lleno' };
+      }
+      if (data?.error === 'stack_full') {
+        playSound('error');
+        return { success: false, error: 'Stack máximo alcanzado (10)' };
+      }
+
       playSound('error');
       return { success: false, error: data?.error ?? 'Error buying cooling' };
     } catch (e) {
@@ -503,6 +523,16 @@ export const useMarketStore = defineStore('market', () => {
         inventoryStore.refresh();
         playSound('purchase');
         return { success: true };
+      }
+
+      // Handle inventory capacity errors
+      if (data?.error === 'inventory_full') {
+        playSound('error');
+        return { success: false, error: 'Inventario lleno' };
+      }
+      if (data?.error === 'stack_full') {
+        playSound('error');
+        return { success: false, error: 'Stack máximo alcanzado (10)' };
       }
 
       playSound('error');
@@ -539,6 +569,16 @@ export const useMarketStore = defineStore('market', () => {
         return { success: true };
       }
 
+      // Handle inventory capacity errors
+      if (data?.error === 'inventory_full') {
+        playSound('error');
+        return { success: false, error: 'Inventario lleno' };
+      }
+      if (data?.error === 'stack_full') {
+        playSound('error');
+        return { success: false, error: 'Stack máximo alcanzado (10)' };
+      }
+
       playSound('error');
       return { success: false, error: data?.error ?? 'Error buying card' };
     } catch (e) {
@@ -571,6 +611,16 @@ export const useMarketStore = defineStore('market', () => {
         inventoryStore.refresh();
         playSound('purchase');
         return { success: true };
+      }
+
+      // Handle inventory capacity errors
+      if (data?.error === 'inventory_full') {
+        playSound('error');
+        return { success: false, error: 'Inventario lleno' };
+      }
+      if (data?.error === 'stack_full') {
+        playSound('error');
+        return { success: false, error: 'Stack máximo alcanzado (10)' };
       }
 
       playSound('error');

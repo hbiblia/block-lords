@@ -785,6 +785,13 @@ export default {
       noBoosts: "You don't have any boosts. Buy them in the market.",
       installHint: 'Activate boosts from your inventory to enhance mining performance.',
     },
+    delete: {
+      button: 'Discard',
+      title: 'Discard Item',
+      warning: 'This action cannot be undone',
+      quantity: 'Quantity',
+      all: 'Select all',
+    },
     processing: {
       title: 'Processing Action',
       wait: 'Please wait while we process your action...',
@@ -797,6 +804,7 @@ export default {
       errorRepairRig: 'Error repairing rig. Please try again.',
       errorDeleteRig: 'Error deleting rig. Please try again.',
       errorActivatingBoost: 'Error activating boost. Please try again.',
+      errorDeleteItem: 'Error discarding item. Please try again.',
     },
     confirm: {
       installCooling: 'Install Cooling',
@@ -1950,6 +1958,14 @@ export default {
     forge: {
       title: 'The Forge',
       description: 'New <strong class="text-orange-400">Forge</strong> system! Craft items from mined materials: <strong class="text-sky-400">Tier Kits</strong> to boost slot XP, <strong class="text-yellow-400">Rig Enhancements</strong> for permanent rig bonuses, <strong class="text-cyan-400">Cooling Components</strong> (F2P path to all 15 components!), and <strong class="text-fuchsia-400">Utilities</strong> like Durability Shield (+1 slot use) and Slot Protector (prevents destruction). Access it from the 🔨 Forge button.',
+    },
+    newInventory: {
+      title: 'New Inventory',
+      description: 'The inventory has been <strong class="text-amber-400">completely redesigned</strong>. It now displays all your items in a <strong class="text-cyan-400">unified grid</strong> with a capacity bar. Each item type takes <strong class="text-amber-400">1 slot</strong>. Limit: <strong class="text-blue-400">10 slots Free</strong> / <strong class="text-amber-400">20 slots Premium</strong>. Tap an item to view its details and actions.',
+    },
+    deleteItems: {
+      title: 'Delete Inventory Items',
+      description: 'You can now <strong class="text-red-400">delete items</strong> directly from your inventory. Select an item, click 🗑️ and confirm the quantity to discard. Works with all types: rigs, coolings, components, boosts, materials and cards.',
     },
     button: 'Got it!',
   },
