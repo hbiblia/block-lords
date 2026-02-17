@@ -4702,76 +4702,8 @@ END;
 $$;
 
 -- Reiniciar cuenta (soft reset)
-CREATE OR REPLACE FUNCTION reset_player_account(p_player_id UUID)
-RETURNS JSON
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_player RECORD;
-BEGIN
-  -- Get player
-  SELECT * INTO v_player FROM players WHERE id = p_player_id;
-
-  IF NOT FOUND THEN
-    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
-  END IF;
-
-  -- Delete all player rigs
-  DELETE FROM player_rigs WHERE player_id = p_player_id;
-
-  -- Delete all player cooling and inventory
-  DELETE FROM player_cooling WHERE player_id = p_player_id;
-  DELETE FROM player_inventory WHERE player_id = p_player_id;
-
-  -- Delete player prepaid cards
-  DELETE FROM player_cards WHERE player_id = p_player_id;
-
-  -- Delete player boosts
-  DELETE FROM player_boosts WHERE player_id = p_player_id;
-  DELETE FROM active_boosts WHERE player_id = p_player_id;
-
-  -- Delete player missions progress
-  DELETE FROM player_missions WHERE player_id = p_player_id;
-
-  -- Delete streak data
-  DELETE FROM player_streaks WHERE player_id = p_player_id;
-  DELETE FROM streak_claims WHERE player_id = p_player_id;
-
-  -- Delete market orders
-  DELETE FROM market_orders WHERE player_id = p_player_id;
-
-  -- Delete transactions history
-  DELETE FROM transactions WHERE player_id = p_player_id;
-
-  -- Reset player stats to initial values
-  UPDATE players SET
-    gamecoin_balance = 1000,
-    crypto_balance = 0,
-    energy = 300,
-    internet = 300,
-    max_energy = 300,
-    max_internet = 300,
-    reputation_score = 50,
-    rig_slots = 1,
-    blocks_mined = 0,
-    updated_at = NOW()
-  WHERE id = p_player_id;
-
-  -- Give starter rig
-  INSERT INTO player_rigs (player_id, rig_id, condition, is_active)
-  VALUES (p_player_id, 'basic_miner', 100, false);
-
-  -- Log the reset
-  INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'account_reset', 1000, 'gamecoin', 'Cuenta reiniciada - Balance inicial');
-
-  RETURN json_build_object(
-    'success', true,
-    'message', 'Cuenta reiniciada exitosamente'
-  );
-END;
-$$;
+-- NOTA: La versión definitiva está más abajo en el archivo (se redefine con CREATE OR REPLACE).
+-- Esta primera definición se mantiene por compatibilidad de orden de ejecución.
 
 -- =====================================================
 -- FUNCIONES DE PAQUETES DE CRYPTO (RON)
@@ -6176,22 +6108,95 @@ $$;
 
 CREATE OR REPLACE FUNCTION reset_player_account(p_player_id UUID)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_new_rig_id UUID;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM players WHERE id = p_player_id) THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
+  IF NOT EXISTS (SELECT 1 FROM players WHERE id = p_player_id) THEN
+    RETURN json_build_object('success', false, 'error', 'Jugador no encontrado');
+  END IF;
+
+  -- ========== BORRAR DATOS DEL JUGADOR ==========
+
+  -- Materiales & Forge (nuevo)
+  DELETE FROM player_materials WHERE player_id = p_player_id;
+  DELETE FROM player_cooling_items WHERE player_id = p_player_id;
+
+  -- Shares & mining history
+  DELETE FROM share_history WHERE player_id = p_player_id;
+  DELETE FROM player_shares WHERE player_id = p_player_id;
+
+  -- Pending blocks (incluye materials_dropped)
+  DELETE FROM pending_blocks WHERE player_id = p_player_id;
+
+  -- Gifts
+  DELETE FROM player_gifts WHERE player_id = p_player_id;
+
+  -- Boosts (activos y en inventario)
+  DELETE FROM active_boosts WHERE player_id = p_player_id;
+  DELETE FROM player_boosts WHERE player_id = p_player_id;
+
+  -- Rigs (cascadea a rig_cooling y rig_boosts)
   DELETE FROM player_rigs WHERE player_id = p_player_id;
+
+  -- Rig inventory
+  DELETE FROM player_rig_inventory WHERE player_id = p_player_id;
+
+  -- Slots (se recrean después)
+  DELETE FROM player_slots WHERE player_id = p_player_id;
+
+  -- Cooling & inventory
   DELETE FROM player_cooling WHERE player_id = p_player_id;
   DELETE FROM player_inventory WHERE player_id = p_player_id;
+
+  -- Cards, missions, streaks
   DELETE FROM player_cards WHERE player_id = p_player_id;
-  DELETE FROM player_boosts WHERE player_id = p_player_id;
   DELETE FROM player_missions WHERE player_id = p_player_id;
   DELETE FROM player_streaks WHERE player_id = p_player_id;
   DELETE FROM streak_claims WHERE player_id = p_player_id;
+
+  -- Market & transactions
   DELETE FROM market_orders WHERE player_id = p_player_id;
   DELETE FROM transactions WHERE player_id = p_player_id;
-  UPDATE players SET gamecoin_balance = 1000, crypto_balance = 0, energy = 300, internet = 300, max_energy = 300, max_internet = 300, reputation_score = 50, rig_slots = 1, blocks_mined = 0, updated_at = NOW() WHERE id = p_player_id;
-  INSERT INTO player_rigs (player_id, rig_id, condition, is_active) VALUES (p_player_id, 'basic_miner', 100, false);
-  INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (p_player_id, 'account_reset', 1000, 'gamecoin', 'Cuenta reiniciada');
-  RETURN json_build_object('success', true, 'message', 'Cuenta reiniciada');
+
+  -- Tracking & reputation
+  DELETE FROM player_online_tracking WHERE player_id = p_player_id;
+  DELETE FROM reputation_events WHERE player_id = p_player_id;
+  DELETE FROM player_badges WHERE player_id = p_player_id;
+  DELETE FROM player_events WHERE player_id = p_player_id;
+  DELETE FROM player_penalties WHERE player_id = p_player_id;
+
+  -- ========== RESETEAR STATS DEL JUGADOR ==========
+  UPDATE players SET
+    gamecoin_balance = 1000,
+    crypto_balance = 0,
+    ron_balance = 0,
+    energy = 300,
+    internet = 300,
+    max_energy = 300,
+    max_internet = 300,
+    reputation_score = 50,
+    rig_slots = 1,
+    blocks_mined = 0,
+    total_crypto_earned = 0,
+    mining_bonus_accumulated = 0,
+    premium_until = NULL,
+    updated_at = NOW()
+  WHERE id = p_player_id;
+
+  -- ========== DAR RIG INICIAL ==========
+  INSERT INTO player_rigs (player_id, rig_id, condition, is_active)
+  VALUES (p_player_id, 'basic_miner', 100, false)
+  RETURNING id INTO v_new_rig_id;
+
+  -- ========== CREAR SLOT INICIAL (tier basic, full durability) ==========
+  INSERT INTO player_slots (player_id, slot_number, max_uses, uses_remaining, player_rig_id, tier, xp)
+  VALUES (p_player_id, 1, 2, 2, v_new_rig_id, 'basic', 0);
+
+  -- ========== LOG ==========
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'account_reset', 1000, 'gamecoin', 'Cuenta reiniciada');
+
+  RETURN json_build_object('success', true, 'message', 'Cuenta reiniciada exitosamente');
 END;
 $$;
 

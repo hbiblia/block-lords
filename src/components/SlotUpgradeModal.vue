@@ -57,12 +57,12 @@ const ronBalance = computed(() => authStore.player?.ron_balance ?? 0);
 const canAffordNextUpgrade = computed(() => {
   if (!slotInfo.value?.next_upgrade) return false;
   const upgrade = slotInfo.value.next_upgrade;
-  if (upgrade.currency === 'gamecoin') {
-    return balance.value >= upgrade.price;
+  if (upgrade.currency === 'crypto') {
+    return cryptoBalance.value >= upgrade.price;
   } else if (upgrade.currency === 'ron') {
     return ronBalance.value >= upgrade.price;
   }
-  return cryptoBalance.value >= upgrade.price;
+  return balance.value >= upgrade.price;
 });
 
 async function loadData() {
