@@ -1310,6 +1310,7 @@ export default {
       achievement_first_battle: { name: 'Into the Arena', desc: 'Play your first card battle.' },
       achievement_battle_wins_50: { name: 'Seasoned Fighter', desc: 'Win 50 card battles.' },
       achievement_battle_wins_100: { name: 'Battle God', desc: 'Win 100 card battles.' },
+      achievement_captcha_10000: { name: 'Puzzle Master', desc: 'Solve 10,000 captchas.' },
     },
   },
 

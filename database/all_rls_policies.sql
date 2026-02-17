@@ -819,3 +819,80 @@ DROP POLICY IF EXISTS "battle_sessions_select" ON battle_sessions;
 CREATE POLICY "battle_sessions_select"
   ON battle_sessions FOR SELECT
   USING (player1_id = auth.uid() OR player2_id = auth.uid());
+
+-- =====================================================
+-- POLÍTICAS PARA PLAYER_GIFTS (Regalos del jugador)
+-- =====================================================
+
+ALTER TABLE player_gifts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ver propios regalos" ON player_gifts;
+CREATE POLICY "Ver propios regalos"
+  ON player_gifts FOR SELECT
+  USING (player_id = auth.uid());
+
+-- =====================================================
+-- POLÍTICAS PARA RIG_COOLING (Actualización con player_id)
+-- Ahora rig_cooling tiene player_id desnormalizado para
+-- filtros eficientes de Realtime
+-- =====================================================
+
+DROP POLICY IF EXISTS "Ver cooling de propios rigs" ON rig_cooling;
+CREATE POLICY "Ver cooling de propios rigs"
+  ON rig_cooling FOR SELECT
+  USING (player_id = auth.uid());
+
+DROP POLICY IF EXISTS "Insertar cooling en propios rigs" ON rig_cooling;
+CREATE POLICY "Insertar cooling en propios rigs"
+  ON rig_cooling FOR INSERT
+  WITH CHECK (player_id = auth.uid());
+
+DROP POLICY IF EXISTS "Actualizar cooling de propios rigs" ON rig_cooling;
+CREATE POLICY "Actualizar cooling de propios rigs"
+  ON rig_cooling FOR UPDATE
+  USING (player_id = auth.uid());
+
+DROP POLICY IF EXISTS "Eliminar cooling de propios rigs" ON rig_cooling;
+CREATE POLICY "Eliminar cooling de propios rigs"
+  ON rig_cooling FOR DELETE
+  USING (player_id = auth.uid());
+
+-- =====================================================
+-- SUPABASE REALTIME - Publicación de tablas
+-- =====================================================
+-- Las tablas deben estar en la publication supabase_realtime
+-- para que los clientes reciban eventos postgres_changes.
+-- Las políticas SELECT de cada tabla controlan qué filas
+-- puede ver cada usuario vía Realtime.
+-- =====================================================
+
+-- Canal global (todos los jugadores reciben estos eventos)
+--   blocks        → INSERT (nuevo bloque minado)
+--   network_stats → UPDATE (stats de la red)
+
+-- Canal privado (filtrado por player_id del jugador)
+--   players        → UPDATE filter: id=eq.{playerId}
+--   player_rigs    → INSERT/DELETE filter: player_id=eq.{playerId}
+--   rig_cooling    → INSERT/DELETE filter: player_id=eq.{playerId}
+--   pending_blocks → INSERT filter: player_id=eq.{playerId}
+--   player_gifts   → INSERT filter: player_id=eq.{playerId}
+
+-- Canal market (filtrado por tipo de item)
+--   market_orders → * filter: item_type=eq.{itemType}
+
+-- Canal battle (PvP card battles)
+--   battle_lobby       → * (lobbies en estado 'waiting' son públicos)
+--   battle_ready_rooms → * (ambos jugadores pueden ver)
+--   battle_sessions    → * (ambos jugadores pueden ver)
+
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE blocks; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE network_stats; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE players; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE player_rigs; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE rig_cooling; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE pending_blocks; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE player_gifts; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE market_orders; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE battle_lobby; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE battle_ready_rooms; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE battle_sessions; EXCEPTION WHEN duplicate_object THEN NULL; END $$;

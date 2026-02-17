@@ -54,6 +54,17 @@ CREATE TABLE IF NOT EXISTS rig_cooling (
 -- Índice para búsquedas
 CREATE INDEX IF NOT EXISTS idx_rig_cooling_rig ON rig_cooling(player_rig_id);
 
+-- Agregar player_id desnormalizado para filtros de Realtime
+ALTER TABLE rig_cooling ADD COLUMN IF NOT EXISTS player_id UUID REFERENCES players(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_rig_cooling_player ON rig_cooling(player_id);
+
+-- Migración: Poblar player_id en rig_cooling existentes
+UPDATE rig_cooling rc
+SET player_id = pr.player_id
+FROM player_rigs pr
+WHERE rc.player_rig_id = pr.id
+  AND rc.player_id IS NULL;
+
 -- Agregar columna de consumo de energía extra a cooling_items si no existe
 ALTER TABLE cooling_items ADD COLUMN IF NOT EXISTS energy_cost NUMERIC DEFAULT 0.5;
 
@@ -758,6 +769,10 @@ BEGIN
   SELECT * INTO v_slot
   FROM player_slots
   WHERE player_rig_id = p_rig_id AND player_id = p_player_id AND NOT is_destroyed;
+
+  -- Destruir player_cooling_items modded asociados al rig
+  DELETE FROM player_cooling_items
+  WHERE id IN (SELECT player_cooling_item_id FROM rig_cooling WHERE player_rig_id = p_rig_id AND player_cooling_item_id IS NOT NULL);
 
   -- Eliminar cooling instalado en el rig
   DELETE FROM rig_cooling WHERE player_rig_id = p_rig_id;
@@ -2672,8 +2687,8 @@ BEGIN
     END IF;
 
     -- Insertar en rig_cooling con referencia al item modded
-    INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability, player_cooling_item_id)
-    VALUES (p_rig_id, p_cooling_id, 100, p_player_cooling_item_id);
+    INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability, player_cooling_item_id, player_id)
+    VALUES (p_rig_id, p_cooling_id, 100, p_player_cooling_item_id, p_player_id);
 
     -- Marcar el rig como modificado
     UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
@@ -2736,8 +2751,8 @@ BEGIN
       );
     ELSE
       -- No está instalado: insertar nuevo
-      INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability)
-      VALUES (p_rig_id, p_cooling_id, 100);
+      INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability, player_id)
+      VALUES (p_rig_id, p_cooling_id, 100, p_player_id);
 
       -- Marcar el rig como modificado (evita penalización por quick toggle)
       UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
@@ -2838,6 +2853,9 @@ BEGIN
         FROM player_cooling_items pci
         JOIN cooling_items ci ON ci.id = pci.cooling_item_id
         WHERE pci.player_id = p_player_id
+          AND NOT EXISTS (
+            SELECT 1 FROM rig_cooling rc WHERE rc.player_cooling_item_id = pci.id
+          )
         ORDER BY pci.created_at DESC
       ) t
     ),
@@ -6851,6 +6869,10 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Refrigeración no encontrada en este rig');
   END IF;
 
+  -- Si es modded, destruir también el player_cooling_items asociado
+  DELETE FROM player_cooling_items
+  WHERE id = (SELECT player_cooling_item_id FROM rig_cooling WHERE id = p_cooling_id AND player_cooling_item_id IS NOT NULL);
+
   -- Eliminar el cooling (destruir - no se devuelve al inventario)
   DELETE FROM rig_cooling WHERE id = p_cooling_id;
 
@@ -6947,6 +6969,10 @@ BEGIN
   IF v_count = 0 THEN
     RETURN json_build_object('success', false, 'error', 'No hay refrigeración instalada');
   END IF;
+
+  -- Destruir player_cooling_items modded asociados
+  DELETE FROM player_cooling_items
+  WHERE id IN (SELECT player_cooling_item_id FROM rig_cooling WHERE player_rig_id = p_rig_id AND player_cooling_item_id IS NOT NULL);
 
   -- Eliminar todos
   DELETE FROM rig_cooling WHERE player_rig_id = p_rig_id;

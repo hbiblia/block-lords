@@ -1310,6 +1310,7 @@
       achievement_first_battle: { name: 'A la Arena', desc: 'Juega tu primera batalla de cartas.' },
       achievement_battle_wins_50: { name: 'Luchador Experimentado', desc: 'Gana 50 batallas de cartas.' },
       achievement_battle_wins_100: { name: 'Dios de la Batalla', desc: 'Gana 100 batallas de cartas.' },
+      achievement_captcha_10000: { name: 'Maestro de Puzzles', desc: 'Resuelve 10,000 captchas.' },
     },
   },
 

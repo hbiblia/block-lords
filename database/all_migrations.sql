@@ -884,8 +884,24 @@ END $$;
 -- =====================================================
 -- SUPABASE REALTIME - Habilitar para tablas que necesitan eventos en tiempo real
 -- =====================================================
+
+-- Canal global (blocks + network_stats)
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE blocks;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE network_stats;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Canal privado (player data)
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE players;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE player_rigs;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
@@ -893,7 +909,31 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE player_rigs;
+  ALTER PUBLICATION supabase_realtime ADD TABLE rig_cooling;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE player_gifts;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Canal market
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE market_orders;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Canal battle (PvP card battles)
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE battle_lobby;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE battle_ready_rooms;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE battle_sessions;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

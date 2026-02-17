@@ -989,7 +989,7 @@ export const useMiningStore = defineStore('mining', () => {
         loadPlayerShares();
       }
     } catch (e: any) {
-      if (e?.name !== 'AbortError') console.error('Error loading mining block info:', e);
+      if (e?.name !== 'AbortError' && !e?.message?.includes('AbortError')) console.error('Error loading mining block info:', e);
     }
   }
 
