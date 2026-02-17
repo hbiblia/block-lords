@@ -2152,4 +2152,183 @@
       violations: 'Las violaciones de estas reglas pueden resultar en advertencias, suspensiones temporales o baneos permanentes según la gravedad.',
     },
   },
+
+  prediction: {
+    title: 'Yield Prediction',
+    short: 'Predecir',
+    subtitle: 'Predice el movimiento del precio de RON',
+    predictButton: 'Predecir RON',
+    tabs: {
+      place: 'Apostar',
+      active: 'Activas',
+      history: 'Historial',
+    },
+    direction: {
+      label: 'Dirección',
+      up: 'SUBE',
+      down: 'BAJA',
+      upDesc: 'El precio de RON subirá',
+      downDesc: 'El precio de RON bajará',
+    },
+    target: {
+      label: 'Objetivo',
+    },
+    bet: {
+      label: 'Monto de apuesta (Landwork)',
+      min: 'Mínimo: 50,000 Landwork',
+      insufficientBalance: 'Balance de Landwork insuficiente',
+      maxActiveBets: 'Máximo 3 predicciones activas',
+      priceUnavailable: 'Precio no disponible',
+      invalidTarget: 'Objetivo inválido',
+    },
+    summary: {
+      direction: 'Dirección',
+      potentialYield: 'Yield potencial',
+      fee: 'Fee (5% sobre yield)',
+      totalReturn: 'Retorno total',
+      entryPrice: 'Precio entrada',
+      targetPrice: 'Precio objetivo',
+      currentPrice: 'Precio actual',
+    },
+    info: {
+      noLoss: 'Nunca pierdes tu apuesta. Se mantiene activa hasta alcanzar el objetivo. Cancela cuando quieras (2% fee).',
+    },
+    actions: {
+      placeBet: 'Crear Predicción',
+      placing: 'Creando...',
+      cancel: 'Cancelar Apuesta',
+      cancelling: 'Cancelando...',
+      confirmCancel: '¿Estás seguro? Recibirás un reembolso con 2% de fee.',
+      confirmPlace: 'Confirmar Predicción',
+    },
+    active: {
+      noBets: 'Sin predicciones activas',
+      progress: 'Progreso',
+      yield: 'Yield al alcanzar objetivo',
+      cancelFee: '2% fee por cancelación',
+      of: 'de',
+    },
+    history: {
+      noHistory: 'Sin historial de predicciones',
+      won: 'Ganada',
+      cancelled: 'Cancelada',
+      yield: 'Yield',
+      fee: 'Fee',
+    },
+    stats: {
+      totalBets: 'Total Apuestas',
+      wonBets: 'Ganadas',
+      totalYield: 'Yield Total Ganado',
+      totalFees: 'Fees Total Pagado',
+    },
+    price: {
+      ronUsdc: 'RON/USDC',
+      loading: 'Cargando precio...',
+      high24h: 'Máx 24h',
+      low24h: 'Mín 24h',
+    },
+    errors: {
+      max_active_bets: 'Máximo 3 predicciones activas',
+      insufficient_balance: 'Balance insuficiente',
+      price_unavailable: 'Precio no disponible',
+      invalid_direction: 'Dirección inválida',
+      invalid_target: 'Objetivo inválido',
+      min_bet_50k: 'Mínimo 50,000 Landwork',
+      bet_not_found: 'Apuesta no encontrada',
+      player_not_found: 'Jugador no encontrado',
+    },
+  },
+
+  tips: {
+    energyCritical: '¡Energía críticamente baja ({percent}%)! La minería puede detenerse.',
+    energyWarning: 'Energía baja ({percent}%). Considera comprar Tarjetas Prepago.',
+    internetCritical: '¡Internet críticamente bajo ({percent}%)! Conexión en riesgo.',
+    internetWarning: 'Internet bajo ({percent}%). Recarga pronto.',
+    rigOverheatCritical: '{count} rig(s) con sobrecalentamiento crítico ({temp}°C). ¡Riesgo de apagado!',
+    rigOverheatWarning: '{count} rig(s) con temperatura elevada. Revisa la refrigeración.',
+    rigBroken: '{count} rig(s) rotos (condición 0%). No están minando.',
+    rigConditionLow: '{count} rig(s) con condición baja (< 30%). Repáralos pronto.',
+    coolingDegraded: 'La refrigeración de {count} rig(s) activo(s) está degradada (< 50% durabilidad).',
+    noActiveRigs: 'No hay rigs activos. Activa uno para empezar a minar.',
+    action: {
+      goToMarket: 'Ir al Mercado',
+      repairRig: 'Reparar',
+    },
+  },
+
+  guide: {
+    title: 'Cómo Jugar',
+    show: 'Mostrar guía',
+    hide: 'Ocultar guía',
+    startTour: 'Iniciar Tour Interactivo',
+    topics: {
+      howMining: {
+        icon: '⛏️',
+        title: 'Cómo Funciona la Minería',
+        body: 'La minería es por shares: tus rigs contribuyen shares al pool en cada ciclo de bloque. Al cerrarse el bloque, las recompensas se distribuyen proporcionalmente. Más hashrate = más shares = mayor recompensa.',
+      },
+      rigsAndSlots: {
+        icon: '🖥️',
+        title: 'Rigs y Slots',
+        body: 'Cada rig ocupa un slot. Los slots tienen tiers (Básico → Estándar → Avanzado → Elite) que mejoran con XP. Los slots de tier alto potencian el rendimiento. Compra slots en el Mercado.',
+      },
+      tempAndCondition: {
+        icon: '🌡️',
+        title: 'Temperatura y Condición',
+        body: 'Temperatura sobre 60°C reduce el hashrate; sobre 80°C riesgo de apagado. La condición baja con el tiempo — menos del 30% es advertencia, 0% significa roto. Instala refrigeración para controlar el calor.',
+      },
+      resources: {
+        icon: '⚡',
+        title: 'Recursos',
+        body: 'Energía e Internet son consumidos por tus rigs activos. Se regeneran lentamente o se pueden rellenar con Tarjetas Prepago del Mercado. Sin recursos, los rigs dejan de minar.',
+      },
+      currencies: {
+        icon: '💰',
+        title: 'Monedas',
+        body: 'GameCoin (GC) se gana minando y sirve para compras básicas. Landwork (LW) es la moneda premium para ítems de alto nivel. RON es el token blockchain para reclamar recompensas.',
+      },
+      upgradesAndBoosts: {
+        icon: '🚀',
+        title: 'Mejoras y Boosts',
+        body: 'Mejora rigs en la Forja para aumentar hashrate, eficiencia y resistencia térmica. Los boosts son temporales (Overclock, Inyección de Refrigerante, etc.) que dan un impulso breve de potencia.',
+      },
+    },
+  },
+
+  tour: {
+    skip: 'Saltar tour',
+    prev: 'Anterior',
+    next: 'Siguiente',
+    finish: 'Finalizar',
+    steps: {
+      welcome: {
+        title: '¡Bienvenido al Centro de Minería!',
+        body: 'Este es tu panel de control. Aquí puedes ver el progreso del bloque, tu hashrate, shares, y gestionar todos tus rigs. Te haremos un recorrido por las funciones principales.',
+      },
+      blockSystem: {
+        title: 'Bloques y Shares',
+        body: 'La minería funciona por ciclos de bloque. Tus rigs generan shares continuamente. Al cerrarse el bloque, quienes contribuyeron shares reciben una recompensa proporcional.',
+      },
+      rigCard: {
+        title: 'Tus Rigs de Minería',
+        body: 'Cada tarjeta representa un rig. Puedes ver su nombre, tier, hashrate y estado. Punto verde = minando activamente. Haz clic en el ícono de engranaje para gestionar mejoras y refrigeración.',
+      },
+      tempCondition: {
+        title: 'Temperatura y Condición',
+        body: 'Observa la barra de temperatura (rojo = peligroso) y la barra de condición (verde = saludable). Alta temperatura reduce el hashrate. Baja condición significa desgaste — repáralo antes de que se rompa.',
+      },
+      startRig: {
+        title: 'Activar un Rig',
+        body: 'Usa el botón para iniciar o detener un rig. Los rigs activos consumen Energía e Internet. Asegúrate de tener suficientes recursos antes de activar varios rigs.',
+      },
+      sidebar: {
+        title: 'Bloques Recientes y Tasa de Cambio',
+        body: 'La barra lateral muestra el historial de bloques recientes con detalles de participación, y el gráfico en vivo de la tasa de cambio. Úsalo para seguir tus ganancias.',
+      },
+      market: {
+        title: 'El Mercado',
+        body: 'Visita el Mercado para comprar rigs, refrigeración, Tarjetas Prepago (recargar Energía/Internet) y boosts. Es tu centro de recursos principal.',
+      },
+    },
+  },
 };

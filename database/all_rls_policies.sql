@@ -896,3 +896,45 @@ DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE market_orders; EXCEPTI
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE battle_lobby; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE battle_ready_rooms; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE battle_sessions; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- =====================================================
+-- POLÍTICAS PARA PREDICTION_PRICE_SNAPSHOTS (datos públicos)
+-- =====================================================
+
+ALTER TABLE prediction_price_snapshots ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Snapshots de precio públicos" ON prediction_price_snapshots;
+CREATE POLICY "Snapshots de precio públicos"
+  ON prediction_price_snapshots FOR SELECT
+  USING (true);
+-- Nota: INSERT/UPDATE/DELETE solo via funciones SECURITY DEFINER
+
+-- =====================================================
+-- POLÍTICAS PARA PREDICTION_BETS (apuestas del jugador)
+-- =====================================================
+
+ALTER TABLE prediction_bets ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ver propias predicciones" ON prediction_bets;
+CREATE POLICY "Ver propias predicciones"
+  ON prediction_bets FOR SELECT
+  USING (auth.uid() = player_id);
+-- Nota: INSERT/UPDATE/DELETE solo via funciones SECURITY DEFINER
+-- (place_prediction_bet, cancel_prediction_bet, settle_prediction_bet)
+
+-- =====================================================
+-- POLÍTICAS PARA PREDICTION_TREASURY (solo sistema)
+-- =====================================================
+
+ALTER TABLE prediction_treasury ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Treasury solo accesible por sistema" ON prediction_treasury;
+CREATE POLICY "Treasury solo accesible por sistema"
+  ON prediction_treasury FOR ALL
+  USING (false)
+  WITH CHECK (false);
+-- Nota: Solo accesible via funciones SECURITY DEFINER
+
+-- Canal prediction (filtrado por player_id)
+--   prediction_bets → UPDATE filter: player_id=eq.{playerId}
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE prediction_bets; EXCEPTION WHEN duplicate_object THEN NULL; END $$;

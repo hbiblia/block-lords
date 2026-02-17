@@ -12705,3 +12705,444 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION delete_inventory_item TO authenticated;
+
+-- =====================================================
+-- YIELD PREDICTION GAME
+-- =====================================================
+
+-- Colocar apuesta
+CREATE OR REPLACE FUNCTION place_prediction_bet(
+  p_player_id UUID,
+  p_direction TEXT,
+  p_target_percent DECIMAL,
+  p_bet_amount DECIMAL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_active_count INT;
+  v_player_crypto DECIMAL;
+  v_current_price DECIMAL;
+  v_target_price DECIMAL;
+  v_bet_amount_ron DECIMAL;
+  v_lw_to_ron_rate DECIMAL;
+  v_bet_id UUID;
+BEGIN
+  IF p_direction NOT IN ('up', 'down') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'invalid_direction');
+  END IF;
+
+  IF p_target_percent NOT IN (5, 10, 20, 40, 60, 100) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'invalid_target');
+  END IF;
+
+  IF p_direction = 'down' AND p_target_percent >= 100 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'invalid_target');
+  END IF;
+
+  IF p_bet_amount < 50000 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'min_bet_50k');
+  END IF;
+
+  SELECT COUNT(*) INTO v_active_count
+  FROM prediction_bets
+  WHERE player_id = p_player_id AND status = 'active';
+
+  IF v_active_count >= 3 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'max_active_bets');
+  END IF;
+
+  SELECT crypto_balance INTO v_player_crypto
+  FROM players WHERE id = p_player_id FOR UPDATE;
+
+  IF v_player_crypto IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'player_not_found');
+  END IF;
+
+  IF v_player_crypto < p_bet_amount THEN
+    RETURN jsonb_build_object('success', false, 'error', 'insufficient_balance');
+  END IF;
+
+  SELECT ron_usdc_price INTO v_current_price
+  FROM prediction_price_snapshots
+  ORDER BY recorded_at DESC LIMIT 1;
+
+  IF v_current_price IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'price_unavailable');
+  END IF;
+
+  IF p_direction = 'up' THEN
+    v_target_price := v_current_price * (1 + p_target_percent / 100);
+  ELSE
+    v_target_price := v_current_price * (1 - p_target_percent / 100);
+  END IF;
+
+  -- 100,000 LW = 1 RON (mismo rate que exchange_crypto_to_ron)
+  v_lw_to_ron_rate := 0.00001;
+
+  v_bet_amount_ron := p_bet_amount * v_lw_to_ron_rate;
+
+  UPDATE players
+  SET crypto_balance = crypto_balance - p_bet_amount, updated_at = NOW()
+  WHERE id = p_player_id;
+
+  INSERT INTO prediction_bets (
+    player_id, direction, target_percent,
+    bet_amount_lw, bet_amount_ron, exchange_rate,
+    entry_price, target_price, status,
+    hedge_status
+  ) VALUES (
+    p_player_id, p_direction, p_target_percent,
+    p_bet_amount, v_bet_amount_ron, v_lw_to_ron_rate,
+    v_current_price, v_target_price, 'active',
+    CASE WHEN p_direction = 'down' THEN 'pending' ELSE 'none' END
+  ) RETURNING id INTO v_bet_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'bet_id', v_bet_id,
+    'direction', p_direction,
+    'entry_price', v_current_price,
+    'target_price', v_target_price,
+    'bet_amount_ron', v_bet_amount_ron,
+    'exchange_rate', v_lw_to_ron_rate
+  );
+END;
+$$;
+
+-- Cancelar apuesta (2% fee)
+CREATE OR REPLACE FUNCTION cancel_prediction_bet(
+  p_player_id UUID,
+  p_bet_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_bet prediction_bets%ROWTYPE;
+  v_cancel_fee DECIMAL;
+  v_refund DECIMAL;
+BEGIN
+  SELECT * INTO v_bet FROM prediction_bets
+  WHERE id = p_bet_id AND player_id = p_player_id AND status = 'active'
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'bet_not_found');
+  END IF;
+
+  v_cancel_fee := v_bet.bet_amount_lw * 0.02;
+  v_refund := v_bet.bet_amount_lw - v_cancel_fee;
+
+  UPDATE prediction_bets
+  SET status = 'cancelled',
+      fee_amount_lw = v_cancel_fee,
+      cancelled_at = NOW()
+  WHERE id = p_bet_id;
+
+  UPDATE players
+  SET crypto_balance = crypto_balance + v_refund, updated_at = NOW()
+  WHERE id = p_player_id;
+
+  INSERT INTO prediction_treasury (event_type, amount, bet_id, description)
+  VALUES ('cancel_fee', v_cancel_fee, p_bet_id, 'Cancellation fee 2%');
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'refund', v_refund,
+    'fee', v_cancel_fee,
+    'direction', v_bet.direction,
+    'hedge_status', v_bet.hedge_status,
+    'hedge_usdc_amount', v_bet.hedge_usdc_amount
+  );
+END;
+$$;
+
+-- Resolver apuesta individual (legacy, mantener para compatibilidad)
+CREATE OR REPLACE FUNCTION settle_prediction_bet(
+  p_bet_id UUID,
+  p_exit_price DECIMAL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_bet prediction_bets%ROWTYPE;
+  v_yield DECIMAL;
+  v_fee DECIMAL;
+  v_total_payout DECIMAL;
+BEGIN
+  SELECT * INTO v_bet FROM prediction_bets
+  WHERE id = p_bet_id AND status = 'active'
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'bet_not_found');
+  END IF;
+
+  IF v_bet.direction = 'up' AND p_exit_price < v_bet.target_price THEN
+    RETURN jsonb_build_object('success', false, 'error', 'target_not_reached');
+  END IF;
+
+  IF v_bet.direction = 'down' AND p_exit_price > v_bet.target_price THEN
+    RETURN jsonb_build_object('success', false, 'error', 'target_not_reached');
+  END IF;
+
+  -- DOWN bets: reduce yield by ~3% swap friction (DEX fees + slippage + gas)
+  IF v_bet.direction = 'down' THEN
+    v_yield := v_bet.bet_amount_lw * GREATEST(v_bet.target_percent - 3, 1) / 100;
+  ELSE
+    v_yield := v_bet.bet_amount_lw * v_bet.target_percent / 100;
+  END IF;
+  v_fee := v_yield * 0.05;
+  v_total_payout := v_bet.bet_amount_lw + v_yield - v_fee;
+
+  UPDATE prediction_bets
+  SET status = 'won',
+      exit_price = p_exit_price,
+      yield_earned_lw = v_yield,
+      fee_amount_lw = v_fee,
+      settled_at = NOW()
+  WHERE id = p_bet_id;
+
+  UPDATE players
+  SET crypto_balance = crypto_balance + v_total_payout, updated_at = NOW()
+  WHERE id = v_bet.player_id;
+
+  INSERT INTO prediction_treasury (event_type, amount, bet_id, description)
+  VALUES ('yield_fee', v_fee, p_bet_id, '5% yield fee');
+
+  INSERT INTO prediction_treasury (event_type, amount, bet_id, description)
+  VALUES ('yield_payout', v_yield - v_fee, p_bet_id, 'Net yield payout');
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'player_id', v_bet.player_id,
+    'payout', v_total_payout,
+    'yield', v_yield,
+    'fee', v_fee,
+    'direction', v_bet.direction,
+    'hedge_status', v_bet.hedge_status,
+    'hedge_usdc_amount', v_bet.hedge_usdc_amount
+  );
+END;
+$$;
+
+-- Resolver TODAS las apuestas que alcanzaron su target (batch, llamado por worker)
+-- Una sola llamada en vez de N llamadas individuales
+CREATE OR REPLACE FUNCTION settle_all_prediction_bets(p_current_price DECIMAL)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_bet RECORD;
+  v_yield DECIMAL;
+  v_fee DECIMAL;
+  v_total_payout DECIMAL;
+  v_settled_count INT := 0;
+  v_settled_bets JSONB := '[]'::JSONB;
+BEGIN
+  FOR v_bet IN
+    SELECT * FROM prediction_bets
+    WHERE status = 'active'
+      AND (
+        (direction = 'up'   AND p_current_price >= target_price) OR
+        (direction = 'down' AND p_current_price <= target_price)
+      )
+    FOR UPDATE
+  LOOP
+    -- Calcular yield
+    IF v_bet.direction = 'down' THEN
+      v_yield := v_bet.bet_amount_lw * GREATEST(v_bet.target_percent - 3, 1) / 100;
+    ELSE
+      v_yield := v_bet.bet_amount_lw * v_bet.target_percent / 100;
+    END IF;
+    v_fee := v_yield * 0.05;
+    v_total_payout := v_bet.bet_amount_lw + v_yield - v_fee;
+
+    -- Actualizar bet
+    UPDATE prediction_bets
+    SET status = 'won',
+        exit_price = p_current_price,
+        yield_earned_lw = v_yield,
+        fee_amount_lw = v_fee,
+        settled_at = NOW()
+    WHERE id = v_bet.id;
+
+    -- Pagar al jugador
+    UPDATE players
+    SET crypto_balance = crypto_balance + v_total_payout, updated_at = NOW()
+    WHERE id = v_bet.player_id;
+
+    -- Registrar en treasury
+    INSERT INTO prediction_treasury (event_type, amount, bet_id, description)
+    VALUES ('yield_fee', v_fee, v_bet.id, '5% yield fee');
+
+    INSERT INTO prediction_treasury (event_type, amount, bet_id, description)
+    VALUES ('yield_payout', v_yield - v_fee, v_bet.id, 'Net yield payout');
+
+    v_settled_count := v_settled_count + 1;
+
+    -- Acumular info para DOWN bets que necesitan unhedge
+    IF v_bet.direction = 'down' AND v_bet.hedge_status = 'hedged' THEN
+      v_settled_bets := v_settled_bets || jsonb_build_array(jsonb_build_object(
+        'bet_id', v_bet.id,
+        'direction', 'down',
+        'hedge_status', v_bet.hedge_status,
+        'needs_unhedge', true
+      ));
+    ELSE
+      v_settled_bets := v_settled_bets || jsonb_build_array(jsonb_build_object(
+        'bet_id', v_bet.id,
+        'direction', v_bet.direction,
+        'hedge_status', v_bet.hedge_status,
+        'needs_unhedge', false
+      ));
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'settled_count', v_settled_count,
+    'settled_bets', v_settled_bets
+  );
+END;
+$$;
+
+-- Obtener predicciones del jugador
+CREATE OR REPLACE FUNCTION get_player_predictions(
+  p_player_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_active JSONB;
+  v_history JSONB;
+  v_current_price DECIMAL;
+  v_stats JSONB;
+BEGIN
+  SELECT ron_usdc_price INTO v_current_price
+  FROM prediction_price_snapshots
+  ORDER BY recorded_at DESC LIMIT 1;
+
+  SELECT COALESCE(jsonb_agg(row_to_json ORDER BY created_at DESC), '[]'::jsonb)
+  INTO v_active
+  FROM (
+    SELECT
+      b.id, b.direction, b.target_percent,
+      b.bet_amount_lw, b.bet_amount_ron,
+      b.entry_price, b.target_price,
+      v_current_price AS current_price,
+      CASE
+        WHEN b.direction = 'up' AND b.target_price > b.entry_price THEN
+          LEAST(100, GREATEST(0,
+            ((COALESCE(v_current_price, b.entry_price) - b.entry_price) / (b.target_price - b.entry_price)) * 100
+          ))
+        WHEN b.direction = 'down' AND b.entry_price > b.target_price THEN
+          LEAST(100, GREATEST(0,
+            ((b.entry_price - COALESCE(v_current_price, b.entry_price)) / (b.entry_price - b.target_price)) * 100
+          ))
+        ELSE 0
+      END AS progress_percent,
+      CASE WHEN b.direction = 'down'
+        THEN b.bet_amount_lw * GREATEST(b.target_percent - 3, 1) / 100
+        ELSE b.bet_amount_lw * b.target_percent / 100
+      END AS potential_yield,
+      b.created_at
+    FROM prediction_bets b
+    WHERE b.player_id = p_player_id AND b.status = 'active'
+  ) row_to_json;
+
+  SELECT COALESCE(jsonb_agg(row_to_json ORDER BY settled_at DESC), '[]'::jsonb)
+  INTO v_history
+  FROM (
+    SELECT
+      b.id, b.direction, b.target_percent,
+      b.bet_amount_lw, b.entry_price, b.target_price,
+      b.exit_price, b.status,
+      b.yield_earned_lw, b.fee_amount_lw,
+      b.created_at,
+      COALESCE(b.settled_at, b.cancelled_at) AS settled_at
+    FROM prediction_bets b
+    WHERE b.player_id = p_player_id AND b.status != 'active'
+    ORDER BY COALESCE(b.settled_at, b.cancelled_at) DESC
+    LIMIT 20
+  ) row_to_json;
+
+  SELECT jsonb_build_object(
+    'total_bets', COUNT(*),
+    'total_won', COUNT(*) FILTER (WHERE status = 'won'),
+    'total_cancelled', COUNT(*) FILTER (WHERE status = 'cancelled'),
+    'total_yield_earned', COALESCE(SUM(yield_earned_lw) FILTER (WHERE status = 'won'), 0),
+    'total_fees_paid', COALESCE(SUM(fee_amount_lw), 0),
+    'active_count', COUNT(*) FILTER (WHERE status = 'active')
+  )
+  INTO v_stats
+  FROM prediction_bets
+  WHERE player_id = p_player_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'current_price', v_current_price,
+    'active', v_active,
+    'history', v_history,
+    'stats', v_stats
+  );
+END;
+$$;
+
+-- Obtener precio actual
+CREATE OR REPLACE FUNCTION get_prediction_price()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current DECIMAL;
+  v_prev DECIMAL;
+  v_change_pct DECIMAL;
+  v_high_24h DECIMAL;
+  v_low_24h DECIMAL;
+BEGIN
+  SELECT ron_usdc_price INTO v_current
+  FROM prediction_price_snapshots
+  ORDER BY recorded_at DESC LIMIT 1;
+
+  SELECT ron_usdc_price INTO v_prev
+  FROM prediction_price_snapshots
+  ORDER BY recorded_at DESC LIMIT 1 OFFSET 1;
+
+  v_change_pct := CASE
+    WHEN v_prev IS NOT NULL AND v_prev > 0
+    THEN ((v_current - v_prev) / v_prev) * 100
+    ELSE 0
+  END;
+
+  SELECT MAX(ron_usdc_price), MIN(ron_usdc_price)
+  INTO v_high_24h, v_low_24h
+  FROM prediction_price_snapshots
+  WHERE recorded_at >= NOW() - INTERVAL '24 hours';
+
+  RETURN jsonb_build_object(
+    'price', v_current,
+    'previous_price', v_prev,
+    'change_percent', ROUND(v_change_pct, 4),
+    'high_24h', v_high_24h,
+    'low_24h', v_low_24h,
+    'updated_at', NOW()
+  );
+END;
+$$;
+
+-- Grants para prediction
+GRANT EXECUTE ON FUNCTION place_prediction_bet TO authenticated;
+GRANT EXECUTE ON FUNCTION cancel_prediction_bet TO authenticated;
+GRANT EXECUTE ON FUNCTION get_player_predictions TO authenticated;
+GRANT EXECUTE ON FUNCTION get_prediction_price TO authenticated;

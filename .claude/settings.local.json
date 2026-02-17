@@ -19,7 +19,13 @@
       "Bash(git -C \"d:/software/block-lords\" diff --stat database/all_functions.sql)",
       "Bash(git show:*)",
       "Bash(python -c:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:docs.roninchain.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:app.roninchain.com)",
+      "WebFetch(domain:api.dexscreener.com)",
+      "WebFetch(domain:api.geckoterminal.com)"
     ]
   }
 }

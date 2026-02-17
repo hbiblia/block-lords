@@ -49,7 +49,6 @@ watch(() => giftsStore.phase, (phase) => {
       generateParticles();
     }
     if (phase === 'revealed') {
-      initAd();
     }
   }
 });
@@ -132,19 +131,6 @@ function getItemName(type: string | null, id: string | null): string {
   return names[type] || id || t('gifts.itemGeneric', 'Item');
 }
 
-function initAd() {
-  setTimeout(() => {
-    try {
-      document.querySelectorAll('ins.adsbygoogle').forEach((el) => {
-        if (el.clientWidth > 0 && !el.hasAttribute('data-adsbygoogle-status')) {
-          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-        }
-      });
-    } catch (e) {
-      // AdSense not available
-    }
-  }, 500);
-}
 </script>
 
 <template>
@@ -284,15 +270,6 @@ function initAd() {
             {{ t('gifts.collect') }}
           </button>
 
-          <!-- AdSense Banner -->
-          <div class="mt-4 bg-bg-tertiary rounded-xl p-4 text-center max-h-28 h-28">
-            <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
-            <ins class="adsbygoogle"
-              style="display:block"
-              data-ad-format="autorelaxed"
-              data-ad-client="ca-pub-7500429866047477"
-              data-ad-slot="7767935377"></ins>
-          </div>
         </div>
       </div>
     </div>

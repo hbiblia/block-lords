@@ -83,7 +83,6 @@ function selectBlockForClaim(blockId: string) {
   // Renderizar captcha y ad después de que el DOM se actualice
   nextTick(() => {
     renderCaptcha();
-    initCaptchaAd();
   });
 }
 
@@ -190,20 +189,6 @@ function onScroll() {
   }
 }
 
-// Init ad in captcha screen
-function initCaptchaAd() {
-  setTimeout(() => {
-    try {
-      document.querySelectorAll('ins.adsbygoogle').forEach((el) => {
-        if (el.clientWidth > 0 && !el.hasAttribute('data-adsbygoogle-status')) {
-          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-        }
-      });
-    } catch (e) {
-      // AdSense not available
-    }
-  }, 500);
-}
 </script>
 
 <template>
@@ -310,15 +295,6 @@ function initCaptchaAd() {
               {{ t('common.cancel') }}
             </button>
 
-            <!-- AdSense Banner -->
-            <div class="mt-4 bg-bg-secondary rounded-xl p-4 text-center max-h-28 h-28">
-              <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
-              <ins class="adsbygoogle"
-                style="display:block"
-                data-ad-format="autorelaxed"
-                data-ad-client="ca-pub-7500429866047477"
-                data-ad-slot="7767935377"></ins>
-            </div>
           </div>
 
           <!-- Pending Blocks List -->
@@ -482,15 +458,6 @@ function initCaptchaAd() {
               <span class="animate-spin w-5 h-5 border-2 border-accent-primary border-t-transparent rounded-full"></span>
             </div>
 
-            <!-- AdSense Banner -->
-            <div class="mt-4 bg-bg-secondary rounded-xl p-4 text-center max-h-28 h-28">
-              <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
-              <ins class="adsbygoogle"
-                style="display:block"
-                data-ad-format="autorelaxed"
-                data-ad-client="ca-pub-7500429866047477"
-                data-ad-slot="7767935377"></ins>
-            </div>
           </div>
         </div>
       </div>

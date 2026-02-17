@@ -1138,6 +1138,82 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- =====================================================
+-- YIELD PREDICTION GAME
+-- =====================================================
+
+-- Historial de precios RON/USDC (registrado por worker cada 30s)
+CREATE TABLE IF NOT EXISTS prediction_price_snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ron_usdc_price DECIMAL(18, 8) NOT NULL,
+  source TEXT DEFAULT 'katana',
+  recorded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_snapshots_recorded
+  ON prediction_price_snapshots(recorded_at DESC);
+
+-- Apuestas de prediccion (activas e historicas)
+CREATE TABLE IF NOT EXISTS prediction_bets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+
+  -- Prediccion
+  direction TEXT NOT NULL CHECK (direction IN ('up', 'down')),
+  target_percent DECIMAL(5, 2) NOT NULL
+    CHECK (target_percent IN (5, 10, 20, 40, 60, 100)),
+
+  -- Montos
+  bet_amount_lw DECIMAL(18, 8) NOT NULL CHECK (bet_amount_lw >= 50000),
+  bet_amount_ron DECIMAL(18, 8) NOT NULL,
+  exchange_rate DECIMAL(18, 8) NOT NULL,
+
+  -- Precios
+  entry_price DECIMAL(18, 8) NOT NULL,
+  target_price DECIMAL(18, 8) NOT NULL,
+
+  -- Estado
+  status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'won', 'cancelled')),
+
+  -- Resultado (al resolver)
+  exit_price DECIMAL(18, 8),
+  yield_earned_lw DECIMAL(18, 8) DEFAULT 0,
+  fee_amount_lw DECIMAL(18, 8) DEFAULT 0,
+
+  -- Hedge tracking (DOWN bets: RON→USDC→RON via Katana)
+  hedge_status TEXT DEFAULT 'none'
+    CHECK (hedge_status IN ('none', 'pending', 'hedged', 'failed')),
+  hedge_usdc_amount DECIMAL(18, 8) DEFAULT 0,
+  hedge_tx_hash TEXT,
+  unhedge_tx_hash TEXT,
+
+  -- Timestamps
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  settled_at TIMESTAMPTZ,
+  cancelled_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_prediction_bets_player
+  ON prediction_bets(player_id);
+
+CREATE INDEX IF NOT EXISTS idx_prediction_bets_active
+  ON prediction_bets(status) WHERE status = 'active';
+
+CREATE INDEX IF NOT EXISTS idx_prediction_bets_player_active
+  ON prediction_bets(player_id, status) WHERE status = 'active';
+
+-- Log del treasury (fees, payouts, supplements)
+CREATE TABLE IF NOT EXISTS prediction_treasury (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_type TEXT NOT NULL CHECK (event_type IN ('yield_fee', 'cancel_fee', 'yield_payout', 'supplement')),
+  amount DECIMAL(18, 8) NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'landwork',
+  bet_id UUID REFERENCES prediction_bets(id),
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- =====================================================
 -- NOTA: Las funciones están en all_functions.sql
 -- NOTA: Las políticas RLS están en all_rls_policies.sql
 -- =====================================================

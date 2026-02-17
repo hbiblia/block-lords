@@ -1675,3 +1675,60 @@ export async function cancelBattleReadyRoom(playerId: string): Promise<any> {
     p_player_id: playerId,
   });
 }
+
+// === YIELD PREDICTION ===
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPlayerPredictions(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_predictions', {
+    p_player_id: playerId,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPredictionPrice(): Promise<any> {
+  return rpcWithRetry('get_prediction_price');
+}
+
+export async function placePredictionBet(
+  playerId: string,
+  direction: 'up' | 'down',
+  targetPercent: number,
+  betAmount: number
+) {
+  const { data, error } = await supabase.rpc('place_prediction_bet', {
+    p_player_id: playerId,
+    p_direction: direction,
+    p_target_percent: targetPercent,
+    p_bet_amount: betAmount,
+  });
+
+  if (error) throw error;
+
+  // Trigger RON→USDC hedge for DOWN bets (non-blocking)
+  if (data?.success && direction === 'down' && data?.bet_id) {
+    supabase.functions.invoke('hedge-swap', {
+      body: { action: 'hedge', bet_id: data.bet_id },
+    }).catch((err: unknown) => console.warn('Hedge trigger failed (worker will retry):', err));
+  }
+
+  return data;
+}
+
+export async function cancelPredictionBet(playerId: string, betId: string) {
+  const { data, error } = await supabase.rpc('cancel_prediction_bet', {
+    p_player_id: playerId,
+    p_bet_id: betId,
+  });
+
+  if (error) throw error;
+
+  // Trigger USDC→RON unhedge for cancelled DOWN bets (non-blocking)
+  if (data?.success && data?.direction === 'down' && data?.hedge_status === 'hedged') {
+    supabase.functions.invoke('hedge-swap', {
+      body: { action: 'unhedge', bet_id: betId },
+    }).catch((err: unknown) => console.warn('Unhedge trigger failed (worker will retry):', err));
+  }
+
+  return data;
+}

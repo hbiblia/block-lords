@@ -34,6 +34,11 @@ const showInventory = ref(false);
 const showExchange = ref(false);
 const showDefense = ref(false);
 const showForge = ref(false);
+const showPrediction = ref(false);
+
+function openPrediction() {
+  showPrediction.value = true;
+}
 
 function openMarket() {
   showMarket.value = true;
@@ -65,6 +70,7 @@ import ExchangeModal from '@/components/ExchangeModal.vue';
 import GiftModal from '@/components/GiftModal.vue';
 import DefenseModal from '@/components/DefenseModal.vue';
 import ForgeModal from '@/components/ForgeModal.vue';
+import PredictionModal from '@/components/PredictionModal.vue';
 import RewardCelebration from '@/components/RewardCelebration.vue';
 
 const authStore = useAuthStore();
@@ -129,6 +135,9 @@ function handleOpenExchangeEvent() {
 function handleOpenInventoryEvent() {
   showInventory.value = true;
 }
+function handleOpenPredictionEvent() {
+  showPrediction.value = true;
+}
 
 // Escuchar eventos
 onMounted(() => {
@@ -137,6 +146,7 @@ onMounted(() => {
   window.addEventListener('open-market', handleOpenMarketEvent);
   window.addEventListener('open-exchange', handleOpenExchangeEvent);
   window.addEventListener('open-inventory', handleOpenInventoryEvent);
+  window.addEventListener('open-prediction', handleOpenPredictionEvent);
   // Ad blocker detection (only in production)
   if (window.location.hostname !== 'localhost' && !window.location.hostname.startsWith('127.')) {
     detectAdBlocker();
@@ -193,6 +203,7 @@ onUnmounted(() => {
   window.removeEventListener('open-market', handleOpenMarketEvent);
   window.removeEventListener('open-exchange', handleOpenExchangeEvent);
   window.removeEventListener('open-inventory', handleOpenInventoryEvent);
+  window.removeEventListener('open-prediction', handleOpenPredictionEvent);
 });
 
 // Connection status computed properties
@@ -397,6 +408,13 @@ async function handleConnectionClick() {
       :show="showDefense"
       @close="showDefense = false"
     />
+
+    <!-- Yield Prediction deshabilitado temporalmente
+    <PredictionModal
+      :show="showPrediction"
+      @close="showPrediction = false"
+    />
+    -->
 
     <!-- Main Content -->
     <main

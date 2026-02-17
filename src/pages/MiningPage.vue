@@ -10,6 +10,10 @@ import { useWakeLock } from '@/composables/useWakeLock';
 import { isTabLocked } from '@/composables/useTabLock';
 import { useMiningEstimate } from '@/composables/useMiningEstimate';
 import RigEnhanceModal from '@/components/RigEnhanceModal.vue';
+import MiningTips from '@/components/MiningTips.vue';
+import MiningGuide from '@/components/MiningGuide.vue';
+import MiningTour from '@/components/MiningTour.vue';
+import { useMiningTour } from '@/composables/useMiningTour';
 
 // Wake Lock to keep screen on while mining
 const { requestWakeLock, releaseWakeLock } = useWakeLock();
@@ -55,6 +59,14 @@ const hashesCalculated = ref(0);
 const miningInterval = ref<number | null>(null);
 const lastBlockFound = ref<any>(null);
 const showBlockFound = ref(false);
+
+// Guided tour
+const showTour = ref(false);
+const { isCompleted: tourCompleted } = useMiningTour();
+
+function startTour() {
+  showTour.value = true;
+}
 
 // Recent blocks panel
 const recentBlocksCollapsed = ref(localStorage.getItem('recentBlocksCollapsed') !== 'false');
@@ -276,6 +288,10 @@ function getSlotCurrencyName(currency: string): string {
 // Open market modal via global event
 function openMarket() {
   window.dispatchEvent(new CustomEvent('open-market'));
+}
+
+function openPrediction() {
+  window.dispatchEvent(new CustomEvent('open-prediction'));
 }
 
 // Rig manage modal
@@ -671,6 +687,13 @@ onMounted(() => {
   }, 1500);
 });
 
+// Auto-start tour for first-time users
+watch(dataLoaded, (loaded) => {
+  if (loaded && !tourCompleted.value && !showTour.value) {
+    setTimeout(() => { showTour.value = true; }, 2000);
+  }
+}, { once: true });
+
 onUnmounted(() => {
   stopMiningSimulation();
   stopUptimeTimer();
@@ -716,6 +739,9 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Contextual Tips -->
+    <MiningTips />
+
     <!-- Primera carga - solo si no hay datos en cache -->
     <div v-if="loading && !dataLoaded" class="text-center py-20 text-text-muted">
       <div
@@ -728,7 +754,7 @@ onUnmounted(() => {
     <!-- Contenido (con datos en cache o cargados) -->
     <div v-else class="space-y-6">
       <!-- Bloque Actual - Dashboard Unificado -->
-      <div class="card relative overflow-hidden p-3 sm:p-6">
+      <div id="tour-dashboard" class="card relative overflow-hidden p-3 sm:p-6">
         <div v-if="totalHashrate > 0"
           class="absolute inset-0 bg-gradient-to-r from-accent-primary/5 via-accent-secondary/5 to-accent-primary/5 animate-pulse">
         </div>
@@ -787,7 +813,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Estado: Con bloque activo -->
-          <div v-else>
+          <div v-else id="tour-block-info">
             <!-- Info de Red (Dificultad, etc) -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 sm:mb-4 p-2 sm:p-3 bg-bg-tertiary/50 rounded-lg">
               <div v-tooltip="t('mining.tooltip.difficulty')" class="text-center cursor-help">
@@ -1015,24 +1041,34 @@ onUnmounted(() => {
       <div class="grid lg:grid-cols-3 gap-6">
         <!-- Rigs Column -->
         <div class="lg:col-span-2 space-y-4">
-          <h2 class="text-lg font-semibold flex items-center gap-2">
-            <span>🖥️</span> {{ t('mining.yourRigs') }}
-            <span v-if="slotInfo" class="text-sm font-normal px-2 py-0.5 rounded-full"
-              :class="slotInfo.available_slots === 0 ? 'bg-status-warning/20 text-status-warning' : 'bg-accent-primary/20 text-accent-primary'">
-              {{ slotInfo.used_slots }}/{{ slotInfo.current_slots }}
-            </span>
-          </h2>
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold flex items-center gap-2">
+              <span>🖥️</span> {{ t('mining.yourRigs') }}
+              <span v-if="slotInfo" class="text-sm font-normal px-2 py-0.5 rounded-full"
+                :class="slotInfo.available_slots === 0 ? 'bg-status-warning/20 text-status-warning' : 'bg-accent-primary/20 text-accent-primary'">
+                {{ slotInfo.used_slots }}/{{ slotInfo.current_slots }}
+              </span>
+            </h2>
+            <!-- Yield Prediction deshabilitado temporalmente
+            <button
+              @click="openPrediction"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 transition-colors">
+              📊 {{ t('prediction.title') }}
+            </button>
+            -->
+          </div>
 
           <div v-if="rigs.length === 0" class="card text-center py-12">
             <div class="text-4xl mb-4">🛒</div>
             <p class="text-text-muted mb-4">{{ t('mining.noRigs') }}</p>
-            <button @click="openMarket" class="btn-primary">
+            <button id="tour-market-btn" @click="openMarket" class="btn-primary">
               {{ t('mining.goToMarket') }}
             </button>
           </div>
 
           <div v-else class="grid sm:grid-cols-2 gap-4">
-            <div v-for="playerRig in rigs" :key="playerRig.id"
+            <div v-for="(playerRig, rigIndex) in rigs" :key="playerRig.id"
+              :id="rigIndex === 0 ? 'tour-rig-first' : undefined"
               class="bg-bg-secondary/80 rounded-xl border relative overflow-hidden"
               :class="playerRig.condition <= 0 ? 'border-status-danger/70' : playerRig.condition < 30 ? 'border-status-warning/50' : 'border-border/30'">
 
@@ -1193,7 +1229,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Action buttons -->
-                <div class="flex gap-2">
+                <div :id="rigIndex === 0 ? 'tour-rig-actions' : undefined" class="flex gap-2">
                   <button @click="handleToggleRig(playerRig.id)" :disabled="playerRig.condition <= 0"
                     class="flex-1 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50" :class="playerRig.condition <= 0
                       ? 'bg-status-danger/10 text-status-danger cursor-not-allowed'
@@ -1317,7 +1353,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Sidebar -->
-        <div class="space-y-4">
+        <div id="tour-sidebar" class="space-y-4">
           <!-- Recent Blocks -->
           <div class="card p-3">
             <div class="flex items-center justify-between mb-2">
@@ -1485,6 +1521,9 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <!-- How to Play Guide -->
+          <MiningGuide @start-tour="startTour" />
+
           <!-- AdSense Banner -->
           <div class="card p-3 text-center">
             <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
@@ -1496,6 +1535,9 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Guided Tour -->
+    <MiningTour :show="showTour" @close="showTour = false" />
 
     <!-- Rig Enhance Modal -->
     <RigEnhanceModal :show="showRigManage" :rig="selectedRigForManage" @close="closeRigManage"

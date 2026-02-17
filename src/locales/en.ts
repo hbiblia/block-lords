@@ -2152,4 +2152,183 @@ export default {
       violations: 'Violations of these rules may result in warnings, temporary suspensions, or permanent bans depending on severity.',
     },
   },
+
+  prediction: {
+    title: 'Yield Prediction',
+    short: 'Predict',
+    subtitle: 'Predict RON price movement',
+    predictButton: 'Predict RON',
+    tabs: {
+      place: 'Place Bet',
+      active: 'Active',
+      history: 'History',
+    },
+    direction: {
+      label: 'Direction',
+      up: 'UP',
+      down: 'DOWN',
+      upDesc: 'RON price will rise',
+      downDesc: 'RON price will drop',
+    },
+    target: {
+      label: 'Target',
+    },
+    bet: {
+      label: 'Bet Amount (Landwork)',
+      min: 'Minimum: 50,000 Landwork',
+      insufficientBalance: 'Insufficient Landwork balance',
+      maxActiveBets: 'Maximum 3 active predictions',
+      priceUnavailable: 'Price data unavailable',
+      invalidTarget: 'Invalid target',
+    },
+    summary: {
+      direction: 'Direction',
+      potentialYield: 'Potential Yield',
+      fee: 'Fee (5% on yield)',
+      totalReturn: 'Total Return',
+      entryPrice: 'Entry Price',
+      targetPrice: 'Target Price',
+      currentPrice: 'Current Price',
+    },
+    info: {
+      noLoss: 'You never lose your bet! It stays active until the target is reached. Cancel anytime (2% fee).',
+    },
+    actions: {
+      placeBet: 'Place Prediction',
+      placing: 'Placing...',
+      cancel: 'Cancel Bet',
+      cancelling: 'Cancelling...',
+      confirmCancel: 'Are you sure? You will receive a refund with 2% fee.',
+      confirmPlace: 'Confirm Prediction',
+    },
+    active: {
+      noBets: 'No active predictions',
+      progress: 'Progress',
+      yield: 'Yield when target reached',
+      cancelFee: '2% cancellation fee',
+      of: 'of',
+    },
+    history: {
+      noHistory: 'No prediction history',
+      won: 'Won',
+      cancelled: 'Cancelled',
+      yield: 'Yield',
+      fee: 'Fee',
+    },
+    stats: {
+      totalBets: 'Total Bets',
+      wonBets: 'Won',
+      totalYield: 'Total Yield Earned',
+      totalFees: 'Total Fees Paid',
+    },
+    price: {
+      ronUsdc: 'RON/USDC',
+      loading: 'Loading price...',
+      high24h: 'High 24h',
+      low24h: 'Low 24h',
+    },
+    errors: {
+      max_active_bets: 'Maximum 3 active predictions',
+      insufficient_balance: 'Insufficient balance',
+      price_unavailable: 'Price unavailable',
+      invalid_direction: 'Invalid direction',
+      invalid_target: 'Invalid target',
+      min_bet_50k: 'Minimum 50,000 Landwork',
+      bet_not_found: 'Bet not found',
+      player_not_found: 'Player not found',
+    },
+  },
+
+  tips: {
+    energyCritical: 'Energy critically low ({percent}%)! Mining may stop soon.',
+    energyWarning: 'Energy is low ({percent}%). Consider buying Prepaid Cards.',
+    internetCritical: 'Internet critically low ({percent}%)! Connection at risk.',
+    internetWarning: 'Internet is low ({percent}%). Refill soon.',
+    rigOverheatCritical: '{count} rig(s) critically overheating ({temp}°C)! Shutdown risk.',
+    rigOverheatWarning: '{count} rig(s) running hot. Check cooling.',
+    rigBroken: '{count} rig(s) are broken (0% condition). They are not mining.',
+    rigConditionLow: '{count} rig(s) have low condition (< 30%). Repair soon.',
+    coolingDegraded: 'Cooling on {count} active rig(s) is degraded (< 50% durability).',
+    noActiveRigs: 'No rigs are active. Activate a rig to start mining.',
+    action: {
+      goToMarket: 'Go to Market',
+      repairRig: 'Repair',
+    },
+  },
+
+  guide: {
+    title: 'How to Play',
+    show: 'Show guide',
+    hide: 'Hide guide',
+    startTour: 'Start Interactive Tour',
+    topics: {
+      howMining: {
+        icon: '⛏️',
+        title: 'How Mining Works',
+        body: 'Mining is share-based: your rigs contribute shares to a pool each block cycle. When the block closes, rewards are distributed proportionally to all contributors. More hashrate = more shares = bigger reward.',
+      },
+      rigsAndSlots: {
+        icon: '🖥️',
+        title: 'Rigs & Slots',
+        body: 'Each rig occupies one slot. Slots have tiers (Basic → Standard → Advanced → Elite) that unlock as you gain XP. Higher-tier slots boost performance. Buy new slots in the Market.',
+      },
+      tempAndCondition: {
+        icon: '🌡️',
+        title: 'Temperature & Condition',
+        body: 'Temperature above 60°C reduces hashrate; above 80°C risks shutdown. Condition degrades over time — below 30% is a warning, 0% means broken. Install cooling to manage heat.',
+      },
+      resources: {
+        icon: '⚡',
+        title: 'Resources',
+        body: 'Energy and Internet are consumed by your active rigs. Both regenerate slowly over time or can be refilled with Prepaid Cards from the Market. Without resources, rigs stop mining.',
+      },
+      currencies: {
+        icon: '💰',
+        title: 'Currencies',
+        body: 'GameCoin (GC) is earned from mining and used for basic purchases. Landwork (LW) is the premium currency for top-tier items. RON is the blockchain token used for claiming rewards.',
+      },
+      upgradesAndBoosts: {
+        icon: '🚀',
+        title: 'Upgrades & Boosts',
+        body: 'Upgrade rigs in the Forge to increase hashrate, efficiency, and thermal resistance. Boosts are temporary items (Overclock, Coolant Injection, etc.) that give a short burst of power.',
+      },
+    },
+  },
+
+  tour: {
+    skip: 'Skip tour',
+    prev: 'Previous',
+    next: 'Next',
+    finish: 'Finish',
+    steps: {
+      welcome: {
+        title: 'Welcome to the Mining Center!',
+        body: 'This is your command center. Here you can see your block progress, hashrate, shares, and manage all your rigs. Let\'s walk through the key features.',
+      },
+      blockSystem: {
+        title: 'Blocks & Shares',
+        body: 'Mining works in block cycles. Your rigs generate shares continuously. When the block closes, everyone who contributed shares earns a proportional reward.',
+      },
+      rigCard: {
+        title: 'Your Mining Rigs',
+        body: 'Each card represents a rig. You can see its name, tier, hashrate, and current status. Green dot = actively mining. Click the gear icon to manage upgrades and cooling.',
+      },
+      tempCondition: {
+        title: 'Temperature & Condition',
+        body: 'Watch the temperature bar (red = dangerous) and condition bar (green = healthy). High temperature reduces hashrate. Low condition means the rig is wearing out — repair it before it breaks.',
+      },
+      startRig: {
+        title: 'Activating a Rig',
+        body: 'Use the toggle button to start or stop a rig. Active rigs consume Energy and Internet. Make sure you have enough resources before activating multiple rigs.',
+      },
+      sidebar: {
+        title: 'Recent Blocks & Exchange Rate',
+        body: 'The sidebar shows your recent block history with participation details, and the live exchange rate chart. Use this to track your earnings.',
+      },
+      market: {
+        title: 'The Market',
+        body: 'Visit the Market to buy new rigs, cooling items, Prepaid Cards (to refill Energy/Internet), and boosts. This is your main resource hub.',
+      },
+    },
+  },
 };
