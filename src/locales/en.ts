@@ -807,6 +807,8 @@ export default {
       turnOnRig: 'Turn On Rig',
       turnOffRig: 'Turn Off Rig',
       areYouSure: 'Are you sure you want to perform this action?',
+      installRig: 'Install Rig',
+      installRigNote: 'The rig will be installed in an available slot and will start mining.',
       rig: 'Rig:',
       cooling: 'Cooling:',
       power: 'Power:',

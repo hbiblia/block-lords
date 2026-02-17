@@ -5074,7 +5074,7 @@ BEGIN
   END IF;
 
   -- Validar type
-  IF p_type NOT IN ('info', 'warning', 'success', 'error', 'maintenance') THEN
+  IF p_type NOT IN ('info', 'warning', 'success', 'error', 'maintenance', 'update') THEN
     RAISE EXCEPTION 'Invalid announcement type';
   END IF;
 
@@ -5141,7 +5141,7 @@ BEGIN
   END IF;
 
   -- Validar type si se proporciona
-  IF p_type IS NOT NULL AND p_type NOT IN ('info', 'warning', 'success', 'error', 'maintenance') THEN
+  IF p_type IS NOT NULL AND p_type NOT IN ('info', 'warning', 'success', 'error', 'maintenance', 'update') THEN
     RAISE EXCEPTION 'Invalid announcement type';
   END IF;
 
@@ -12005,13 +12005,13 @@ BEGIN
 
   -- SORTEAR valores aleatorios (gacha!)
   v_roll_cooling := ROUND(
-    v_component.cooling_power_min + (random() * (v_component.cooling_power_max - v_component.cooling_power_min))
+    (v_component.cooling_power_min + (random() * (v_component.cooling_power_max - v_component.cooling_power_min)))::NUMERIC
   , 1);
   v_roll_energy := ROUND(
-    v_component.energy_cost_min + (random() * (v_component.energy_cost_max - v_component.energy_cost_min))
+    (v_component.energy_cost_min + (random() * (v_component.energy_cost_max - v_component.energy_cost_min)))::NUMERIC
   , 1);
   v_roll_durability := ROUND(
-    v_component.durability_min + (random() * (v_component.durability_max - v_component.durability_min))
+    (v_component.durability_min + (random() * (v_component.durability_max - v_component.durability_min)))::NUMERIC
   , 1);
 
   -- Construir mod object
@@ -12066,7 +12066,7 @@ BEGIN
     'player_cooling_item_id', v_pci_id,
     'mod', v_new_mod,
     'quality', v_quality,
-    'quality_percent', ROUND(v_quality_percent, 1),
+    'quality_percent', ROUND(v_quality_percent::NUMERIC, 1),
     'component', row_to_json(v_component),
     'cooling', row_to_json(v_cooling),
     'slots_used', v_current_slots + 1,

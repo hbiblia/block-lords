@@ -235,12 +235,16 @@ export async function updatePlayerHeartbeat(playerId: string): Promise<boolean> 
     });
 
     if (error) {
+      // AbortError is expected when tab loses/regains focus — silently ignore
+      if (error.message?.includes('AbortError')) return false;
       console.warn('Heartbeat failed:', error.message);
       return false;
     }
 
     return data === true;
-  } catch (error) {
+  } catch (error: unknown) {
+    // AbortError from fetch when tab transitions — silently ignore
+    if (error instanceof DOMException && error.name === 'AbortError') return false;
     console.warn('Heartbeat error:', error);
     return false;
   }
@@ -945,7 +949,7 @@ export interface CreateAnnouncementParams {
 }
 
 export async function adminCreateAnnouncement(params: CreateAnnouncementParams) {
-  const { data, error } = await supabase.rpc('admin_create_announcement', {
+  return rpcWithRetry('admin_create_announcement', {
     p_message: params.message,
     p_message_es: params.message_es || null,
     p_type: params.type || 'info',
@@ -956,10 +960,7 @@ export async function adminCreateAnnouncement(params: CreateAnnouncementParams) 
     p_priority: params.priority || 0,
     p_starts_at: params.starts_at || null,
     p_ends_at: params.ends_at || null,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
 // Admin: Actualizar anuncio
@@ -978,7 +979,7 @@ export interface UpdateAnnouncementParams {
 }
 
 export async function adminUpdateAnnouncement(params: UpdateAnnouncementParams) {
-  const { data, error } = await supabase.rpc('admin_update_announcement', {
+  return rpcWithRetry('admin_update_announcement', {
     p_announcement_id: params.announcement_id,
     p_message: params.message || null,
     p_message_es: params.message_es || null,
@@ -990,32 +991,23 @@ export async function adminUpdateAnnouncement(params: UpdateAnnouncementParams) 
     p_priority: params.priority ?? null,
     p_starts_at: params.starts_at || null,
     p_ends_at: params.ends_at || null,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
 // Admin: Eliminar anuncio
 export async function adminDeleteAnnouncement(announcementId: string) {
-  const { data, error } = await supabase.rpc('admin_delete_announcement', {
+  return rpcWithRetry('admin_delete_announcement', {
     p_announcement_id: announcementId,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
 // Admin: Crear anuncio de actualización (quick action)
 export async function adminCreateUpdateAnnouncement(version: string, message?: string, messageEs?: string) {
-  const { data, error } = await supabase.rpc('admin_create_update_announcement', {
+  return rpcWithRetry('admin_create_update_announcement', {
     p_version: version,
     p_message: message || null,
     p_message_es: messageEs || null,
-  });
-
-  if (error) throw error;
-  return data;
+  }, { critical: true });
 }
 
 // Admin: Enviar regalo

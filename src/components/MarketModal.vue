@@ -160,6 +160,16 @@ function getTierBorder(tier: string) {
   }
 }
 
+function getTierBg(tier: string) {
+  switch (tier) {
+    case 'basic': return 'bg-gray-500/15';
+    case 'standard': return 'bg-blue-500/15';
+    case 'advanced': return 'bg-amber-500/15';
+    case 'elite': return 'bg-yellow-500/15';
+    default: return 'bg-white/10';
+  }
+}
+
 // Translation helpers for market items - fallback to DB name if no translation
 function getRigName(id: string): string {
   const key = `market.items.rigs.${id}.name`;
@@ -722,7 +732,7 @@ watch(() => props.show, (newVal) => {
                   <div class="flex items-start justify-between mb-1.5 sm:mb-2">
                     <div class="min-w-0 flex-1">
                       <h4 class="font-medium text-xs sm:text-sm truncate">{{ getRigName(rig.id) }}</h4>
-                      <p class="text-[10px] sm:text-xs uppercase" :class="getTierColor(rig.tier)">{{ rig.tier }}</p>
+                      <span class="inline-block text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 rounded mt-0.5" :class="[getTierColor(rig.tier), getTierBg(rig.tier)]">{{ rig.tier }}</span>
                     </div>
                     <span class="text-lg sm:text-2xl ml-1">⛏️</span>
                   </div>
@@ -780,7 +790,7 @@ watch(() => props.show, (newVal) => {
                   <div class="flex items-start justify-between mb-1.5 sm:mb-2">
                     <div class="min-w-0 flex-1">
                       <h4 class="font-medium text-xs sm:text-sm truncate">{{ getCoolingName(item.id) }}</h4>
-                      <p class="text-[10px] sm:text-xs uppercase" :class="getTierColor(item.tier)">{{ item.tier }}</p>
+                      <span class="inline-block text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 rounded mt-0.5" :class="[getTierColor(item.tier), getTierBg(item.tier)]">{{ item.tier }}</span>
                     </div>
                     <span class="text-lg sm:text-2xl ml-1">❄️</span>
                   </div>
@@ -846,7 +856,7 @@ watch(() => props.show, (newVal) => {
                   <div class="flex items-start justify-between mb-1.5 sm:mb-2">
                     <div class="min-w-0 flex-1">
                       <h4 class="font-medium text-xs sm:text-sm truncate">{{ getComponentName(comp.id) }}</h4>
-                      <p class="text-[10px] sm:text-xs uppercase" :class="getTierColor(comp.tier)">{{ comp.tier }}</p>
+                      <span class="inline-block text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 rounded mt-0.5" :class="[getTierColor(comp.tier), getTierBg(comp.tier)]">{{ comp.tier }}</span>
                     </div>
                     <span class="text-lg sm:text-2xl ml-1">🧩</span>
                   </div>

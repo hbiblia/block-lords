@@ -807,6 +807,8 @@
       turnOnRig: 'Encender Rig',
       turnOffRig: 'Apagar Rig',
       areYouSure: '¿Estás seguro de realizar esta acción?',
+      installRig: 'Instalar Rig',
+      installRigNote: 'El rig se instalará en un slot disponible y comenzará a minar.',
       rig: 'Rig:',
       cooling: 'Refrigeración:',
       power: 'Poder:',

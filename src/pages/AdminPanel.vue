@@ -841,6 +841,14 @@ onMounted(async () => {
             {{ editingAnnouncement ? 'Editar Anuncio' : 'Crear Nuevo Anuncio' }}
           </h3>
 
+          <!-- Error inside modal -->
+          <div
+            v-if="error"
+            class="mb-4 p-3 bg-status-danger/10 border border-status-danger/30 rounded-lg text-status-danger text-sm"
+          >
+            {{ error }}
+          </div>
+
           <div class="space-y-4">
             <!-- Message (EN) -->
             <div>
