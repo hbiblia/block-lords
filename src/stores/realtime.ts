@@ -10,10 +10,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const channels = ref<Map<string, any>>(new Map());
   const connected = ref(false);
-  const wasConnected = ref(false); // Track if we were ever connected
+  const wasConnected = ref(false);
   const reconnecting = ref(false);
   const reconnectAttempts = ref(0);
   const maxReconnectAttempts = 10;
+  // Track per-channel errors to avoid nuclear reconnection
+  const channelErrors = ref<Map<string, number>>(new Map());
   let reconnectTimeout: number | null = null;
   let heartbeatInterval: number | null = null;
   let visibilityHandler: (() => void) | null = null;
@@ -23,21 +25,17 @@ export const useRealtimeStore = defineStore('realtime', () => {
   let blurHandler: (() => void) | null = null;
 
   const isConnected = computed(() => connected.value);
-  // Mostrar modal si: estábamos conectados, ya no lo estamos, y han pasado varios intentos de reconexión
-  // O si la reconexión falló completamente
   const showDisconnectedModal = computed(() => {
     if (!wasConnected.value) return false;
     if (connected.value) return false;
-    // Mostrar después de 3 intentos fallidos O si ya no está reconectando (falló todo)
     return reconnectAttempts.value >= 3 || !reconnecting.value;
   });
 
-  // Heartbeat para detectar conexiones zombie
+  // --- Heartbeat ---
   function startHeartbeat() {
     stopHeartbeat();
     heartbeatInterval = window.setInterval(() => {
       if (connected.value && channels.value.size > 0) {
-        // Verificar si algún canal está en estado problemático
         let hasActiveChannel = false;
         channels.value.forEach((channel) => {
           if (channel.state === 'joined' || channel.state === 'joining') {
@@ -47,10 +45,10 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
         if (!hasActiveChannel && wasConnected.value) {
           console.warn('Heartbeat: No hay canales activos, reconectando...');
-          handleChannelError();
+          handleFullReconnect();
         }
       }
-    }, 30000); // Check every 30 seconds
+    }, 30000);
   }
 
   function stopHeartbeat() {
@@ -60,7 +58,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
     }
   }
 
-  // Manejar visibilidad del documento (cuando el usuario cambia de pestaña)
+  // --- Visibility & Network Handlers ---
   function setupVisibilityHandler() {
     if (visibilityHandler) return;
 
@@ -69,27 +67,16 @@ export const useRealtimeStore = defineStore('realtime', () => {
       if (document.visibilityState === 'visible') {
         const authStore = useAuthStore();
 
-        // ✅ Actualizar heartbeat inmediatamente al recuperar foco
         if (authStore.player?.id) {
           updatePlayerHeartbeat(authStore.player.id).catch(err => {
             console.warn('Failed to update heartbeat on visibility change:', err);
           });
         }
 
-        // Si estábamos conectados pero ya no lo estamos, reconectar
         if (wasConnected.value && !connected.value) {
           manualReconnect();
         } else if (connected.value) {
-          // Verificar que los canales sigan activos
-          let needsReconnect = false;
-          channels.value.forEach((channel) => {
-            if (channel.state !== 'joined' && channel.state !== 'joining') {
-              needsReconnect = true;
-            }
-          });
-          if (needsReconnect) {
-            manualReconnect();
-          }
+          checkAndReconnectStaleChannels();
         }
       }
     };
@@ -97,14 +84,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
     document.addEventListener('visibilitychange', visibilityHandler);
   }
 
-  // Manejar eventos de red online/offline
   function setupNetworkHandlers() {
     if (onlineHandler) return;
 
     onlineHandler = () => {
       if (isTabLocked.value) return;
       if (wasConnected.value && !connected.value) {
-        // Esperar un momento para que la red se estabilice
         setTimeout(() => {
           if (!isTabLocked.value) manualReconnect();
         }, 1000);
@@ -119,7 +104,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
     window.addEventListener('offline', offlineHandler);
   }
 
-  // Manejar eventos de focus/blur de la ventana (diferente de visibilitychange)
   function setupFocusHandlers() {
     if (focusHandler) return;
 
@@ -128,42 +112,45 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
       const authStore = useAuthStore();
 
-      // ✅ Actualizar heartbeat inmediatamente al recuperar foco
       if (authStore.player?.id) {
         updatePlayerHeartbeat(authStore.player.id).catch(err => {
           console.warn('Failed to update heartbeat on focus:', err);
         });
       }
 
-      // Verificar inmediatamente el estado de los canales
       if (wasConnected.value) {
-        let needsReconnect = false;
-
-        // Si no estamos conectados, reconectar
         if (!connected.value) {
-          needsReconnect = true;
-        } else {
-          // Verificar que los canales sigan activos
-          channels.value.forEach((channel) => {
-            if (channel.state !== 'joined' && channel.state !== 'joining') {
-              needsReconnect = true;
-            }
-          });
-        }
-
-        if (needsReconnect) {
           manualReconnect();
+        } else {
+          checkAndReconnectStaleChannels();
         }
       }
     };
 
-    blurHandler = () => {
-      // Cuando la ventana pierde foco, el navegador puede throttle la conexión
-      // No desconectamos activamente
-    };
+    blurHandler = () => {};
 
     window.addEventListener('focus', focusHandler);
     window.addEventListener('blur', blurHandler);
+  }
+
+  // Check individual channels and reconnect only the ones that are stale
+  function checkAndReconnectStaleChannels() {
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) return;
+
+    const staleChannels: string[] = [];
+    channels.value.forEach((channel, name) => {
+      if (channel.state !== 'joined' && channel.state !== 'joining') {
+        staleChannels.push(name);
+      }
+    });
+
+    if (staleChannels.length > 0) {
+      console.warn(`Reconectando ${staleChannels.length} canal(es) inactivos:`, staleChannels);
+      for (const name of staleChannels) {
+        reconnectSingleChannel(name, authStore.player.id);
+      }
+    }
   }
 
   function cleanupHandlers() {
@@ -173,70 +160,70 @@ export const useRealtimeStore = defineStore('realtime', () => {
       document.removeEventListener('visibilitychange', visibilityHandler);
       visibilityHandler = null;
     }
-
     if (onlineHandler) {
       window.removeEventListener('online', onlineHandler);
       onlineHandler = null;
     }
-
     if (offlineHandler) {
       window.removeEventListener('offline', offlineHandler);
       offlineHandler = null;
     }
-
     if (focusHandler) {
       window.removeEventListener('focus', focusHandler);
       focusHandler = null;
     }
-
     if (blurHandler) {
       window.removeEventListener('blur', blurHandler);
       blurHandler = null;
     }
   }
 
-  function connect() {
-    const authStore = useAuthStore();
+  // --- Per-channel error handling (granular, not nuclear) ---
+  function handleChannelError(channelName: string) {
+    const errors = (channelErrors.value.get(channelName) ?? 0) + 1;
+    channelErrors.value.set(channelName, errors);
 
-    if (!authStore.player?.id) {
-      console.warn('No player ID for realtime connection');
+    if (errors >= 3) {
+      // After 3 failures for the same channel, do a full reconnect
+      console.error(`Canal "${channelName}" falló ${errors} veces, reconexión completa...`);
+      handleFullReconnect();
       return;
     }
 
-    // Suscribirse a cambios en el jugador actual
-    subscribeToPlayer(authStore.player.id);
+    const delay = Math.min(1000 * Math.pow(1.5, errors), 10000);
+    console.warn(`Canal "${channelName}" error (intento ${errors}), reconectando en ${delay / 1000}s...`);
 
-    // Suscribirse a cambios en los rigs del jugador
-    subscribeToPlayerRigs(authStore.player.id);
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) return;
 
-    // Suscribirse a cambios en el cooling de rigs
-    subscribeToRigCooling(authStore.player.id);
-
-    // Suscribirse a nuevos bloques
-    subscribeToBlocks();
-
-    // Suscribirse a bloques pendientes (incluye pity blocks)
-    subscribeToPendingBlocks(authStore.player.id);
-
-    // Suscribirse a regalos del jugador
-    subscribeToPlayerGifts(authStore.player.id);
-
-    // Suscribirse a stats de la red
-    subscribeToNetworkStats();
-
-    connected.value = true;
-    wasConnected.value = true;
-    reconnecting.value = false;
-    reconnectAttempts.value = 0;
-
-    // Iniciar heartbeat y handlers
-    startHeartbeat();
-    setupVisibilityHandler();
-    setupNetworkHandlers();
-    setupFocusHandlers();
+    setTimeout(() => {
+      if (!isTabLocked.value) {
+        reconnectSingleChannel(channelName, authStore.player!.id);
+      }
+    }, delay);
   }
 
-  function handleChannelError() {
+  // Reconnect a single channel without touching the others
+  function reconnectSingleChannel(channelName: string, playerId: string) {
+    const oldChannel = channels.value.get(channelName);
+    if (oldChannel) {
+      supabase.removeChannel(oldChannel);
+      channels.value.delete(channelName);
+    }
+
+    // Re-subscribe based on channel name
+    if (channelName === 'private') {
+      subscribePrivateChannel(playerId);
+    } else if (channelName === 'global') {
+      subscribeGlobalChannel(playerId);
+    } else if (channelName.startsWith('market:')) {
+      const itemType = channelName.replace('market:', '');
+      subscribeToMarketOrders(itemType);
+    }
+  }
+
+  // --- Full reconnect (only when multiple channels fail) ---
+  function handleFullReconnect() {
     connected.value = false;
 
     if (isTabLocked.value) return;
@@ -246,14 +233,14 @@ export const useRealtimeStore = defineStore('realtime', () => {
       reconnectAttempts.value++;
 
       const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts.value), 15000);
-      console.log(`Intentando reconectar en ${delay / 1000}s (intento ${reconnectAttempts.value}/${maxReconnectAttempts})`);
+      console.log(`Reconexión completa en ${delay / 1000}s (intento ${reconnectAttempts.value}/${maxReconnectAttempts})`);
 
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
       }
 
       reconnectTimeout = window.setTimeout(() => {
-        disconnect(false); // No limpiar handlers durante reconexión
+        disconnect(false);
         connect();
       }, delay);
     } else {
@@ -264,28 +251,46 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
   function manualReconnect() {
     reconnectAttempts.value = 0;
+    channelErrors.value.clear();
     reconnecting.value = true;
-    disconnect(false); // No limpiar handlers durante reconexión
+    disconnect(false);
     connect();
   }
 
-  function disconnect(full = true) {
-    channels.value.forEach((channel) => {
-      supabase.removeChannel(channel);
-    });
-    channels.value.clear();
-    connected.value = false;
+  // --- Main connect: 2 multiplexed channels instead of 7 ---
+  function connect() {
+    const authStore = useAuthStore();
 
-    // Solo limpiar handlers en desconexión completa (logout)
-    if (full) {
-      cleanupHandlers();
-      wasConnected.value = false;
+    if (!authStore.player?.id) {
+      console.warn('No player ID for realtime connection');
+      return;
     }
+
+    const playerId = authStore.player.id;
+
+    // Channel 1: Private — all player-specific subscriptions
+    subscribePrivateChannel(playerId);
+
+    // Channel 2: Global — blocks + network_stats
+    subscribeGlobalChannel(playerId);
+
+    connected.value = true;
+    wasConnected.value = true;
+    reconnecting.value = false;
+    reconnectAttempts.value = 0;
+    channelErrors.value.clear();
+
+    startHeartbeat();
+    setupVisibilityHandler();
+    setupNetworkHandlers();
+    setupFocusHandlers();
   }
 
-  function subscribeToPlayer(playerId: string) {
+  // --- Channel 1: Private (player, rigs, cooling, pending_blocks, gifts) ---
+  function subscribePrivateChannel(playerId: string) {
     const channel = supabase
-      .channel(`player:${playerId}`)
+      .channel(`private:${playerId}`)
+      // Player updates
       .on(
         'postgres_changes',
         {
@@ -299,67 +304,69 @@ export const useRealtimeStore = defineStore('realtime', () => {
           authStore.updatePlayer(payload.new as any);
         }
       )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Suscrito a cambios del jugador');
-          connected.value = true;
-          reconnecting.value = false;
-          reconnectAttempts.value = 0;
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('Error en canal del jugador:', status);
-          handleChannelError();
-        } else if (status === 'CLOSED') {
-          connected.value = false;
-        }
-      });
-
-    channels.value.set(`player:${playerId}`, channel);
-  }
-
-  function subscribeToBlocks() {
-    const channel = supabase
-      .channel('blocks')
+      // Rig INSERT/DELETE only (skip UPDATE to avoid game_tick flood)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'blocks',
+          table: 'player_rigs',
+          filter: `player_id=eq.${playerId}`,
         },
-        async (payload) => {
-          const block = payload.new;
-
-          // Obtener info del minero
-          const { data: miner } = await supabase
-            .from('players')
-            .select('id, username')
-            .eq('id', block.miner_id)
-            .single();
-
-          // Emitir evento global
+        (payload) => {
+          console.log('Rig cambio: INSERT');
           window.dispatchEvent(
-            new CustomEvent('block-mined', {
-              detail: {
-                block,
-                winner: miner,
-              },
-            })
+            new CustomEvent('player-rigs-updated', { detail: payload })
           );
         }
       )
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('Error en canal de bloques:', status);
-          handleChannelError();
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'player_rigs',
+          filter: `player_id=eq.${playerId}`,
+        },
+        (payload) => {
+          console.log('Rig cambio: DELETE');
+          window.dispatchEvent(
+            new CustomEvent('player-rigs-updated', { detail: payload })
+          );
         }
-      });
-
-    channels.value.set('blocks', channel);
-  }
-
-  function subscribeToPendingBlocks(playerId: string) {
-    const channel = supabase
-      .channel(`pending_blocks:${playerId}`)
+      )
+      // Rig cooling — WITH player filter
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'rig_cooling',
+          filter: `player_id=eq.${playerId}`,
+        },
+        (payload) => {
+          console.log('Cooling cambio: INSERT');
+          window.dispatchEvent(
+            new CustomEvent('rig-cooling-updated', { detail: payload })
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'rig_cooling',
+          filter: `player_id=eq.${playerId}`,
+        },
+        (payload) => {
+          console.log('Cooling cambio: DELETE');
+          window.dispatchEvent(
+            new CustomEvent('rig-cooling-updated', { detail: payload })
+          );
+        }
+      )
+      // Pending blocks
       .on(
         'postgres_changes',
         {
@@ -371,7 +378,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
         (payload) => {
           const pendingBlock = payload.new;
 
-          // Emitir evento para nuevo bloque pendiente (incluye pity blocks y material drops)
           window.dispatchEvent(
             new CustomEvent('pending-block-created', {
               detail: {
@@ -387,21 +393,67 @@ export const useRealtimeStore = defineStore('realtime', () => {
           );
         }
       )
+      // Player gifts
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'player_gifts',
+          filter: `player_id=eq.${playerId}`,
+        },
+        () => {
+          const giftsStore = useGiftsStore();
+          giftsStore.fetchGifts();
+        }
+      )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('Suscrito a bloques pendientes');
+          console.log('Canal privado conectado');
+          connected.value = true;
+          reconnecting.value = false;
+          reconnectAttempts.value = 0;
+          channelErrors.value.delete('private');
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('Error en canal de pending_blocks:', status);
-          handleChannelError();
+          console.error('Error en canal privado:', status);
+          handleChannelError('private');
+        } else if (status === 'CLOSED') {
+          connected.value = false;
         }
       });
 
-    channels.value.set(`pending_blocks:${playerId}`, channel);
+    channels.value.set('private', channel);
   }
 
-  function subscribeToNetworkStats() {
+  // --- Channel 2: Global (blocks + network_stats) ---
+  function subscribeGlobalChannel(_playerId: string) {
     const channel = supabase
-      .channel('network_stats')
+      .channel('global')
+      // New blocks mined
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'blocks',
+        },
+        async (payload) => {
+          const block = payload.new;
+
+          const { data: miner } = await supabase
+            .from('players')
+            .select('id, username')
+            .eq('id', block.miner_id)
+            .single();
+
+          window.dispatchEvent(
+            new CustomEvent('block-mined', {
+              detail: { block, winner: miner },
+            })
+          );
+        }
+      )
+      // Network stats
       .on(
         'postgres_changes',
         {
@@ -419,111 +471,30 @@ export const useRealtimeStore = defineStore('realtime', () => {
       )
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('Error en canal de network_stats:', status);
-          handleChannelError();
+          console.error('Error en canal global:', status);
+          handleChannelError('global');
         }
       });
 
-    channels.value.set('network_stats', channel);
+    channels.value.set('global', channel);
   }
 
-  function subscribeToPlayerRigs(playerId: string) {
-    const channel = supabase
-      .channel(`player_rigs:${playerId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'player_rigs',
-          filter: `player_id=eq.${playerId}`,
-        },
-        (payload) => {
-          // Solo loguear INSERT/DELETE (no los UPDATE frecuentes del game_tick)
-          if (payload.eventType !== 'UPDATE') {
-            console.log('Rig cambio:', payload.eventType);
-          }
-          window.dispatchEvent(
-            new CustomEvent('player-rigs-updated', {
-              detail: payload,
-            })
-          );
-        }
-      )
-      .subscribe((status: string) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Suscrito a cambios de rigs');
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('Error en canal de rigs:', status);
-          handleChannelError();
-        }
-      });
+  // --- Disconnect ---
+  function disconnect(full = true) {
+    channels.value.forEach((channel) => {
+      supabase.removeChannel(channel);
+    });
+    channels.value.clear();
+    connected.value = false;
 
-    channels.value.set(`player_rigs:${playerId}`, channel);
+    if (full) {
+      cleanupHandlers();
+      wasConnected.value = false;
+      channelErrors.value.clear();
+    }
   }
 
-  function subscribeToRigCooling(playerId: string) {
-    const channel = supabase
-      .channel(`rig_cooling:${playerId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'rig_cooling',
-        },
-        (payload) => {
-          // Solo loguear INSERT/DELETE (no los UPDATE frecuentes)
-          if (payload.eventType !== 'UPDATE') {
-            console.log('Cooling cambio:', payload.eventType);
-          }
-          window.dispatchEvent(
-            new CustomEvent('rig-cooling-updated', {
-              detail: payload,
-            })
-          );
-        }
-      )
-      .subscribe((status: string) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Suscrito a cambios de cooling');
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('Error en canal de cooling:', status);
-          handleChannelError();
-        }
-      });
-
-    channels.value.set(`rig_cooling:${playerId}`, channel);
-  }
-
-  function subscribeToPlayerGifts(playerId: string) {
-    const channel = supabase
-      .channel(`player_gifts:${playerId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'player_gifts',
-          filter: `player_id=eq.${playerId}`,
-        },
-        () => {
-          const giftsStore = useGiftsStore();
-          giftsStore.fetchGifts();
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Suscrito a regalos del jugador');
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('Error en canal de gifts:', status);
-          handleChannelError();
-        }
-      });
-
-    channels.value.set(`player_gifts:${playerId}`, channel);
-  }
-
+  // --- Market orders (on-demand, separate channel) ---
   function subscribeToMarketOrders(itemType: string) {
     const channelName = `market:${itemType}`;
 
@@ -550,6 +521,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.error('Error en canal de market:', status);
+          handleChannelError(channelName);
         }
       });
 
