@@ -12715,7 +12715,7 @@ CREATE OR REPLACE FUNCTION place_prediction_bet(
   p_player_id UUID,
   p_direction TEXT,
   p_target_percent DECIMAL,
-  p_bet_amount DECIMAL
+  p_bet_amount DECIMAL  -- ahora en RON
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -12723,13 +12723,18 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_active_count INT;
-  v_player_crypto DECIMAL;
+  v_player_ron DECIMAL;
+  v_player_role TEXT;
   v_current_price DECIMAL;
   v_target_price DECIMAL;
-  v_bet_amount_ron DECIMAL;
-  v_lw_to_ron_rate DECIMAL;
   v_bet_id UUID;
 BEGIN
+  -- Solo admin puede usar prediction
+  SELECT role INTO v_player_role FROM players WHERE id = p_player_id;
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'unauthorized');
+  END IF;
+
   IF p_direction NOT IN ('up', 'down') THEN
     RETURN jsonb_build_object('success', false, 'error', 'invalid_direction');
   END IF;
@@ -12742,8 +12747,8 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'invalid_target');
   END IF;
 
-  IF p_bet_amount < 50000 THEN
-    RETURN jsonb_build_object('success', false, 'error', 'min_bet_50k');
+  IF p_bet_amount < 0.5 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'min_bet_half_ron');
   END IF;
 
   SELECT COUNT(*) INTO v_active_count
@@ -12754,14 +12759,14 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'max_active_bets');
   END IF;
 
-  SELECT crypto_balance INTO v_player_crypto
+  SELECT ron_balance INTO v_player_ron
   FROM players WHERE id = p_player_id FOR UPDATE;
 
-  IF v_player_crypto IS NULL THEN
+  IF v_player_ron IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'player_not_found');
   END IF;
 
-  IF v_player_crypto < p_bet_amount THEN
+  IF v_player_ron < p_bet_amount THEN
     RETURN jsonb_build_object('success', false, 'error', 'insufficient_balance');
   END IF;
 
@@ -12779,15 +12784,11 @@ BEGIN
     v_target_price := v_current_price * (1 - p_target_percent / 100);
   END IF;
 
-  -- 100,000 LW = 1 RON (mismo rate que exchange_crypto_to_ron)
-  v_lw_to_ron_rate := 0.00001;
-
-  v_bet_amount_ron := p_bet_amount * v_lw_to_ron_rate;
-
   UPDATE players
-  SET crypto_balance = crypto_balance - p_bet_amount, updated_at = NOW()
+  SET ron_balance = ron_balance - p_bet_amount, updated_at = NOW()
   WHERE id = p_player_id;
 
+  -- Reutilizamos columnas _lw para almacenar RON (evita migración de columnas)
   INSERT INTO prediction_bets (
     player_id, direction, target_percent,
     bet_amount_lw, bet_amount_ron, exchange_rate,
@@ -12795,7 +12796,7 @@ BEGIN
     hedge_status
   ) VALUES (
     p_player_id, p_direction, p_target_percent,
-    p_bet_amount, v_bet_amount_ron, v_lw_to_ron_rate,
+    p_bet_amount, p_bet_amount, 1,
     v_current_price, v_target_price, 'active',
     CASE WHEN p_direction = 'down' THEN 'pending' ELSE 'none' END
   ) RETURNING id INTO v_bet_id;
@@ -12806,13 +12807,12 @@ BEGIN
     'direction', p_direction,
     'entry_price', v_current_price,
     'target_price', v_target_price,
-    'bet_amount_ron', v_bet_amount_ron,
-    'exchange_rate', v_lw_to_ron_rate
+    'bet_amount_ron', p_bet_amount
   );
 END;
 $$;
 
--- Cancelar apuesta (2% fee)
+-- Cancelar apuesta (2% fee) — montos en RON
 CREATE OR REPLACE FUNCTION cancel_prediction_bet(
   p_player_id UUID,
   p_bet_id UUID
@@ -12844,11 +12844,11 @@ BEGIN
   WHERE id = p_bet_id;
 
   UPDATE players
-  SET crypto_balance = crypto_balance + v_refund, updated_at = NOW()
+  SET ron_balance = ron_balance + v_refund, updated_at = NOW()
   WHERE id = p_player_id;
 
-  INSERT INTO prediction_treasury (event_type, amount, bet_id, description)
-  VALUES ('cancel_fee', v_cancel_fee, p_bet_id, 'Cancellation fee 2%');
+  INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
+  VALUES ('cancel_fee', v_cancel_fee, p_bet_id, 'Cancellation fee 2%', 'ron');
 
   RETURN jsonb_build_object(
     'success', true,
@@ -12861,7 +12861,7 @@ BEGIN
 END;
 $$;
 
--- Resolver apuesta individual (legacy, mantener para compatibilidad)
+-- Resolver apuesta individual (legacy, mantener para compatibilidad) — montos en RON
 CREATE OR REPLACE FUNCTION settle_prediction_bet(
   p_bet_id UUID,
   p_exit_price DECIMAL
@@ -12910,14 +12910,14 @@ BEGIN
   WHERE id = p_bet_id;
 
   UPDATE players
-  SET crypto_balance = crypto_balance + v_total_payout, updated_at = NOW()
+  SET ron_balance = ron_balance + v_total_payout, updated_at = NOW()
   WHERE id = v_bet.player_id;
 
-  INSERT INTO prediction_treasury (event_type, amount, bet_id, description)
-  VALUES ('yield_fee', v_fee, p_bet_id, '5% yield fee');
+  INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
+  VALUES ('yield_fee', v_fee, p_bet_id, '5% yield fee', 'ron');
 
-  INSERT INTO prediction_treasury (event_type, amount, bet_id, description)
-  VALUES ('yield_payout', v_yield - v_fee, p_bet_id, 'Net yield payout');
+  INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
+  VALUES ('yield_payout', v_yield - v_fee, p_bet_id, 'Net yield payout', 'ron');
 
   RETURN jsonb_build_object(
     'success', true,
@@ -12974,17 +12974,17 @@ BEGIN
         settled_at = NOW()
     WHERE id = v_bet.id;
 
-    -- Pagar al jugador
+    -- Pagar al jugador (RON)
     UPDATE players
-    SET crypto_balance = crypto_balance + v_total_payout, updated_at = NOW()
+    SET ron_balance = ron_balance + v_total_payout, updated_at = NOW()
     WHERE id = v_bet.player_id;
 
     -- Registrar en treasury
-    INSERT INTO prediction_treasury (event_type, amount, bet_id, description)
-    VALUES ('yield_fee', v_fee, v_bet.id, '5% yield fee');
+    INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
+    VALUES ('yield_fee', v_fee, v_bet.id, '5% yield fee', 'ron');
 
-    INSERT INTO prediction_treasury (event_type, amount, bet_id, description)
-    VALUES ('yield_payout', v_yield - v_fee, v_bet.id, 'Net yield payout');
+    INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
+    VALUES ('yield_payout', v_yield - v_fee, v_bet.id, 'Net yield payout', 'ron');
 
     v_settled_count := v_settled_count + 1;
 

@@ -1959,13 +1959,17 @@
       title: 'La Forja',
       description: '¡Nuevo sistema de <strong class="text-orange-400">Forja</strong>! Craftea items con materiales minados: <strong class="text-sky-400">Kits de Tier</strong> para acelerar XP de slots, <strong class="text-yellow-400">Mejoras de Rig</strong> para bonificaciones permanentes, <strong class="text-cyan-400">Componentes de Cooling</strong> (¡camino F2P a los 15 componentes!), y <strong class="text-fuchsia-400">Utilidades</strong> como Escudo de Durabilidad (+1 uso de slot) y Protector de Slot (previene destrucción). Accede desde el botón 🔨 Forja.',
     },
-    newInventory: {
-      title: 'Nuevo Inventario',
-      description: 'El inventario fue <strong class="text-amber-400">rediseñado completamente</strong>. Ahora muestra todos tus items en una <strong class="text-cyan-400">grilla unificada</strong> con barra de capacidad. Cada tipo de item ocupa <strong class="text-amber-400">1 slot</strong>. Límite: <strong class="text-blue-400">10 slots Free</strong> / <strong class="text-amber-400">20 slots Premium</strong>. Toca un item para ver sus detalles y acciones.',
+    guidedTour: {
+      title: 'Tour Guiado Interactivo',
+      description: 'Un <strong class="text-amber-400">tour guiado paso a paso</strong> te lleva por toda la interfaz de minería. Resalta cada sección y explica cómo funciona. Se inicia automáticamente la primera vez que entras, y puedes repetirlo desde <strong class="text-cyan-400">Cómo Jugar</strong> en el pie de página.',
     },
-    deleteItems: {
-      title: 'Eliminar Items del Inventario',
-      description: 'Ahora puedes <strong class="text-red-400">eliminar items</strong> directamente desde tu inventario. Selecciona un item, haz clic en 🗑️ y confirma la cantidad a descartar. Funciona con todos los tipos: rigs, coolings, componentes, boosts, materiales y tarjetas.',
+    contextualTips: {
+      title: 'Tips Contextuales Inteligentes',
+      description: 'Ahora verás <strong class="text-amber-400">alertas en tiempo real</strong> cuando algo necesite atención: energía baja, rigs sobrecalentados, equipo roto, cooling degradado y más. Cada tip incluye una <strong class="text-cyan-400">acción rápida</strong> para solucionar el problema.',
+    },
+    howToPlay: {
+      title: 'Guía Cómo Jugar',
+      description: 'Una guía completa de <strong class="text-amber-400">Cómo Jugar</strong> está disponible desde el pie de página. Cubre todas las mecánicas: minería, rigs, temperatura, recursos, monedas y mejoras. ¡Accesible desde cualquier página!',
     },
     button: '¡Entendido!',
   },
@@ -2106,6 +2110,7 @@
   },
   footer: {
     discord: 'Únete a nuestro Discord',
+    howToPlay: 'Cómo Jugar',
     rules: 'Reglas y Normas',
     tagline: 'LootMine — Juego Idle de Minería Landwork',
     description: 'Simulación de minería free-to-play. Compite contra jugadores reales, mejora tus rigs, craftea items, batalla en duelos PvP de cartas y gana Landwork intercambiable por RON.',
@@ -2174,9 +2179,9 @@
       label: 'Objetivo',
     },
     bet: {
-      label: 'Monto de apuesta (Landwork)',
-      min: 'Mínimo: 50,000 Landwork',
-      insufficientBalance: 'Balance de Landwork insuficiente',
+      label: 'Monto de apuesta (RON)',
+      min: 'Mínimo: 0.5 RON',
+      insufficientBalance: 'Balance de RON insuficiente',
       maxActiveBets: 'Máximo 3 predicciones activas',
       priceUnavailable: 'Precio no disponible',
       invalidTarget: 'Objetivo inválido',
@@ -2233,7 +2238,7 @@
       price_unavailable: 'Precio no disponible',
       invalid_direction: 'Dirección inválida',
       invalid_target: 'Objetivo inválido',
-      min_bet_50k: 'Mínimo 50,000 Landwork',
+      min_bet_half_ron: 'Mínimo 0.5 RON',
       bet_not_found: 'Apuesta no encontrada',
       player_not_found: 'Jugador no encontrado',
     },
@@ -2285,7 +2290,7 @@
       currencies: {
         icon: '💰',
         title: 'Monedas',
-        body: 'GameCoin (GC) se gana minando y sirve para compras básicas. Landwork (LW) es la moneda premium para ítems de alto nivel. RON es el token blockchain para reclamar recompensas.',
+        body: 'Landwork (LW) se gana minando y se puede intercambiar por GC o por RON en la Casa de Cambio. GameCoin (GC) se obtiene cambiando LW y completando logros y misiones, sirve para compras en el Mercado. RON es el token nativo de la blockchain Ronin con valor real.',
       },
       upgradesAndBoosts: {
         icon: '🚀',
@@ -2301,9 +2306,13 @@
     next: 'Siguiente',
     finish: 'Finalizar',
     steps: {
+      intro: {
+        title: '¡Hola, minero!',
+        body: '¡Bienvenido a LootMine! Te daremos un recorrido rápido para que aprendas cómo funciona todo. Solo tomará un minuto. ¿Listo? ¡Vamos!',
+      },
       welcome: {
-        title: '¡Bienvenido al Centro de Minería!',
-        body: 'Este es tu panel de control. Aquí puedes ver el progreso del bloque, tu hashrate, shares, y gestionar todos tus rigs. Te haremos un recorrido por las funciones principales.',
+        title: 'Tu Panel de Minería',
+        body: 'Este es tu panel de control. Aquí puedes ver el progreso del bloque, tu hashrate, shares, y gestionar todos tus rigs.',
       },
       blockSystem: {
         title: 'Bloques y Shares',

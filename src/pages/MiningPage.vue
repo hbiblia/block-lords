@@ -11,7 +11,6 @@ import { isTabLocked } from '@/composables/useTabLock';
 import { useMiningEstimate } from '@/composables/useMiningEstimate';
 import RigEnhanceModal from '@/components/RigEnhanceModal.vue';
 import MiningTips from '@/components/MiningTips.vue';
-import MiningGuide from '@/components/MiningGuide.vue';
 import MiningTour from '@/components/MiningTour.vue';
 import { useMiningTour } from '@/composables/useMiningTour';
 
@@ -673,6 +672,7 @@ onMounted(() => {
   }, 30000) as unknown as number;
 
   window.addEventListener('block-mined', handleBlockMined as EventListener);
+  window.addEventListener('start-mining-tour', startTour);
 
   // Initialize AdSense (delay to ensure container has width)
   setTimeout(() => {
@@ -692,7 +692,7 @@ watch(dataLoaded, (loaded) => {
   if (loaded && !tourCompleted.value && !showTour.value) {
     setTimeout(() => { showTour.value = true; }, 2000);
   }
-}, { once: true });
+}, { immediate: true, once: true });
 
 onUnmounted(() => {
   stopMiningSimulation();
@@ -710,6 +710,7 @@ onUnmounted(() => {
   document.removeEventListener('keydown', initRigSoundOnInteraction);
 
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
+  window.removeEventListener('start-mining-tour', startTour);
 });
 </script>
 
@@ -1049,13 +1050,13 @@ onUnmounted(() => {
                 {{ slotInfo.used_slots }}/{{ slotInfo.current_slots }}
               </span>
             </h2>
-            <!-- Yield Prediction deshabilitado temporalmente
+            <!-- Yield Prediction (admin only) -->
             <button
+              v-if="authStore.player?.role === 'admin'"
               @click="openPrediction"
               class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 transition-colors">
               📊 {{ t('prediction.title') }}
             </button>
-            -->
           </div>
 
           <div v-if="rigs.length === 0" class="card text-center py-12">
@@ -1520,9 +1521,6 @@ onUnmounted(() => {
               {{ t('mining.rateChart.noData') }}
             </div>
           </div>
-
-          <!-- How to Play Guide -->
-          <MiningGuide @start-tour="startTour" />
 
           <!-- AdSense Banner -->
           <div class="card p-3 text-center">

@@ -12,7 +12,21 @@ const tour = useMiningTour();
 const calloutStyle = ref<Record<string, string>>({});
 const highlightedEl = ref<HTMLElement | null>(null);
 
+// Walk ancestors and toggle overflow visibility so box-shadow isn't clipped
+function setAncestorsOverflow(el: HTMLElement, add: boolean) {
+  let parent = el.parentElement;
+  while (parent && parent !== document.body) {
+    if (add) {
+      parent.classList.add('tour-highlight-parent');
+    } else {
+      parent.classList.remove('tour-highlight-parent');
+    }
+    parent = parent.parentElement;
+  }
+}
+
 function positionCallout() {
+  if (!props.show) return;
   const step = tour.currentStep.value;
   if (!step) return;
 
@@ -21,6 +35,14 @@ function positionCallout() {
   // Remove previous highlight
   if (highlightedEl.value && highlightedEl.value !== el) {
     highlightedEl.value.classList.remove('tour-highlight');
+    setAncestorsOverflow(highlightedEl.value, false);
+  }
+
+  // Open/close market modal based on current step
+  if (step.id === 'market') {
+    window.dispatchEvent(new CustomEvent('open-market'));
+  } else {
+    window.dispatchEvent(new CustomEvent('close-market'));
   }
 
   if (!el) {
@@ -35,14 +57,16 @@ function positionCallout() {
     return;
   }
 
-  if (step.scrollTo) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
+  // Always scroll target into view
+  document.body.style.overflow = '';
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => { document.body.style.overflow = 'hidden'; }, 500);
 
   el.classList.add('tour-highlight');
+  setAncestorsOverflow(el, true);
   highlightedEl.value = el;
 
-  const delay = step.scrollTo ? 400 : 50;
+  const delay = 450;
   setTimeout(() => {
     const rect = el.getBoundingClientRect();
     const cardW = 320;
@@ -100,24 +124,34 @@ watch(() => tour.currentStep.value, () => {
 
 watch(() => props.show, (shown) => {
   if (shown) {
+    document.body.style.overflow = 'hidden';
     tour.start();
     nextTick(positionCallout);
   } else {
+    document.body.style.overflow = '';
     if (highlightedEl.value) {
       highlightedEl.value.classList.remove('tour-highlight');
+      setAncestorsOverflow(highlightedEl.value, false);
       highlightedEl.value = null;
     }
   }
 }, { immediate: true });
 
 onUnmounted(() => {
+  document.body.style.overflow = '';
   if (highlightedEl.value) {
     highlightedEl.value.classList.remove('tour-highlight');
+    setAncestorsOverflow(highlightedEl.value, false);
   }
 });
 
+function cleanup() {
+  window.dispatchEvent(new CustomEvent('close-market'));
+}
+
 function handleNext() {
   if (tour.isLastStep.value) {
+    cleanup();
     tour.complete();
     emit('close');
   } else {
@@ -128,8 +162,10 @@ function handleNext() {
 function handleSkip() {
   if (highlightedEl.value) {
     highlightedEl.value.classList.remove('tour-highlight');
+    setAncestorsOverflow(highlightedEl.value, false);
     highlightedEl.value = null;
   }
+  cleanup();
   tour.complete();
   emit('close');
 }
@@ -138,10 +174,14 @@ function handleSkip() {
 <template>
   <Teleport to="body">
     <Transition name="tour-fade">
-      <div v-if="show" class="fixed inset-0 z-[300] pointer-events-none">
+      <div v-if="show" class="fixed inset-0 z-[302] pointer-events-none">
+        <!-- Backdrop only for steps that intentionally have no target (e.g. intro) -->
+        <Transition name="tour-fade">
+          <div v-if="!tour.currentStep.value?.targetId" class="absolute inset-0 bg-black/75 pointer-events-auto" />
+        </Transition>
         <!-- Callout card -->
         <div
-          class="pointer-events-auto bg-bg-secondary border border-accent-primary/50 rounded-2xl shadow-2xl shadow-black/60 p-5"
+          class="pointer-events-auto bg-bg-secondary border border-accent-primary/50 rounded-2xl shadow-2xl shadow-black/60 p-5 tour-callout"
           :style="calloutStyle"
         >
           <!-- Progress dots -->
@@ -206,6 +246,13 @@ function handleSkip() {
 </template>
 
 <style scoped>
+.tour-callout {
+  transition: top 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s ease;
+}
+
 .tour-fade-enter-active,
 .tour-fade-leave-active {
   transition: opacity 0.3s ease;

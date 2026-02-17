@@ -12,6 +12,12 @@
     0 0 0 3px #f59e0b,
     0 0 20px 4px rgba(245, 158, 11, 0.4);
   transition: box-shadow 0.3s ease;
+  overflow: visible !important;
+}
+
+/* Prevent parent overflow:hidden from clipping the highlight */
+.tour-highlight-parent {
+  overflow: visible !important;
 }
 
 /* === ESTILOS BASE === */

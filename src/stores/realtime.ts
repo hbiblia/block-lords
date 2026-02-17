@@ -393,6 +393,19 @@ export const useRealtimeStore = defineStore('realtime', () => {
           );
         }
       )
+      // Player shares (mining)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'player_shares',
+          filter: `player_id=eq.${playerId}`,
+        },
+        () => {
+          window.dispatchEvent(new CustomEvent('player-shares-updated'));
+        }
+      )
       // Player gifts
       .on(
         'postgres_changes',

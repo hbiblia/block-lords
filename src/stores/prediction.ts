@@ -183,7 +183,7 @@ export const usePredictionStore = defineStore('prediction', () => {
       if (result?.success) {
         playSound('click');
         toastStore.info(
-          `Apuesta cancelada. Reembolso: ${Number(result.refund).toFixed(0)} Landwork (2% fee)`
+          `Apuesta cancelada. Reembolso: ${Number(result.refund).toFixed(4)} RON (2% fee)`
         );
         await loadData();
         await authStore.fetchPlayer();
@@ -240,9 +240,9 @@ export const usePredictionStore = defineStore('prediction', () => {
         if (newData.status === 'won') {
           playSound('reward');
           const toastStore = useToastStore();
-          const yieldAmount = Number(newData.yield_earned_lw || 0).toFixed(0);
+          const yieldAmount = Number(newData.yield_earned_lw || 0).toFixed(4);
           toastStore.success(
-            `Predicción ganada! +${yieldAmount} Landwork de yield`
+            `Predicción ganada! +${yieldAmount} RON de yield`
           );
           loadData();
           const authStore = useAuthStore();

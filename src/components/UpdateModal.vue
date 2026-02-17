@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '2.5.0';
+const CURRENT_VERSION = '2.6.0';
 const STORAGE_KEY = 'lootmine-last-seen-version';
 
 const route = useRoute();
@@ -63,20 +63,28 @@ function closeModal() {
 
         <!-- Contenido scrollable -->
         <div class="space-y-3 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- New Inventory -->
+          <!-- Guided Tour -->
           <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
             <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>🎒</span> {{ t('updateModal.newInventory.title') }}
+              <span>🗺️</span> {{ t('updateModal.guidedTour.title') }}
             </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.newInventory.description')"></p>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.guidedTour.description')"></p>
           </div>
 
-          <!-- Delete Items -->
+          <!-- Contextual Tips -->
           <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
             <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>🗑️</span> {{ t('updateModal.deleteItems.title') }}
+              <span>💡</span> {{ t('updateModal.contextualTips.title') }}
             </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.deleteItems.description')"></p>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.contextualTips.description')"></p>
+          </div>
+
+          <!-- How to Play Guide -->
+          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
+            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+              <span>📖</span> {{ t('updateModal.howToPlay.title') }}
+            </h3>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.howToPlay.description')"></p>
           </div>
 
         </div>

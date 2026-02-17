@@ -13,6 +13,13 @@ const TOUR_COMPLETED_KEY = 'miningTourCompleted';
 
 export const TOUR_STEPS: TourStep[] = [
   {
+    id: 'intro',
+    targetId: '',
+    placement: 'center',
+    titleKey: 'tour.steps.intro.title',
+    bodyKey: 'tour.steps.intro.body',
+  },
+  {
     id: 'welcome',
     targetId: 'tour-dashboard',
     placement: 'bottom',

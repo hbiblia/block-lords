@@ -53,41 +53,21 @@ function formatCryptoStat(num: number | undefined | null): string {
   return num.toFixed(2) + ' ₿';
 }
 
-// Realtime subscription para network_stats
-const networkStatsChannel = supabase
-  .channel('home_network_stats')
-  .on(
-    'postgres_changes',
-    {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'network_stats',
-    },
-    (payload: { new: { difficulty?: number } }) => {
-      if (stats.value && payload.new) {
-        stats.value.difficulty = payload.new.difficulty ?? stats.value.difficulty;
-      }
-    }
-  );
+// Listen to global channel events (avoids duplicate realtime subscriptions)
+function handleNetworkStats(e: Event) {
+  const detail = (e as CustomEvent).detail;
+  if (stats.value && detail) {
+    stats.value.difficulty = detail.difficulty ?? stats.value.difficulty;
+  }
+}
 
-// Realtime subscription para blocks (nuevos bloques)
-const blocksChannel = supabase
-  .channel('home_blocks')
-  .on(
-    'postgres_changes',
-    {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'blocks',
-    },
-    () => {
-      if (stats.value) {
-        stats.value.totalBlocks++;
-      }
-    }
-  );
+function handleBlockMined() {
+  if (stats.value) {
+    stats.value.totalBlocks++;
+  }
+}
 
-// Realtime subscription para players (nuevos jugadores)
+// Realtime subscription para players (nuevos jugadores) — no global equivalent
 const playersChannel = supabase
   .channel('home_players')
   .on(
@@ -119,14 +99,14 @@ const playersChannel = supabase
 
 onMounted(() => {
   loadStats();
-  networkStatsChannel.subscribe();
-  blocksChannel.subscribe();
+  window.addEventListener('network-stats-updated', handleNetworkStats);
+  window.addEventListener('block-mined', handleBlockMined);
   playersChannel.subscribe();
 });
 
 onUnmounted(() => {
-  supabase.removeChannel(networkStatsChannel);
-  supabase.removeChannel(blocksChannel);
+  window.removeEventListener('network-stats-updated', handleNetworkStats);
+  window.removeEventListener('block-mined', handleBlockMined);
   supabase.removeChannel(playersChannel);
 });
 </script>

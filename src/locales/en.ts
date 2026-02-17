@@ -1959,13 +1959,17 @@ export default {
       title: 'The Forge',
       description: 'New <strong class="text-orange-400">Forge</strong> system! Craft items from mined materials: <strong class="text-sky-400">Tier Kits</strong> to boost slot XP, <strong class="text-yellow-400">Rig Enhancements</strong> for permanent rig bonuses, <strong class="text-cyan-400">Cooling Components</strong> (F2P path to all 15 components!), and <strong class="text-fuchsia-400">Utilities</strong> like Durability Shield (+1 slot use) and Slot Protector (prevents destruction). Access it from the 🔨 Forge button.',
     },
-    newInventory: {
-      title: 'New Inventory',
-      description: 'The inventory has been <strong class="text-amber-400">completely redesigned</strong>. It now displays all your items in a <strong class="text-cyan-400">unified grid</strong> with a capacity bar. Each item type takes <strong class="text-amber-400">1 slot</strong>. Limit: <strong class="text-blue-400">10 slots Free</strong> / <strong class="text-amber-400">20 slots Premium</strong>. Tap an item to view its details and actions.',
+    guidedTour: {
+      title: 'Interactive Guided Tour',
+      description: 'A <strong class="text-amber-400">step-by-step guided tour</strong> now walks you through the mining interface. It highlights each section and explains how it works. It starts automatically the first time you visit, and you can replay it anytime from <strong class="text-cyan-400">How to Play</strong> in the footer.',
     },
-    deleteItems: {
-      title: 'Delete Inventory Items',
-      description: 'You can now <strong class="text-red-400">delete items</strong> directly from your inventory. Select an item, click 🗑️ and confirm the quantity to discard. Works with all types: rigs, coolings, components, boosts, materials and cards.',
+    contextualTips: {
+      title: 'Smart Contextual Tips',
+      description: 'You\'ll now see <strong class="text-amber-400">real-time alerts</strong> when something needs attention: low energy, overheating rigs, broken equipment, degraded cooling, and more. Each tip includes a <strong class="text-cyan-400">quick action</strong> to fix the issue.',
+    },
+    howToPlay: {
+      title: 'How to Play Guide',
+      description: 'A complete <strong class="text-amber-400">How to Play</strong> guide is now available from the footer. It covers all game mechanics: mining, rigs, temperature, resources, currencies, and upgrades. Accessible from any page!',
     },
     button: 'Got it!',
   },
@@ -2106,6 +2110,7 @@ export default {
   },
   footer: {
     discord: 'Join our Discord',
+    howToPlay: 'How to Play',
     rules: 'Rules & Guidelines',
     tagline: 'LootMine — Landwork Mining Idle Game',
     description: 'Free-to-play mining simulation. Compete against real players, upgrade your rigs, craft items, battle in PvP card duels, and earn Landwork exchangeable for RON.',
@@ -2174,9 +2179,9 @@ export default {
       label: 'Target',
     },
     bet: {
-      label: 'Bet Amount (Landwork)',
-      min: 'Minimum: 50,000 Landwork',
-      insufficientBalance: 'Insufficient Landwork balance',
+      label: 'Bet Amount (RON)',
+      min: 'Minimum: 0.5 RON',
+      insufficientBalance: 'Insufficient RON balance',
       maxActiveBets: 'Maximum 3 active predictions',
       priceUnavailable: 'Price data unavailable',
       invalidTarget: 'Invalid target',
@@ -2233,7 +2238,7 @@ export default {
       price_unavailable: 'Price unavailable',
       invalid_direction: 'Invalid direction',
       invalid_target: 'Invalid target',
-      min_bet_50k: 'Minimum 50,000 Landwork',
+      min_bet_half_ron: 'Minimum 0.5 RON',
       bet_not_found: 'Bet not found',
       player_not_found: 'Player not found',
     },
@@ -2285,7 +2290,7 @@ export default {
       currencies: {
         icon: '💰',
         title: 'Currencies',
-        body: 'GameCoin (GC) is earned from mining and used for basic purchases. Landwork (LW) is the premium currency for top-tier items. RON is the blockchain token used for claiming rewards.',
+        body: 'Landwork (LW) is earned from mining and can be exchanged for GC or RON at the Exchange. GameCoin (GC) is obtained by exchanging LW and completing achievements and missions, used for Market purchases. RON is the native Ronin blockchain token with real value.',
       },
       upgradesAndBoosts: {
         icon: '🚀',
@@ -2301,9 +2306,13 @@ export default {
     next: 'Next',
     finish: 'Finish',
     steps: {
+      intro: {
+        title: 'Hey there, miner!',
+        body: 'Welcome to LootMine! We\'ll give you a quick guided tour so you can learn how everything works. It\'ll only take a minute. Ready? Let\'s go!',
+      },
       welcome: {
-        title: 'Welcome to the Mining Center!',
-        body: 'This is your command center. Here you can see your block progress, hashrate, shares, and manage all your rigs. Let\'s walk through the key features.',
+        title: 'Your Mining Dashboard',
+        body: 'This is your command center. Here you can see your block progress, hashrate, shares, and manage all your rigs.',
       },
       blockSystem: {
         title: 'Blocks & Shares',

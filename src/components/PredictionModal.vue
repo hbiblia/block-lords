@@ -3,7 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { usePredictionStore } from '@/stores/prediction';
-import type { PredictionBet, PredictionHistory } from '@/stores/prediction';
+import type { PredictionBet } from '@/stores/prediction';
 
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits<{ close: [] }>();
@@ -45,18 +45,18 @@ const estimatedYield = computed(() => numericAmount.value * effectivePercent.val
 const yieldFee = computed(() => estimatedYield.value * 0.05);
 const netYield = computed(() => estimatedYield.value - yieldFee.value);
 const totalReturn = computed(() => numericAmount.value + netYield.value);
-const playerBalance = computed(() => authStore.player?.crypto_balance ?? 0);
+const playerBalance = computed(() => authStore.player?.ron_balance ?? 0);
 
 const errorMessage = computed(() => {
   if (!predictionStore.canPlaceBet) return t('prediction.errors.max_active_bets');
-  if (numericAmount.value > 0 && numericAmount.value < 50000) return t('prediction.bet.min');
+  if (numericAmount.value > 0 && numericAmount.value < 0.5) return t('prediction.bet.min');
   if (numericAmount.value > playerBalance.value) return t('prediction.errors.insufficient_balance');
   if (predictionStore.currentPrice === null) return t('prediction.errors.price_unavailable');
   return '';
 });
 
 const canSubmit = computed(() =>
-  numericAmount.value >= 50000 &&
+  numericAmount.value >= 0.5 &&
   numericAmount.value <= playerBalance.value &&
   predictionStore.canPlaceBet &&
   predictionStore.currentPrice !== null &&
@@ -86,7 +86,7 @@ watch(() => props.show, (open) => {
 });
 
 function setPercentAmount(pct: number) {
-  const amount = Math.floor(playerBalance.value * pct / 100);
+  const amount = Math.floor(playerBalance.value * pct * 10000 / 100) / 10000;
   betAmount.value = amount > 0 ? String(amount) : '';
 }
 
@@ -109,9 +109,9 @@ function formatPrice(price: number | null | undefined): string {
   return '$' + Number(price).toFixed(4);
 }
 
-function formatLw(amount: number | null | undefined): string {
+function formatRon(amount: number | null | undefined): string {
   if (amount == null) return '0';
-  return Number(amount).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
 
 function formatProgress(bet: PredictionBet): string {
@@ -242,7 +242,8 @@ function timeAgo(dateStr: string): string {
                   <input
                     v-model="betAmount"
                     type="number"
-                    min="50000"
+                    min="0.5"
+                    step="0.01"
                     :max="playerBalance"
                     class="input pr-16 font-mono text-sm"
                     :placeholder="t('prediction.bet.min')"
@@ -261,13 +262,13 @@ function timeAgo(dateStr: string): string {
                   </button>
                 </div>
                 <div class="flex items-center justify-between mt-1">
-                  <p class="text-[10px] text-text-muted font-mono">{{ formatLw(playerBalance) }} LW</p>
+                  <p class="text-[10px] text-text-muted font-mono">{{ formatRon(playerBalance) }} RON</p>
                   <p v-if="errorMessage" class="text-[10px] text-status-danger">{{ errorMessage }}</p>
                 </div>
               </div>
 
               <!-- Summary -->
-              <div v-if="numericAmount >= 50000" class="glass rounded-lg px-2.5 py-2 space-y-1 text-xs">
+              <div v-if="numericAmount >= 0.5" class="glass rounded-lg px-2.5 py-2 space-y-1 text-xs">
                 <div class="flex justify-between">
                   <span class="text-text-muted">{{ t('prediction.summary.direction') }}</span>
                   <span :class="direction === 'up' ? 'text-status-success' : 'text-status-danger'" class="font-bold">
@@ -280,11 +281,11 @@ function timeAgo(dateStr: string): string {
                 </div>
                 <div class="border-t border-border pt-1 mt-1 flex justify-between">
                   <span class="text-text-muted">{{ t('prediction.summary.potentialYield') }} <span class="text-text-muted/50">(- 5% fee)</span></span>
-                  <span class="text-status-success font-bold">+{{ formatLw(netYield) }} LW</span>
+                  <span class="text-status-success font-bold">+{{ formatRon(netYield) }} RON</span>
                 </div>
                 <div class="flex justify-between font-bold">
                   <span class="text-white">{{ t('prediction.summary.totalReturn') }}</span>
-                  <span class="text-accent-primary">{{ formatLw(totalReturn) }} LW</span>
+                  <span class="text-accent-primary">{{ formatRon(totalReturn) }} RON</span>
                 </div>
               </div>
 
@@ -324,7 +325,7 @@ function timeAgo(dateStr: string): string {
                       class="px-2 py-0.5 rounded text-[10px] font-bold">
                       {{ bet.direction === 'up' ? '📈 ' + t('prediction.direction.up') : '📉 ' + t('prediction.direction.down') }} {{ bet.target_percent }}%
                     </span>
-                    <span class="text-accent-primary font-bold text-xs">{{ formatLw(bet.bet_amount_lw) }} LW</span>
+                    <span class="text-accent-primary font-bold text-xs">{{ formatRon(bet.bet_amount_lw) }} RON</span>
                   </div>
                   <span class="text-[10px] text-text-muted">{{ timeAgo(bet.created_at) }}</span>
                 </div>
@@ -355,7 +356,7 @@ function timeAgo(dateStr: string): string {
 
                 <!-- Yield + Cancel -->
                 <div class="flex items-center justify-between">
-                  <span class="text-[10px] text-status-success font-bold">+{{ formatLw(bet.potential_yield) }} LW</span>
+                  <span class="text-[10px] text-status-success font-bold">+{{ formatRon(bet.potential_yield) }} RON</span>
                   <button
                     @click="showConfirmCancel = bet.id"
                     :disabled="predictionStore.cancelling === bet.id"
@@ -380,11 +381,11 @@ function timeAgo(dateStr: string): string {
                 </div>
                 <div>
                   <p class="text-[10px] text-text-muted leading-none">{{ t('prediction.stats.totalYield') }}</p>
-                  <p class="text-accent-primary font-bold text-xs">{{ formatLw(predictionStore.stats.total_yield_earned) }}</p>
+                  <p class="text-accent-primary font-bold text-xs">{{ formatRon(predictionStore.stats.total_yield_earned) }}</p>
                 </div>
                 <div>
                   <p class="text-[10px] text-text-muted leading-none">{{ t('prediction.stats.totalFees') }}</p>
-                  <p class="text-text-muted font-bold text-xs">{{ formatLw(predictionStore.stats.total_fees_paid) }}</p>
+                  <p class="text-text-muted font-bold text-xs">{{ formatRon(predictionStore.stats.total_fees_paid) }}</p>
                 </div>
               </div>
 
@@ -402,15 +403,15 @@ function timeAgo(dateStr: string): string {
                     <p class="text-xs font-medium text-white leading-tight">
                       {{ bet.direction === 'up' ? t('prediction.direction.up') : t('prediction.direction.down') }}
                       {{ bet.target_percent }}%
-                      <span class="text-text-muted">· {{ formatLw(bet.bet_amount_lw) }} LW</span>
+                      <span class="text-text-muted">· {{ formatRon(bet.bet_amount_lw) }} RON</span>
                     </p>
                     <p class="text-[10px] text-text-muted">{{ timeAgo(bet.settled_at) }}</p>
                   </div>
                 </div>
                 <div class="text-right">
-                  <p v-if="bet.status === 'won'" class="text-xs font-bold text-status-success">+{{ formatLw(bet.yield_earned_lw) }} LW</p>
+                  <p v-if="bet.status === 'won'" class="text-xs font-bold text-status-success">+{{ formatRon(bet.yield_earned_lw) }} RON</p>
                   <p v-else class="text-xs text-text-muted">{{ t('prediction.history.cancelled') }}</p>
-                  <p v-if="bet.fee_amount_lw > 0" class="text-[10px] text-text-muted">fee: {{ formatLw(bet.fee_amount_lw) }}</p>
+                  <p v-if="bet.fee_amount_lw > 0" class="text-[10px] text-text-muted">fee: {{ formatRon(bet.fee_amount_lw) }}</p>
                 </div>
               </div>
             </div>
@@ -430,7 +431,7 @@ function timeAgo(dateStr: string): string {
                 </div>
                 <div class="flex justify-between">
                   <span class="text-text-muted">{{ t('prediction.bet.label') }}</span>
-                  <span class="text-white font-bold">{{ formatLw(numericAmount) }} LW</span>
+                  <span class="text-white font-bold">{{ formatRon(numericAmount) }} RON</span>
                 </div>
                 <div class="flex justify-between">
                   <span class="text-text-muted">{{ t('prediction.summary.targetPrice') }}</span>
@@ -438,7 +439,7 @@ function timeAgo(dateStr: string): string {
                 </div>
                 <div class="flex justify-between border-t border-border pt-1.5">
                   <span class="text-text-muted">{{ t('prediction.summary.potentialYield') }}</span>
-                  <span class="text-status-success font-bold">+{{ formatLw(netYield) }} LW</span>
+                  <span class="text-status-success font-bold">+{{ formatRon(netYield) }} RON</span>
                 </div>
               </div>
               <div class="flex gap-2">

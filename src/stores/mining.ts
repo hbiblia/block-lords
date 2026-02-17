@@ -245,11 +245,7 @@ export const useMiningStore = defineStore('mining', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let rigsChannel: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let coolingChannel: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let boostsChannel: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let networkStatsChannel: any = null;
+  let coolingBoostsChannel: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let miningBlocksChannel: any = null;
 
@@ -845,31 +841,28 @@ export const useMiningStore = defineStore('mining', () => {
       )
       .subscribe();
 
-    // Subscribe to rig_cooling changes
-    coolingChannel = supabase
-      .channel(`mining_cooling:${playerId}`)
+    // Subscribe to rig_cooling + rig_boosts on a single channel (with player filter)
+    coolingBoostsChannel = supabase
+      .channel(`mining_cooling_boosts:${playerId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'rig_cooling',
+          filter: `player_id=eq.${playerId}`,
         },
         () => {
           handleCoolingUpdate();
         }
       )
-      .subscribe();
-
-    // Subscribe to rig_boosts changes
-    boostsChannel = supabase
-      .channel(`mining_boosts:${playerId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'rig_boosts',
+          filter: `player_id=eq.${playerId}`,
         },
         () => {
           handleBoostsUpdate();
@@ -877,29 +870,24 @@ export const useMiningStore = defineStore('mining', () => {
       )
       .subscribe();
 
-    // Subscribe to network_stats changes (global)
-    // Note: network_stats table only has difficulty and hashrate columns
-    // latestBlock comes from block-mined events, activeMiners from player_rigs
-    networkStatsChannel = supabase
-      .channel('mining_network_stats')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'network_stats',
-        },
-        (payload) => {
-          const newStats = payload.new as any;
-          networkStats.value = {
-            ...networkStats.value,
-            difficulty: newStats.difficulty ?? networkStats.value.difficulty,
-            hashrate: newStats.hashrate ?? networkStats.value.hashrate,
-            activeMiners: newStats.active_miners ?? networkStats.value.activeMiners,
-          };
-        }
-      )
-      .subscribe();
+    // Listen to network_stats from global channel event (avoids duplicate subscription)
+    window.addEventListener('network-stats-updated', handleNetworkStatsEvent as EventListener);
+  }
+
+  function handlePlayerSharesEvent() {
+    loadPlayerShares();
+  }
+
+  function handleNetworkStatsEvent(e: CustomEvent) {
+    const newStats = e.detail;
+    if (newStats) {
+      networkStats.value = {
+        ...networkStats.value,
+        difficulty: newStats.difficulty ?? networkStats.value.difficulty,
+        hashrate: newStats.hashrate ?? networkStats.value.hashrate,
+        activeMiners: newStats.active_miners ?? networkStats.value.activeMiners,
+      };
+    }
   }
 
   function unsubscribeFromRealtime() {
@@ -907,18 +895,12 @@ export const useMiningStore = defineStore('mining', () => {
       supabase.removeChannel(rigsChannel);
       rigsChannel = null;
     }
-    if (coolingChannel) {
-      supabase.removeChannel(coolingChannel);
-      coolingChannel = null;
+    if (coolingBoostsChannel) {
+      supabase.removeChannel(coolingBoostsChannel);
+      coolingBoostsChannel = null;
     }
-    if (boostsChannel) {
-      supabase.removeChannel(boostsChannel);
-      boostsChannel = null;
-    }
-    if (networkStatsChannel) {
-      supabase.removeChannel(networkStatsChannel);
-      networkStatsChannel = null;
-    }
+    window.removeEventListener('network-stats-updated', handleNetworkStatsEvent as EventListener);
+    window.removeEventListener('player-shares-updated', handlePlayerSharesEvent);
     if (miningBlocksChannel) {
       supabase.removeChannel(miningBlocksChannel);
       miningBlocksChannel = null;
@@ -1129,15 +1111,10 @@ export const useMiningStore = defineStore('mining', () => {
       }, () => {
         loadMiningBlockInfo();
       })
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'player_shares',
-        filter: `player_id=eq.${authStore.player.id}`,
-      }, () => {
-        loadPlayerShares();
-      })
       .subscribe();
+
+    // Listen to player_shares from private channel event
+    window.addEventListener('player-shares-updated', handlePlayerSharesEvent);
   }
 
   return {

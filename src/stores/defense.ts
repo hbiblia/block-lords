@@ -10,8 +10,7 @@ export const useDefenseStore = defineStore('defense', () => {
   const gameView = ref<BattleView>('lobby');
   const lobbyCount = ref(0);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let lobbyCountChannel: any = null;
+  let lobbyPollingInterval: number | null = null;
 
   function openModal() {
     showModal.value = true;
@@ -38,20 +37,15 @@ export const useDefenseStore = defineStore('defense', () => {
   }
 
   function subscribeLobbyCount() {
-    if (lobbyCountChannel) return;
+    if (lobbyPollingInterval) return;
     fetchLobbyCount();
-    lobbyCountChannel = supabase
-      .channel('lobby-count-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'battle_lobby' }, () => {
-        fetchLobbyCount();
-      })
-      .subscribe();
+    lobbyPollingInterval = window.setInterval(fetchLobbyCount, 30000);
   }
 
   function unsubscribeLobbyCount() {
-    if (lobbyCountChannel) {
-      supabase.removeChannel(lobbyCountChannel);
-      lobbyCountChannel = null;
+    if (lobbyPollingInterval) {
+      clearInterval(lobbyPollingInterval);
+      lobbyPollingInterval = null;
     }
   }
 
