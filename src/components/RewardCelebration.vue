@@ -5,10 +5,17 @@ import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 
+interface MaterialDrop {
+  id?: string;
+  name: string;
+  icon: string;
+}
+
 interface RewardEvent {
   reward: number;
   is_premium: boolean;
   is_pity: boolean;
+  materials_dropped: MaterialDrop[];
 }
 
 interface CoinParticle {
@@ -24,6 +31,7 @@ const rewardAmount = ref(0);
 const displayedAmount = ref(0);
 const isPremium = ref(false);
 const isPity = ref(false);
+const materialsDropped = ref<MaterialDrop[]>([]);
 const coinParticles = ref<CoinParticle[]>([]);
 
 const rewardQueue: RewardEvent[] = [];
@@ -33,8 +41,10 @@ let countUpFrame: number | null = null;
 let lastRewardTime = 0;
 let lastRewardAmount = 0;
 
-function generateParticles(): CoinParticle[] {
-  const emojis = ['🪙', '💰', '✨', '⭐', '💎'];
+function generateParticles(hasMaterials: boolean): CoinParticle[] {
+  const baseEmojis = ['🪙', '💰', '✨', '⭐', '💎'];
+  const materialEmojis = hasMaterials ? ['🔩', '💾', '🧬', '💠'] : [];
+  const emojis = [...baseEmojis, ...materialEmojis];
   return Array.from({ length: 25 }, (_, i) => ({
     id: i,
     left: Math.random() * 100,
@@ -73,22 +83,27 @@ function showNextReward() {
   rewardAmount.value = reward.reward;
   isPremium.value = reward.is_premium;
   isPity.value = reward.is_pity;
-  coinParticles.value = generateParticles();
+  materialsDropped.value = reward.materials_dropped || [];
+  coinParticles.value = generateParticles(materialsDropped.value.length > 0);
   showCelebration.value = true;
 
   playSound('reward');
   startCountUp(reward.reward);
 
+  // Más tiempo si hay materiales para que el jugador los vea
+  const displayTime = materialsDropped.value.length > 0 ? 5000 : 4000;
+
   dismissTimer = setTimeout(() => {
     showCelebration.value = false;
     coinParticles.value = [];
+    materialsDropped.value = [];
     if (countUpFrame) cancelAnimationFrame(countUpFrame);
     setTimeout(showNextReward, 500);
-  }, 4000);
+  }, displayTime);
 }
 
 function handlePendingBlockCreated(event: Event) {
-  const { reward, is_premium, is_pity } = (event as CustomEvent).detail;
+  const { reward, is_premium, is_pity, materials_dropped } = (event as CustomEvent).detail;
   if (!reward) return;
 
   // Dedup: ignore duplicate events for same reward within 5 seconds
@@ -102,6 +117,7 @@ function handlePendingBlockCreated(event: Event) {
     reward: amount,
     is_premium: !!is_premium,
     is_pity: !!is_pity,
+    materials_dropped: Array.isArray(materials_dropped) ? materials_dropped : [],
   });
 
   if (!isShowing) {
@@ -185,11 +201,28 @@ onUnmounted(() => {
               👑 Premium +50%
             </div>
 
+            <!-- Material Drops -->
+            <div v-if="materialsDropped.length > 0" class="mt-3 pt-3 border-t border-white/10">
+              <div class="text-xs text-text-muted mb-2">{{ t('reward.materialDrops') }}</div>
+              <div class="flex items-center justify-center gap-2 flex-wrap">
+                <div
+                  v-for="(mat, idx) in materialsDropped"
+                  :key="idx"
+                  class="material-drop-item inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-500/15 border border-purple-500/30"
+                  :style="{ animationDelay: `${0.3 + idx * 0.15}s` }"
+                >
+                  <span class="text-base">{{ mat.icon }}</span>
+                  <span class="text-xs font-medium text-purple-300">{{ mat.name }}</span>
+                </div>
+              </div>
+            </div>
+
             <!-- Auto-dismiss Progress Bar -->
             <div class="mt-3 h-1 bg-bg-tertiary rounded-full overflow-hidden">
               <div
                 class="h-full rounded-full reward-progress"
                 :class="isPremium ? 'bg-amber-500' : 'bg-status-success'"
+                :style="{ animationDuration: materialsDropped.length > 0 ? '5s' : '4s' }"
               ></div>
             </div>
           </div>
@@ -278,15 +311,33 @@ onUnmounted(() => {
 }
 
 .reward-progress {
-  animation: reward-progress-shrink 4s linear forwards;
+  width: 100%;
+  animation: progress-shrink linear forwards;
 }
 
-@keyframes reward-progress-shrink {
+@keyframes progress-shrink {
   from {
     width: 100%;
   }
   to {
     width: 0%;
+  }
+}
+
+/* Material drop items appear with a pop-in animation */
+.material-drop-item {
+  opacity: 0;
+  animation: material-pop-in 0.4s cubic-bezier(0.21, 1.02, 0.73, 1) forwards;
+}
+
+@keyframes material-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 </style>

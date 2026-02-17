@@ -1391,6 +1391,7 @@
   reward: {
     blockReward: '¡Recompensa de Bloque!',
     pityTitle: '¡Recompensa de Lealtad!',
+    materialDrops: '¡Materiales obtenidos!',
   },
 
   premium: {

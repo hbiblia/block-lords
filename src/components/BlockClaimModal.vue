@@ -454,6 +454,15 @@ function initCaptchaAd() {
                 </div>
 
                 <div class="flex items-center gap-3">
+                  <!-- Material drops indicators -->
+                  <div v-if="block.materials_dropped && block.materials_dropped.length > 0" class="flex items-center gap-0.5">
+                    <span
+                      v-for="(mat, idx) in block.materials_dropped"
+                      :key="idx"
+                      class="text-sm"
+                      :title="mat.name"
+                    >{{ mat.icon }}</span>
+                  </div>
                   <div class="text-right">
                     <div class="font-bold text-amber-400/70">+{{ Number(block.reward).toFixed(2) }} ₿</div>
                   </div>

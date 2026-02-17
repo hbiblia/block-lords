@@ -5811,7 +5811,8 @@ BEGIN
     SELECT pb.id,
            COALESCE(pb.block_id, pb.id) as block_id,
            COALESCE(pb.block_number, b.height, v_max_height) as block_height,
-           pb.reward, pb.is_premium, pb.created_at
+           pb.reward, pb.is_premium, pb.created_at,
+           COALESCE(pb.materials_dropped, '[]'::jsonb) as materials_dropped
     FROM pending_blocks pb
     LEFT JOIN blocks b ON b.id = pb.block_id
     WHERE pb.player_id = p_player_id AND pb.claimed = false
@@ -5849,20 +5850,29 @@ BEGIN
   PERFORM update_mission_progress(p_player_id, 'event_crypto', v_pending.reward);
   -- Trackear captcha resuelto (cada claim requiere captcha)
   PERFORM update_mission_progress(p_player_id, 'captcha_solved', 1);
-  RETURN json_build_object('success', true, 'reward', v_pending.reward, 'block_id', COALESCE(v_pending.block_id, v_pending.id));
+  RETURN json_build_object('success', true, 'reward', v_pending.reward, 'block_id', COALESCE(v_pending.block_id, v_pending.id), 'materials_dropped', COALESCE(v_pending.materials_dropped, '[]'::jsonb));
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION claim_all_blocks(p_player_id UUID)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_total_reward DECIMAL := 0; v_count INTEGER := 0; v_pending RECORD;
+DECLARE v_total_reward DECIMAL := 0; v_count INTEGER := 0; v_pending RECORD; v_all_materials JSONB := '[]'::JSONB; v_aggregated_materials JSONB;
 BEGIN
   IF p_player_id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Player ID requerido'); END IF;
-  FOR v_pending IN SELECT id, reward FROM pending_blocks WHERE player_id = p_player_id AND claimed = false LOOP
+  FOR v_pending IN SELECT id, reward, materials_dropped FROM pending_blocks WHERE player_id = p_player_id AND claimed = false LOOP
     v_total_reward := v_total_reward + v_pending.reward; v_count := v_count + 1;
+    v_all_materials := v_all_materials || COALESCE(v_pending.materials_dropped, '[]'::JSONB);
     UPDATE pending_blocks SET claimed = true, claimed_at = NOW() WHERE id = v_pending.id;
   END LOOP;
   IF v_count = 0 THEN RETURN json_build_object('success', false, 'error', 'No hay bloques pendientes'); END IF;
+  -- Agregar materiales por nombre
+  SELECT COALESCE(jsonb_agg(jsonb_build_object('name', m.name, 'icon', m.icon, 'count', m.cnt)), '[]'::JSONB)
+  INTO v_aggregated_materials
+  FROM (
+    SELECT elem->>'name' as name, elem->>'icon' as icon, COUNT(*) as cnt
+    FROM jsonb_array_elements(v_all_materials) elem
+    GROUP BY elem->>'name', elem->>'icon'
+  ) m;
   UPDATE players SET crypto_balance = crypto_balance + v_total_reward,
     total_crypto_earned = COALESCE(total_crypto_earned, 0) + v_total_reward WHERE id = p_player_id;
   INSERT INTO transactions (player_id, type, amount, currency, description)
@@ -5874,7 +5884,7 @@ BEGIN
   PERFORM update_mission_progress(p_player_id, 'event_crypto', v_total_reward);
   -- Trackear captchas resueltos (1 por cada bloque reclamado)
   PERFORM update_mission_progress(p_player_id, 'captcha_solved', v_count);
-  RETURN json_build_object('success', true, 'total_reward', v_total_reward, 'blocks_claimed', v_count);
+  RETURN json_build_object('success', true, 'total_reward', v_total_reward, 'blocks_claimed', v_count, 'materials_dropped', v_aggregated_materials);
 END;
 $$;
 
@@ -7024,6 +7034,7 @@ DECLARE
   v_ron_cost_per_block DECIMAL := 0.0001;
   v_total_ron_cost DECIMAL;
   v_pending RECORD;
+  v_all_materials JSONB;
 BEGIN
   -- Verificar jugador
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
@@ -7062,6 +7073,17 @@ BEGIN
   SET ron_balance = ron_balance - v_total_ron_cost
   WHERE id = p_player_id;
 
+  -- Recopilar materiales de todos los bloques pendientes
+  SELECT COALESCE(jsonb_agg(jsonb_build_object('name', m.name, 'icon', m.icon, 'count', m.cnt)), '[]'::JSONB)
+  INTO v_all_materials
+  FROM (
+    SELECT elem->>'name' as name, elem->>'icon' as icon, COUNT(*) as cnt
+    FROM pending_blocks pb,
+         jsonb_array_elements(COALESCE(pb.materials_dropped, '[]'::JSONB)) elem
+    WHERE pb.player_id = p_player_id AND pb.claimed = false
+    GROUP BY elem->>'name', elem->>'icon'
+  ) m;
+
   -- Marcar todos los bloques como reclamados
   UPDATE pending_blocks
   SET claimed = true, claimed_at = NOW()
@@ -7088,7 +7110,8 @@ BEGIN
     'blocks_claimed', v_pending_count,
     'total_reward', v_total_reward,
     'ron_spent', v_total_ron_cost,
-    'cost_per_block', v_ron_cost_per_block
+    'cost_per_block', v_ron_cost_per_block,
+    'materials_dropped', v_all_materials
   );
 END;
 $$;

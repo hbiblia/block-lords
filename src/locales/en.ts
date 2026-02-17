@@ -1391,6 +1391,7 @@ export default {
   reward: {
     blockReward: 'Block Reward!',
     pityTitle: 'Loyalty Reward!',
+    materialDrops: 'Material Drops!',
   },
 
   premium: {

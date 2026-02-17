@@ -161,6 +161,15 @@ export const useToastStore = defineStore('toast', () => {
     });
   }
 
+  function materialDrop(materials: { name: string; icon: string; count?: number }[]) {
+    if (!materials || materials.length === 0) return;
+    const text = materials.map(m => `${m.icon} ${m.name}${m.count && m.count > 1 ? ` x${m.count}` : ''}`).join(', ');
+    return show(text, 'info', {
+      icon: '⛏️',
+      duration: 5000,
+    });
+  }
+
   return {
     toasts,
     show,
@@ -178,5 +187,6 @@ export const useToastStore = defineStore('toast', () => {
     boostInstalled,
     boostExpired,
     giftReceived,
+    materialDrop,
   };
 });

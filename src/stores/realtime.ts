@@ -371,7 +371,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
         (payload) => {
           const pendingBlock = payload.new;
 
-          // Emitir evento para nuevo bloque pendiente (incluye pity blocks)
+          // Emitir evento para nuevo bloque pendiente (incluye pity blocks y material drops)
           window.dispatchEvent(
             new CustomEvent('pending-block-created', {
               detail: {
@@ -380,6 +380,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
                 reward: pendingBlock.reward,
                 is_premium: pendingBlock.is_premium,
                 is_pity: pendingBlock.is_pity,
+                materials_dropped: pendingBlock.materials_dropped || [],
                 created_at: pendingBlock.created_at,
               },
             })

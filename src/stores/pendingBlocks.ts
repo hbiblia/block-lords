@@ -4,6 +4,13 @@ import { getPendingBlocks, getPendingBlocksCount, claimBlock, claimAllBlocks, cl
 import { useAuthStore } from './auth';
 import { useToastStore } from './toast';
 
+export interface MaterialDrop {
+  id?: string;
+  name: string;
+  icon: string;
+  count?: number;
+}
+
 export interface PendingBlock {
   id: string;
   block_id: string;
@@ -13,6 +20,7 @@ export interface PendingBlock {
   shares_contributed?: number;     // NUEVO: Shares aportadas por el jugador
   total_block_shares?: number;     // NUEVO: Total de shares del bloque
   share_percentage?: number;       // NUEVO: Porcentaje de contribución
+  materials_dropped?: MaterialDrop[];
   created_at: string;
 }
 
@@ -144,6 +152,12 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
         const toastStore = useToastStore();
         toastStore.success(`¡Bloque reclamado! +${result.reward} ₿`);
 
+        // Toast de materiales dropeados
+        const materials = result.materials_dropped;
+        if (Array.isArray(materials) && materials.length > 0) {
+          toastStore.materialDrop(materials);
+        }
+
         return result;
       } else {
         error.value = result.error ?? 'Error al reclamar bloque';
@@ -196,6 +210,12 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
         // Toast de éxito
         const toastStore = useToastStore();
         toastStore.success(`¡${result.blocks_claimed} bloques reclamados! +${result.total_reward} ₿`);
+
+        // Toast de materiales dropeados
+        const materials = result.materials_dropped;
+        if (Array.isArray(materials) && materials.length > 0) {
+          toastStore.materialDrop(materials);
+        }
 
         // Cerrar modal
         showModal.value = false;
@@ -257,6 +277,12 @@ export const usePendingBlocksStore = defineStore('pendingBlocks', () => {
         // Toast de éxito
         const toastStore = useToastStore();
         toastStore.success(`¡${result.blocks_claimed} bloques reclamados! +${result.total_reward} ₿ (-${result.ron_spent} RON)`);
+
+        // Toast de materiales dropeados
+        const materials = result.materials_dropped;
+        if (Array.isArray(materials) && materials.length > 0) {
+          toastStore.materialDrop(materials);
+        }
 
         // Cerrar modal
         showModal.value = false;
