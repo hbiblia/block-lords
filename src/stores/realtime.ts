@@ -244,8 +244,8 @@ export const useRealtimeStore = defineStore('realtime', () => {
         connect();
       }, delay);
     } else {
-      reconnecting.value = false;
-      console.error('Se agotaron los intentos de reconexión');
+      console.error('Se agotaron los intentos de reconexión, recargando página...');
+      window.location.reload();
     }
   }
 
