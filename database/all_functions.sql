@@ -9093,7 +9093,7 @@ DECLARE
   v_sender RECORD;
   v_mail_id UUID;
   v_today_count INTEGER;
-  v_send_cost_energy NUMERIC := 5;
+  v_send_cost_internet NUMERIC := 5;
   v_has_attachment BOOLEAN;
   v_mail_size_kb INTEGER;
   v_recipient_used_kb INTEGER;
@@ -9136,9 +9136,9 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Sender not found');
   END IF;
 
-  -- Verificar costo de envio (energy)
-  IF v_sender.energy < v_send_cost_energy THEN
-    RETURN json_build_object('success', false, 'error', 'Not enough energy to send mail', 'required', v_send_cost_energy);
+  -- Verificar costo de envio (internet)
+  IF v_sender.internet < v_send_cost_internet THEN
+    RETURN json_build_object('success', false, 'error', 'Not enough internet to send mail', 'required', v_send_cost_internet);
   END IF;
 
   -- Determinar si hay adjuntos
@@ -9154,11 +9154,11 @@ BEGIN
     IF COALESCE(p_crypto, 0) > 0 AND v_sender.crypto_balance < p_crypto THEN
       RETURN json_build_object('success', false, 'error', 'Insufficient crypto for attachment');
     END IF;
-    IF COALESCE(p_energy, 0) > 0 AND v_sender.energy < (p_energy + v_send_cost_energy) THEN
-      RETURN json_build_object('success', false, 'error', 'Insufficient energy for attachment + send cost');
+    IF COALESCE(p_energy, 0) > 0 AND v_sender.energy < p_energy THEN
+      RETURN json_build_object('success', false, 'error', 'Insufficient energy for attachment');
     END IF;
-    IF COALESCE(p_internet, 0) > 0 AND v_sender.internet < p_internet THEN
-      RETURN json_build_object('success', false, 'error', 'Insufficient internet for attachment');
+    IF COALESCE(p_internet, 0) > 0 AND v_sender.internet < (p_internet + v_send_cost_internet) THEN
+      RETURN json_build_object('success', false, 'error', 'Insufficient internet for attachment + send cost');
     END IF;
     IF p_item_type IS NOT NULL AND COALESCE(p_item_quantity, 0) > 0 THEN
       IF p_item_type = 'rig' THEN
@@ -9189,10 +9189,10 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Recipient''s mailbox is full');
   END IF;
 
-  -- Cobrar costo de envio
-  UPDATE players SET energy = GREATEST(0, energy - v_send_cost_energy) WHERE id = p_sender_id;
+  -- Cobrar costo de envio (internet)
+  UPDATE players SET internet = GREATEST(0, internet - v_send_cost_internet) WHERE id = p_sender_id;
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_sender_id, 'mail_send_cost', v_send_cost_energy, 'energy', 'Mail send cost');
+  VALUES (p_sender_id, 'mail_send_cost', v_send_cost_internet, 'internet', 'Mail send cost');
 
   -- Deducir adjuntos del sender (escrow)
   IF v_has_attachment THEN
@@ -9529,8 +9529,9 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_sender RECORD;
+  v_admin_id UUID;
   v_today_count INTEGER;
-  v_send_cost_energy NUMERIC := 5;
+  v_send_cost_internet NUMERIC := 5;
   v_mail_size_kb INTEGER;
   v_mail_id UUID;
 BEGIN
@@ -9551,6 +9552,12 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Sender not found');
   END IF;
 
+  -- Buscar un admin como destinatario
+  SELECT id INTO v_admin_id FROM players WHERE role = 'admin' LIMIT 1;
+  IF v_admin_id IS NULL THEN
+    v_admin_id := p_sender_id; -- fallback si no hay admin
+  END IF;
+
   -- Limite diario de tickets (3/dia)
   SELECT COUNT(*) INTO v_today_count
   FROM player_mail
@@ -9562,26 +9569,26 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Daily ticket limit reached (3/day)');
   END IF;
 
-  -- Verificar energia
-  IF v_sender.energy < v_send_cost_energy THEN
-    RETURN json_build_object('success', false, 'error', 'Not enough energy to send ticket', 'required', v_send_cost_energy);
+  -- Verificar internet
+  IF v_sender.internet < v_send_cost_internet THEN
+    RETURN json_build_object('success', false, 'error', 'Not enough internet to send ticket', 'required', v_send_cost_internet);
   END IF;
 
   -- Calcular tamano
   v_mail_size_kb := calculate_mail_size_kb(p_subject, COALESCE(p_body, ''), 0, 0, 0, 0, 0);
 
-  -- Cobrar energia
-  UPDATE players SET energy = GREATEST(0, energy - v_send_cost_energy) WHERE id = p_sender_id;
+  -- Cobrar internet
+  UPDATE players SET internet = GREATEST(0, internet - v_send_cost_internet) WHERE id = p_sender_id;
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_sender_id, 'ticket_send_cost', v_send_cost_energy, 'energy', 'Support ticket send cost');
+  VALUES (p_sender_id, 'ticket_send_cost', v_send_cost_internet, 'internet', 'Support ticket send cost');
 
-  -- Insertar ticket (recipient_id = sender_id para NOT NULL, is_deleted_recipient = TRUE para no aparecer en inbox)
+  -- Insertar ticket dirigido al admin (aparece en su bandeja de entrada)
   INSERT INTO player_mail (
     sender_id, recipient_id, subject, body, mail_type,
     is_read, is_claimed, is_deleted_recipient, size_kb
   ) VALUES (
-    p_sender_id, p_sender_id, trim(p_subject), p_body, 'ticket',
-    FALSE, TRUE, TRUE, v_mail_size_kb
+    p_sender_id, v_admin_id, trim(p_subject), p_body, 'ticket',
+    FALSE, TRUE, FALSE, v_mail_size_kb
   ) RETURNING id INTO v_mail_id;
 
   RETURN json_build_object(

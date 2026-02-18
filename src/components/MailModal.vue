@@ -105,6 +105,19 @@ function removeAttachment(key: string) {
   else if (key === 'internet') composeInternet.value = 0;
 }
 
+// Send animation
+const showSendAnimation = ref(false);
+
+function playSendAnimation(): Promise<void> {
+  return new Promise((resolve) => {
+    showSendAnimation.value = true;
+    setTimeout(() => {
+      showSendAnimation.value = false;
+      resolve();
+    }, 1400);
+  });
+}
+
 // Claim password prompt
 const claimPassword = ref('');
 const showClaimPassword = ref(false);
@@ -132,7 +145,8 @@ watch(() => props.show, (val) => {
     mailStore.currentView = 'inbox';
     mailStore.selectedMail = null;
     mailStore.error = null;
-    resetCompose();
+    // No llamar resetCompose() aquí para preservar el borrador en localStorage
+    // El borrador se carga cuando el usuario navega a compose (ver watch de currentView)
   }
 });
 
@@ -192,16 +206,33 @@ function resetCompose() {
   clearDraft();
 }
 
-// Auto-save draft while composing
-watch([composeTo, composeSubject, composeBody, composeGamecoin, composeCrypto, composeEnergy, composeInternet, composeToConfirmed], saveDraft, { deep: true });
+// Flag para pausar auto-save durante carga de borrador
+const draftLoading = ref(false);
+
+// Auto-save draft while composing (pausado durante carga)
+watch([composeTo, composeSubject, composeBody, composeGamecoin, composeCrypto, composeEnergy, composeInternet, composeToConfirmed], () => {
+  if (!draftLoading.value) saveDraft();
+}, { deep: true });
 
 // Load draft when compose view opens
 watch(() => mailStore.currentView, (view) => {
   if (view === 'compose') {
+    // Pausar auto-save para que el reset no borre el draft de localStorage
+    draftLoading.value = true;
+    composeTo.value = '';
+    composeToConfirmed.value = false;
+    composeSubject.value = '';
+    composeBody.value = '';
+    composePassword.value = '';
+    composeGamecoin.value = 0;
+    composeCrypto.value = 0;
+    composeEnergy.value = 0;
+    composeInternet.value = 0;
+    showPasswordField.value = false;
+    showFilePicker.value = false;
     nextTick(() => {
-      if (!composeTo.value && !composeSubject.value && !composeBody.value) {
-        loadDraft();
-      }
+      loadDraft();
+      draftLoading.value = false;
     });
   }
 });
@@ -247,6 +278,7 @@ async function handleSend() {
     });
     if (result) {
       playSound('purchase');
+      await playSendAnimation();
       toastStore.success(t('mail.ticketSent'), '🎫');
       resetCompose();
       mailStore.goToSent();
@@ -257,8 +289,31 @@ async function handleSend() {
     return;
   }
 
+  // Everyone mode: admin broadcast
+  if (isEveryoneMode.value) {
+    const result = await mailStore.sendBroadcast({
+      subject: composeSubject.value.trim(),
+      body: composeBody.value.trim() || undefined,
+      gamecoin: composeGamecoin.value || undefined,
+      crypto: composeCrypto.value || undefined,
+      energy: composeEnergy.value || undefined,
+      internet: composeInternet.value || undefined,
+    });
+    if (result) {
+      playSound('purchase');
+      await playSendAnimation();
+      toastStore.success(t('mail.broadcastSent'), '📢');
+      resetCompose();
+      mailStore.goToInbox();
+    } else {
+      playSound('error');
+    }
+    return;
+  }
+
+  const recipientName = composeTo.value.trim();
   const result = await mailStore.sendMail({
-    recipientUsername: composeTo.value.trim(),
+    recipientUsername: recipientName,
     subject: composeSubject.value.trim(),
     body: composeBody.value.trim() || undefined,
     password: showPasswordField.value ? composePassword.value.trim() || undefined : undefined,
@@ -270,7 +325,8 @@ async function handleSend() {
 
   if (result) {
     playSound('purchase');
-    toastStore.success(t('mail.sentSuccess', { username: composeTo.value.trim() }), '📧');
+    await playSendAnimation();
+    toastStore.success(t('mail.sentSuccess', { username: recipientName }), '📧');
     resetCompose();
     mailStore.goToInbox();
     mailStore.fetchInbox();
@@ -348,17 +404,22 @@ const estimatedSizeKb = computed(() => {
 });
 
 const isTicketMode = computed(() => composeTo.value.trim().toLowerCase() === '@ticket');
+const isEveryoneMode = computed(() => composeTo.value.trim().toLowerCase() === '@everyone');
+const isAdmin = computed(() => authStore.player?.role === 'admin');
 
 const showAtSuggestions = computed(() => {
   const val = composeTo.value.trim().toLowerCase();
-  return val.startsWith('@') && val !== '@ticket';
+  return val.startsWith('@') && val !== '@ticket' && val !== '@everyone';
 });
 
 const atSuggestions = computed(() => {
   const val = composeTo.value.trim().toLowerCase();
-  const options = [
+  const options: { value: string; label: string; desc: string; icon: string }[] = [
     { value: '@ticket', label: '@ticket', desc: t('mail.ticketHint', 'Soporte'), icon: '🎫' },
   ];
+  if (isAdmin.value) {
+    options.push({ value: '@everyone', label: '@everyone', desc: t('mail.everyoneHint', 'Todos los jugadores'), icon: '📢' });
+  }
   if (!val || val === '@') return options;
   return options.filter(o => o.value.startsWith(val));
 });
@@ -688,6 +749,11 @@ function getResourceSizeLabel(key: string): string {
                   <span class="text-sm">🎫</span>
                   <span class="text-[11px] text-fuchsia-300">{{ t('mail.ticketHint') }}</span>
                 </div>
+                <!-- Everyone mode banner -->
+                <div v-if="isEveryoneMode" class="flex items-center gap-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/20 mb-2">
+                  <span class="text-sm">📢</span>
+                  <span class="text-[11px] text-amber-300">{{ t('mail.everyoneHint') }}</span>
+                </div>
 
                 <!-- To -->
                 <div class="gmail-compose-field relative">
@@ -697,8 +763,11 @@ function getResourceSizeLabel(key: string): string {
                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium max-w-[200px]"
                       :class="isTicketMode
                         ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30'
-                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'">
+                        : isEveryoneMode
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'">
                       <span v-if="isTicketMode">🎫</span>
+                      <span v-else-if="isEveryoneMode">📢</span>
                       <span class="truncate">{{ composeTo.trim() }}</span>
                       <button @click="clearRecipient" class="ml-0.5 hover:text-white transition-colors text-[10px] shrink-0">✕</button>
                     </span>
@@ -758,13 +827,13 @@ function getResourceSizeLabel(key: string): string {
                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
                     {{ t('mail.addAttachment') }}
                   </button>
-                  <button v-if="attachedResources.length > 0" @click="showPasswordField = !showPasswordField" class="gmail-extra-btn" :class="{ 'gmail-extra-btn-active': showPasswordField }">
+                  <button v-if="attachedResources.length > 0 && !isEveryoneMode" @click="showPasswordField = !showPasswordField" class="gmail-extra-btn" :class="{ 'gmail-extra-btn-active': showPasswordField }">
                     🔒 {{ t('mail.password') }}
                   </button>
                 </div>
 
-                <!-- Password field (hidden in ticket mode) -->
-                <div v-if="!isTicketMode && showPasswordField && attachedResources.length > 0" class="gmail-compose-attachments">
+                <!-- Password field (hidden in ticket and everyone mode) -->
+                <div v-if="!isTicketMode && !isEveryoneMode && showPasswordField && attachedResources.length > 0" class="gmail-compose-attachments">
                   <div class="gmail-attach-field">
                     <label>🔒 {{ t('mail.password') }}</label>
                     <input v-model="composePassword" type="text" maxlength="50" :placeholder="t('mail.passwordPlaceholder')" class="gmail-input" />
@@ -781,11 +850,11 @@ function getResourceSizeLabel(key: string): string {
                     @click="handleSend"
                     :disabled="mailStore.sending || !composeSubject.trim() || !composeTo.trim()"
                     class="gmail-btn-send"
-                    :class="{ '!bg-fuchsia-600 hover:!bg-fuchsia-500': isTicketMode }"
+                    :class="{ '!bg-fuchsia-600 hover:!bg-fuchsia-500': isTicketMode, '!bg-amber-600 hover:!bg-amber-500': isEveryoneMode }"
                   >
-                    {{ mailStore.sending ? t('mail.sending') : (isTicketMode ? t('mail.sendTicket') : t('mail.send')) }}
+                    {{ mailStore.sending ? t('mail.sending') : (isTicketMode ? t('mail.sendTicket') : isEveryoneMode ? t('mail.sendBroadcast') : t('mail.send')) }}
                   </button>
-                  <span class="text-[10px] text-white/25">{{ t('mail.sendCost', { cost: 5 }) }}</span>
+                  <span v-if="!isEveryoneMode" class="text-[10px] text-white/25">{{ t('mail.sendCost', { cost: 5 }) }}</span>
                   <span v-if="isTicketMode" class="text-[10px] text-fuchsia-400/50">{{ t('mail.ticketLimit') }}</span>
                   <span v-else class="text-[10px] text-white/20 ml-auto font-mono">{{ t('mail.estimatedSize', { size: estimatedSizeKb }) }}</span>
                 </div>
@@ -799,6 +868,17 @@ function getResourceSizeLabel(key: string): string {
         <div class="gmail-footer shrink-0">
           <span>LootMail v2.1 &mdash; Powered by LootMine</span>
           <span>{{ t('mail.dailyLimit', { remaining: 10 }) }}</span>
+        </div>
+
+        <!-- Send animation overlay -->
+        <div v-if="showSendAnimation" class="send-anim-overlay">
+          <div class="send-anim-envelope">
+            <svg class="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22,2 15,22 11,13 2,9" />
+            </svg>
+          </div>
+          <div class="send-anim-trail"></div>
         </div>
 
       </div>
@@ -1609,5 +1689,74 @@ function getResourceSizeLabel(key: string): string {
   color: rgba(255,255,255,0.15);
   border-top: 1px solid rgba(255,255,255,0.04);
   background: #1a1a2e;
+}
+
+/* ===== SEND ANIMATION ===== */
+.send-anim-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  background: rgba(22, 22, 43, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  overflow: hidden;
+  animation: sendOverlayFade 1.4s ease-out forwards;
+}
+
+.send-anim-envelope {
+  color: #4285f4;
+  filter: drop-shadow(0 0 12px rgba(66, 133, 244, 0.5));
+  animation: sendFly 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.send-anim-trail {
+  position: absolute;
+  width: 120px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(66, 133, 244, 0.6), transparent);
+  border-radius: 2px;
+  animation: sendTrail 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  filter: blur(1px);
+}
+
+@keyframes sendOverlayFade {
+  0% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes sendFly {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  30% {
+    transform: translate(0, -10px) scale(1.15) rotate(-5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(300px, -150px) scale(0.3) rotate(15deg);
+    opacity: 0;
+  }
+}
+
+@keyframes sendTrail {
+  0% {
+    transform: translate(0, 0) scaleX(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0;
+  }
+  40% {
+    transform: translate(-30px, 10px) scaleX(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-120px, 60px) scaleX(2);
+    opacity: 0;
+  }
 }
 </style>

@@ -8,6 +8,7 @@ import {
   readMail as apiReadMail,
   sendPlayerMail,
   sendSupportTicket,
+  adminSendMail,
   claimMailAttachment,
   deletePlayerMail,
 } from '@/utils/api';
@@ -240,6 +241,40 @@ export const useMailStore = defineStore('mail', () => {
     }
   }
 
+  async function sendBroadcast(params: {
+    subject: string;
+    body?: string;
+    gamecoin?: number;
+    crypto?: number;
+    energy?: number;
+    internet?: number;
+  }) {
+    sending.value = true;
+    error.value = null;
+    try {
+      const result = await adminSendMail({
+        target: '@everyone',
+        subject: params.subject,
+        body: params.body,
+        gamecoin: params.gamecoin,
+        crypto: params.crypto,
+        energy: params.energy,
+        internet: params.internet,
+      });
+      if (result?.success) {
+        return result;
+      } else {
+        error.value = result?.error || 'Error sending broadcast';
+        return null;
+      }
+    } catch (e: any) {
+      error.value = e.message || 'Error sending broadcast';
+      return null;
+    } finally {
+      sending.value = false;
+    }
+  }
+
   async function claimAttachment(mailId: string, password?: string): Promise<MailClaimResult | null> {
     const authStore = useAuthStore();
     if (!authStore.player?.id) return null;
@@ -343,6 +378,7 @@ export const useMailStore = defineStore('mail', () => {
     markAsRead,
     sendMail,
     sendTicket,
+    sendBroadcast,
     claimAttachment,
     removeMail,
     selectMail,

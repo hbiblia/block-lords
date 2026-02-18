@@ -1863,6 +1863,26 @@ export async function sendSupportTicket(senderId: string, subject: string, body?
   }, { critical: true, maxRetries: 3 });
 }
 
+export async function adminSendMail(params: {
+  target: string;
+  subject: string;
+  body?: string;
+  gamecoin?: number;
+  crypto?: number;
+  energy?: number;
+  internet?: number;
+}): Promise<any> {
+  return rpcWithRetry('admin_send_mail', {
+    p_target: params.target,
+    p_subject: params.subject,
+    p_body: params.body || null,
+    p_gamecoin: params.gamecoin || 0,
+    p_crypto: params.crypto || 0,
+    p_energy: params.energy || 0,
+    p_internet: params.internet || 0,
+  }, { critical: true, maxRetries: 3 });
+}
+
 export async function adminGetTickets(): Promise<any> {
   return rpcWithRetry('admin_get_tickets', {});
 }

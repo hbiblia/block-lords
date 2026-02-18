@@ -2399,7 +2399,7 @@
     password: 'Clave de seguridad',
     passwordHint: 'El destinatario debe ingresar esta clave para reclamar',
     passwordPlaceholder: 'Ingresa clave/password',
-    sendCost: 'Costo: {cost} Energía',
+    sendCost: 'Costo: {cost} Internet',
     dailyLimit: '{remaining}/10 correos restantes hoy',
     from: 'De',
     date: 'Fecha',
@@ -2438,5 +2438,8 @@
     ticketSent: 'Ticket de soporte enviado!',
     ticketLimit: '3 tickets/día',
     ticketBodyPlaceholder: 'Describe tu problema...',
+    everyoneHint: 'Enviando a TODOS los jugadores. Los adjuntos se enviarán a cada jugador.',
+    sendBroadcast: 'Enviar Broadcast',
+    broadcastSent: 'Broadcast enviado a todos los jugadores!',
   },
 };

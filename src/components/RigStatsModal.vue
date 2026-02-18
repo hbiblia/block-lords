@@ -288,7 +288,7 @@ function getConditionColor(cond: number): string {
           <div class="text-center">
             <div class="text-[10px] text-text-muted">Hashrate</div>
             <div class="text-sm font-bold font-mono text-accent-primary">
-              {{ rig.rig.hashrate }} H/s
+              {{ snapshots.length > 0 ? Math.round(snapshots[snapshots.length - 1].effectiveHashrate) : rig.rig.hashrate }} H/s
             </div>
           </div>
           <div class="text-center">

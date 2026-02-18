@@ -2399,7 +2399,7 @@ export default {
     password: 'Password lock',
     passwordHint: 'Recipient must enter this password to claim',
     passwordPlaceholder: 'Enter password/key',
-    sendCost: 'Cost: {cost} Energy',
+    sendCost: 'Cost: {cost} Internet',
     dailyLimit: '{remaining}/10 mails left today',
     from: 'From',
     date: 'Date',
@@ -2438,5 +2438,8 @@ export default {
     ticketSent: 'Support ticket sent!',
     ticketLimit: '3 tickets/day',
     ticketBodyPlaceholder: 'Describe your issue...',
+    everyoneHint: 'Broadcasting to ALL players. Attachments will be sent to each player.',
+    sendBroadcast: 'Send Broadcast',
+    broadcastSent: 'Broadcast sent to all players!',
   },
 };
