@@ -83,6 +83,7 @@ WHERE (max_energy != 300 OR max_internet != 300)
 -- Agregar columnas para degradación de rigs
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS max_condition NUMERIC DEFAULT 100;
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS times_repaired INTEGER DEFAULT 0;
+ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS patch_count INTEGER DEFAULT 0;
 
 -- Permitir múltiples rigs del mismo tipo por jugador (eliminar constraint único)
 ALTER TABLE player_rigs DROP CONSTRAINT IF EXISTS player_rigs_player_id_rig_id_key;
@@ -475,6 +476,7 @@ BEGIN
       SELECT pr.id, pr.is_active, pr.condition, pr.temperature, pr.acquired_at, pr.activated_at,
              COALESCE(pr.max_condition, 100) as max_condition,
              COALESCE(pr.times_repaired, 0) as times_repaired,
+             COALESCE(pr.patch_count, 0) as patch_count,
              COALESCE(pr.hashrate_level, 1) as hashrate_level,
              COALESCE(pr.efficiency_level, 1) as efficiency_level,
              COALESCE(pr.thermal_level, 1) as thermal_level,
@@ -721,6 +723,89 @@ BEGIN
     'times_repaired', v_times_repaired + 1,
     'condition_restored', v_condition_restored,
     'repair_bonus', v_repair_bonus
+  );
+END;
+$$;
+
+-- Aplicar parche de emergencia al rig
+-- Restaura +50% condición pero penaliza permanentemente:
+--   -10% hashrate por parche (multiplicativo: POWER(0.90, patch_count))
+--   +15% consumo por parche (multiplicativo: POWER(1.15, patch_count))
+-- Ilimitado en stacking, se paga con Crypto (BLC)
+-- Costo escala +50% por cada parche previo
+CREATE OR REPLACE FUNCTION apply_rig_patch(p_player_id UUID, p_rig_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rig RECORD;
+  v_player players%ROWTYPE;
+  v_patch_cost NUMERIC;
+  v_current_patches INTEGER;
+  v_new_condition NUMERIC;
+  v_condition_restored NUMERIC;
+BEGIN
+  -- Obtener rig con datos base
+  SELECT pr.*, r.name as rig_name, r.repair_cost
+  INTO v_rig
+  FROM player_rigs pr
+  JOIN rigs r ON r.id = pr.rig_id
+  WHERE pr.id = p_rig_id AND pr.player_id = p_player_id;
+
+  IF v_rig IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig not found');
+  END IF;
+
+  -- No parchear rigs activos
+  IF v_rig.is_active THEN
+    RETURN json_build_object('success', false, 'error', 'Rig must be stopped');
+  END IF;
+
+  v_current_patches := COALESCE(v_rig.patch_count, 0);
+
+  -- Costo: repair_cost * 0.002 BLC (escalado por patch count +50% cada vez)
+  v_patch_cost := (v_rig.repair_cost * 0.002) * POWER(1.5, v_current_patches);
+
+  -- Verificar balance
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player.crypto_balance < v_patch_cost THEN
+    RETURN json_build_object('success', false, 'error', 'Insufficient crypto',
+      'cost', v_patch_cost, 'balance', v_player.crypto_balance);
+  END IF;
+
+  -- Restaurar 50% de condición (respetando max_condition)
+  v_new_condition := LEAST(
+    v_rig.condition + 50,
+    COALESCE(v_rig.max_condition, 100)
+  );
+  v_condition_restored := v_new_condition - v_rig.condition;
+
+  -- Cobrar crypto
+  UPDATE players SET crypto_balance = crypto_balance - v_patch_cost WHERE id = p_player_id;
+
+  -- Aplicar parche
+  UPDATE player_rigs
+  SET condition = v_new_condition,
+      patch_count = v_current_patches + 1,
+      last_modified_at = NOW()
+  WHERE id = p_rig_id;
+
+  -- Registrar transacción
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'rig_patch', -v_patch_cost, 'crypto',
+    'Patch #' || (v_current_patches + 1) || ' on ' || v_rig.rig_name ||
+    ' (+' || v_condition_restored || '% condition, -10% hash, +15% consumption)');
+
+  RETURN json_build_object(
+    'success', true,
+    'cost', v_patch_cost,
+    'old_condition', v_rig.condition,
+    'new_condition', v_new_condition,
+    'condition_restored', v_condition_restored,
+    'patch_count', v_current_patches + 1,
+    'hashrate_penalty', ROUND((1 - POWER(0.90, v_current_patches + 1)) * 100, 1),
+    'consumption_penalty', ROUND((POWER(1.15, v_current_patches + 1) - 1) * 100, 1)
   );
 END;
 $$;
@@ -1602,7 +1687,8 @@ BEGIN
     FOR v_rig IN
       SELECT pr.id, pr.temperature, pr.condition, r.power_consumption, r.internet_consumption, r.hashrate,
              COALESCE(pr.efficiency_level, 1) as efficiency_level,
-             COALESCE(pr.thermal_level, 1) as thermal_level
+             COALESCE(pr.thermal_level, 1) as thermal_level,
+             COALESCE(pr.patch_count, 0) as patch_count
       FROM player_rigs pr
       JOIN rigs r ON r.id = pr.rig_id
       WHERE pr.player_id = v_player.id AND pr.is_active = true
@@ -1652,13 +1738,17 @@ BEGIN
       -- Temperatura > 40°C aumenta consumo hasta 50% extra a 100°C
       -- Aplicar multiplicador de boost de energy_saver (por rig)
       -- Aplicar bonus de eficiencia del upgrade (reduce consumo)
+      -- Penalización por parches: +15% consumo por parche (acumulativo multiplicativo)
       v_total_power := v_total_power +
         ((v_rig.power_consumption * (1 + GREATEST(0, (v_rig.temperature - 40)) * 0.0083)) +
-        v_rig_cooling_energy) * v_energy_mult * (1 - v_efficiency_bonus / 100.0);
+        v_rig_cooling_energy) * v_energy_mult * (1 - v_efficiency_bonus / 100.0)
+        * POWER(1.15, v_rig.patch_count);
 
       -- Aplicar multiplicador de boost de bandwidth_optimizer (por rig)
       -- Aplicar bonus de eficiencia del upgrade (reduce consumo)
-      v_total_internet := v_total_internet + (v_rig.internet_consumption * v_internet_mult * (1 - v_efficiency_bonus / 100.0));
+      -- Penalización por parches: +15% consumo por parche (acumulativo multiplicativo)
+      v_total_internet := v_total_internet + (v_rig.internet_consumption * v_internet_mult * (1 - v_efficiency_bonus / 100.0))
+        * POWER(1.15, v_rig.patch_count);
 
       -- Calcular hashrate efectivo para determinar generación de calor
       -- Solo genera calor si está minando efectivamente
@@ -7504,7 +7594,8 @@ BEGIN
     SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature,
            r.hashrate, p.reputation_score,
            COALESCE(pr.hashrate_level, 1) as hashrate_level,
-           pr.activated_at
+           pr.activated_at,
+           COALESCE(pr.patch_count, 0) as patch_count
     FROM player_rigs pr
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
@@ -7552,6 +7643,11 @@ BEGIN
     -- Calcular hashrate efectivo
     v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier *
                            v_temp_penalty * v_hashrate_mult;
+
+    -- Penalización por parches: -10% hashrate por parche (acumulativo multiplicativo)
+    IF v_rig.patch_count > 0 THEN
+      v_effective_hashrate := v_effective_hashrate * POWER(0.90, v_rig.patch_count);
+    END IF;
 
     -- Warm-up: +20% por tick (30s), 100% en 5 ticks (120s)
     IF v_rig.activated_at IS NOT NULL THEN
@@ -8366,6 +8462,7 @@ $$;
 GRANT EXECUTE ON FUNCTION get_referral_info TO authenticated;
 GRANT EXECUTE ON FUNCTION apply_referral_code TO authenticated;
 GRANT EXECUTE ON FUNCTION upgrade_rig TO authenticated;
+GRANT EXECUTE ON FUNCTION apply_rig_patch TO authenticated;
 GRANT EXECUTE ON FUNCTION get_pending_blocks TO authenticated;
 GRANT EXECUTE ON FUNCTION get_pending_blocks_count TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_block TO authenticated;
@@ -8662,6 +8759,669 @@ $$;
 
 GRANT EXECUTE ON FUNCTION get_pending_gifts TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_gift TO authenticated;
+
+-- =====================================================
+-- SISTEMA DE CORREO IN-GAME (TERMINAL MAIL)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS player_mail (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id UUID REFERENCES players(id) ON DELETE SET NULL,
+  recipient_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  subject TEXT NOT NULL CHECK (length(subject) >= 1 AND length(subject) <= 100),
+  body TEXT CHECK (body IS NULL OR length(body) <= 2000),
+  mail_type TEXT NOT NULL DEFAULT 'player' CHECK (mail_type IN ('player', 'system', 'admin')),
+  -- Attachment fields (mismo patron que player_gifts)
+  attachment_gamecoin DECIMAL(10,2) DEFAULT 0,
+  attachment_crypto DECIMAL(10,8) DEFAULT 0,
+  attachment_energy DECIMAL DEFAULT 0,
+  attachment_internet DECIMAL DEFAULT 0,
+  attachment_item_type TEXT,
+  attachment_item_id TEXT,
+  attachment_item_quantity INTEGER DEFAULT 0,
+  -- Password protection for attachments
+  attachment_password TEXT DEFAULT NULL,
+  -- State
+  is_read BOOLEAN DEFAULT FALSE,
+  is_claimed BOOLEAN DEFAULT FALSE,
+  is_deleted_sender BOOLEAN DEFAULT FALSE,
+  is_deleted_recipient BOOLEAN DEFAULT FALSE,
+  claimed_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE player_mail ADD COLUMN IF NOT EXISTS size_kb INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_player_mail_recipient ON player_mail(recipient_id, is_deleted_recipient, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_player_mail_sender ON player_mail(sender_id, is_deleted_sender, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_player_mail_unread ON player_mail(recipient_id, is_read) WHERE is_read = FALSE AND is_deleted_recipient = FALSE;
+CREATE INDEX IF NOT EXISTS idx_player_mail_daily_send ON player_mail(sender_id, created_at) WHERE mail_type = 'player';
+
+ALTER TABLE player_mail ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS player_mail_select ON player_mail;
+CREATE POLICY player_mail_select ON player_mail FOR SELECT TO authenticated
+  USING (
+    (recipient_id = auth.uid() AND is_deleted_recipient = FALSE)
+    OR
+    (sender_id = auth.uid() AND is_deleted_sender = FALSE)
+  );
+
+-- Calcular tamano de un correo en KB
+CREATE OR REPLACE FUNCTION calculate_mail_size_kb(
+  p_subject TEXT,
+  p_body TEXT,
+  p_gamecoin DECIMAL DEFAULT 0,
+  p_crypto DECIMAL DEFAULT 0,
+  p_energy DECIMAL DEFAULT 0,
+  p_internet DECIMAL DEFAULT 0,
+  p_item_quantity INTEGER DEFAULT 0
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  v_size INTEGER := 1; -- Base: 1 KB (mail headers)
+  v_text_len INTEGER;
+BEGIN
+  -- Text size: CEIL((subject_length + body_length) / 50) KB
+  v_text_len := COALESCE(length(p_subject), 0) + COALESCE(length(p_body), 0);
+  IF v_text_len > 0 THEN
+    v_size := v_size + CEIL(v_text_len::NUMERIC / 50);
+  END IF;
+
+  -- Attachment sizes
+  IF COALESCE(p_gamecoin, 0) > 0 THEN
+    v_size := v_size + CEIL(p_gamecoin / 100.0);
+  END IF;
+  IF COALESCE(p_crypto, 0) > 0 THEN
+    v_size := v_size + CEIL(p_crypto * 100.0);
+  END IF;
+  IF COALESCE(p_energy, 0) > 0 THEN
+    v_size := v_size + CEIL(p_energy / 10.0);
+  END IF;
+  IF COALESCE(p_internet, 0) > 0 THEN
+    v_size := v_size + CEIL(p_internet / 10.0);
+  END IF;
+  IF COALESCE(p_item_quantity, 0) > 0 THEN
+    v_size := v_size + (p_item_quantity * 50);
+  END IF;
+
+  RETURN v_size;
+END;
+$$;
+
+-- Obtener cantidad de correos no leidos (para badge)
+CREATE OR REPLACE FUNCTION get_mail_unread_count(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_count
+  FROM player_mail
+  WHERE recipient_id = p_player_id
+    AND is_read = FALSE
+    AND is_deleted_recipient = FALSE
+    AND (expires_at IS NULL OR expires_at > NOW());
+
+  RETURN json_build_object('success', true, 'count', v_count);
+END;
+$$;
+
+-- Obtener uso de almacenamiento del buzon
+CREATE OR REPLACE FUNCTION get_mail_storage(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_used_kb INTEGER;
+  v_max_kb INTEGER := 1024; -- 1 MB default
+BEGIN
+  SELECT COALESCE(SUM(size_kb), 0) INTO v_used_kb
+  FROM player_mail
+  WHERE recipient_id = p_player_id
+    AND is_deleted_recipient = FALSE
+    AND (expires_at IS NULL OR expires_at > NOW());
+
+  RETURN json_build_object(
+    'success', true,
+    'used_kb', v_used_kb,
+    'max_kb', v_max_kb
+  );
+END;
+$$;
+
+-- Obtener bandeja de entrada
+CREATE OR REPLACE FUNCTION get_player_inbox(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.created_at DESC), '[]'::JSON)
+    FROM (
+      SELECT
+        m.id, m.sender_id,
+        COALESCE(p.username, 'SYSTEM') as sender_username,
+        m.subject, m.body, m.mail_type,
+        m.attachment_gamecoin, m.attachment_crypto,
+        m.attachment_energy, m.attachment_internet,
+        m.attachment_item_type, m.attachment_item_id, m.attachment_item_quantity,
+        (m.attachment_password IS NOT NULL) as has_password,
+        m.is_read, m.is_claimed,
+        (COALESCE(m.attachment_gamecoin, 0) > 0 OR COALESCE(m.attachment_crypto, 0) > 0 OR
+         COALESCE(m.attachment_energy, 0) > 0 OR COALESCE(m.attachment_internet, 0) > 0 OR
+         (m.attachment_item_type IS NOT NULL AND COALESCE(m.attachment_item_quantity, 0) > 0)) as has_attachment,
+        m.expires_at, m.created_at,
+        m.size_kb
+      FROM player_mail m
+      LEFT JOIN players p ON p.id = m.sender_id
+      WHERE m.recipient_id = p_player_id
+        AND m.is_deleted_recipient = FALSE
+        AND (m.expires_at IS NULL OR m.expires_at > NOW())
+      ORDER BY m.created_at DESC
+      LIMIT 100
+    ) t
+  );
+END;
+$$;
+
+-- Obtener correos enviados
+CREATE OR REPLACE FUNCTION get_player_sent(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.created_at DESC), '[]'::JSON)
+    FROM (
+      SELECT
+        m.id,
+        COALESCE(p.username, 'Unknown') as recipient_username,
+        m.subject, m.mail_type,
+        (COALESCE(m.attachment_gamecoin, 0) > 0 OR COALESCE(m.attachment_crypto, 0) > 0 OR
+         COALESCE(m.attachment_energy, 0) > 0 OR COALESCE(m.attachment_internet, 0) > 0 OR
+         (m.attachment_item_type IS NOT NULL AND COALESCE(m.attachment_item_quantity, 0) > 0)) as has_attachment,
+        m.is_claimed,
+        m.created_at,
+        m.size_kb
+      FROM player_mail m
+      LEFT JOIN players p ON p.id = m.recipient_id
+      WHERE m.sender_id = p_player_id
+        AND m.is_deleted_sender = FALSE
+      ORDER BY m.created_at DESC
+      LIMIT 50
+    ) t
+  );
+END;
+$$;
+
+-- Marcar correo como leido
+CREATE OR REPLACE FUNCTION read_mail(p_player_id UUID, p_mail_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE player_mail
+  SET is_read = TRUE
+  WHERE id = p_mail_id AND recipient_id = p_player_id;
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Mail not found');
+  END IF;
+
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+-- Enviar correo entre jugadores
+CREATE OR REPLACE FUNCTION send_player_mail(
+  p_sender_id UUID,
+  p_recipient_username TEXT,
+  p_subject TEXT,
+  p_body TEXT DEFAULT NULL,
+  p_password TEXT DEFAULT NULL,
+  p_gamecoin DECIMAL DEFAULT 0,
+  p_crypto DECIMAL DEFAULT 0,
+  p_energy DECIMAL DEFAULT 0,
+  p_internet DECIMAL DEFAULT 0,
+  p_item_type TEXT DEFAULT NULL,
+  p_item_id TEXT DEFAULT NULL,
+  p_item_quantity INTEGER DEFAULT 0
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_recipient_id UUID;
+  v_sender RECORD;
+  v_mail_id UUID;
+  v_today_count INTEGER;
+  v_send_cost_energy NUMERIC := 5;
+  v_has_attachment BOOLEAN;
+  v_mail_size_kb INTEGER;
+  v_recipient_used_kb INTEGER;
+  v_max_kb INTEGER := 1024;
+BEGIN
+  -- Validar subject
+  IF p_subject IS NULL OR length(trim(p_subject)) < 1 THEN
+    RETURN json_build_object('success', false, 'error', 'Subject is required');
+  END IF;
+  IF length(p_subject) > 100 THEN
+    RETURN json_build_object('success', false, 'error', 'Subject too long (max 100)');
+  END IF;
+  IF p_body IS NOT NULL AND length(p_body) > 2000 THEN
+    RETURN json_build_object('success', false, 'error', 'Body too long (max 2000)');
+  END IF;
+
+  -- Buscar destinatario por username
+  SELECT id INTO v_recipient_id FROM players WHERE lower(username) = lower(trim(p_recipient_username));
+  IF v_recipient_id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+  IF v_recipient_id = p_sender_id THEN
+    RETURN json_build_object('success', false, 'error', 'Cannot send mail to yourself');
+  END IF;
+
+  -- Verificar limite diario (10/dia)
+  SELECT COUNT(*) INTO v_today_count
+  FROM player_mail
+  WHERE sender_id = p_sender_id
+    AND mail_type = 'player'
+    AND created_at::date = CURRENT_DATE;
+
+  IF v_today_count >= 10 THEN
+    RETURN json_build_object('success', false, 'error', 'Daily mail limit reached (10/day)');
+  END IF;
+
+  -- Obtener datos del sender
+  SELECT * INTO v_sender FROM players WHERE id = p_sender_id;
+  IF v_sender IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Sender not found');
+  END IF;
+
+  -- Verificar costo de envio (energy)
+  IF v_sender.energy < v_send_cost_energy THEN
+    RETURN json_build_object('success', false, 'error', 'Not enough energy to send mail', 'required', v_send_cost_energy);
+  END IF;
+
+  -- Determinar si hay adjuntos
+  v_has_attachment := (COALESCE(p_gamecoin, 0) > 0 OR COALESCE(p_crypto, 0) > 0 OR
+                       COALESCE(p_energy, 0) > 0 OR COALESCE(p_internet, 0) > 0 OR
+                       (p_item_type IS NOT NULL AND COALESCE(p_item_quantity, 0) > 0));
+
+  -- Validar recursos suficientes para adjuntos
+  IF v_has_attachment THEN
+    IF COALESCE(p_gamecoin, 0) > 0 AND v_sender.gamecoin_balance < p_gamecoin THEN
+      RETURN json_build_object('success', false, 'error', 'Insufficient gamecoin for attachment');
+    END IF;
+    IF COALESCE(p_crypto, 0) > 0 AND v_sender.crypto_balance < p_crypto THEN
+      RETURN json_build_object('success', false, 'error', 'Insufficient crypto for attachment');
+    END IF;
+    IF COALESCE(p_energy, 0) > 0 AND v_sender.energy < (p_energy + v_send_cost_energy) THEN
+      RETURN json_build_object('success', false, 'error', 'Insufficient energy for attachment + send cost');
+    END IF;
+    IF COALESCE(p_internet, 0) > 0 AND v_sender.internet < p_internet THEN
+      RETURN json_build_object('success', false, 'error', 'Insufficient internet for attachment');
+    END IF;
+    IF p_item_type IS NOT NULL AND COALESCE(p_item_quantity, 0) > 0 THEN
+      IF p_item_type = 'rig' THEN
+        IF NOT EXISTS (SELECT 1 FROM player_rig_inventory WHERE player_id = p_sender_id AND rig_id = p_item_id AND quantity >= p_item_quantity) THEN
+          RETURN json_build_object('success', false, 'error', 'Insufficient item in inventory');
+        END IF;
+      ELSE
+        IF NOT EXISTS (SELECT 1 FROM player_inventory WHERE player_id = p_sender_id AND item_type = p_item_type AND item_id = p_item_id AND quantity >= p_item_quantity) THEN
+          RETURN json_build_object('success', false, 'error', 'Insufficient item in inventory');
+        END IF;
+      END IF;
+    END IF;
+  END IF;
+
+  -- Calcular tamano del correo
+  v_mail_size_kb := calculate_mail_size_kb(
+    p_subject, p_body, p_gamecoin, p_crypto, p_energy, p_internet, p_item_quantity
+  );
+
+  -- Verificar espacio en buzon del destinatario
+  SELECT COALESCE(SUM(size_kb), 0) INTO v_recipient_used_kb
+  FROM player_mail
+  WHERE recipient_id = v_recipient_id
+    AND is_deleted_recipient = FALSE
+    AND (expires_at IS NULL OR expires_at > NOW());
+
+  IF (v_recipient_used_kb + v_mail_size_kb) > v_max_kb THEN
+    RETURN json_build_object('success', false, 'error', 'Recipient''s mailbox is full');
+  END IF;
+
+  -- Cobrar costo de envio
+  UPDATE players SET energy = GREATEST(0, energy - v_send_cost_energy) WHERE id = p_sender_id;
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_sender_id, 'mail_send_cost', v_send_cost_energy, 'energy', 'Mail send cost');
+
+  -- Deducir adjuntos del sender (escrow)
+  IF v_has_attachment THEN
+    UPDATE players SET
+      gamecoin_balance = gamecoin_balance - COALESCE(p_gamecoin, 0),
+      crypto_balance = crypto_balance - COALESCE(p_crypto, 0),
+      energy = GREATEST(0, energy - COALESCE(p_energy, 0)),
+      internet = GREATEST(0, internet - COALESCE(p_internet, 0))
+    WHERE id = p_sender_id;
+
+    -- Deducir items del inventario
+    IF p_item_type IS NOT NULL AND COALESCE(p_item_quantity, 0) > 0 THEN
+      IF p_item_type = 'rig' THEN
+        UPDATE player_rig_inventory SET quantity = quantity - p_item_quantity
+        WHERE player_id = p_sender_id AND rig_id = p_item_id;
+        DELETE FROM player_rig_inventory WHERE player_id = p_sender_id AND rig_id = p_item_id AND quantity <= 0;
+      ELSE
+        UPDATE player_inventory SET quantity = quantity - p_item_quantity
+        WHERE player_id = p_sender_id AND item_type = p_item_type AND item_id = p_item_id;
+        DELETE FROM player_inventory WHERE player_id = p_sender_id AND item_type = p_item_type AND item_id = p_item_id AND quantity <= 0;
+      END IF;
+    END IF;
+
+    IF COALESCE(p_gamecoin, 0) > 0 THEN
+      INSERT INTO transactions (player_id, type, amount, currency, description)
+      VALUES (p_sender_id, 'mail_attachment', p_gamecoin, 'gamecoin', 'Mail attachment to ' || p_recipient_username);
+    END IF;
+    IF COALESCE(p_crypto, 0) > 0 THEN
+      INSERT INTO transactions (player_id, type, amount, currency, description)
+      VALUES (p_sender_id, 'mail_attachment', p_crypto, 'crypto', 'Mail attachment to ' || p_recipient_username);
+    END IF;
+  END IF;
+
+  -- Insertar correo
+  INSERT INTO player_mail (
+    sender_id, recipient_id, subject, body, mail_type,
+    attachment_gamecoin, attachment_crypto, attachment_energy, attachment_internet,
+    attachment_item_type, attachment_item_id, attachment_item_quantity,
+    attachment_password, is_claimed, size_kb
+  ) VALUES (
+    p_sender_id, v_recipient_id, trim(p_subject), p_body, 'player',
+    COALESCE(p_gamecoin, 0), COALESCE(p_crypto, 0), COALESCE(p_energy, 0), COALESCE(p_internet, 0),
+    p_item_type, p_item_id, COALESCE(p_item_quantity, 0),
+    CASE WHEN trim(COALESCE(p_password, '')) = '' THEN NULL ELSE trim(p_password) END,
+    CASE WHEN v_has_attachment THEN FALSE ELSE TRUE END,
+    v_mail_size_kb
+  ) RETURNING id INTO v_mail_id;
+
+  -- Actualizar progreso de misiones
+  PERFORM update_mission_progress(p_sender_id, 'send_mail', 1);
+
+  RETURN json_build_object(
+    'success', true,
+    'mailId', v_mail_id,
+    'recipient', p_recipient_username,
+    'dailyRemaining', 10 - v_today_count - 1,
+    'size_kb', v_mail_size_kb
+  );
+END;
+$$;
+
+-- Reclamar adjuntos de un correo (con verificacion de password)
+CREATE OR REPLACE FUNCTION claim_mail_attachment(
+  p_player_id UUID,
+  p_mail_id UUID,
+  p_password TEXT DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_mail player_mail%ROWTYPE;
+  v_effective_max_energy NUMERIC;
+  v_effective_max_internet NUMERIC;
+  v_rig_record RECORD;
+  v_boost_duration INTEGER;
+  i INTEGER;
+BEGIN
+  -- Obtener correo
+  SELECT * INTO v_mail
+  FROM player_mail
+  WHERE id = p_mail_id AND recipient_id = p_player_id AND is_claimed = FALSE;
+
+  IF v_mail IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Mail not found or already claimed');
+  END IF;
+
+  -- Verificar expiracion
+  IF v_mail.expires_at IS NOT NULL AND v_mail.expires_at <= NOW() THEN
+    UPDATE player_mail SET is_claimed = TRUE, claimed_at = NOW() WHERE id = p_mail_id;
+    RETURN json_build_object('success', false, 'error', 'This mail has expired');
+  END IF;
+
+  -- Verificar password si tiene
+  IF v_mail.attachment_password IS NOT NULL THEN
+    IF p_password IS NULL OR trim(p_password) != v_mail.attachment_password THEN
+      RETURN json_build_object('success', false, 'error', 'Incorrect password');
+    END IF;
+  END IF;
+
+  -- Marcar como reclamado
+  UPDATE player_mail SET is_claimed = TRUE, claimed_at = NOW() WHERE id = p_mail_id;
+
+  -- Obtener maximos efectivos
+  v_effective_max_energy := get_effective_max_energy(p_player_id);
+  v_effective_max_internet := get_effective_max_internet(p_player_id);
+
+  -- Acreditar moneda/recursos (mismo patron que claim_gift)
+  UPDATE players
+  SET gamecoin_balance = gamecoin_balance + COALESCE(v_mail.attachment_gamecoin, 0),
+      crypto_balance = crypto_balance + COALESCE(v_mail.attachment_crypto, 0),
+      total_crypto_earned = COALESCE(total_crypto_earned, 0) + COALESCE(v_mail.attachment_crypto, 0),
+      energy = LEAST(v_effective_max_energy, energy + COALESCE(v_mail.attachment_energy, 0)),
+      internet = LEAST(v_effective_max_internet, internet + COALESCE(v_mail.attachment_internet, 0))
+  WHERE id = p_player_id;
+
+  -- Acreditar items (misma logica que claim_gift)
+  IF v_mail.attachment_item_type IS NOT NULL AND v_mail.attachment_item_id IS NOT NULL AND COALESCE(v_mail.attachment_item_quantity, 0) > 0 THEN
+    IF v_mail.attachment_item_type = 'prepaid_card' THEN
+      IF EXISTS (SELECT 1 FROM prepaid_cards WHERE id = v_mail.attachment_item_id) THEN
+        FOR i IN 1..v_mail.attachment_item_quantity LOOP
+          INSERT INTO player_cards (player_id, card_id, code)
+          VALUES (p_player_id, v_mail.attachment_item_id, generate_card_code());
+        END LOOP;
+      END IF;
+    ELSIF v_mail.attachment_item_type = 'cooling' THEN
+      IF EXISTS (SELECT 1 FROM cooling_items WHERE id = v_mail.attachment_item_id) THEN
+        INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+        VALUES (p_player_id, 'cooling', v_mail.attachment_item_id, v_mail.attachment_item_quantity)
+        ON CONFLICT (player_id, item_type, item_id)
+        DO UPDATE SET quantity = player_inventory.quantity + v_mail.attachment_item_quantity;
+      END IF;
+    ELSIF v_mail.attachment_item_type = 'boost' THEN
+      IF EXISTS (SELECT 1 FROM boost_items WHERE id = v_mail.attachment_item_id) THEN
+        SELECT duration_minutes INTO v_boost_duration FROM boost_items WHERE id = v_mail.attachment_item_id;
+        FOR v_rig_record IN SELECT id FROM player_rigs WHERE player_id = p_player_id
+        LOOP
+          INSERT INTO rig_boosts (player_rig_id, boost_item_id, remaining_seconds, stack_count)
+          VALUES (v_rig_record.id, v_mail.attachment_item_id, v_boost_duration * 60 * v_mail.attachment_item_quantity, v_mail.attachment_item_quantity)
+          ON CONFLICT (player_rig_id, boost_item_id)
+          DO UPDATE SET
+            remaining_seconds = rig_boosts.remaining_seconds + v_boost_duration * 60 * v_mail.attachment_item_quantity,
+            stack_count = rig_boosts.stack_count + v_mail.attachment_item_quantity;
+        END LOOP;
+      END IF;
+    ELSIF v_mail.attachment_item_type = 'rig' THEN
+      IF EXISTS (SELECT 1 FROM rigs WHERE id = v_mail.attachment_item_id) THEN
+        INSERT INTO player_rig_inventory (player_id, rig_id, quantity)
+        VALUES (p_player_id, v_mail.attachment_item_id, v_mail.attachment_item_quantity)
+        ON CONFLICT (player_id, rig_id)
+        DO UPDATE SET quantity = player_rig_inventory.quantity + v_mail.attachment_item_quantity;
+      END IF;
+    ELSIF v_mail.attachment_item_type = 'premium' THEN
+      UPDATE players SET
+        premium_until = CASE
+          WHEN premium_until IS NOT NULL AND premium_until > NOW()
+          THEN premium_until + (COALESCE(v_mail.attachment_item_quantity, 30) || ' days')::INTERVAL
+          ELSE NOW() + (COALESCE(v_mail.attachment_item_quantity, 30) || ' days')::INTERVAL
+        END,
+        max_energy = 1000, max_internet = 1000,
+        energy = GREATEST(energy, 1000), internet = GREATEST(internet, 1000)
+      WHERE id = p_player_id;
+    END IF;
+  END IF;
+
+  -- Registrar transacciones
+  IF COALESCE(v_mail.attachment_gamecoin, 0) > 0 THEN
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'mail_claimed', v_mail.attachment_gamecoin, 'gamecoin',
+      'Mail from: ' || COALESCE((SELECT username FROM players WHERE id = v_mail.sender_id), 'System'));
+  END IF;
+  IF COALESCE(v_mail.attachment_crypto, 0) > 0 THEN
+    INSERT INTO transactions (player_id, type, amount, currency, description)
+    VALUES (p_player_id, 'mail_claimed', v_mail.attachment_crypto, 'crypto',
+      'Mail from: ' || COALESCE((SELECT username FROM players WHERE id = v_mail.sender_id), 'System'));
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'gamecoin', COALESCE(v_mail.attachment_gamecoin, 0),
+    'crypto', COALESCE(v_mail.attachment_crypto, 0),
+    'energy', COALESCE(v_mail.attachment_energy, 0),
+    'internet', COALESCE(v_mail.attachment_internet, 0),
+    'itemType', v_mail.attachment_item_type,
+    'itemId', v_mail.attachment_item_id,
+    'itemQuantity', COALESCE(v_mail.attachment_item_quantity, 0)
+  );
+END;
+$$;
+
+-- Eliminar correo (soft delete)
+CREATE OR REPLACE FUNCTION delete_mail(p_player_id UUID, p_mail_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_mail player_mail%ROWTYPE;
+BEGIN
+  SELECT * INTO v_mail FROM player_mail WHERE id = p_mail_id;
+
+  IF v_mail IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Mail not found');
+  END IF;
+
+  IF v_mail.recipient_id = p_player_id THEN
+    UPDATE player_mail SET is_deleted_recipient = TRUE WHERE id = p_mail_id;
+  ELSIF v_mail.sender_id = p_player_id THEN
+    UPDATE player_mail SET is_deleted_sender = TRUE WHERE id = p_mail_id;
+  ELSE
+    RETURN json_build_object('success', false, 'error', 'Not your mail');
+  END IF;
+
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+-- Admin: enviar correo del sistema
+CREATE OR REPLACE FUNCTION admin_send_mail(
+  p_target TEXT,
+  p_subject TEXT,
+  p_body TEXT DEFAULT NULL,
+  p_gamecoin DECIMAL DEFAULT 0,
+  p_crypto DECIMAL DEFAULT 0,
+  p_energy DECIMAL DEFAULT 0,
+  p_internet DECIMAL DEFAULT 0,
+  p_item_type TEXT DEFAULT NULL,
+  p_item_id TEXT DEFAULT NULL,
+  p_item_quantity INTEGER DEFAULT 0,
+  p_expires_at TIMESTAMPTZ DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_count INTEGER;
+  v_player_id UUID;
+  v_has_attachment BOOLEAN;
+  v_mail_size_kb INTEGER;
+BEGIN
+  v_has_attachment := (COALESCE(p_gamecoin, 0) > 0 OR COALESCE(p_crypto, 0) > 0 OR
+                       COALESCE(p_energy, 0) > 0 OR COALESCE(p_internet, 0) > 0 OR
+                       (p_item_type IS NOT NULL AND COALESCE(p_item_quantity, 0) > 0));
+
+  v_mail_size_kb := calculate_mail_size_kb(
+    p_subject, p_body, p_gamecoin, p_crypto, p_energy, p_internet, p_item_quantity
+  );
+
+  IF LOWER(TRIM(p_target)) = '@everyone' THEN
+    INSERT INTO player_mail (
+      sender_id, recipient_id, subject, body, mail_type,
+      attachment_gamecoin, attachment_crypto, attachment_energy, attachment_internet,
+      attachment_item_type, attachment_item_id, attachment_item_quantity,
+      is_claimed, expires_at, size_kb
+    )
+    SELECT
+      NULL, p.id, p_subject, p_body, 'admin',
+      COALESCE(p_gamecoin, 0), COALESCE(p_crypto, 0), COALESCE(p_energy, 0), COALESCE(p_internet, 0),
+      p_item_type, p_item_id, COALESCE(p_item_quantity, 0),
+      CASE WHEN v_has_attachment THEN FALSE ELSE TRUE END,
+      p_expires_at, v_mail_size_kb
+    FROM players p;
+
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    RETURN json_build_object('success', true, 'target', '@everyone', 'count', v_count);
+  ELSE
+    BEGIN
+      v_player_id := p_target::UUID;
+    EXCEPTION WHEN OTHERS THEN
+      RETURN json_build_object('success', false, 'error', 'Invalid target. Use @everyone or a valid UUID.');
+    END;
+
+    IF NOT EXISTS (SELECT 1 FROM players WHERE id = v_player_id) THEN
+      RETURN json_build_object('success', false, 'error', 'Player not found');
+    END IF;
+
+    INSERT INTO player_mail (
+      sender_id, recipient_id, subject, body, mail_type,
+      attachment_gamecoin, attachment_crypto, attachment_energy, attachment_internet,
+      attachment_item_type, attachment_item_id, attachment_item_quantity,
+      is_claimed, expires_at, size_kb
+    ) VALUES (
+      NULL, v_player_id, p_subject, p_body, 'admin',
+      COALESCE(p_gamecoin, 0), COALESCE(p_crypto, 0), COALESCE(p_energy, 0), COALESCE(p_internet, 0),
+      p_item_type, p_item_id, COALESCE(p_item_quantity, 0),
+      CASE WHEN v_has_attachment THEN FALSE ELSE TRUE END,
+      p_expires_at, v_mail_size_kb
+    );
+
+    RETURN json_build_object('success', true, 'target', v_player_id);
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_mail_unread_count TO authenticated;
+GRANT EXECUTE ON FUNCTION get_player_inbox TO authenticated;
+GRANT EXECUTE ON FUNCTION get_player_sent TO authenticated;
+GRANT EXECUTE ON FUNCTION read_mail TO authenticated;
+GRANT EXECUTE ON FUNCTION send_player_mail TO authenticated;
+GRANT EXECUTE ON FUNCTION claim_mail_attachment TO authenticated;
+GRANT EXECUTE ON FUNCTION delete_mail TO authenticated;
+GRANT EXECUTE ON FUNCTION admin_send_mail TO authenticated;
+GRANT EXECUTE ON FUNCTION calculate_mail_size_kb TO authenticated;
+GRANT EXECUTE ON FUNCTION get_mail_storage TO authenticated;
+
+-- Backfill size_kb for existing mails
+UPDATE player_mail
+SET size_kb = calculate_mail_size_kb(
+  subject, body,
+  attachment_gamecoin, attachment_crypto,
+  attachment_energy, attachment_internet,
+  attachment_item_quantity
+)
+WHERE size_kb = 0 OR size_kb IS NULL;
 
 -- =====================================================
 -- CRAFTING LORDS - MINI-JUEGO DE RECOLECCIÓN Y CRAFTEO

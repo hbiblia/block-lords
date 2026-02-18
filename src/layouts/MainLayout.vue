@@ -9,6 +9,7 @@ import { useMissionsStore } from '@/stores/missions';
 import { usePendingBlocksStore } from '@/stores/pendingBlocks';
 import { useMiningStore } from '@/stores/mining';
 import { useGiftsStore } from '@/stores/gifts';
+import { useMailStore } from '@/stores/mail';
 import { useDefenseStore } from '@/stores/defense';
 import { formatCompact } from '@/utils/format';
 
@@ -38,6 +39,11 @@ const showDefense = ref(false);
 const showForge = ref(false);
 const showPrediction = ref(false);
 const showGuide = ref(false);
+const showMail = ref(false);
+
+function openMail() {
+  showMail.value = true;
+}
 
 function openMarket() {
   showMarket.value = true;
@@ -70,6 +76,7 @@ import GiftModal from '@/components/GiftModal.vue';
 import DefenseModal from '@/components/DefenseModal.vue';
 import ForgeModal from '@/components/ForgeModal.vue';
 import PredictionModal from '@/components/PredictionModal.vue';
+import MailModal from '@/components/MailModal.vue';
 import MiningGuide from '@/components/MiningGuide.vue';
 import RewardCelebration from '@/components/RewardCelebration.vue';
 
@@ -80,6 +87,7 @@ const missionsStore = useMissionsStore();
 const pendingBlocksStore = usePendingBlocksStore();
 const miningStore = useMiningStore();
 const giftsStore = useGiftsStore();
+const mailStore = useMailStore();
 const defenseStore = useDefenseStore();
 
 // Combined rewards panel (missions + streak)
@@ -141,6 +149,9 @@ function handleOpenInventoryEvent() {
 function handleOpenPredictionEvent() {
   showPrediction.value = true;
 }
+function handleOpenMailEvent() {
+  showMail.value = true;
+}
 
 // Escuchar eventos
 onMounted(() => {
@@ -151,6 +162,7 @@ onMounted(() => {
   window.addEventListener('open-exchange', handleOpenExchangeEvent);
   window.addEventListener('open-inventory', handleOpenInventoryEvent);
   window.addEventListener('open-prediction', handleOpenPredictionEvent);
+  window.addEventListener('open-mail', handleOpenMailEvent);
   // Ad blocker detection (only in production)
   if (window.location.hostname !== 'localhost' && !window.location.hostname.startsWith('127.')) {
     detectAdBlocker();
@@ -168,6 +180,9 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
     // Cargar regalos pendientes y empezar polling
     giftsStore.fetchGifts();
     giftsStore.startPolling();
+    // Cargar correo y empezar polling
+    mailStore.fetchUnreadCount();
+    mailStore.startPolling();
     // Iniciar verificación periódica de sesión
     authStore.startSessionCheck();
     // Subscribe to lobby count for badge
@@ -188,6 +203,7 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
     missionsStore.stopHeartbeat();
     authStore.stopSessionCheck();
     giftsStore.stopPolling();
+    mailStore.stopPolling();
     defenseStore.unsubscribeLobbyCount();
   }
 }, { immediate: true });
@@ -201,6 +217,7 @@ onUnmounted(() => {
   missionsStore.stopHeartbeat();
   authStore.stopSessionCheck();
   giftsStore.stopPolling();
+  mailStore.stopPolling();
   defenseStore.unsubscribeLobbyCount();
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
   window.removeEventListener('pending-block-created', handlePendingBlockCreated as EventListener);
@@ -209,6 +226,7 @@ onUnmounted(() => {
   window.removeEventListener('open-exchange', handleOpenExchangeEvent);
   window.removeEventListener('open-inventory', handleOpenInventoryEvent);
   window.removeEventListener('open-prediction', handleOpenPredictionEvent);
+  window.removeEventListener('open-mail', handleOpenMailEvent);
 });
 
 // Connection status computed properties
@@ -401,6 +419,12 @@ async function handleConnectionClick() {
     <!-- Gift Modal -->
     <GiftModal />
 
+    <!-- Mail Modal -->
+    <MailModal
+      :show="showMail"
+      @close="showMail = false"
+    />
+
     <!-- Exchange Modal -->
     <ExchangeModal
       :show="showExchange"
@@ -505,6 +529,18 @@ async function handleConnectionClick() {
             >{{ t('defense.lobbyBubble', 'Someone wants to battle!') }}</span>
           </button>
 
+          <!-- Mail -->
+          <button @click="openMail" class="mobile-action-btn">
+            <div class="relative">
+              <span class="text-xl">📧</span>
+              <span
+                v-if="mailStore.hasUnread"
+                class="mobile-badge bg-accent-primary"
+              >{{ mailStore.unreadCount }}</span>
+            </div>
+            <span class="mobile-action-label">{{ t('mail.short', 'Mail') }}</span>
+          </button>
+
           <!-- Exchange -->
           <button @click="openExchange" class="mobile-action-btn">
             <span class="text-xl">💱</span>
@@ -567,6 +603,26 @@ async function handleConnectionClick() {
           <div class="text-left">
             <div class="text-xs font-semibold text-slate-200">{{ t('mining.market') }}</div>
             <div class="text-[10px] text-slate-400">{{ t('market.buyRigs') }}</div>
+          </div>
+        </button>
+
+        <!-- Mail Button -->
+        <button
+          @click="openMail"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
+        >
+          <div class="w-8 h-8 rounded-md flex items-center justify-center">
+            <span class="text-lg">📧</span>
+          </div>
+          <div class="text-left">
+            <div class="text-xs font-semibold text-slate-200">{{ t('mail.title', 'Mail') }}</div>
+            <div class="text-[10px] text-slate-400">{{ t('mail.inbox', 'Inbox') }}</div>
+          </div>
+          <div
+            v-if="mailStore.hasUnread"
+            class="ml-auto px-1.5 py-0.5 bg-accent-primary text-white text-[10px] font-bold rounded-full"
+          >
+            {{ mailStore.unreadCount }}
           </div>
         </button>
 
@@ -683,6 +739,11 @@ async function handleConnectionClick() {
               class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-green-500 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer animate-border-pulse-green"
               @click="openRewards()"
             >🎯 {{ (missionsStore.claimableCount || 0) + (streakStore.canClaim ? 1 : 0) }}</span>
+            <span
+              v-if="mailStore.hasUnread"
+              class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-accent-primary/50 rounded-lg text-[10px] font-bold text-accent-primary cursor-pointer"
+              @click="openMail"
+            >📧 {{ mailStore.unreadCount }}</span>
             <span
               v-if="defenseStore.lobbyCount > 0"
               class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-red-600/50 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer"

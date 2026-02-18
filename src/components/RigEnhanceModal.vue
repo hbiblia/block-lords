@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
 import { useToastStore } from '@/stores/toast';
-import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling, getPlayerBoosts, installBoostToRig, getRigBoosts, getRigUpgrades, upgradeRig, removeCoolingFromRig, removeBoostFromRig } from '@/utils/api';
+import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling, getPlayerBoosts, installBoostToRig, getRigBoosts, getRigUpgrades, upgradeRig, removeCoolingFromRig, removeBoostFromRig, applyRigPatch } from '@/utils/api';
 import { formatCrypto } from '@/utils/format';
 import { playSound } from '@/utils/sounds';
 import RepairMinigame from '@/components/RepairMinigame.vue';
@@ -21,6 +21,7 @@ interface RigData {
   temperature: number;
   max_condition?: number;
   times_repaired?: number;
+  patch_count?: number;
   rig: {
     id: string;
     name: string;
@@ -153,7 +154,7 @@ function toggleCoolingDetail(id: string) {
 // Confirmation dialog
 const showConfirm = ref(false);
 const confirmAction = ref<{
-  type: 'install' | 'repair' | 'delete' | 'boost' | 'upgrade' | 'destroy_cooling' | 'destroy_boost';
+  type: 'install' | 'repair' | 'delete' | 'boost' | 'upgrade' | 'destroy_cooling' | 'destroy_boost' | 'patch';
   data: {
     coolingId?: string;
     coolingName?: string;
@@ -387,6 +388,29 @@ const canAffordRepair = computed(() => {
   if (!authStore.player) return false;
   return (authStore.player.gamecoin_balance ?? 0) >= repairCost.value;
 });
+
+// Patch system computeds
+const patchCount = computed(() => props.rig?.patch_count ?? 0);
+const patchHashPenalty = computed(() =>
+  Math.round((1 - Math.pow(0.90, patchCount.value)) * 1000) / 10
+);
+const patchConsumptionPenalty = computed(() =>
+  Math.round((Math.pow(1.15, patchCount.value) - 1) * 1000) / 10
+);
+const patchCost = computed(() => {
+  if (!props.rig) return 0;
+  const repCost = props.rig.rig.repair_cost ?? 0;
+  return repCost * 0.002 * Math.pow(1.5, patchCount.value);
+});
+const canAffordPatch = computed(() =>
+  (authStore.player?.crypto_balance ?? 0) >= patchCost.value
+);
+const nextPatchHashPenalty = computed(() =>
+  Math.round((1 - Math.pow(0.90, patchCount.value + 1)) * 1000) / 10
+);
+const nextPatchConsumptionPenalty = computed(() =>
+  Math.round((Math.pow(1.15, patchCount.value + 1) - 1) * 1000) / 10
+);
 
 // Total cooling power installed (considering durability and mods)
 const totalCoolingPower = computed(() => {
@@ -894,6 +918,14 @@ function requestRepair() {
   showConfirm.value = true;
 }
 
+function requestPatch() {
+  confirmAction.value = {
+    type: 'patch',
+    data: {},
+  };
+  showConfirm.value = true;
+}
+
 async function handleMinigameComplete(success: boolean) {
   showMinigame.value = false;
 
@@ -1019,6 +1051,8 @@ async function confirmUse() {
       result = await removeCoolingFromRig(authStore.player.id, props.rig.id, data.coolingId);
     } else if (type === 'destroy_boost' && data.boostId) {
       result = await removeBoostFromRig(authStore.player.id, props.rig.id, data.boostId);
+    } else if (type === 'patch') {
+      result = await applyRigPatch(authStore.player.id, props.rig.id);
     }
 
     if (result?.success) {
@@ -1064,6 +1098,8 @@ async function confirmUse() {
         toastStore.success(`${data.coolingName} destruido`);
       } else if (type === 'destroy_boost' && data.boostName) {
         toastStore.success(`${data.boostName} destruido`);
+      } else if (type === 'patch') {
+        toastStore.success(`${rigName}: Patch #${result.patch_count} (+${result.condition_restored}%)`);
       }
     } else {
       processingStatus.value = 'error';
@@ -1195,7 +1231,7 @@ function closeProcessingModal() {
 
           <div v-else class="grid grid-cols-1 gap-6 pb-20">
             <!-- Active Effects Panel -->
-            <div v-if="installedCooling.length > 0 || coolantBoostPercent > 0 || hasUpgradeBonuses"
+            <div v-if="installedCooling.length > 0 || coolantBoostPercent > 0 || hasUpgradeBonuses || patchCount > 0"
               class="space-y-4">
               <div class="flex items-center justify-between border-b border-border pb-2 mb-2">
                 <h3 class="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
@@ -1266,9 +1302,25 @@ function closeProcessingModal() {
                     <span class="text-cyan-400 font-mono">-{{ rigUpgradeThermalBonus }}% <span class="text-xs opacity-70">(-{{ (rigBaseHeat * rigUpgradeThermalBonus / 100).toFixed(1) }}°)</span></span>
                   </div>
                 </div>
+
+                <!-- Patch penalties -->
+                <div v-if="patchCount > 0"
+                  class="flex flex-col gap-1 text-xs px-2 py-2 rounded bg-fuchsia-500/5 w-full">
+                  <div class="flex items-center justify-between w-full">
+                    <div class="flex items-center gap-2">
+                      <span>🩹</span>
+                      <span class="text-text-muted">{{ t('rigManage.patchPenalties') }}</span>
+                      <span class="text-fuchsia-400 text-[10px]">x{{ patchCount }}</span>
+                    </div>
+                  </div>
+                  <div class="flex gap-4 text-[10px] font-mono pl-6">
+                    <span class="text-status-danger">Hash: -{{ patchHashPenalty }}%</span>
+                    <span class="text-status-warning">{{ t('rigManage.consumption') }}: +{{ patchConsumptionPenalty }}%</span>
+                  </div>
+                </div>
               </div>
             </div>
-            
+
             <!-- LEFT COLUMN: Hardware & Boosts -->
             <div class="space-y-4">
               <div class="flex items-center justify-between border-b border-border pb-2 mb-2">
@@ -1528,6 +1580,32 @@ function closeProcessingModal() {
                    {{ t('rigManage.maxRepairsReached') }}
                  </div>
 
+                 <!-- Patch Box -->
+                 <div class="p-3 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/5">
+                   <div class="flex items-center justify-between gap-4">
+                     <div class="flex items-center gap-3">
+                       <div class="bg-bg-tertiary p-2 rounded">
+                         <div class="text-[10px] text-text-muted">{{ t('rigManage.patchesApplied') }}</div>
+                         <div class="font-mono font-bold text-sm text-fuchsia-400">{{ patchCount }}</div>
+                       </div>
+                       <div>
+                         <div class="text-xs text-text-muted">{{ t('rigManage.patchCost') }}: <span class="text-amber-400 font-mono">{{ formatCrypto(patchCost) }} BLC</span></div>
+                         <div class="text-xs text-status-success">+50% {{ t('rigManage.condition') }}</div>
+                         <div class="text-xs text-status-danger">-10% Hash / +15% {{ t('rigManage.consumption') }}</div>
+                       </div>
+                     </div>
+                     <button @click="requestPatch"
+                       :disabled="rig.is_active || processing || !canAffordPatch"
+                       class="px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-fuchsia-500 text-white hover:bg-fuchsia-400">
+                       {{ !canAffordPatch ? t('rigManage.insufficientFunds') : t('rigManage.applyPatch') }}
+                     </button>
+                   </div>
+                   <div v-if="patchCount > 0" class="mt-2 pt-2 border-t border-fuchsia-500/20 flex gap-4 text-[10px]">
+                     <span class="text-status-danger font-mono">Hash: -{{ patchHashPenalty }}%</span>
+                     <span class="text-status-warning font-mono">{{ t('rigManage.consumption') }}: +{{ patchConsumptionPenalty }}%</span>
+                   </div>
+                 </div>
+
                  <!-- Delete Zone -->
                  <div class="p-3 rounded-lg border border-status-danger/20 bg-status-danger/5">
                    <div class="flex items-center justify-between gap-4">
@@ -1555,10 +1633,10 @@ function closeProcessingModal() {
         <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
           <div class="text-center mb-4">
             <div class="text-4xl mb-3">
-              {{ confirmAction.type === 'install' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'repair' ? '🔧' : confirmAction.type === 'upgrade' ? '⬆️' : confirmAction.type === 'destroy_cooling' ? '❄️' : confirmAction.type === 'destroy_boost' ? '🚀' : '🗑️' }}
+              {{ confirmAction.type === 'install' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'repair' ? '🔧' : confirmAction.type === 'upgrade' ? '⬆️' : confirmAction.type === 'patch' ? '🩹' : confirmAction.type === 'destroy_cooling' ? '❄️' : confirmAction.type === 'destroy_boost' ? '🚀' : '🗑️' }}
             </div>
             <h3 class="text-lg font-bold mb-1">
-              {{ confirmAction.type === 'install' ? t('rigManage.confirmInstall') : confirmAction.type === 'boost' ? t('rigManage.confirmApplyBoost', 'Aplicar Boost') : confirmAction.type === 'repair' ? t('rigManage.confirmRepair') : confirmAction.type === 'upgrade' ? t('rigManage.confirmUpgrade', 'Confirmar Mejora') : (confirmAction.type === 'destroy_cooling' || confirmAction.type === 'destroy_boost') ? t('rigManage.confirmDestroy', 'Destruir Item') : t('rigManage.confirmDelete') }}
+              {{ confirmAction.type === 'install' ? t('rigManage.confirmInstall') : confirmAction.type === 'boost' ? t('rigManage.confirmApplyBoost', 'Aplicar Boost') : confirmAction.type === 'repair' ? t('rigManage.confirmRepair') : confirmAction.type === 'upgrade' ? t('rigManage.confirmUpgrade', 'Confirmar Mejora') : confirmAction.type === 'patch' ? t('rigManage.confirmPatch', 'Aplicar Parche') : (confirmAction.type === 'destroy_cooling' || confirmAction.type === 'destroy_boost') ? t('rigManage.confirmDestroy', 'Destruir Item') : t('rigManage.confirmDelete') }}
             </h3>
             <p class="text-text-muted text-sm">{{ t('inventory.confirm.areYouSure') }}</p>
           </div>
@@ -1622,6 +1700,24 @@ function closeProcessingModal() {
                 <span class="font-bold text-amber-400">💎 {{ formatCrypto(confirmAction.data.upgradeCost ?? 0) }}</span>
               </div>
             </template>
+            <template v-else-if="confirmAction.type === 'patch'">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">{{ t('rigManage.patchCost') }}</span>
+                <span class="font-bold text-amber-400">{{ formatCrypto(patchCost) }} BLC</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">{{ t('rigManage.conditionBonus') }}</span>
+                <span class="font-bold text-status-success">+50%</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-text-muted text-sm">Hashrate</span>
+                <span class="font-bold text-status-danger">-{{ nextPatchHashPenalty }}% (total)</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-text-muted text-sm">{{ t('rigManage.consumption') }}</span>
+                <span class="font-bold text-status-danger">+{{ nextPatchConsumptionPenalty }}% (total)</span>
+              </div>
+            </template>
             <template v-else-if="confirmAction.type === 'destroy_cooling'">
               <p class="text-sm text-status-danger mb-3">{{ t('rigManage.destroyWarning', 'Este item será destruido permanentemente y no podrá recuperarse.') }}</p>
               <div class="flex items-center justify-between mb-2">
@@ -1676,7 +1772,9 @@ function closeProcessingModal() {
                     ? 'bg-amber-500 text-white hover:bg-amber-400'
                     : confirmAction.type === 'upgrade'
                       ? 'bg-amber-500 text-black hover:bg-amber-400'
-                      : 'bg-cyan-500 text-white hover:bg-cyan-400'"
+                      : confirmAction.type === 'patch'
+                        ? 'bg-fuchsia-500 text-white hover:bg-fuchsia-400'
+                        : 'bg-cyan-500 text-white hover:bg-cyan-400'"
             >
               {{ (confirmAction.type === 'destroy_cooling' || confirmAction.type === 'destroy_boost') ? t('rigManage.destroy', 'Destruir') : t('common.confirm') }}
             </button>

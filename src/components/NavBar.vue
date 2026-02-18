@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 import { useMiningStore } from '@/stores/mining';
+import { useMailStore } from '@/stores/mail';
 import { toggleLocale, getLocale } from '@/plugins/i18n';
 import { useSound } from '@/composables/useSound';
 import { formatGamecoin, formatCrypto, formatCompact, formatNumber } from '@/utils/format';
@@ -18,7 +19,12 @@ const router = useRouter();
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
 const miningStore = useMiningStore();
+const mailStore = useMailStore();
 const { soundEnabled, toggle: toggleSound, play } = useSound();
+
+function openMail() {
+  window.dispatchEvent(new CustomEvent('open-mail'));
+}
 
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 const username = computed(() => authStore.player?.username ?? 'Player');
@@ -194,6 +200,19 @@ async function handleLogout() {
               >{{ Math.round(internet) }}/{{ Math.round(maxInternet) }}</span>
             </div>
           </div>
+
+          <!-- Mail Button -->
+          <button
+            @click="openMail"
+            class="relative flex items-center justify-center w-9 h-9 rounded-lg hover:bg-bg-tertiary transition-colors"
+            :title="t('mail.title', 'Mail')"
+          >
+            <span class="text-lg">📧</span>
+            <span
+              v-if="mailStore.hasUnread"
+              class="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center bg-accent-primary text-white text-[9px] font-bold rounded-full shadow-sm"
+            >{{ mailStore.unreadCount }}</span>
+          </button>
 
           <!-- Profile Dropdown -->
           <div class="relative">

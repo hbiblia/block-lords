@@ -299,6 +299,16 @@ export async function repairRig(playerId: string, rigId: string) {
   return data;
 }
 
+export async function applyRigPatch(playerId: string, rigId: string) {
+  const { data, error } = await supabase.rpc('apply_rig_patch', {
+    p_player_id: playerId,
+    p_rig_id: rigId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 export async function deleteRig(playerId: string, rigId: string) {
   const { data, error } = await supabase.rpc('delete_rig', {
     p_player_id: playerId,
@@ -1752,4 +1762,86 @@ export async function cancelPredictionBet(playerId: string, betId: string) {
   }
 
   return data;
+}
+
+// === MAIL SYSTEM ===
+
+export async function getPlayerInbox(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_inbox', {
+    p_player_id: playerId,
+  });
+}
+
+export async function getPlayerSent(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_sent', {
+    p_player_id: playerId,
+  });
+}
+
+export async function getMailUnreadCount(playerId: string): Promise<any> {
+  return rpcWithRetry('get_mail_unread_count', {
+    p_player_id: playerId,
+  });
+}
+
+export async function readMail(playerId: string, mailId: string): Promise<any> {
+  return rpcWithRetry('read_mail', {
+    p_player_id: playerId,
+    p_mail_id: mailId,
+  });
+}
+
+export async function sendPlayerMail(params: {
+  senderId: string;
+  recipientUsername: string;
+  subject: string;
+  body?: string;
+  password?: string;
+  gamecoin?: number;
+  crypto?: number;
+  energy?: number;
+  internet?: number;
+  itemType?: string;
+  itemId?: string;
+  itemQuantity?: number;
+}): Promise<any> {
+  const { data, error } = await supabase.rpc('send_player_mail', {
+    p_sender_id: params.senderId,
+    p_recipient_username: params.recipientUsername,
+    p_subject: params.subject,
+    p_body: params.body || null,
+    p_password: params.password || null,
+    p_gamecoin: params.gamecoin || 0,
+    p_crypto: params.crypto || 0,
+    p_energy: params.energy || 0,
+    p_internet: params.internet || 0,
+    p_item_type: params.itemType || null,
+    p_item_id: params.itemId || null,
+    p_item_quantity: params.itemQuantity || 0,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function claimMailAttachment(playerId: string, mailId: string, password?: string): Promise<any> {
+  return rpcWithRetry('claim_mail_attachment', {
+    p_player_id: playerId,
+    p_mail_id: mailId,
+    p_password: password || null,
+  }, { critical: true, maxRetries: 5 });
+}
+
+export async function deletePlayerMail(playerId: string, mailId: string): Promise<any> {
+  const { data, error } = await supabase.rpc('delete_mail', {
+    p_player_id: playerId,
+    p_mail_id: mailId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getMailStorage(playerId: string): Promise<any> {
+  return rpcWithRetry('get_mail_storage', {
+    p_player_id: playerId,
+  });
 }
