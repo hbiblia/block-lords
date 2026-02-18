@@ -27,7 +27,9 @@
       "WebFetch(domain:api.dexscreener.com)",
       "WebFetch(domain:api.geckoterminal.com)",
       "Bash(git -C /d/software/block-lords log --oneline -10)",
-      "Bash(git -C /d/software/block-lords ls-files)"
+      "Bash(git -C /d/software/block-lords ls-files)",
+      "Bash(ls:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

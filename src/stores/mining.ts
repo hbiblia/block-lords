@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { supabase } from '@/utils/supabase';
-import { getPlayerRigs, getNetworkStats, getRecentMiningBlocks, getRigCooling, getRigBoosts, getPlayerSlotInfo, getPlayerBoosts, toggleRig as apiToggleRig } from '@/utils/api';
+import { getPlayerRigs, getNetworkStats, getRecentMiningBlocks, getRigCooling, getRigBoosts, getPlayerSlotInfo, getPlayerBoosts, toggleRig as apiToggleRig, getPendingBlocks } from '@/utils/api';
 import { useAuthStore } from './auth';
 import { useNotificationsStore } from './notifications';
 import { useToastStore } from './toast';
@@ -963,13 +963,35 @@ export const useMiningStore = defineStore('mining', () => {
       if (error) throw error;
       currentMiningBlock.value = data;
 
-      // Block just closed (was active, now inactive or different block number) → reload recent blocks
-      // Note: reward celebration is handled by realtime.ts subscribeToPendingBlocks()
-      // which dispatches 'pending-block-created' when the DB inserts the pending_block.
-      // We must NOT dispatch it here too, or the animation shows twice.
+      // Block just closed (was active, now inactive or different block number)
       if (wasActive && (!data?.active || data?.block_number !== prevBlockNumber)) {
         loadRecentBlocks();
         loadPlayerShares();
+
+        // Fetch latest pending block and trigger reward animation
+        const authStore = useAuthStore();
+        if (authStore.player?.id) {
+          try {
+            const pending = await getPendingBlocks(authStore.player.id, 1, 0);
+            const latest = pending?.blocks?.[0];
+            if (latest) {
+              window.dispatchEvent(
+                new CustomEvent('pending-block-created', {
+                  detail: {
+                    id: latest.id,
+                    block_id: latest.block_id,
+                    reward: latest.reward,
+                    is_premium: latest.is_premium,
+                    materials_dropped: latest.materials_dropped || [],
+                    created_at: latest.created_at,
+                  },
+                })
+              );
+            }
+          } catch (e) {
+            // Non-critical: animation is nice-to-have
+          }
+        }
       }
     } catch (e: any) {
       if (e?.name !== 'AbortError' && !e?.message?.includes('AbortError')) console.error('Error loading mining block info:', e);

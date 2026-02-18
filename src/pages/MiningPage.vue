@@ -10,6 +10,8 @@ import { useWakeLock } from '@/composables/useWakeLock';
 import { isTabLocked } from '@/composables/useTabLock';
 import { useMiningEstimate } from '@/composables/useMiningEstimate';
 import RigEnhanceModal from '@/components/RigEnhanceModal.vue';
+import RigStatsModal from '@/components/RigStatsModal.vue';
+import { useRigStats } from '@/composables/useRigStats';
 import MiningTips from '@/components/MiningTips.vue';
 import MiningTour from '@/components/MiningTour.vue';
 import { useMiningTour } from '@/composables/useMiningTour';
@@ -32,6 +34,21 @@ const {
 // Modals
 const showRigManage = ref(false);
 const selectedRigForManage = ref<typeof miningStore.rigs[0] | null>(null);
+const showRigStats = ref(false);
+const selectedRigForStats = ref<typeof miningStore.rigs[0] | null>(null);
+
+// Rig stats collection
+const { captureSnapshots } = useRigStats();
+
+function openRigStats(rig: typeof miningStore.rigs[0]) {
+  selectedRigForStats.value = rig;
+  showRigStats.value = true;
+}
+
+function closeRigStats() {
+  showRigStats.value = false;
+  selectedRigForStats.value = null;
+}
 
 // Slot purchase
 const buyingSlot = ref(false);
@@ -674,11 +691,15 @@ onMounted(() => {
 
   // Actualizar datos de rigs cada 30 segundos (temperatura, condición, etc.)
   // Necesario porque realtime skippea UPDATEs de player_rigs para evitar flood del game_tick
-  rigsRefreshInterval = setInterval(() => {
+  rigsRefreshInterval = setInterval(async () => {
     if (rigs.value.some(r => r.is_active)) {
-      miningStore.reloadRigs();
+      await miningStore.reloadRigs();
+      captureSnapshots();
     }
   }, 30000) as unknown as number;
+
+  // Captura inicial de stats
+  captureSnapshots();
 
   window.addEventListener('block-mined', handleBlockMined as EventListener);
   window.addEventListener('start-mining-tour', startTour);
@@ -1086,7 +1107,7 @@ onUnmounted(() => {
               <!-- === SLOT SECTION === -->
               <div v-if="getSlotForRig(playerRig.id)" class="px-3 pt-2.5 pb-2 space-y-1.5">
                 <!-- Mining indicator dot -->
-                <div v-if="playerRig.is_active" class="absolute top-2.5 right-2.5">
+                <div v-if="playerRig.is_active && playerRig.condition > 0" class="absolute top-2.5 right-2.5">
                   <span class="relative flex h-2.5 w-2.5">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-success opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-status-success"></span>
@@ -1171,13 +1192,13 @@ onUnmounted(() => {
                         ? 'text-status-warning'
                         : 'text-white')
                     : 'text-text-muted'" :key="uptimeKey">
-                    {{ playerRig.is_active ? Math.round(miningStore.getRigEffectiveHashrate(playerRig)).toLocaleString() : '0' }}
+                    {{ playerRig.is_active && playerRig.condition > 0 ? Math.round(miningStore.getRigEffectiveHashrate(playerRig)).toLocaleString() : '0' }}
                   </span>
                   <span class="text-xs text-text-muted">
                     / {{ getUpgradedHashrate(playerRig).toLocaleString() }} H/s
                     <span v-if="(playerRig.hashrate_level ?? 1) > 1" class="text-yellow-400 text-[10px]">(+{{ getHashrateBonus(playerRig) }}%)</span>
                   </span>
-                  <span v-if="playerRig.is_active && miningStore.getRigHashrateBoostPercent(playerRig) > 0"
+                  <span v-if="playerRig.is_active && playerRig.condition > 0 && miningStore.getRigHashrateBoostPercent(playerRig) > 0"
                     class="text-[10px] text-status-success font-medium">
                     (+{{ miningStore.getRigHashrateBoostPercent(playerRig) }}% ⚡)
                   </span>
@@ -1217,11 +1238,11 @@ onUnmounted(() => {
                     <span class="text-[11px]">🌡️</span>
                     <div class="flex-1 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                       <div class="h-full rounded-full transition-all"
-                        :class="getTempBarColor(playerRig.temperature ?? 25)"
-                        :style="{ width: `${playerRig.temperature ?? 25}%` }"></div>
+                        :class="getTempBarColor(playerRig.condition <= 0 ? 0 : (playerRig.temperature ?? 25))"
+                        :style="{ width: `${playerRig.condition <= 0 ? 0 : (playerRig.temperature ?? 25)}%` }"></div>
                     </div>
-                    <span class="text-[10px] whitespace-nowrap" :class="getTempColor(playerRig.temperature ?? 25)">
-                      {{ (playerRig.temperature ?? 25).toFixed(0) }}°C
+                    <span class="text-[10px] whitespace-nowrap" :class="getTempColor(playerRig.condition <= 0 ? 0 : (playerRig.temperature ?? 25))">
+                      {{ playerRig.condition <= 0 ? '0' : (playerRig.temperature ?? 25).toFixed(0) }}°C
                     </span>
                   </div>
                   <div v-tooltip="t('mining.tooltips.condition')" class="flex items-center gap-1.5 cursor-help">
@@ -1248,6 +1269,11 @@ onUnmounted(() => {
                         ? 'bg-status-danger/10 text-status-danger hover:bg-status-danger/20'
                         : 'bg-status-success/10 text-status-success hover:bg-status-success/20'">
                     {{ playerRig.condition <= 0 ? '🔧 ' + t('mining.repairInInventory') : (playerRig.is_active ? '⏹ ' + t('mining.stop') : '▶ ' + t('mining.start')) }}
+                  </button>
+                  <button @click="openRigStats(playerRig)"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all bg-bg-tertiary hover:bg-bg-tertiary/80 text-text-muted hover:text-white"
+                    title="Stats">
+                    📊
                   </button>
                   <button @click="openRigManage(playerRig)"
                     class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all bg-bg-tertiary hover:bg-bg-tertiary/80 text-text-muted hover:text-white"
@@ -1550,6 +1576,8 @@ onUnmounted(() => {
     <!-- Rig Enhance Modal -->
     <RigEnhanceModal :show="showRigManage" :rig="selectedRigForManage" @close="closeRigManage"
       @updated="handleRigUpdated" />
+
+    <RigStatsModal :show="showRigStats" :rig="selectedRigForStats" @close="closeRigStats" />
 
     <!-- Slot Purchase Confirmation Modal -->
     <Teleport to="body">
