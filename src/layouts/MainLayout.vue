@@ -41,10 +41,6 @@ const showPrediction = ref(false);
 const showGuide = ref(false);
 const showMail = ref(false);
 
-function openMail() {
-  showMail.value = true;
-}
-
 function openMarket() {
   showMarket.value = true;
 }
@@ -529,18 +525,6 @@ async function handleConnectionClick() {
             >{{ t('defense.lobbyBubble', 'Someone wants to battle!') }}</span>
           </button>
 
-          <!-- Mail -->
-          <button @click="openMail" class="mobile-action-btn">
-            <div class="relative">
-              <span class="text-xl">📧</span>
-              <span
-                v-if="mailStore.hasUnread"
-                class="mobile-badge bg-accent-primary"
-              >{{ mailStore.unreadCount }}</span>
-            </div>
-            <span class="mobile-action-label">{{ t('mail.short', 'Mail') }}</span>
-          </button>
-
           <!-- Exchange -->
           <button @click="openExchange" class="mobile-action-btn">
             <span class="text-xl">💱</span>
@@ -603,26 +587,6 @@ async function handleConnectionClick() {
           <div class="text-left">
             <div class="text-xs font-semibold text-slate-200">{{ t('mining.market') }}</div>
             <div class="text-[10px] text-slate-400">{{ t('market.buyRigs') }}</div>
-          </div>
-        </button>
-
-        <!-- Mail Button -->
-        <button
-          @click="openMail"
-          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
-        >
-          <div class="w-8 h-8 rounded-md flex items-center justify-center">
-            <span class="text-lg">📧</span>
-          </div>
-          <div class="text-left">
-            <div class="text-xs font-semibold text-slate-200">{{ t('mail.title', 'Mail') }}</div>
-            <div class="text-[10px] text-slate-400">{{ t('mail.inbox', 'Inbox') }}</div>
-          </div>
-          <div
-            v-if="mailStore.hasUnread"
-            class="ml-auto px-1.5 py-0.5 bg-accent-primary text-white text-[10px] font-bold rounded-full"
-          >
-            {{ mailStore.unreadCount }}
           </div>
         </button>
 
@@ -739,11 +703,6 @@ async function handleConnectionClick() {
               class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-green-500 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer animate-border-pulse-green"
               @click="openRewards()"
             >🎯 {{ (missionsStore.claimableCount || 0) + (streakStore.canClaim ? 1 : 0) }}</span>
-            <span
-              v-if="mailStore.hasUnread"
-              class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-accent-primary/50 rounded-lg text-[10px] font-bold text-accent-primary cursor-pointer"
-              @click="openMail"
-            >📧 {{ mailStore.unreadCount }}</span>
             <span
               v-if="defenseStore.lobbyCount > 0"
               class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-red-600/50 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer"

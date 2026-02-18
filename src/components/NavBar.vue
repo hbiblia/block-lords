@@ -210,7 +210,7 @@ async function handleLogout() {
             <span class="text-lg">📧</span>
             <span
               v-if="mailStore.hasUnread"
-              class="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center bg-accent-primary text-white text-[9px] font-bold rounded-full shadow-sm"
+              class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full shadow-lg animate-bounce"
             >{{ mailStore.unreadCount }}</span>
           </button>
 

@@ -66,6 +66,36 @@ export const useMailStore = defineStore('mail', () => {
 
   const hasUnread = computed(() => unreadCount.value > 0);
 
+  function playMailSound() {
+    try {
+      const ctx = new AudioContext();
+      const now = ctx.currentTime;
+
+      // Classic "You've got mail" two-tone chime
+      const notes = [
+        { freq: 784, start: 0, dur: 0.15 },     // G5
+        { freq: 1047, start: 0.18, dur: 0.25 },  // C6
+      ];
+
+      for (const note of notes) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = note.freq;
+        gain.gain.setValueAtTime(0.3, now + note.start);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + note.start + note.dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + note.start);
+        osc.stop(now + note.start + note.dur + 0.05);
+      }
+
+      setTimeout(() => ctx.close(), 1000);
+    } catch {
+      // Audio not available
+    }
+  }
+
   async function fetchInbox() {
     const authStore = useAuthStore();
     if (!authStore.player?.id) return;
@@ -105,7 +135,11 @@ export const useMailStore = defineStore('mail', () => {
     try {
       const result = await getMailUnreadCount(authStore.player.id);
       if (result?.success) {
+        const prev = unreadCount.value;
         unreadCount.value = result.count;
+        if (result.count > prev && prev >= 0) {
+          playMailSound();
+        }
       }
     } catch (e) {
       console.error('Error fetching unread count:', e);
