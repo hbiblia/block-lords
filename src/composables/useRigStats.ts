@@ -26,9 +26,34 @@ export interface RigStatsSummary {
 }
 
 const MAX_SNAPSHOTS = 120; // ~1 hour at 30s ticks
+const STORAGE_KEY = 'lootmine_rig_stats';
 
-// Module-level singleton: shared across all component instances, persists until page reload
-const rigSnapshots = ref<Map<string, RigSnapshot[]>>(new Map());
+// --- localStorage persistence ---
+function loadSnapshots(): Map<string, RigSnapshot[]> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const obj = JSON.parse(raw) as Record<string, RigSnapshot[]>;
+      return new Map(Object.entries(obj));
+    }
+  } catch (e) {
+    console.error('Error loading rig stats cache:', e);
+  }
+  return new Map();
+}
+
+function saveSnapshots(data: Map<string, RigSnapshot[]>) {
+  try {
+    const obj: Record<string, RigSnapshot[]> = {};
+    data.forEach((snaps, id) => { obj[id] = snaps; });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+  } catch (e) {
+    console.error('Error saving rig stats cache:', e);
+  }
+}
+
+// Module-level singleton: shared across all component instances, persists via localStorage
+const rigSnapshots = ref<Map<string, RigSnapshot[]>>(loadSnapshots());
 
 export function useRigStats() {
   const miningStore = useMiningStore();
@@ -36,6 +61,14 @@ export function useRigStats() {
   function captureSnapshots() {
     const now = Date.now();
     for (const rig of miningStore.rigs) {
+      // If rig has no durability, clear its snapshots and skip
+      if (rig.condition <= 0) {
+        if (rigSnapshots.value.has(rig.id)) {
+          rigSnapshots.value.delete(rig.id);
+        }
+        continue;
+      }
+
       const snapshots = rigSnapshots.value.get(rig.id) ?? [];
 
       snapshots.push({
@@ -61,6 +94,9 @@ export function useRigStats() {
 
       rigSnapshots.value.set(rig.id, snapshots);
     }
+
+    // Persist to localStorage after each capture
+    saveSnapshots(rigSnapshots.value);
   }
 
   function getSnapshots(rigId: string): RigSnapshot[] {

@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
-import { buyRigSlot, getExchangeRateHistory, getExchangeRates, upgradeSlotTier } from '@/utils/api';
+import { buyRigSlot, upgradeSlotTier } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { useRigSound } from '@/composables/useSound';
 import { useWakeLock } from '@/composables/useWakeLock';
@@ -11,6 +11,7 @@ import { isTabLocked } from '@/composables/useTabLock';
 import { useMiningEstimate } from '@/composables/useMiningEstimate';
 import RigEnhanceModal from '@/components/RigEnhanceModal.vue';
 import RigStatsModal from '@/components/RigStatsModal.vue';
+import ExchangeRateChart from '@/components/ExchangeRateChart.vue';
 import { useRigStats } from '@/composables/useRigStats';
 import MiningTips from '@/components/MiningTips.vue';
 import MiningTour from '@/components/MiningTour.vue';
@@ -39,6 +40,9 @@ const selectedRigForStats = ref<typeof miningStore.rigs[0] | null>(null);
 
 // Rig stats collection
 const { captureSnapshots } = useRigStats();
+
+// Exchange rate chart ref
+const exchangeRateChartRef = ref<InstanceType<typeof ExchangeRateChart> | null>(null);
 
 function openRigStats(rig: typeof miningStore.rigs[0]) {
   selectedRigForStats.value = rig;
@@ -91,83 +95,6 @@ function toggleRecentBlocks() {
   localStorage.setItem('recentBlocksCollapsed', String(recentBlocksCollapsed.value));
 }
 
-// Exchange rate chart
-const rateHistory = ref<{ rate: number; recorded_at: string }[]>([]);
-const currentRate = ref<number | null>(null);
-const previousRate = ref<number | null>(null);
-const loadingChart = ref(false);
-
-const rateTrend = computed(() => {
-  if (currentRate.value === null || previousRate.value === null) return 'neutral';
-  if (currentRate.value > previousRate.value) return 'up';
-  if (currentRate.value < previousRate.value) return 'down';
-  return 'neutral';
-});
-
-const rateChangePercent = computed(() => {
-  if (!currentRate.value || !previousRate.value) return 0;
-  return ((currentRate.value - previousRate.value) / previousRate.value * 100);
-});
-
-const chartPath = computed(() => {
-  if (rateHistory.value.length < 2) return '';
-  const points = [...rateHistory.value].reverse();
-  const rates = points.map(p => p.rate);
-  const min = Math.min(...rates);
-  const max = Math.max(...rates);
-  const range = max - min || 1;
-  const w = 280;
-  const h = 80;
-  const pad = 4;
-
-  return points.map((p, i) => {
-    const x = pad + (i / (points.length - 1)) * (w - pad * 2);
-    const y = pad + (1 - (p.rate - min) / range) * (h - pad * 2);
-    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-});
-
-const chartAreaPath = computed(() => {
-  if (!chartPath.value) return '';
-  const points = [...rateHistory.value].reverse();
-  const w = 280;
-  const h = 80;
-  const pad = 4;
-  const lastX = pad + ((points.length - 1) / (points.length - 1)) * (w - pad * 2);
-  const firstX = pad;
-  return `${chartPath.value} L${lastX.toFixed(1)},${h} L${firstX.toFixed(1)},${h} Z`;
-});
-
-const chartMinMax = computed(() => {
-  if (rateHistory.value.length < 2) return { min: 0, max: 0 };
-  const rates = rateHistory.value.map(p => p.rate);
-  return { min: Math.min(...rates), max: Math.max(...rates) };
-});
-
-function formatRate(rate: number): string {
-  if (rate >= 1) return rate.toFixed(2);
-  if (rate >= 0.01) return rate.toFixed(3);
-  return rate.toFixed(4);
-}
-
-async function loadRateChart() {
-  loadingChart.value = true;
-  try {
-    const [history, rates] = await Promise.all([
-      getExchangeRateHistory(50),
-      getExchangeRates(),
-    ]);
-    if (history) rateHistory.value = history;
-    if (rates) {
-      currentRate.value = rates.crypto_to_gamecoin;
-      previousRate.value = rates.crypto_to_gamecoin_previous;
-    }
-  } catch (e) {
-    console.error('Error loading rate chart:', e);
-  } finally {
-    loadingChart.value = false;
-  }
-}
 
 // Uptime timer
 const uptimeKey = ref(0);
@@ -439,6 +366,9 @@ function handleBlockMined(event: CustomEvent) {
   const { block, winner } = event.detail;
   miningStore.handleBlockMined(block, winner);
 
+  // Refresh exchange rate chart when a block is mined (rates may change)
+  exchangeRateChartRef.value?.refresh();
+
   if (winner?.id === authStore.player?.id) {
     lastBlockFound.value = block;
     showBlockFound.value = true;
@@ -670,9 +600,6 @@ onMounted(() => {
   startMiningSimulation();
   startUptimeTimer();
   requestWakeLock();
-
-  // Exchange rate chart
-  loadRateChart();
 
   // Nuevo sistema de shares
   miningStore.loadMiningBlockInfo();
@@ -1505,58 +1432,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Exchange Rate Chart -->
-          <div class="card p-3">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="text-sm font-semibold flex items-center gap-1.5 text-text-muted">
-                <span>📈</span> {{ t('mining.rateChart.title') }}
-                <span v-if="currentRate !== null" class="font-mono text-status-warning">{{ formatRate(currentRate) }} 🪙</span>
-                <span
-                  v-if="rateTrend !== 'neutral'"
-                  class="text-[10px] font-bold px-1 py-0.5 rounded"
-                  :class="rateTrend === 'up' ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'"
-                >{{ rateTrend === 'up' ? '▲' : '▼' }} {{ Math.abs(rateChangePercent).toFixed(1) }}%</span>
-              </h3>
-              <button @click="loadRateChart" class="text-text-muted hover:text-white transition-colors p-0.5 rounded" :title="t('mining.rateChart.refresh')">
-                <span class="text-xs" :class="loadingChart ? 'animate-spin inline-block' : ''">🔄</span>
-              </button>
-            </div>
-
-            <!-- SVG Chart -->
-            <div v-if="loadingChart" class="flex items-center justify-center py-6">
-              <span class="animate-spin w-5 h-5 border-2 border-accent-primary border-t-transparent rounded-full"></span>
-            </div>
-            <div v-else-if="rateHistory.length >= 2" class="relative">
-              <svg viewBox="0 0 280 80" class="w-full h-auto" preserveAspectRatio="none">
-                <!-- Grid lines -->
-                <line x1="4" y1="4" x2="276" y2="4" stroke="currentColor" class="text-border" stroke-width="0.5" stroke-dasharray="4 4" />
-                <line x1="4" y1="40" x2="276" y2="40" stroke="currentColor" class="text-border" stroke-width="0.5" stroke-dasharray="4 4" />
-                <line x1="4" y1="76" x2="276" y2="76" stroke="currentColor" class="text-border" stroke-width="0.5" stroke-dasharray="4 4" />
-                <!-- Area fill -->
-                <path
-                  :d="chartAreaPath"
-                  :fill="rateTrend === 'down' ? 'rgba(248,113,113,0.1)' : 'rgba(74,222,128,0.1)'"
-                />
-                <!-- Line -->
-                <path
-                  :d="chartPath"
-                  fill="none"
-                  :stroke="rateTrend === 'down' ? '#f87171' : '#4ade80'"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              <!-- Min/Max labels -->
-              <div class="flex justify-between text-[10px] text-text-muted font-mono mt-0.5 px-1">
-                <span>{{ formatRate(chartMinMax.min) }}</span>
-                <span class="text-text-muted/50">{{ rateHistory.length }} {{ t('mining.rateChart.blocks') }}</span>
-                <span>{{ formatRate(chartMinMax.max) }}</span>
-              </div>
-            </div>
-            <div v-else class="text-center py-4 text-text-muted text-xs">
-              {{ t('mining.rateChart.noData') }}
-            </div>
-          </div>
+          <ExchangeRateChart ref="exchangeRateChartRef" />
 
           <!-- AdSense Banner -->
           <div class="card p-3 text-center">

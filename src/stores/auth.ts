@@ -537,6 +537,9 @@ export const useAuthStore = defineStore('auth', () => {
     needsUsername.value = false;
     hasAppliedRegeneration.value = false;
     stopSessionCheck();
+
+    // Refrescar la app para limpiar todo el estado
+    window.location.reload();
   }
 
   // Iniciar verificación periódica de sesión
