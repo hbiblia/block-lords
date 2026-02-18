@@ -858,6 +858,17 @@ CREATE POLICY "Eliminar cooling de propios rigs"
   USING (player_id = auth.uid());
 
 -- =====================================================
+-- POLÍTICAS PARA PLAYER_FRIENDS (Amigos del jugador)
+-- =====================================================
+
+ALTER TABLE player_friends ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ver propias amistades" ON player_friends;
+CREATE POLICY "Ver propias amistades"
+  ON player_friends FOR SELECT
+  USING (sender_id = auth.uid() OR receiver_id = auth.uid());
+
+-- =====================================================
 -- SUPABASE REALTIME - Publicación de tablas
 -- =====================================================
 -- Las tablas deben estar en la publication supabase_realtime

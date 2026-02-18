@@ -1152,8 +1152,9 @@ onUnmounted(() => {
                     <span v-if="getPatchConsumptionPercent(playerRig) > 0" class="text-fuchsia-400">(+{{ getPatchConsumptionPercent(playerRig) }}% 🩹)</span>
                   </span>
                   <span v-tooltip="t('mining.tooltips.internet')" class="flex items-center gap-1 cursor-help">
-                    <span class="text-accent-tertiary">📡</span>{{ (playerRig.rig.internet_consumption * (1 - (playerRig.efficiency_bonus ?? 0) / 100)).toFixed(0) }}/t
+                    <span class="text-accent-tertiary">📡</span>{{ (playerRig.rig.internet_consumption * (1 - (playerRig.efficiency_bonus ?? 0) / 100) * getPatchConsumptionMultiplier(playerRig)).toFixed(0) }}/t
                     <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">(-{{ getEfficiencyBonus(playerRig) }}%)</span>
+                    <span v-if="getPatchConsumptionPercent(playerRig) > 0" class="text-fuchsia-400">(+{{ getPatchConsumptionPercent(playerRig) }}% 🩹)</span>
                   </span>
                   <span v-if="rigCooling[playerRig.id]?.length > 0 || getThermalBonus(playerRig) > 0"
                     v-tooltip="t('mining.tooltips.cooling')" class="flex items-center gap-1 cursor-help">

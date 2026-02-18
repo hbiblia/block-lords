@@ -280,7 +280,8 @@ export const useMiningStore = defineStore('mining', () => {
       .filter(r => r.is_active)
       .reduce((sum, r) => {
         const efficiencyBonus = r.efficiency_bonus ?? 0;
-        return sum + r.rig.internet_consumption * (1 - efficiencyBonus / 100);
+        const patchMult = Math.pow(1.15, r.patch_count ?? 0);
+        return sum + r.rig.internet_consumption * (1 - efficiencyBonus / 100) * patchMult;
       }, 0)
   );
 
@@ -328,7 +329,9 @@ export const useMiningStore = defineStore('mining', () => {
     boostMultiplier *= (1 + hashrateBonus / 100);
     // Warm-up: 0% → 100% en 5 minutos tras encender
     const warmup = getRigWarmupMultiplier(rig);
-    return rig.rig.hashrate * conditionPenalty * tempPenalty * boostMultiplier * warmup;
+    // Patch penalty: -10% hashrate per patch (multiplicative)
+    const patchPenalty = Math.pow(0.90, rig.patch_count ?? 0);
+    return rig.rig.hashrate * conditionPenalty * tempPenalty * boostMultiplier * warmup * patchPenalty;
   }
 
   function getRigHashrateBoostPercent(rig: PlayerRig): number {
@@ -351,7 +354,9 @@ export const useMiningStore = defineStore('mining', () => {
     const tempPenalty = 1 + Math.max(0, (temp - 40)) * 0.0083;
     // Apply efficiency upgrade bonus (reduces consumption)
     const efficiencyBonus = rig.efficiency_bonus ?? 0;
-    return rig.rig.power_consumption * tempPenalty * (1 - efficiencyBonus / 100);
+    // Patch penalty: +15% consumption per patch (multiplicative)
+    const patchMult = Math.pow(1.15, rig.patch_count ?? 0);
+    return rig.rig.power_consumption * tempPenalty * (1 - efficiencyBonus / 100) * patchMult;
   }
 
   function getPowerPenaltyPercent(rig: PlayerRig): number {
