@@ -727,12 +727,10 @@ BEGIN
 END;
 $$;
 
--- Aplicar parche de emergencia al rig
+-- Aplicar parche de emergencia al rig (consume 1 patch del inventario)
 -- Restaura +50% condición pero penaliza permanentemente:
 --   -10% hashrate por parche (multiplicativo: POWER(0.90, patch_count))
 --   +15% consumo por parche (multiplicativo: POWER(1.15, patch_count))
--- Ilimitado en stacking, se paga con Crypto (BLC)
--- Costo escala +50% por cada parche previo
 CREATE OR REPLACE FUNCTION apply_rig_patch(p_player_id UUID, p_rig_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -740,11 +738,10 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_rig RECORD;
-  v_player players%ROWTYPE;
-  v_patch_cost NUMERIC;
   v_current_patches INTEGER;
   v_new_condition NUMERIC;
   v_condition_restored NUMERIC;
+  v_patch_qty NUMERIC;
 BEGIN
   -- Obtener rig con datos base
   SELECT pr.*, r.name as rig_name, r.repair_cost
@@ -762,17 +759,16 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Rig must be stopped');
   END IF;
 
-  v_current_patches := COALESCE(v_rig.patch_count, 0);
+  -- Verificar patch en inventario
+  SELECT quantity INTO v_patch_qty
+  FROM player_inventory
+  WHERE player_id = p_player_id AND item_type = 'patch' AND item_id = 'rig_patch';
 
-  -- Costo: repair_cost * 0.002 BLC (escalado por patch count +50% cada vez)
-  v_patch_cost := (v_rig.repair_cost * 0.002) * POWER(1.5, v_current_patches);
-
-  -- Verificar balance
-  SELECT * INTO v_player FROM players WHERE id = p_player_id;
-  IF v_player.crypto_balance < v_patch_cost THEN
-    RETURN json_build_object('success', false, 'error', 'Insufficient crypto',
-      'cost', v_patch_cost, 'balance', v_player.crypto_balance);
+  IF COALESCE(v_patch_qty, 0) < 1 THEN
+    RETURN json_build_object('success', false, 'error', 'No patches in inventory');
   END IF;
+
+  v_current_patches := COALESCE(v_rig.patch_count, 0);
 
   -- Restaurar 50% de condición (respetando max_condition)
   v_new_condition := LEAST(
@@ -781,8 +777,13 @@ BEGIN
   );
   v_condition_restored := v_new_condition - v_rig.condition;
 
-  -- Cobrar crypto
-  UPDATE players SET crypto_balance = crypto_balance - v_patch_cost WHERE id = p_player_id;
+  -- Consumir 1 patch del inventario
+  UPDATE player_inventory
+  SET quantity = quantity - 1
+  WHERE player_id = p_player_id AND item_type = 'patch' AND item_id = 'rig_patch';
+
+  DELETE FROM player_inventory
+  WHERE player_id = p_player_id AND item_type = 'patch' AND item_id = 'rig_patch' AND quantity <= 0;
 
   -- Aplicar parche
   UPDATE player_rigs
@@ -793,13 +794,12 @@ BEGIN
 
   -- Registrar transacción
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'rig_patch', -v_patch_cost, 'crypto',
+  VALUES (p_player_id, 'rig_patch', 0, 'gamecoin',
     'Patch #' || (v_current_patches + 1) || ' on ' || v_rig.rig_name ||
     ' (+' || v_condition_restored || '% condition, -10% hash, +15% consumption)');
 
   RETURN json_build_object(
     'success', true,
-    'cost', v_patch_cost,
     'old_condition', v_rig.condition,
     'new_condition', v_new_condition,
     'condition_restored', v_condition_restored,
@@ -807,6 +807,53 @@ BEGIN
     'hashrate_penalty', ROUND((1 - POWER(0.90, v_current_patches + 1)) * 100, 1),
     'consumption_penalty', ROUND((POWER(1.15, v_current_patches + 1) - 1) * 100, 1)
   );
+END;
+$$;
+
+-- Comprar parche de rig en tienda (500 GC)
+CREATE OR REPLACE FUNCTION buy_rig_patch(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_price NUMERIC := 500;
+BEGIN
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+
+  -- Check inventory capacity
+  IF NOT EXISTS (SELECT 1 FROM player_inventory WHERE player_id = p_player_id AND item_type = 'patch' AND item_id = 'rig_patch' AND quantity > 0) THEN
+    IF count_inventory_slots(p_player_id) >= get_max_inventory_slots(p_player_id) THEN
+      RETURN json_build_object('success', false, 'error', 'inventory_full');
+    END IF;
+  ELSE
+    IF (SELECT quantity FROM player_inventory WHERE player_id = p_player_id AND item_type = 'patch' AND item_id = 'rig_patch') >= 10 THEN
+      RETURN json_build_object('success', false, 'error', 'stack_full');
+    END IF;
+  END IF;
+
+  -- Verificar balance
+  IF v_player.gamecoin_balance < v_price THEN
+    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+  END IF;
+
+  -- Descontar GameCoin
+  UPDATE players SET gamecoin_balance = gamecoin_balance - v_price WHERE id = p_player_id;
+
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'patch_purchase', -v_price, 'gamecoin', 'Compra de Rig Patch');
+
+  -- Agregar al inventario
+  INSERT INTO player_inventory (player_id, item_type, item_id)
+  VALUES (p_player_id, 'patch', 'rig_patch')
+  ON CONFLICT (player_id, item_type, item_id)
+  DO UPDATE SET quantity = player_inventory.quantity + 1;
+
+  RETURN json_build_object('success', true);
 END;
 $$;
 
@@ -1665,6 +1712,7 @@ DECLARE
   v_base_heat NUMERIC;
   v_heat_after_upgrade NUMERIC;
   v_active_rig_count INT;
+  v_consumption_flux NUMERIC;
 BEGIN
   -- Procesar jugadores que están ONLINE o tienen rigs con autonomous mining boost
   FOR v_player IN
@@ -1733,22 +1781,27 @@ BEGIN
       LEFT JOIN player_cooling_items pci ON pci.id = rc.player_cooling_item_id
       WHERE rc.player_rig_id = v_rig.id AND rc.durability > 0;
 
+      -- Fluctuación variable de consumo por rig (85% a 100% del máximo)
+      v_consumption_flux := 0.85 + (random() * 0.15);
+
       -- Calcular consumo de energía del rig:
       -- Base + penalización por temperatura + consumo de refrigeración
       -- Temperatura > 40°C aumenta consumo hasta 50% extra a 100°C
       -- Aplicar multiplicador de boost de energy_saver (por rig)
       -- Aplicar bonus de eficiencia del upgrade (reduce consumo)
       -- Penalización por parches: +15% consumo por parche (acumulativo multiplicativo)
+      -- Fluctuación variable: nunca supera el máximo (factor <= 1.0)
       v_total_power := v_total_power +
         ((v_rig.power_consumption * (1 + GREATEST(0, (v_rig.temperature - 40)) * 0.0083)) +
         v_rig_cooling_energy) * v_energy_mult * (1 - v_efficiency_bonus / 100.0)
-        * POWER(1.15, v_rig.patch_count);
+        * POWER(1.15, v_rig.patch_count) * v_consumption_flux;
 
       -- Aplicar multiplicador de boost de bandwidth_optimizer (por rig)
       -- Aplicar bonus de eficiencia del upgrade (reduce consumo)
       -- Penalización por parches: +15% consumo por parche (acumulativo multiplicativo)
+      -- Fluctuación variable: misma fluctuación que energía
       v_total_internet := v_total_internet + (v_rig.internet_consumption * v_internet_mult * (1 - v_efficiency_bonus / 100.0))
-        * POWER(1.15, v_rig.patch_count);
+        * POWER(1.15, v_rig.patch_count) * v_consumption_flux;
 
       -- Calcular hashrate efectivo para determinar generación de calor
       -- Solo genera calor si está minando efectivamente
@@ -2290,6 +2343,14 @@ BEGIN
       RETURN json_build_object('success', false, 'error', 'Energía insuficiente');
     ELSIF p_item_type = 'internet' AND v_player.internet < p_quantity THEN
       RETURN json_build_object('success', false, 'error', 'Internet insuficiente');
+    ELSIF p_item_type = 'patch' THEN
+      IF COALESCE((SELECT quantity FROM player_inventory WHERE player_id = p_player_id AND item_type = 'patch' AND item_id = 'rig_patch'), 0) < p_quantity THEN
+        RETURN json_build_object('success', false, 'error', 'Patches insuficientes');
+      END IF;
+      -- Reservar patches del inventario
+      UPDATE player_inventory SET quantity = quantity - p_quantity
+      WHERE player_id = p_player_id AND item_type = 'patch' AND item_id = 'rig_patch';
+      DELETE FROM player_inventory WHERE player_id = p_player_id AND item_type = 'patch' AND item_id = 'rig_patch' AND quantity <= 0;
     END IF;
   END IF;
 
@@ -2386,6 +2447,12 @@ BEGIN
     WHEN 'internet' THEN
       UPDATE players SET internet = GREATEST(0, internet - p_quantity) WHERE id = v_seller_id;
       UPDATE players SET internet = LEAST(max_internet, internet + p_quantity) WHERE id = v_buyer_id;
+    WHEN 'patch' THEN
+      -- Seller inventory already deducted at order creation; give to buyer
+      INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+      VALUES (v_buyer_id, 'patch', 'rig_patch', p_quantity)
+      ON CONFLICT (player_id, item_type, item_id)
+      DO UPDATE SET quantity = player_inventory.quantity + p_quantity;
     ELSE NULL;
   END CASE;
 
@@ -2435,6 +2502,12 @@ BEGIN
   IF v_order.type = 'buy' THEN
     v_refund := v_order.remaining_quantity * v_order.price_per_unit;
     UPDATE players SET gamecoin_balance = gamecoin_balance + v_refund WHERE id = p_player_id;
+  ELSIF v_order.type = 'sell' AND v_order.item_type = 'patch' THEN
+    -- Devolver patches al inventario
+    INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+    VALUES (p_player_id, 'patch', 'rig_patch', v_order.remaining_quantity)
+    ON CONFLICT (player_id, item_type, item_id)
+    DO UPDATE SET quantity = player_inventory.quantity + v_order.remaining_quantity;
   END IF;
 
   UPDATE market_orders SET status = 'cancelled' WHERE id = p_order_id;
@@ -2970,6 +3043,14 @@ BEGIN
         JOIN cooling_components cc ON cc.id = pi.item_id
         WHERE pi.player_id = p_player_id AND pi.item_type = 'component' AND pi.quantity > 0
         ORDER BY cc.base_price ASC
+      ) t
+    ),
+    'patches', (
+      SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+      FROM (
+        SELECT pi.id as inventory_id, pi.item_id, pi.quantity
+        FROM player_inventory pi
+        WHERE pi.player_id = p_player_id AND pi.item_type = 'patch' AND pi.quantity > 0
       ) t
     ),
     'cards', (
@@ -6260,13 +6341,6 @@ BEGIN
   DELETE FROM player_materials WHERE player_id = p_player_id;
   DELETE FROM player_cooling_items WHERE player_id = p_player_id;
 
-  -- Shares & mining history
-  DELETE FROM share_history WHERE player_id = p_player_id;
-  DELETE FROM player_shares WHERE player_id = p_player_id;
-
-  -- Pending blocks (incluye materials_dropped)
-  DELETE FROM pending_blocks WHERE player_id = p_player_id;
-
   -- Gifts
   DELETE FROM player_gifts WHERE player_id = p_player_id;
 
@@ -6276,6 +6350,13 @@ BEGIN
 
   -- Rigs (cascadea a rig_cooling y rig_boosts)
   DELETE FROM player_rigs WHERE player_id = p_player_id;
+
+  -- Shares & mining history (después de eliminar rigs)
+  DELETE FROM share_history WHERE player_id = p_player_id;
+  DELETE FROM player_shares WHERE player_id = p_player_id;
+
+  -- Pending blocks (incluye materials_dropped)
+  DELETE FROM pending_blocks WHERE player_id = p_player_id;
 
   -- Rig inventory
   DELETE FROM player_rig_inventory WHERE player_id = p_player_id;
@@ -7575,6 +7656,7 @@ DECLARE
   v_current_accumulator NUMERIC;  -- ⚙️ Acumulador actual del jugador
   v_new_accumulator NUMERIC;      -- ⚙️ Nuevo acumulador después de generación
   v_warmup_mult NUMERIC;          -- Multiplicador de calentamiento al encender rig
+  v_hash_flux NUMERIC;             -- Fluctuación variable de hashrate (±3%)
 BEGIN
   -- Obtener bloque de minería actual
   SELECT current_mining_block_id, difficulty
@@ -7655,6 +7737,10 @@ BEGIN
       v_warmup_mult := GREATEST(0.0, v_warmup_mult);
       v_effective_hashrate := v_effective_hashrate * v_warmup_mult;
     END IF;
+
+    -- Fluctuación variable de hashrate (±3% por rig por tick)
+    v_hash_flux := 0.97 + (random() * 0.06);
+    v_effective_hashrate := v_effective_hashrate * v_hash_flux;
 
     -- Calcular probabilidad de generar shares
     -- Fórmula: (hashrate_efectivo / dificultad) * tick_duration * luck_multiplier
@@ -8463,6 +8549,7 @@ GRANT EXECUTE ON FUNCTION get_referral_info TO authenticated;
 GRANT EXECUTE ON FUNCTION apply_referral_code TO authenticated;
 GRANT EXECUTE ON FUNCTION upgrade_rig TO authenticated;
 GRANT EXECUTE ON FUNCTION apply_rig_patch TO authenticated;
+GRANT EXECUTE ON FUNCTION buy_rig_patch TO authenticated;
 GRANT EXECUTE ON FUNCTION get_pending_blocks TO authenticated;
 GRANT EXECUTE ON FUNCTION get_pending_blocks_count TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_block TO authenticated;
@@ -8770,7 +8857,7 @@ CREATE TABLE IF NOT EXISTS player_mail (
   recipient_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   subject TEXT NOT NULL CHECK (length(subject) >= 1 AND length(subject) <= 100),
   body TEXT CHECK (body IS NULL OR length(body) <= 2000),
-  mail_type TEXT NOT NULL DEFAULT 'player' CHECK (mail_type IN ('player', 'system', 'admin')),
+  mail_type TEXT NOT NULL DEFAULT 'player' CHECK (mail_type IN ('player', 'system', 'admin', 'ticket')),
   -- Attachment fields (mismo patron que player_gifts)
   attachment_gamecoin DECIMAL(10,2) DEFAULT 0,
   attachment_crypto DECIMAL(10,8) DEFAULT 0,
@@ -9422,6 +9509,120 @@ SET size_kb = calculate_mail_size_kb(
   attachment_item_quantity
 )
 WHERE size_kb = 0 OR size_kb IS NULL;
+
+-- Migración: agregar 'ticket' al constraint de mail_type
+ALTER TABLE player_mail DROP CONSTRAINT IF EXISTS player_mail_mail_type_check;
+ALTER TABLE player_mail ADD CONSTRAINT player_mail_mail_type_check CHECK (mail_type IN ('player', 'system', 'admin', 'ticket'));
+
+-- =====================================================
+-- SUPPORT TICKETS (@ticket)
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION send_support_ticket(
+  p_sender_id UUID,
+  p_subject TEXT,
+  p_body TEXT DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_sender RECORD;
+  v_today_count INTEGER;
+  v_send_cost_energy NUMERIC := 5;
+  v_mail_size_kb INTEGER;
+  v_mail_id UUID;
+BEGIN
+  -- Validar subject
+  IF p_subject IS NULL OR length(trim(p_subject)) < 1 THEN
+    RETURN json_build_object('success', false, 'error', 'Subject is required');
+  END IF;
+  IF length(p_subject) > 100 THEN
+    RETURN json_build_object('success', false, 'error', 'Subject too long (max 100)');
+  END IF;
+  IF p_body IS NOT NULL AND length(p_body) > 2000 THEN
+    RETURN json_build_object('success', false, 'error', 'Body too long (max 2000)');
+  END IF;
+
+  -- Obtener datos del sender
+  SELECT * INTO v_sender FROM players WHERE id = p_sender_id;
+  IF v_sender IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Sender not found');
+  END IF;
+
+  -- Limite diario de tickets (3/dia)
+  SELECT COUNT(*) INTO v_today_count
+  FROM player_mail
+  WHERE sender_id = p_sender_id
+    AND mail_type = 'ticket'
+    AND created_at::date = CURRENT_DATE;
+
+  IF v_today_count >= 3 THEN
+    RETURN json_build_object('success', false, 'error', 'Daily ticket limit reached (3/day)');
+  END IF;
+
+  -- Verificar energia
+  IF v_sender.energy < v_send_cost_energy THEN
+    RETURN json_build_object('success', false, 'error', 'Not enough energy to send ticket', 'required', v_send_cost_energy);
+  END IF;
+
+  -- Calcular tamano
+  v_mail_size_kb := calculate_mail_size_kb(p_subject, COALESCE(p_body, ''), 0, 0, 0, 0, 0);
+
+  -- Cobrar energia
+  UPDATE players SET energy = GREATEST(0, energy - v_send_cost_energy) WHERE id = p_sender_id;
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_sender_id, 'ticket_send_cost', v_send_cost_energy, 'energy', 'Support ticket send cost');
+
+  -- Insertar ticket (recipient_id = sender_id para NOT NULL, is_deleted_recipient = TRUE para no aparecer en inbox)
+  INSERT INTO player_mail (
+    sender_id, recipient_id, subject, body, mail_type,
+    is_read, is_claimed, is_deleted_recipient, size_kb
+  ) VALUES (
+    p_sender_id, p_sender_id, trim(p_subject), p_body, 'ticket',
+    FALSE, TRUE, TRUE, v_mail_size_kb
+  ) RETURNING id INTO v_mail_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'ticketId', v_mail_id,
+    'dailyRemaining', 3 - v_today_count - 1
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION admin_get_tickets()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_tickets JSON;
+BEGIN
+  SELECT json_agg(t ORDER BY t.created_at DESC) INTO v_tickets
+  FROM (
+    SELECT
+      m.id,
+      m.sender_id,
+      p.username AS sender_username,
+      m.subject,
+      m.body,
+      m.is_read,
+      m.created_at
+    FROM player_mail m
+    JOIN players p ON p.id = m.sender_id
+    WHERE m.mail_type = 'ticket'
+    ORDER BY m.created_at DESC
+    LIMIT 100
+  ) t;
+
+  RETURN json_build_object('success', true, 'tickets', COALESCE(v_tickets, '[]'::json));
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION send_support_ticket TO authenticated;
+GRANT EXECUTE ON FUNCTION admin_get_tickets TO authenticated;
 
 -- =====================================================
 -- CRAFTING LORDS - MINI-JUEGO DE RECOLECCIÓN Y CRAFTEO

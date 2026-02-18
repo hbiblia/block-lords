@@ -7,6 +7,7 @@ import {
   getMailStorage,
   readMail as apiReadMail,
   sendPlayerMail,
+  sendSupportTicket,
   claimMailAttachment,
   deletePlayerMail,
 } from '@/utils/api';
@@ -19,7 +20,7 @@ export interface Mail {
   recipient_username?: string;
   subject: string;
   body: string | null;
-  mail_type: 'player' | 'system' | 'admin';
+  mail_type: 'player' | 'system' | 'admin' | 'ticket';
   attachment_gamecoin: number;
   attachment_crypto: number;
   attachment_energy: number;
@@ -213,6 +214,32 @@ export const useMailStore = defineStore('mail', () => {
     }
   }
 
+  async function sendTicket(params: { subject: string; body?: string }) {
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) return null;
+    sending.value = true;
+    error.value = null;
+    try {
+      const result = await sendSupportTicket(
+        authStore.player.id,
+        params.subject,
+        params.body,
+      );
+      if (result?.success) {
+        await authStore.fetchPlayer();
+        return result;
+      } else {
+        error.value = result?.error || 'Error sending ticket';
+        return null;
+      }
+    } catch (e: any) {
+      error.value = e.message || 'Error sending ticket';
+      return null;
+    } finally {
+      sending.value = false;
+    }
+  }
+
   async function claimAttachment(mailId: string, password?: string): Promise<MailClaimResult | null> {
     const authStore = useAuthStore();
     if (!authStore.player?.id) return null;
@@ -315,6 +342,7 @@ export const useMailStore = defineStore('mail', () => {
     fetchStorage,
     markAsRead,
     sendMail,
+    sendTicket,
     claimAttachment,
     removeMail,
     selectMail,

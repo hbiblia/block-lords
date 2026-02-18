@@ -219,6 +219,7 @@ export default {
     you: 'You!',
     unknown: 'Unknown',
     yourStats: 'Your Statistics',
+    stats: 'Rig Stats',
     hashrate: 'Hashrate',
     activeRigsLabel: 'Active Rigs',
     probPerBlock: 'Prob. per Block',
@@ -361,6 +362,7 @@ export default {
       cards: 'Prepaid Cards',
       boosts: 'Power-Ups',
       crypto: 'Buy Landwork',
+      patch: 'Supplies',
     },
     rigs: {
       description: 'Buy new rigs to increase your mining power...',
@@ -405,6 +407,13 @@ export default {
         autonomous_mining: 'Autonomous mining while offline',
       },
     },
+    patch: {
+      name: 'Rig Patch',
+      universal: 'Universal',
+      desc: 'Restores +50% rig condition. Penalty: -10% hashrate, +15% consumption.',
+      type: 'Consumable',
+      inventory: 'in inventory',
+    },
     confirmPurchase: {
       title: 'Confirm Purchase',
       question: 'Do you want to buy this item?',
@@ -424,6 +433,7 @@ export default {
       errorBuyingCard: 'Error purchasing card. Please try again.',
       errorBuyingBoost: 'Error purchasing boost. Please try again.',
       errorBuyingCrypto: 'Error purchasing Landwork package. Please try again.',
+      errorBuyingPatch: 'Error purchasing patch. Please try again.',
       packageNotFound: 'Package not found.',
     },
     wallet: {
@@ -785,6 +795,12 @@ export default {
       noBoosts: "You don't have any boosts. Buy them in the market.",
       installHint: 'Activate boosts from your inventory to enhance mining performance.',
     },
+    patch: {
+      install: 'Install',
+      selectRig: 'Select Rig',
+      selectRigHint: 'Choose the rig to apply the patch to',
+      noRigs: "You don't have any installed rigs",
+    },
     delete: {
       button: 'Discard',
       title: 'Discard Item',
@@ -1017,6 +1033,7 @@ export default {
       upgradeHashBonus: '<b>⚡ Hashrate Upgrade</b><br>+{value}% (+{abs} Hash)<br><span style="opacity:0.7">Permanent mining speed</span>',
       upgradeEffBonus: '<b>💡 Efficiency Upgrade</b><br>-{value}% (-{abs} W)<br><span style="opacity:0.7">Reduces energy & internet</span>',
       upgradeThermalBonus: '<b>❄️ Thermal Upgrade</b><br>-{value}% (-{abs}°)<br><span style="opacity:0.7">Reduces base heat</span>',
+      patchPenalties: '<b>🩹 Patches Applied: {count}</b><br>Hashrate: <span style="color:#f87171">-{hash}%</span><br>Consumption: <span style="color:#fbbf24">+{consumption}%</span><br><span style="opacity:0.7">Each patch restores +50% condition but adds cumulative penalties</span>',
     },
   },
 
@@ -1980,6 +1997,18 @@ export default {
       title: 'How to Play Guide',
       description: 'A complete <strong class="text-amber-400">How to Play</strong> guide is now available from the footer. It covers all game mechanics: mining, rigs, temperature, resources, currencies, and upgrades. Accessible from any page!',
     },
+    mailbox: {
+      title: 'Mailbox',
+      description: 'New <strong class="text-amber-400">Mail system</strong>! Send messages to other players with <strong class="text-cyan-400">resource attachments</strong> (GC, BLC, Energy, Internet). You can protect attachments with a <strong class="text-emerald-400">password</strong>. Limit of 10 mails per day. Also supports <strong class="text-fuchsia-400">&#64;ticket</strong> to send support tickets directly to admins.',
+    },
+    newSupply: {
+      title: 'New Supply: Rig Patch',
+      description: 'A new item is available in the Market: <strong class="text-amber-400">🩹 Rig Patch</strong> (500 GC). It restores <strong class="text-emerald-400">+50% condition</strong> to your rig without counting as a repair. Trade-off: <strong class="text-red-400">-10% hashrate</strong> and <strong class="text-orange-400">+15% consumption</strong> per patch applied (cumulative).',
+    },
+    repairPriceDown: {
+      title: 'Repair Price Reduction',
+      description: 'Rig repair costs have been <strong class="text-emerald-400">reduced to 30%</strong> of the base repair cost. Repairs are now much more affordable so you can keep your rigs running longer.',
+    },
     button: 'Got it!',
   },
 
@@ -2359,7 +2388,7 @@ export default {
     noMail: 'No messages',
     noMailHint: 'Your inbox is empty',
     noSentMail: 'No sent messages',
-    to: 'To (username)',
+    to: 'To',
     subject: 'Subject',
     body: 'Message',
     bodyPlaceholder: 'Write your message...',
@@ -2403,5 +2432,11 @@ export default {
     storageWarning: 'Almost full!',
     estimatedSize: '~{size} KB',
     errorMailboxFull: "Recipient's mailbox is full",
+    toPlaceholder: "username or {'@'}ticket",
+    sendTicket: 'Send Ticket',
+    ticketHint: 'You are sending a support ticket to admin. No attachments allowed.',
+    ticketSent: 'Support ticket sent!',
+    ticketLimit: '3 tickets/day',
+    ticketBodyPlaceholder: 'Describe your issue...',
   },
 };

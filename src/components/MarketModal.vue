@@ -78,7 +78,7 @@ function handleClose() {
   emit('close');
 }
 
-const activeFilter = ref<'all' | 'rigs' | 'cooling' | 'energy' | 'internet' | 'boosts' | 'crypto'>('all');
+const activeFilter = ref<'all' | 'rigs' | 'cooling' | 'energy' | 'internet' | 'boosts' | 'crypto' | 'patch'>('all');
 
 // Mobile category popup
 const showMobileCategories = ref(false);
@@ -104,7 +104,7 @@ function getCategoryIcon(category: typeof activeFilter.value): string {
 // Confirmation dialog state
 const showConfirm = ref(false);
 const confirmAction = ref<{
-  type: 'rig' | 'cooling' | 'card' | 'boost' | 'crypto_package' | 'component';
+  type: 'rig' | 'cooling' | 'card' | 'boost' | 'crypto_package' | 'component' | 'patch';
   id: string;
   name: string;
   price: number;
@@ -516,6 +516,36 @@ async function buyBoost(boostId: string) {
   }
 }
 
+function requestBuyPatch() {
+  confirmAction.value = {
+    type: 'patch',
+    id: 'rig_patch',
+    name: t('market.patch.name', 'Rig Patch'),
+    price: 500,
+    description: t('market.patch.desc', 'Restores +50% rig condition. Penalty: -10% hashrate, +15% consumption.'),
+    currency: 'gamecoin',
+  };
+  showConfirm.value = true;
+}
+
+async function buyPatch() {
+  if (!authStore.player) return;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
+
+  const result = await marketStore.buyPatch();
+
+  if (result.success) {
+    closeProcessingModal();
+    toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
+    emit('purchased');
+  } else {
+    processingStatus.value = 'error';
+    processingError.value = result.error ?? 'Error buying patch';
+  }
+}
+
 function requestBuyCryptoPackage(pkg: CryptoPackageType) {
   const bonusText = pkg.bonus_percent > 0 ? ` (+${pkg.bonus_percent}% bonus)` : '';
   confirmAction.value = {
@@ -569,6 +599,8 @@ async function confirmPurchase() {
     await buyCard(id);
   } else if (type === 'boost') {
     await buyBoost(id);
+  } else if (type === 'patch') {
+    await buyPatch();
   } else if (type === 'crypto_package') {
     await buyCryptoPackage(id);
   } else if (type === 'component') {
@@ -708,6 +740,16 @@ watch(() => props.show, (newVal) => {
             >
               <span>💎</span>
               <span>{{ t('market.tabs.crypto', 'Landwork') }}</span>
+            </button>
+            <button
+              @click="activeFilter = 'patch'"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left"
+              :class="activeFilter === 'patch'
+                ? 'bg-gradient-to-r from-fuchsia-500/20 to-pink-500/20 text-fuchsia-400'
+                : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
+            >
+              <span>🩹</span>
+              <span>{{ t('market.tabs.patch', 'Supplies') }}</span>
             </button>
           </div>
 
@@ -1097,6 +1139,57 @@ watch(() => props.show, (newVal) => {
                 </div>
               </template>
 
+              <!-- Rig Patch -->
+              <template v-if="activeFilter === 'all' || activeFilter === 'patch'">
+                <div
+                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col bg-fuchsia-500/10 border-fuchsia-500/30 transition-all hover:scale-[1.01]"
+                >
+                  <div class="flex items-start justify-between mb-1 sm:mb-2">
+                    <div class="min-w-0 flex-1">
+                      <h4 class="font-medium text-xs sm:text-sm text-fuchsia-400 truncate">{{ t('market.patch.name', 'Rig Patch') }}</h4>
+                      <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ t('market.patch.type', 'Consumable') }}</p>
+                    </div>
+                    <span class="text-lg sm:text-2xl ml-1">🩹</span>
+                  </div>
+
+                  <div class="flex items-center justify-between mb-0.5 sm:mb-1">
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ t('rigManage.condition') }}</span>
+                    <span class="font-mono font-bold text-xs sm:text-sm text-status-success">+50%</span>
+                  </div>
+
+                  <div class="flex items-center justify-between mb-0.5 sm:mb-1">
+                    <span class="text-[10px] sm:text-xs text-text-muted">Hashrate</span>
+                    <span class="font-mono text-xs sm:text-sm text-status-danger">-10%</span>
+                  </div>
+
+                  <div class="flex items-center justify-between mb-1 sm:mb-2">
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ t('rigManage.consumption') }}</span>
+                    <span class="font-mono text-xs sm:text-sm text-status-warning">+15%</span>
+                  </div>
+
+                  <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ t('market.patch.desc', 'Restores +50% rig condition. Penalty: -10% hashrate, +15% consumption.') }}</p>
+
+                  <div v-if="marketStore.getPatchOwned() > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
+                    <span class="px-1.5 sm:px-2 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-400">
+                      {{ marketStore.getPatchOwned() }} {{ t('market.patch.inventory', 'in inventory') }}
+                    </span>
+                  </div>
+
+                  <div class="mt-auto">
+                    <button
+                      @click="requestBuyPatch()"
+                      class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
+                      :class="balance >= 500
+                        ? 'bg-fuchsia-500 text-white hover:bg-fuchsia-400'
+                        : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
+                      :disabled="purchaseDisabled || balance < 500"
+                    >
+                      {{ buying ? '...' : '500 🪙' }}
+                    </button>
+                  </div>
+                </div>
+              </template>
+
               <!-- Crypto Packages (RON) -->
               <template v-if="activeFilter === 'all' || activeFilter === 'crypto'">
                 <div
@@ -1183,7 +1276,7 @@ watch(() => props.show, (newVal) => {
         <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
           <div class="text-center mb-4">
             <div class="text-4xl mb-3">
-              {{ confirmAction.type === 'rig' ? '⛏️' : confirmAction.type === 'cooling' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'crypto_package' ? '💎' : '💳' }}
+              {{ confirmAction.type === 'rig' ? '⛏️' : confirmAction.type === 'cooling' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'crypto_package' ? '💎' : confirmAction.type === 'patch' ? '🩹' : '💳' }}
             </div>
             <h3 class="text-lg font-bold mb-1">{{ t('market.confirmPurchase.title') }}</h3>
             <p class="text-text-muted text-sm">{{ t('market.confirmPurchase.question') }}</p>
@@ -1332,6 +1425,16 @@ watch(() => props.show, (newVal) => {
               >
                 <span class="text-lg">💎</span>
                 <span class="text-[10px] font-medium">Landwork</span>
+              </button>
+              <button
+                @click="selectCategory('patch')"
+                class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-colors"
+                :class="activeFilter === 'patch'
+                  ? 'bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/30'
+                  : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
+              >
+                <span class="text-lg">🩹</span>
+                <span class="text-[10px] font-medium">{{ t('market.tabs.patch', 'Supplies') }}</span>
               </button>
             </div>
           </div>

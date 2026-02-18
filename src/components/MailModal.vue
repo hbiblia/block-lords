@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMailStore, type Mail } from '@/stores/mail';
 import { useAuthStore } from '@/stores/auth';
@@ -22,6 +22,7 @@ const emit = defineEmits<{
 
 // Compose form
 const composeTo = ref('');
+const composeToConfirmed = ref(false);
 const composeSubject = ref('');
 const composeBody = ref('');
 const composePassword = ref('');
@@ -30,6 +31,7 @@ const composeCrypto = ref(0);
 const composeEnergy = ref(0);
 const composeInternet = ref(0);
 const showPasswordField = ref(false);
+const subjectInputRef = ref<HTMLInputElement | null>(null);
 
 // File picker
 const showFilePicker = ref(false);
@@ -134,8 +136,50 @@ watch(() => props.show, (val) => {
   }
 });
 
+const DRAFT_KEY = 'lootmail_draft';
+
+function saveDraft() {
+  const draft = {
+    to: composeTo.value,
+    toConfirmed: composeToConfirmed.value,
+    subject: composeSubject.value,
+    body: composeBody.value,
+    gamecoin: composeGamecoin.value,
+    crypto: composeCrypto.value,
+    energy: composeEnergy.value,
+    internet: composeInternet.value,
+  };
+  // Only save if there's something written
+  if (draft.to || draft.subject || draft.body || draft.gamecoin || draft.crypto || draft.energy || draft.internet) {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } else {
+    localStorage.removeItem(DRAFT_KEY);
+  }
+}
+
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    composeTo.value = draft.to || '';
+    composeToConfirmed.value = draft.toConfirmed || false;
+    composeSubject.value = draft.subject || '';
+    composeBody.value = draft.body || '';
+    composeGamecoin.value = draft.gamecoin || 0;
+    composeCrypto.value = draft.crypto || 0;
+    composeEnergy.value = draft.energy || 0;
+    composeInternet.value = draft.internet || 0;
+  } catch { /* ignore */ }
+}
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_KEY);
+}
+
 function resetCompose() {
   composeTo.value = '';
+  composeToConfirmed.value = false;
   composeSubject.value = '';
   composeBody.value = '';
   composePassword.value = '';
@@ -145,7 +189,22 @@ function resetCompose() {
   composeInternet.value = 0;
   showPasswordField.value = false;
   showFilePicker.value = false;
+  clearDraft();
 }
+
+// Auto-save draft while composing
+watch([composeTo, composeSubject, composeBody, composeGamecoin, composeCrypto, composeEnergy, composeInternet, composeToConfirmed], saveDraft, { deep: true });
+
+// Load draft when compose view opens
+watch(() => mailStore.currentView, (view) => {
+  if (view === 'compose') {
+    nextTick(() => {
+      if (!composeTo.value && !composeSubject.value && !composeBody.value) {
+        loadDraft();
+      }
+    });
+  }
+});
 
 function handleClose() {
   playSound('click');
@@ -177,6 +236,24 @@ async function handleSend() {
   }
   if (!composeTo.value.trim()) {
     mailStore.error = t('mail.errorNotFound');
+    return;
+  }
+
+  // Ticket mode: send support ticket
+  if (isTicketMode.value) {
+    const result = await mailStore.sendTicket({
+      subject: composeSubject.value.trim(),
+      body: composeBody.value.trim() || undefined,
+    });
+    if (result) {
+      playSound('purchase');
+      toastStore.success(t('mail.ticketSent'), '🎫');
+      resetCompose();
+      mailStore.goToSent();
+      mailStore.fetchSent();
+    } else {
+      playSound('error');
+    }
     return;
   }
 
@@ -269,6 +346,40 @@ const estimatedSizeKb = computed(() => {
   if (composeInternet.value > 0) size += Math.ceil(composeInternet.value / 10);
   return size;
 });
+
+const isTicketMode = computed(() => composeTo.value.trim().toLowerCase() === '@ticket');
+
+const showAtSuggestions = computed(() => {
+  const val = composeTo.value.trim().toLowerCase();
+  return val.startsWith('@') && val !== '@ticket';
+});
+
+const atSuggestions = computed(() => {
+  const val = composeTo.value.trim().toLowerCase();
+  const options = [
+    { value: '@ticket', label: '@ticket', desc: t('mail.ticketHint', 'Soporte'), icon: '🎫' },
+  ];
+  if (!val || val === '@') return options;
+  return options.filter(o => o.value.startsWith(val));
+});
+
+function selectAtSuggestion(value: string) {
+  composeTo.value = value;
+  composeToConfirmed.value = true;
+  subjectInputRef.value?.focus();
+}
+
+function confirmRecipient() {
+  if (composeTo.value.trim()) {
+    composeToConfirmed.value = true;
+    subjectInputRef.value?.focus();
+  }
+}
+
+function clearRecipient() {
+  composeTo.value = '';
+  composeToConfirmed.value = false;
+}
 
 function getResourceSizeLabel(key: string): string {
   switch (key) {
@@ -449,7 +560,8 @@ function getResourceSizeLabel(key: string): string {
                 >
                   <span class="gmail-star shrink-0 opacity-0">☆</span>
                   <div class="gmail-sender shrink-0 text-white/40">
-                    To: {{ mail.recipient_username }}
+                    <span v-if="mail.mail_type === 'ticket'" class="text-fuchsia-400">🎫 @ticket</span>
+                    <span v-else>To: {{ mail.recipient_username }}</span>
                   </div>
                   <div class="gmail-subject-area flex-1 min-w-0">
                     <span class="gmail-subject text-white/50">{{ mail.subject }}</span>
@@ -571,15 +683,51 @@ function getResourceSizeLabel(key: string): string {
               </div>
 
               <div class="gmail-compose-body">
+                <!-- Ticket mode banner -->
+                <div v-if="isTicketMode" class="flex items-center gap-2 px-3 py-2 rounded bg-fuchsia-500/10 border border-fuchsia-500/20 mb-2">
+                  <span class="text-sm">🎫</span>
+                  <span class="text-[11px] text-fuchsia-300">{{ t('mail.ticketHint') }}</span>
+                </div>
+
                 <!-- To -->
-                <div class="gmail-compose-field">
+                <div class="gmail-compose-field relative">
                   <label>{{ t('mail.to') }}</label>
-                  <input v-model="composeTo" type="text" placeholder="username" class="gmail-input" />
+                  <!-- Tag mode: show chip -->
+                  <div v-if="composeToConfirmed && composeTo.trim()" class="flex items-center gap-1 flex-1">
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium max-w-[200px]"
+                      :class="isTicketMode
+                        ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30'
+                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'">
+                      <span v-if="isTicketMode">🎫</span>
+                      <span class="truncate">{{ composeTo.trim() }}</span>
+                      <button @click="clearRecipient" class="ml-0.5 hover:text-white transition-colors text-[10px] shrink-0">✕</button>
+                    </span>
+                  </div>
+                  <!-- Input mode -->
+                  <input v-else v-model="composeTo" type="text"
+                    :placeholder="t('mail.toPlaceholder', 'username o @ticket')"
+                    class="gmail-input"
+                    autocomplete="off"
+                    @keydown.enter.prevent="confirmRecipient" />
+                  <!-- @ autocomplete -->
+                  <div v-if="!composeToConfirmed && showAtSuggestions && atSuggestions.length > 0"
+                    class="absolute left-12 right-0 top-full z-10 mt-1 bg-[#2a2a4a] border border-white/10 rounded-lg shadow-lg overflow-hidden">
+                    <button
+                      v-for="s in atSuggestions"
+                      :key="s.value"
+                      @mousedown.prevent="selectAtSuggestion(s.value)"
+                      class="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-white/10 transition-colors"
+                    >
+                      <span>{{ s.icon }}</span>
+                      <span class="text-fuchsia-300 font-medium">{{ s.label }}</span>
+                      <span class="text-white/30 text-[10px] ml-auto">{{ s.desc }}</span>
+                    </button>
+                  </div>
                 </div>
                 <!-- Subject -->
                 <div class="gmail-compose-field">
                   <label>{{ t('mail.subject') }}</label>
-                  <input v-model="composeSubject" type="text" maxlength="100" :placeholder="t('mail.subject')" class="gmail-input" />
+                  <input ref="subjectInputRef" v-model="composeSubject" type="text" maxlength="100" :placeholder="t('mail.subject')" class="gmail-input" />
                 </div>
                 <!-- Body -->
                 <textarea
@@ -587,11 +735,11 @@ function getResourceSizeLabel(key: string): string {
                   rows="6"
                   maxlength="2000"
                   class="gmail-textarea"
-                  :placeholder="t('mail.bodyPlaceholder')"
+                  :placeholder="isTicketMode ? t('mail.ticketBodyPlaceholder', 'Describe tu problema...') : t('mail.bodyPlaceholder')"
                 />
 
-                <!-- Attached resources chips -->
-                <div v-if="attachedResources.length > 0" class="fp-attached-chips">
+                <!-- Attached resources chips (hidden in ticket mode) -->
+                <div v-if="!isTicketMode && attachedResources.length > 0" class="fp-attached-chips">
                   <div
                     v-for="res in attachedResources"
                     :key="res.key"
@@ -604,8 +752,8 @@ function getResourceSizeLabel(key: string): string {
                   </div>
                 </div>
 
-                <!-- Toolbar: attach + password -->
-                <div class="gmail-compose-extras">
+                <!-- Toolbar: attach + password (hidden in ticket mode) -->
+                <div v-if="!isTicketMode" class="gmail-compose-extras">
                   <button @click="openFilePicker" class="gmail-extra-btn">
                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
                     {{ t('mail.addAttachment') }}
@@ -615,8 +763,8 @@ function getResourceSizeLabel(key: string): string {
                   </button>
                 </div>
 
-                <!-- Password field -->
-                <div v-if="showPasswordField && attachedResources.length > 0" class="gmail-compose-attachments">
+                <!-- Password field (hidden in ticket mode) -->
+                <div v-if="!isTicketMode && showPasswordField && attachedResources.length > 0" class="gmail-compose-attachments">
                   <div class="gmail-attach-field">
                     <label>🔒 {{ t('mail.password') }}</label>
                     <input v-model="composePassword" type="text" maxlength="50" :placeholder="t('mail.passwordPlaceholder')" class="gmail-input" />
@@ -633,11 +781,13 @@ function getResourceSizeLabel(key: string): string {
                     @click="handleSend"
                     :disabled="mailStore.sending || !composeSubject.trim() || !composeTo.trim()"
                     class="gmail-btn-send"
+                    :class="{ '!bg-fuchsia-600 hover:!bg-fuchsia-500': isTicketMode }"
                   >
-                    {{ mailStore.sending ? t('mail.sending') : t('mail.send') }}
+                    {{ mailStore.sending ? t('mail.sending') : (isTicketMode ? t('mail.sendTicket') : t('mail.send')) }}
                   </button>
                   <span class="text-[10px] text-white/25">{{ t('mail.sendCost', { cost: 5 }) }}</span>
-                  <span class="text-[10px] text-white/20 ml-auto font-mono">{{ t('mail.estimatedSize', { size: estimatedSizeKb }) }}</span>
+                  <span v-if="isTicketMode" class="text-[10px] text-fuchsia-400/50">{{ t('mail.ticketLimit') }}</span>
+                  <span v-else class="text-[10px] text-white/20 ml-auto font-mono">{{ t('mail.estimatedSize', { size: estimatedSizeKb }) }}</span>
                 </div>
               </div>
             </div>
@@ -1118,6 +1268,9 @@ function getResourceSizeLabel(key: string): string {
   overflow: hidden;
   background: #1e1e38;
   box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100% - 24px);
 }
 .gmail-compose-header {
   display: flex;
@@ -1129,6 +1282,9 @@ function getResourceSizeLabel(key: string): string {
 }
 .gmail-compose-body {
   padding: 8px 12px 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 .gmail-compose-field {
   display: flex;
@@ -1167,6 +1323,7 @@ function getResourceSizeLabel(key: string): string {
   padding: 8px 0;
   resize: none;
   min-height: 100px;
+  flex: 1;
 }
 .gmail-textarea::placeholder {
   color: rgba(255,255,255,0.2);
@@ -1221,6 +1378,7 @@ function getResourceSizeLabel(key: string): string {
   align-items: center;
   gap: 12px;
   padding-top: 8px;
+  margin-top: auto;
 }
 .gmail-btn-send {
   padding: 8px 24px;

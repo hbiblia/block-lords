@@ -11,6 +11,7 @@ import {
   adminGetPlayers,
   adminGetPlayerDetail,
   adminSendGift,
+  adminGetTickets,
   getBoostItems,
   type CreateAnnouncementParams,
   type AdminSendGiftParams
@@ -550,6 +551,28 @@ function formatDate(dateString: string) {
   });
 }
 
+// Tickets
+const tickets = ref<Array<{ id: string; sender_id: string; sender_username: string; subject: string; body: string | null; is_read: boolean; created_at: string }>>([]);
+const loadingTickets = ref(false);
+const showTickets = ref(false);
+const expandedTicketId = ref<string | null>(null);
+
+async function loadTickets() {
+  loadingTickets.value = true;
+  try {
+    const result = await adminGetTickets();
+    tickets.value = result?.tickets || [];
+  } catch (e: any) {
+    console.error('Error loading tickets:', e);
+  } finally {
+    loadingTickets.value = false;
+  }
+}
+
+function toggleTicket(id: string) {
+  expandedTicketId.value = expandedTicketId.value === id ? null : id;
+}
+
 onMounted(async () => {
   // Verificar acceso admin
   if (!isAdmin.value) {
@@ -613,6 +636,58 @@ onMounted(async () => {
         <span class="text-xl">🎁</span>
         Enviar Regalo
       </button>
+
+      <button
+        @click="showTickets = !showTickets; if (showTickets && tickets.length === 0) loadTickets()"
+        class="px-6 py-3 rounded-xl font-medium bg-fuchsia-600 hover:bg-fuchsia-700 transition-colors flex items-center gap-2 border border-fuchsia-400"
+      >
+        <span class="text-xl">🎫</span>
+        Tickets
+        <span v-if="tickets.filter(t => !t.is_read).length > 0" class="px-1.5 py-0.5 text-[10px] bg-white/20 rounded-full">
+          {{ tickets.filter(t => !t.is_read).length }}
+        </span>
+      </button>
+    </div>
+
+    <!-- Tickets Section -->
+    <div v-if="showTickets" class="mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-2xl font-bold text-fuchsia-400">🎫 Support Tickets</h2>
+          <p class="text-text-muted text-sm">{{ tickets.length }} tickets</p>
+        </div>
+        <button @click="loadTickets" :disabled="loadingTickets"
+          class="px-4 py-2 rounded-lg text-sm bg-fuchsia-600/20 hover:bg-fuchsia-600/30 text-fuchsia-300 transition-colors disabled:opacity-50">
+          {{ loadingTickets ? '⏳ Cargando...' : '🔄 Actualizar' }}
+        </button>
+      </div>
+
+      <div v-if="loadingTickets" class="text-center py-8 text-text-muted">⏳ Cargando tickets...</div>
+      <div v-else-if="tickets.length === 0" class="text-center py-8 text-text-muted">No hay tickets</div>
+      <div v-else class="space-y-2">
+        <div
+          v-for="ticket in tickets"
+          :key="ticket.id"
+          class="bg-bg-secondary border rounded-lg overflow-hidden transition-colors"
+          :class="ticket.is_read ? 'border-border' : 'border-fuchsia-500/40'"
+        >
+          <div
+            @click="toggleTicket(ticket.id)"
+            class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors"
+          >
+            <span v-if="!ticket.is_read" class="w-2 h-2 rounded-full bg-fuchsia-400 shrink-0"></span>
+            <span v-else class="w-2 h-2 shrink-0"></span>
+            <span class="text-sm font-medium text-fuchsia-300 shrink-0">{{ ticket.sender_username }}</span>
+            <span class="text-sm text-white/70 truncate flex-1">{{ ticket.subject }}</span>
+            <span class="text-[10px] text-text-muted shrink-0">{{ formatDate(ticket.created_at) }}</span>
+            <span class="text-white/30 text-xs shrink-0">{{ expandedTicketId === ticket.id ? '▲' : '▼' }}</span>
+          </div>
+          <div v-if="expandedTicketId === ticket.id" class="px-4 pb-4 border-t border-border">
+            <p class="text-sm text-white/60 mt-3 whitespace-pre-wrap">{{ ticket.body || '(sin mensaje)' }}</p>
+            <p class="text-[10px] text-text-muted mt-2">ID: {{ ticket.id }} | Sender: {{ ticket.sender_id }}</p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Users Management Section -->

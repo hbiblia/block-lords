@@ -169,6 +169,7 @@ export const useMarketStore = defineStore('market', () => {
   const componentQuantities = ref<Record<string, number>>({});
   const cardQuantities = ref<Record<string, number>>({});
   const boostQuantities = ref<Record<string, number>>({});
+  const patchQuantity = ref(0);
 
   // Loading states - always have data (cached or default), so never show initial loading
   const loadingCatalogs = ref(false);
@@ -285,7 +286,7 @@ export const useMarketStore = defineStore('market', () => {
     const playerId = authStore.player.id;
 
     try {
-      const [playerRigsRes, rigInventoryRes, playerCoolingRes, inventoryCoolingRes, inventoryCardsRes, inventoryBoostsRes, inventoryComponentsRes] = await Promise.all([
+      const [playerRigsRes, rigInventoryRes, playerCoolingRes, inventoryCoolingRes, inventoryCardsRes, inventoryBoostsRes, inventoryComponentsRes, inventoryPatchRes] = await Promise.all([
         supabase.from('player_rigs').select('rig_id').eq('player_id', playerId),
         supabase.from('player_rig_inventory').select('rig_id, quantity').eq('player_id', playerId),
         supabase.from('player_cooling').select('cooling_item_id').eq('player_id', playerId),
@@ -293,6 +294,7 @@ export const useMarketStore = defineStore('market', () => {
         supabase.from('player_cards').select('card_id').eq('player_id', playerId).eq('is_redeemed', false),
         supabase.from('player_boosts').select('boost_id, quantity').eq('player_id', playerId),
         supabase.from('player_inventory').select('item_id, quantity').eq('player_id', playerId).eq('item_type', 'component'),
+        supabase.from('player_inventory').select('quantity').eq('player_id', playerId).eq('item_type', 'patch').eq('item_id', 'rig_patch').maybeSingle(),
       ]);
 
       // Build rig quantities map (installed + inventory)
@@ -347,6 +349,9 @@ export const useMarketStore = defineStore('market', () => {
         compQty[c.item_id] = (compQty[c.item_id] || 0) + (c.quantity || 1);
       }
       componentQuantities.value = compQty;
+
+      // Patch quantity
+      patchQuantity.value = inventoryPatchRes.data?.quantity ?? 0;
     } catch (e) {
       console.error('Error loading player quantities:', e);
     } finally {
@@ -634,6 +639,47 @@ export const useMarketStore = defineStore('market', () => {
     }
   }
 
+  async function buyPatch(): Promise<{ success: boolean; error?: string }> {
+    const authStore = useAuthStore();
+    if (!authStore.player) return { success: false, error: 'No player' };
+
+    buying.value = true;
+    try {
+      const { data, error } = await supabase.rpc('buy_rig_patch', {
+        p_player_id: authStore.player.id,
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        await loadPlayerQuantities();
+        await authStore.fetchPlayer();
+        const inventoryStore = useInventoryStore();
+        inventoryStore.refresh();
+        playSound('purchase');
+        return { success: true };
+      }
+
+      if (data?.error === 'inventory_full') {
+        playSound('error');
+        return { success: false, error: 'Inventario lleno' };
+      }
+      if (data?.error === 'stack_full') {
+        playSound('error');
+        return { success: false, error: 'Stack máximo alcanzado (10)' };
+      }
+
+      playSound('error');
+      return { success: false, error: data?.error ?? 'Error buying patch' };
+    } catch (e) {
+      console.error('Error buying patch:', e);
+      playSound('error');
+      return { success: false, error: 'Connection error' };
+    } finally {
+      buying.value = false;
+    }
+  }
+
   async function buyCryptoPackage(
     packageId: string
   ): Promise<{ success: boolean; error?: string; cryptoReceived?: number }> {
@@ -710,12 +756,17 @@ export const useMarketStore = defineStore('market', () => {
     }
   }
 
+  function getPatchOwned(): number {
+    return patchQuantity.value;
+  }
+
   function clearState() {
     rigQuantities.value = {};
     coolingQuantities.value = {};
     componentQuantities.value = {};
     cardQuantities.value = {};
     boostQuantities.value = {};
+    patchQuantity.value = 0;
     // Keep catalogs loaded
   }
 
@@ -744,6 +795,8 @@ export const useMarketStore = defineStore('market', () => {
     getComponentOwned,
     getCardOwned,
     getBoostOwned,
+    getPatchOwned,
+    patchQuantity,
 
     // Actions
     loadCatalogs,
@@ -755,6 +808,7 @@ export const useMarketStore = defineStore('market', () => {
     buyCoolingComponent,
     buyCard,
     buyBoost,
+    buyPatch,
     buyCryptoPackage,
     buyCryptoPackageWithWallet,
     clearState,

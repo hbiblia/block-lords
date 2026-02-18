@@ -37,6 +37,7 @@ interface PlayerRig {
   hashrate_bonus?: number;
   efficiency_bonus?: number;
   thermal_bonus?: number;
+  patch_count?: number;
   rig: Rig;
 }
 

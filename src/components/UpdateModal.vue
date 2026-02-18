@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '2.6.0';
+const CURRENT_VERSION = '2.6.1';
 const STORAGE_KEY = 'lootmine-last-seen-version';
 
 const route = useRoute();
@@ -63,28 +63,28 @@ function closeModal() {
 
         <!-- Contenido scrollable -->
         <div class="space-y-3 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- Guided Tour -->
+          <!-- Mailbox -->
           <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
             <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>🗺️</span> {{ t('updateModal.guidedTour.title') }}
+              <span>📬</span> {{ t('updateModal.mailbox.title') }}
             </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.guidedTour.description')"></p>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.mailbox.description')"></p>
           </div>
 
-          <!-- Contextual Tips -->
+          <!-- New Supply (Rig Patch) -->
           <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
             <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>💡</span> {{ t('updateModal.contextualTips.title') }}
+              <span>🩹</span> {{ t('updateModal.newSupply.title') }}
             </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.contextualTips.description')"></p>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.newSupply.description')"></p>
           </div>
 
-          <!-- How to Play Guide -->
+          <!-- Repair Price Reduction -->
           <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
             <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>📖</span> {{ t('updateModal.howToPlay.title') }}
+              <span>💰</span> {{ t('updateModal.repairPriceDown.title') }}
             </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.howToPlay.description')"></p>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.repairPriceDown.description')"></p>
           </div>
 
         </div>

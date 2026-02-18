@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useInventoryStore, type CoolingItem, type ModdedCoolingItem } from '@/stores/inventory';
+import { useMiningStore } from '@/stores/mining';
 import { redeemPrepaidCard } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import CoolingWorkshopModal from './CoolingWorkshopModal.vue';
@@ -11,6 +12,7 @@ const { t } = useI18n();
 
 const authStore = useAuthStore();
 const inventoryStore = useInventoryStore();
+const miningStore = useMiningStore();
 
 const props = defineProps<{
   show: boolean;
@@ -394,7 +396,8 @@ type ItemSlot =
   | { type: 'modded_cooling'; id: string; icon: string; label: string; badge: string; tier: string }
   | { type: 'material'; id: string; icon: string; label: string; badge: string; rarity: string }
   | { type: 'component'; id: string; icon: string; label: string; badge: string; tier: string }
-  | { type: 'boost'; id: string; icon: string; label: string; badge: string; tier: string };
+  | { type: 'boost'; id: string; icon: string; label: string; badge: string; tier: string }
+  | { type: 'patch'; id: string; icon: string; label: string; badge: string; tier: string };
 
 const allItems = computed<ItemSlot[]>(() => [
   ...inventoryStore.rigItems.map(r => ({
@@ -427,6 +430,10 @@ const allItems = computed<ItemSlot[]>(() => [
     type: 'boost' as const, id: b.boost_id, icon: getBoostIcon(b.boost_type),
     label: getBoostName(b.boost_id), badge: `x${b.quantity}`, tier: b.tier,
   })),
+  ...inventoryStore.patchItems.map(p => ({
+    type: 'patch' as const, id: p.item_id, icon: '🩹',
+    label: t('market.patch.name', 'Rig Patch'), badge: `x${p.quantity}`, tier: 'standard',
+  })),
 ]);
 
 const emptySlots = computed(() => Math.max(0, inventoryStore.maxSlots - allItems.value.length));
@@ -445,6 +452,7 @@ function getSlotBorder(item: ItemSlot): string {
     case 'material':
     case 'component': return 'border-fuchsia-500/50';
     case 'boost': return 'border-orange-500/50';
+    case 'patch': return 'border-fuchsia-500/50';
     default: return 'border-border';
   }
 }
@@ -458,6 +466,7 @@ function getSlotBg(item: ItemSlot): string {
     case 'material':
     case 'component': return 'bg-fuchsia-500/8';
     case 'boost': return 'bg-orange-500/8';
+    case 'patch': return 'bg-fuchsia-500/8';
     default: return 'bg-bg-tertiary';
   }
 }
@@ -471,6 +480,7 @@ function getSlotLabelColor(item: ItemSlot): string {
     case 'material': return 'rarity' in item ? getRarityColor(item.rarity) : 'text-fuchsia-400';
     case 'component': return 'text-fuchsia-400';
     case 'boost': return 'text-orange-400';
+    case 'patch': return 'text-fuchsia-400';
     default: return 'text-text-muted';
   }
 }
@@ -528,6 +538,53 @@ const selectedBoost = computed(() => {
   if (selectedItem.value?.type !== 'boost') return null;
   return inventoryStore.boostItems.find(b => b.boost_id === selectedItem.value!.id) ?? null;
 });
+
+const selectedPatch = computed(() => {
+  if (selectedItem.value?.type !== 'patch') return null;
+  return inventoryStore.patchItems.find(p => p.item_id === selectedItem.value!.id) ?? null;
+});
+
+// Patch install: rig selection + confirmation
+const showRigSelect = ref(false);
+const applyingPatch = ref(false);
+const patchSelectedRig = ref<{ id: string; name: string; condition: number } | null>(null);
+
+function openRigSelect() {
+  patchSelectedRig.value = null;
+  showRigSelect.value = true;
+}
+
+function selectRigForPatch(rig: { id: string; rig: { name: string }; condition: number }) {
+  patchSelectedRig.value = { id: rig.id, name: rig.rig.name, condition: rig.condition };
+}
+
+async function confirmApplyPatch() {
+  if (!patchSelectedRig.value) return;
+  await applyPatchToRig(patchSelectedRig.value.id);
+}
+
+async function applyPatchToRig(rigId: string) {
+  if (!authStore.player?.id) return;
+  applyingPatch.value = true;
+  try {
+    const { applyRigPatch } = await import('@/utils/api');
+    const result = await applyRigPatch(authStore.player.id, rigId);
+    if (result?.success) {
+      playSound('success');
+      showRigSelect.value = false;
+      selectedItem.value = null;
+      await inventoryStore.refresh();
+    } else {
+      playSound('error');
+      alert(result?.error || 'Error applying patch');
+    }
+  } catch (e) {
+    console.error('Error applying patch:', e);
+    playSound('error');
+  } finally {
+    applyingPatch.value = false;
+  }
+}
 </script>
 
 <template>
@@ -862,8 +919,115 @@ const selectedBoost = computed(() => {
                   🗑️ {{ t('inventory.delete.button', 'Descartar') }}
                 </button>
               </template>
+
+              <!-- Patch Detail -->
+              <template v-if="selectedPatch">
+                <div class="flex items-start gap-3">
+                  <div class="text-3xl sm:text-4xl">🩹</div>
+                  <div class="flex-1 min-w-0">
+                    <h4 class="font-bold text-sm sm:text-base text-fuchsia-400">{{ t('market.patch.name', 'Rig Patch') }}</h4>
+                    <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ t('market.patch.universal', 'Universal') }}</p>
+                  </div>
+                  <span class="text-xs font-mono text-text-muted">x{{ selectedPatch.quantity }}</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-2">
+                  <div class="text-center p-1.5 rounded bg-bg-secondary">
+                    <div class="text-[10px] text-text-muted">{{ t('rigManage.condition', 'Condición') }}</div>
+                    <div class="font-mono font-bold text-sm text-emerald-400">+50%</div>
+                  </div>
+                  <div class="text-center p-1.5 rounded bg-bg-secondary">
+                    <div class="text-[10px] text-text-muted">Hashrate</div>
+                    <div class="font-mono font-bold text-sm text-status-danger">-10%</div>
+                  </div>
+                  <div class="text-center p-1.5 rounded bg-bg-secondary">
+                    <div class="text-[10px] text-text-muted">{{ t('rigManage.consumption', 'Consumo') }}</div>
+                    <div class="font-mono font-bold text-sm text-status-danger">+15%</div>
+                  </div>
+                </div>
+                <div class="flex gap-2 mt-3">
+                  <button
+                    @click="openRigSelect"
+                    :disabled="using || applyingPatch"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-fuchsia-600 hover:bg-fuchsia-500 text-white"
+                  >
+                    🔧 {{ t('inventory.patch.install', 'Instalar') }}
+                  </button>
+                  <button
+                    @click="requestDeleteItem('patch', selectedPatch.item_id, t('market.patch.name', 'Rig Patch'), selectedPatch.quantity)"
+                    :disabled="using"
+                    class="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
+                    :title="t('inventory.delete.button', 'Descartar')"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </template>
             </div>
           </template>
+        </div>
+      </div>
+
+      <!-- Rig Selection Modal for Patch Install -->
+      <div
+        v-if="showRigSelect"
+        class="absolute inset-0 flex items-center justify-center bg-black/60 z-10"
+      >
+        <div class="bg-bg-secondary rounded-xl p-5 max-w-sm w-full mx-4 border border-fuchsia-500/30 animate-fade-in">
+          <div class="text-center mb-4">
+            <div class="text-3xl mb-2">🩹</div>
+            <h3 class="text-lg font-bold">{{ t('inventory.patch.selectRig', 'Seleccionar Rig') }}</h3>
+            <p class="text-text-muted text-xs mt-1">{{ t('inventory.patch.selectRigHint', 'Elige el rig donde instalar el parche') }}</p>
+          </div>
+
+          <div class="space-y-2 max-h-60 overflow-y-auto">
+            <button
+              v-for="rig in miningStore.rigs"
+              :key="rig.id"
+              @click="selectRigForPatch(rig)"
+              :disabled="applyingPatch"
+              class="w-full flex items-center gap-3 p-3 rounded-lg border transition-colors hover:bg-fuchsia-500/10 hover:border-fuchsia-500/40 disabled:opacity-50"
+              :class="[
+                patchSelectedRig?.id === rig.id ? 'border-fuchsia-500 bg-fuchsia-500/15 ring-1 ring-fuchsia-500/50' : rig.condition < 30 ? 'border-status-danger/40 bg-status-danger/5' : 'border-border bg-bg-primary'
+              ]"
+            >
+              <span class="text-2xl">⛏️</span>
+              <div class="flex-1 text-left min-w-0">
+                <div class="font-medium text-sm truncate">{{ rig.rig.name }}</div>
+                <div class="flex items-center gap-2 text-[10px] text-text-muted">
+                  <span :class="rig.condition < 30 ? 'text-status-danger' : rig.condition < 60 ? 'text-status-warning' : 'text-emerald-400'">
+                    ❤️ {{ rig.condition.toFixed(0) }}%
+                  </span>
+                  <span>⚡ {{ formatNumber(rig.rig.hashrate) }} H/s</span>
+                </div>
+              </div>
+              <div v-if="patchSelectedRig?.id === rig.id" class="text-fuchsia-400 text-lg">✓</div>
+              <div v-else-if="applyingPatch" class="w-4 h-4 border-2 border-fuchsia-400 border-t-transparent rounded-full animate-spin"></div>
+            </button>
+
+            <div v-if="!miningStore.rigs.length" class="text-center py-6 text-text-muted text-sm">
+              {{ t('inventory.patch.noRigs', 'No tienes rigs instalados') }}
+            </div>
+          </div>
+
+          <div class="flex gap-2 mt-4">
+            <button
+              @click="showRigSelect = false; patchSelectedRig = null"
+              :disabled="applyingPatch"
+              class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors disabled:opacity-50"
+            >
+              {{ t('common.cancel') }}
+            </button>
+            <button
+              @click="confirmApplyPatch"
+              :disabled="!patchSelectedRig || applyingPatch"
+              class="flex-1 py-2.5 rounded-lg font-medium bg-fuchsia-500 text-white hover:bg-fuchsia-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span v-if="applyingPatch" class="flex items-center justify-center gap-2">
+                <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              </span>
+              <span v-else>{{ t('common.confirm', 'Confirmar') }}</span>
+            </button>
+          </div>
         </div>
       </div>
 

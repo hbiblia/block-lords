@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
 import { useToastStore } from '@/stores/toast';
+import { useMarketStore } from '@/stores/market';
 import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling, getPlayerBoosts, installBoostToRig, getRigBoosts, getRigUpgrades, upgradeRig, removeCoolingFromRig, removeBoostFromRig, applyRigPatch } from '@/utils/api';
 import { formatCrypto } from '@/utils/format';
 import { playSound } from '@/utils/sounds';
@@ -13,6 +14,7 @@ const { t } = useI18n();
 const authStore = useAuthStore();
 const miningStore = useMiningStore();
 const toastStore = useToastStore();
+const marketStore = useMarketStore();
 
 interface RigData {
   id: string;
@@ -396,14 +398,6 @@ const patchHashPenalty = computed(() =>
 );
 const patchConsumptionPenalty = computed(() =>
   Math.round((Math.pow(1.15, patchCount.value) - 1) * 1000) / 10
-);
-const patchCost = computed(() => {
-  if (!props.rig) return 0;
-  const repCost = props.rig.rig.repair_cost ?? 0;
-  return repCost * 0.002 * Math.pow(1.5, patchCount.value);
-});
-const canAffordPatch = computed(() =>
-  (authStore.player?.crypto_balance ?? 0) >= patchCost.value
 );
 const nextPatchHashPenalty = computed(() =>
   Math.round((1 - Math.pow(0.90, patchCount.value + 1)) * 1000) / 10
@@ -918,14 +912,6 @@ function requestRepair() {
   showConfirm.value = true;
 }
 
-function requestPatch() {
-  confirmAction.value = {
-    type: 'patch',
-    data: {},
-  };
-  showConfirm.value = true;
-}
-
 async function handleMinigameComplete(success: boolean) {
   showMinigame.value = false;
 
@@ -1099,6 +1085,7 @@ async function confirmUse() {
       } else if (type === 'destroy_boost' && data.boostName) {
         toastStore.success(`${data.boostName} destruido`);
       } else if (type === 'patch') {
+        marketStore.loadPlayerQuantities();
         toastStore.success(`${rigName}: Patch #${result.patch_count} (+${result.condition_restored}%)`);
       }
     } else {
@@ -1305,7 +1292,8 @@ function closeProcessingModal() {
 
                 <!-- Patch penalties -->
                 <div v-if="patchCount > 0"
-                  class="flex flex-col gap-1 text-xs px-2 py-2 rounded bg-fuchsia-500/5 w-full">
+                  v-tooltip="t('rigManage.tooltips.patchPenalties', { count: patchCount, hash: patchHashPenalty, consumption: patchConsumptionPenalty })"
+                  class="flex flex-col gap-1 text-xs px-2 py-2 rounded bg-fuchsia-500/5 w-full cursor-help">
                   <div class="flex items-center justify-between w-full">
                     <div class="flex items-center gap-2">
                       <span>🩹</span>
@@ -1580,32 +1568,6 @@ function closeProcessingModal() {
                    {{ t('rigManage.maxRepairsReached') }}
                  </div>
 
-                 <!-- Patch Box -->
-                 <div class="p-3 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/5">
-                   <div class="flex items-center justify-between gap-4">
-                     <div class="flex items-center gap-3">
-                       <div class="bg-bg-tertiary p-2 rounded">
-                         <div class="text-[10px] text-text-muted">{{ t('rigManage.patchesApplied') }}</div>
-                         <div class="font-mono font-bold text-sm text-fuchsia-400">{{ patchCount }}</div>
-                       </div>
-                       <div>
-                         <div class="text-xs text-text-muted">{{ t('rigManage.patchCost') }}: <span class="text-amber-400 font-mono">{{ formatCrypto(patchCost) }} BLC</span></div>
-                         <div class="text-xs text-status-success">+50% {{ t('rigManage.condition') }}</div>
-                         <div class="text-xs text-status-danger">-10% Hash / +15% {{ t('rigManage.consumption') }}</div>
-                       </div>
-                     </div>
-                     <button @click="requestPatch"
-                       :disabled="rig.is_active || processing || !canAffordPatch"
-                       class="px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-fuchsia-500 text-white hover:bg-fuchsia-400">
-                       {{ !canAffordPatch ? t('rigManage.insufficientFunds') : t('rigManage.applyPatch') }}
-                     </button>
-                   </div>
-                   <div v-if="patchCount > 0" class="mt-2 pt-2 border-t border-fuchsia-500/20 flex gap-4 text-[10px]">
-                     <span class="text-status-danger font-mono">Hash: -{{ patchHashPenalty }}%</span>
-                     <span class="text-status-warning font-mono">{{ t('rigManage.consumption') }}: +{{ patchConsumptionPenalty }}%</span>
-                   </div>
-                 </div>
-
                  <!-- Delete Zone -->
                  <div class="p-3 rounded-lg border border-status-danger/20 bg-status-danger/5">
                    <div class="flex items-center justify-between gap-4">
@@ -1703,7 +1665,7 @@ function closeProcessingModal() {
             <template v-else-if="confirmAction.type === 'patch'">
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.patchCost') }}</span>
-                <span class="font-bold text-amber-400">{{ formatCrypto(patchCost) }} BLC</span>
+                <span class="font-bold text-fuchsia-400">1 🩹 {{ t('market.patch.name', 'Rig Patch') }}</span>
               </div>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.conditionBonus') }}</span>

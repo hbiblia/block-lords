@@ -116,6 +116,12 @@ export interface MaterialItem {
   drop_chance: number;
 }
 
+export interface PatchItem {
+  inventory_id: string;
+  item_id: string;
+  quantity: number;
+}
+
 export const useInventoryStore = defineStore('inventory', () => {
   const rigItems = ref<RigItem[]>([]);
   const coolingItems = ref<CoolingItem[]>([]);
@@ -125,6 +131,7 @@ export const useInventoryStore = defineStore('inventory', () => {
   const boostItems = ref<BoostItem[]>([]);
   const activeBoosts = ref<ActiveBoost[]>([]);
   const materialItems = ref<MaterialItem[]>([]);
+  const patchItems = ref<PatchItem[]>([]);
 
   const loading = ref(false);
   const installing = ref(false);
@@ -156,7 +163,8 @@ export const useInventoryStore = defineStore('inventory', () => {
     moddedCoolingItems.value.length +
     componentItems.value.length +
     boostItems.value.length +
-    materialItems.value.length
+    materialItems.value.length +
+    patchItems.value.length
   );
 
   const maxSlots = computed(() => {
@@ -221,6 +229,7 @@ export const useInventoryStore = defineStore('inventory', () => {
       activeBoosts.value = boostData?.active || [];
       rigItems.value = rigData || [];
       materialItems.value = materialsData || [];
+      patchItems.value = inventoryData?.patches || [];
 
       loaded.value = true;
       lastLoadTime.value = Date.now();
@@ -306,6 +315,7 @@ export const useInventoryStore = defineStore('inventory', () => {
     boostItems.value = [];
     activeBoosts.value = [];
     materialItems.value = [];
+    patchItems.value = [];
     loaded.value = false;
     lastLoadTime.value = 0;
   }
@@ -319,6 +329,7 @@ export const useInventoryStore = defineStore('inventory', () => {
     boostItems,
     activeBoosts,
     materialItems,
+    patchItems,
     loading,
     installing,
     deleting,

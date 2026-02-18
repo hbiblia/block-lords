@@ -507,6 +507,18 @@ function getEfficiencyBonus(playerRig: typeof miningStore.rigs[0]): number {
   return playerRig.efficiency_bonus ?? 0;
 }
 
+// Get patch consumption penalty percentage for display
+function getPatchConsumptionPercent(playerRig: typeof miningStore.rigs[0]): number {
+  const patchCount = playerRig.patch_count ?? 0;
+  if (patchCount === 0) return 0;
+  return Math.round((Math.pow(1.15, patchCount) - 1) * 1000) / 10;
+}
+
+// Get patch consumption multiplier (1.15^n)
+function getPatchConsumptionMultiplier(playerRig: typeof miningStore.rigs[0]): number {
+  return Math.pow(1.15, playerRig.patch_count ?? 0);
+}
+
 function getTempColor(temp: number): string {
   if (temp >= 80) return 'text-status-danger';
   if (temp >= 60) return 'text-status-warning';
@@ -1134,9 +1146,10 @@ onUnmounted(() => {
                 <!-- Stats row -->
                 <div class="flex items-center gap-3 text-[11px] text-text-muted flex-wrap">
                   <span v-tooltip="t('mining.tooltips.energy')" class="flex items-center gap-1 cursor-help">
-                    <span class="text-status-warning">⚡</span>{{ (getUpgradedPower(playerRig) + getRigCoolingEnergy(playerRig.id)).toFixed(0) }}/t
+                    <span class="text-status-warning">⚡</span>{{ ((getUpgradedPower(playerRig) + getRigCoolingEnergy(playerRig.id)) * getPatchConsumptionMultiplier(playerRig)).toFixed(0) }}/t
                     <span v-if="(playerRig.efficiency_level ?? 1) > 1" class="text-green-400">(-{{ getEfficiencyBonus(playerRig) }}%)</span>
                     <span v-if="miningStore.getPowerPenaltyPercent(playerRig) > 0" class="text-status-danger">(+{{ miningStore.getPowerPenaltyPercent(playerRig) }}%)</span>
+                    <span v-if="getPatchConsumptionPercent(playerRig) > 0" class="text-fuchsia-400">(+{{ getPatchConsumptionPercent(playerRig) }}% 🩹)</span>
                   </span>
                   <span v-tooltip="t('mining.tooltips.internet')" class="flex items-center gap-1 cursor-help">
                     <span class="text-accent-tertiary">📡</span>{{ (playerRig.rig.internet_consumption * (1 - (playerRig.efficiency_bonus ?? 0) / 100)).toFixed(0) }}/t

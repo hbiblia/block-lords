@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS market_orders (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   type TEXT NOT NULL CHECK (type IN ('buy', 'sell')),
-  item_type TEXT NOT NULL CHECK (item_type IN ('crypto', 'rig', 'energy', 'internet', 'cooling')),
+  item_type TEXT NOT NULL CHECK (item_type IN ('crypto', 'rig', 'energy', 'internet', 'cooling', 'patch')),
   item_id TEXT,
   quantity DECIMAL(18, 8) NOT NULL CHECK (quantity > 0),
   price_per_unit DECIMAL(18, 8) NOT NULL CHECK (price_per_unit > 0),
@@ -1212,6 +1212,14 @@ CREATE TABLE IF NOT EXISTS prediction_treasury (
   description TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- =====================================================
+-- SUPPORT TICKETS (@ticket)
+-- =====================================================
+
+-- Agregar 'ticket' al constraint de mail_type
+ALTER TABLE player_mail DROP CONSTRAINT IF EXISTS player_mail_mail_type_check;
+ALTER TABLE player_mail ADD CONSTRAINT player_mail_mail_type_check CHECK (mail_type IN ('player', 'system', 'admin', 'ticket'));
 
 -- =====================================================
 -- NOTA: Las funciones están en all_functions.sql

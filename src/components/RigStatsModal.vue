@@ -161,8 +161,8 @@ const tempConditionOptions = computed(() => ({
   },
 }));
 
-// Chart 2: Hashrate
-const hashrateData = computed(() => ({
+// Chart 2: Hashrate + Energy & Internet (combined)
+const hashrateResourceData = computed(() => ({
   labels: timeLabels.value,
   datasets: [
     {
@@ -174,6 +174,7 @@ const hashrateData = computed(() => ({
       tension: 0.3,
       pointRadius: 2,
       borderWidth: 2,
+      yAxisID: 'y',
     },
     {
       label: '📊 Hashrate Base',
@@ -183,59 +184,50 @@ const hashrateData = computed(() => ({
       pointRadius: 0,
       borderWidth: 1,
       fill: false,
+      yAxisID: 'y',
     },
-  ],
-}));
-
-const hashrateOptions = computed(() => ({
-  ...baseOptions,
-  scales: {
-    ...baseOptions.scales,
-    y: {
-      min: 0,
-      grid: { color: gridColor },
-      ticks: { color: tickColor },
-      title: { display: true, text: 'H/s', color: '#f59e0b' },
-    },
-  },
-}));
-
-// Chart 3: Energy & Internet
-const resourceData = computed(() => ({
-  labels: timeLabels.value,
-  datasets: [
     {
-      label: '⚡ Energía/tick',
+      label: '🔋 Energía/tick',
       data: snapshots.value.map(s => Number(s.energyConsumption.toFixed(1))),
-      borderColor: '#eab308',
-      backgroundColor: 'rgba(234, 179, 8, 0.08)',
-      fill: true,
+      borderColor: '#22c55e',
+      backgroundColor: 'rgba(34, 197, 94, 0.08)',
+      fill: false,
       tension: 0.3,
       pointRadius: 2,
       borderWidth: 2,
+      yAxisID: 'y1',
     },
     {
       label: '📡 Internet/tick',
       data: snapshots.value.map(s => Number(s.internetConsumption.toFixed(1))),
       borderColor: '#3b82f6',
       backgroundColor: 'rgba(59, 130, 246, 0.08)',
-      fill: true,
+      fill: false,
       tension: 0.3,
       pointRadius: 2,
       borderWidth: 2,
+      yAxisID: 'y1',
     },
   ],
 }));
 
-const resourceOptions = computed(() => ({
+const hashrateResourceOptions = computed(() => ({
   ...baseOptions,
   scales: {
     ...baseOptions.scales,
     y: {
+      position: 'left' as const,
       min: 0,
       grid: { color: gridColor },
-      ticks: { color: tickColor },
-      title: { display: true, text: '/tick', color: tickColor },
+      ticks: { color: '#f59e0b' },
+      title: { display: true, text: 'H/s', color: '#f59e0b' },
+    },
+    y1: {
+      position: 'right' as const,
+      min: 0,
+      grid: { drawOnChartArea: false },
+      ticks: { color: '#3b82f6' },
+      title: { display: true, text: '/tick', color: '#3b82f6' },
     },
   },
 }));
@@ -332,19 +324,11 @@ function getConditionColor(cond: number): string {
               </div>
             </div>
 
-            <!-- Chart 2: Hashrate -->
+            <!-- Chart 2: Hashrate + Resources -->
             <div class="bg-bg-primary/50 rounded-xl p-3 border border-border/30">
-              <h3 class="text-sm font-semibold mb-2 text-text-secondary">⚡ Hashrate</h3>
+              <h3 class="text-sm font-semibold mb-2 text-text-secondary">⚡ Hashrate & Consumo</h3>
               <div class="h-48">
-                <Line :data="hashrateData" :options="hashrateOptions" />
-              </div>
-            </div>
-
-            <!-- Chart 3: Resources -->
-            <div class="bg-bg-primary/50 rounded-xl p-3 border border-border/30">
-              <h3 class="text-sm font-semibold mb-2 text-text-secondary">🔋 Consumo de Recursos</h3>
-              <div class="h-48">
-                <Line :data="resourceData" :options="resourceOptions" />
+                <Line :data="hashrateResourceData" :options="hashrateResourceOptions" />
               </div>
             </div>
 

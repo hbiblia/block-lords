@@ -309,6 +309,15 @@ export async function applyRigPatch(playerId: string, rigId: string) {
   return data;
 }
 
+export async function buyRigPatch(playerId: string) {
+  const { data, error } = await supabase.rpc('buy_rig_patch', {
+    p_player_id: playerId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 export async function deleteRig(playerId: string, rigId: string) {
   const { data, error } = await supabase.rpc('delete_rig', {
     p_player_id: playerId,
@@ -1844,4 +1853,16 @@ export async function getMailStorage(playerId: string): Promise<any> {
   return rpcWithRetry('get_mail_storage', {
     p_player_id: playerId,
   });
+}
+
+export async function sendSupportTicket(senderId: string, subject: string, body?: string): Promise<any> {
+  return rpcWithRetry('send_support_ticket', {
+    p_sender_id: senderId,
+    p_subject: subject,
+    p_body: body || null,
+  }, { critical: true, maxRetries: 3 });
+}
+
+export async function adminGetTickets(): Promise<any> {
+  return rpcWithRetry('admin_get_tickets', {});
 }
