@@ -159,6 +159,7 @@ let uptimeInterval: number | null = null;
 // Polling intervals (stored for cleanup)
 let blockInfoInterval: number | null = null;
 let playerSharesInterval: number | null = null;
+let rigsRefreshInterval: number | null = null;
 
 // Computed from store
 const rigs = computed(() => miningStore.rigs);
@@ -671,6 +672,14 @@ onMounted(() => {
     miningStore.loadPlayerShares();
   }, 30000) as unknown as number;
 
+  // Actualizar datos de rigs cada 30 segundos (temperatura, condición, etc.)
+  // Necesario porque realtime skippea UPDATEs de player_rigs para evitar flood del game_tick
+  rigsRefreshInterval = setInterval(() => {
+    if (rigs.value.some(r => r.is_active)) {
+      miningStore.reloadRigs();
+    }
+  }, 30000) as unknown as number;
+
   window.addEventListener('block-mined', handleBlockMined as EventListener);
   window.addEventListener('start-mining-tour', startTour);
 
@@ -704,6 +713,7 @@ onUnmounted(() => {
   // Limpiar intervalos de polling
   if (blockInfoInterval) clearInterval(blockInfoInterval);
   if (playerSharesInterval) clearInterval(playerSharesInterval);
+  if (rigsRefreshInterval) clearInterval(rigsRefreshInterval);
 
   // Limpiar listeners de inicialización de sonido (si aún no se ejecutaron)
   document.removeEventListener('click', initRigSoundOnInteraction);

@@ -538,8 +538,9 @@ export const useMiningStore = defineStore('mining', () => {
     }
   }
 
-  // Reload just the rigs data (used when boosts expire to update stats)
+  // Reload just the rigs data (used when boosts expire and for periodic refresh)
   async function reloadRigs() {
+    if (isTabLocked.value) return;
     const authStore = useAuthStore();
     if (!authStore.player?.id) return;
 
