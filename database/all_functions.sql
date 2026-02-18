@@ -8848,6 +8848,175 @@ GRANT EXECUTE ON FUNCTION get_pending_gifts TO authenticated;
 GRANT EXECUTE ON FUNCTION claim_gift TO authenticated;
 
 -- =====================================================
+-- SISTEMA DE AMIGOS
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS player_friends (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  receiver_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(sender_id, receiver_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_friends_sender ON player_friends(sender_id, status);
+CREATE INDEX IF NOT EXISTS idx_player_friends_receiver ON player_friends(receiver_id, status);
+
+-- Helper: verificar si dos jugadores son amigos
+CREATE OR REPLACE FUNCTION are_friends(p_a UUID, p_b UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM player_friends
+    WHERE status = 'accepted'
+      AND ((sender_id = p_a AND receiver_id = p_b)
+        OR (sender_id = p_b AND receiver_id = p_a))
+  );
+END;
+$$;
+
+-- Enviar solicitud de amistad
+CREATE OR REPLACE FUNCTION send_friend_request(p_sender_id UUID, p_receiver_username TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_receiver_id UUID;
+BEGIN
+  SELECT id INTO v_receiver_id FROM players WHERE LOWER(username) = LOWER(TRIM(p_receiver_username));
+  IF v_receiver_id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+  IF v_receiver_id = p_sender_id THEN
+    RETURN json_build_object('success', false, 'error', 'Cannot add yourself');
+  END IF;
+  IF are_friends(p_sender_id, v_receiver_id) THEN
+    RETURN json_build_object('success', false, 'error', 'Already friends');
+  END IF;
+  IF EXISTS (SELECT 1 FROM player_friends WHERE sender_id = p_sender_id AND receiver_id = v_receiver_id AND status = 'pending') THEN
+    RETURN json_build_object('success', false, 'error', 'Request already sent');
+  END IF;
+  -- Si el otro ya me envio solicitud, aceptar directamente
+  IF EXISTS (SELECT 1 FROM player_friends WHERE sender_id = v_receiver_id AND receiver_id = p_sender_id AND status = 'pending') THEN
+    UPDATE player_friends SET status = 'accepted' WHERE sender_id = v_receiver_id AND receiver_id = p_sender_id;
+    RETURN json_build_object('success', true, 'auto_accepted', true);
+  END IF;
+  INSERT INTO player_friends (sender_id, receiver_id, status) VALUES (p_sender_id, v_receiver_id, 'pending');
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+-- Aceptar solicitud de amistad
+CREATE OR REPLACE FUNCTION accept_friend_request(p_player_id UUID, p_request_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE player_friends SET status = 'accepted'
+  WHERE id = p_request_id AND receiver_id = p_player_id AND status = 'pending';
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Request not found');
+  END IF;
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+-- Rechazar solicitud de amistad
+CREATE OR REPLACE FUNCTION reject_friend_request(p_player_id UUID, p_request_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  DELETE FROM player_friends WHERE id = p_request_id AND receiver_id = p_player_id AND status = 'pending';
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Request not found');
+  END IF;
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+-- Eliminar amigo
+CREATE OR REPLACE FUNCTION remove_friend(p_player_id UUID, p_friend_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  DELETE FROM player_friends
+  WHERE status = 'accepted'
+    AND ((sender_id = p_player_id AND receiver_id = p_friend_id)
+      OR (sender_id = p_friend_id AND receiver_id = p_player_id));
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Friend not found');
+  END IF;
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+-- Obtener lista de amigos
+CREATE OR REPLACE FUNCTION get_friends(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.username), '[]'::JSON)
+    FROM (
+      SELECT
+        f.id as friendship_id,
+        CASE WHEN f.sender_id = p_player_id THEN f.receiver_id ELSE f.sender_id END as friend_id,
+        CASE WHEN f.sender_id = p_player_id THEN p2.username ELSE p1.username END as username,
+        f.created_at
+      FROM player_friends f
+      LEFT JOIN players p1 ON p1.id = f.sender_id
+      LEFT JOIN players p2 ON p2.id = f.receiver_id
+      WHERE f.status = 'accepted'
+        AND (f.sender_id = p_player_id OR f.receiver_id = p_player_id)
+    ) t
+  );
+END;
+$$;
+
+-- Obtener solicitudes de amistad pendientes (recibidas)
+CREATE OR REPLACE FUNCTION get_friend_requests(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.created_at DESC), '[]'::JSON)
+    FROM (
+      SELECT
+        f.id as request_id,
+        f.sender_id,
+        p.username as sender_username,
+        f.created_at
+      FROM player_friends f
+      LEFT JOIN players p ON p.id = f.sender_id
+      WHERE f.receiver_id = p_player_id AND f.status = 'pending'
+    ) t
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION are_friends TO authenticated;
+GRANT EXECUTE ON FUNCTION send_friend_request TO authenticated;
+GRANT EXECUTE ON FUNCTION accept_friend_request TO authenticated;
+GRANT EXECUTE ON FUNCTION reject_friend_request TO authenticated;
+GRANT EXECUTE ON FUNCTION remove_friend TO authenticated;
+GRANT EXECUTE ON FUNCTION get_friends TO authenticated;
+GRANT EXECUTE ON FUNCTION get_friend_requests TO authenticated;
+
+-- =====================================================
 -- SISTEMA DE CORREO IN-GAME (TERMINAL MAIL)
 -- =====================================================
 
@@ -8857,7 +9026,7 @@ CREATE TABLE IF NOT EXISTS player_mail (
   recipient_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   subject TEXT NOT NULL CHECK (length(subject) >= 1 AND length(subject) <= 100),
   body TEXT CHECK (body IS NULL OR length(body) <= 2000),
-  mail_type TEXT NOT NULL DEFAULT 'player' CHECK (mail_type IN ('player', 'system', 'admin', 'ticket')),
+  mail_type TEXT NOT NULL DEFAULT 'player' CHECK (mail_type IN ('player', 'system', 'admin', 'ticket', 'spam')),
   -- Attachment fields (mismo patron que player_gifts)
   attachment_gamecoin DECIMAL(10,2) DEFAULT 0,
   attachment_crypto DECIMAL(10,8) DEFAULT 0,
@@ -8946,16 +9115,26 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_count INTEGER;
+  v_inbox_count INTEGER;
+  v_spam_count INTEGER;
 BEGIN
-  SELECT COUNT(*) INTO v_count
+  SELECT COUNT(*) INTO v_inbox_count
   FROM player_mail
   WHERE recipient_id = p_player_id
     AND is_read = FALSE
     AND is_deleted_recipient = FALSE
+    AND mail_type != 'spam'
     AND (expires_at IS NULL OR expires_at > NOW());
 
-  RETURN json_build_object('success', true, 'count', v_count);
+  SELECT COUNT(*) INTO v_spam_count
+  FROM player_mail
+  WHERE recipient_id = p_player_id
+    AND is_read = FALSE
+    AND is_deleted_recipient = FALSE
+    AND mail_type = 'spam'
+    AND (expires_at IS NULL OR expires_at > NOW());
+
+  RETURN json_build_object('success', true, 'count', v_inbox_count, 'spam_count', v_spam_count);
 END;
 $$;
 
@@ -9011,6 +9190,44 @@ BEGIN
       LEFT JOIN players p ON p.id = m.sender_id
       WHERE m.recipient_id = p_player_id
         AND m.is_deleted_recipient = FALSE
+        AND m.mail_type != 'spam'
+        AND (m.expires_at IS NULL OR m.expires_at > NOW())
+      ORDER BY m.created_at DESC
+      LIMIT 100
+    ) t
+  );
+END;
+$$;
+
+-- Obtener correos spam
+CREATE OR REPLACE FUNCTION get_player_spam(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.created_at DESC), '[]'::JSON)
+    FROM (
+      SELECT
+        m.id, m.sender_id,
+        COALESCE(p.username, 'SYSTEM') as sender_username,
+        m.subject, m.body, m.mail_type,
+        m.attachment_gamecoin, m.attachment_crypto,
+        m.attachment_energy, m.attachment_internet,
+        m.attachment_item_type, m.attachment_item_id, m.attachment_item_quantity,
+        (m.attachment_password IS NOT NULL) as has_password,
+        m.is_read, m.is_claimed,
+        (COALESCE(m.attachment_gamecoin, 0) > 0 OR COALESCE(m.attachment_crypto, 0) > 0 OR
+         COALESCE(m.attachment_energy, 0) > 0 OR COALESCE(m.attachment_internet, 0) > 0 OR
+         (m.attachment_item_type IS NOT NULL AND COALESCE(m.attachment_item_quantity, 0) > 0)) as has_attachment,
+        m.expires_at, m.created_at,
+        m.size_kb
+      FROM player_mail m
+      LEFT JOIN players p ON p.id = m.sender_id
+      WHERE m.recipient_id = p_player_id
+        AND m.is_deleted_recipient = FALSE
+        AND m.mail_type = 'spam'
         AND (m.expires_at IS NULL OR m.expires_at > NOW())
       ORDER BY m.created_at DESC
       LIMIT 100
@@ -9031,16 +9248,29 @@ BEGIN
     FROM (
       SELECT
         m.id,
+        m.sender_id,
+        COALESCE(s.username, 'Unknown') as sender_username,
         COALESCE(p.username, 'Unknown') as recipient_username,
-        m.subject, m.mail_type,
+        m.subject, m.body, m.mail_type,
+        COALESCE(m.attachment_gamecoin, 0) as attachment_gamecoin,
+        COALESCE(m.attachment_crypto, 0) as attachment_crypto,
+        COALESCE(m.attachment_energy, 0) as attachment_energy,
+        COALESCE(m.attachment_internet, 0) as attachment_internet,
+        m.attachment_item_type,
+        m.attachment_item_id,
+        COALESCE(m.attachment_item_quantity, 0) as attachment_item_quantity,
         (COALESCE(m.attachment_gamecoin, 0) > 0 OR COALESCE(m.attachment_crypto, 0) > 0 OR
          COALESCE(m.attachment_energy, 0) > 0 OR COALESCE(m.attachment_internet, 0) > 0 OR
          (m.attachment_item_type IS NOT NULL AND COALESCE(m.attachment_item_quantity, 0) > 0)) as has_attachment,
+        (m.attachment_password IS NOT NULL) as has_password,
+        m.is_read,
         m.is_claimed,
+        m.expires_at,
         m.created_at,
         m.size_kb
       FROM player_mail m
       LEFT JOIN players p ON p.id = m.recipient_id
+      LEFT JOIN players s ON s.id = m.sender_id
       WHERE m.sender_id = p_player_id
         AND m.is_deleted_sender = FALSE
       ORDER BY m.created_at DESC
@@ -9226,14 +9456,15 @@ BEGIN
     END IF;
   END IF;
 
-  -- Insertar correo
+  -- Insertar correo (spam si no son amigos)
   INSERT INTO player_mail (
     sender_id, recipient_id, subject, body, mail_type,
     attachment_gamecoin, attachment_crypto, attachment_energy, attachment_internet,
     attachment_item_type, attachment_item_id, attachment_item_quantity,
     attachment_password, is_claimed, size_kb
   ) VALUES (
-    p_sender_id, v_recipient_id, trim(p_subject), p_body, 'player',
+    p_sender_id, v_recipient_id, trim(p_subject), p_body,
+    CASE WHEN are_friends(p_sender_id, v_recipient_id) THEN 'player' ELSE 'spam' END,
     COALESCE(p_gamecoin, 0), COALESCE(p_crypto, 0), COALESCE(p_energy, 0), COALESCE(p_internet, 0),
     p_item_type, p_item_id, COALESCE(p_item_quantity, 0),
     CASE WHEN trim(COALESCE(p_password, '')) = '' THEN NULL ELSE trim(p_password) END,
@@ -9423,7 +9654,8 @@ CREATE OR REPLACE FUNCTION admin_send_mail(
   p_item_type TEXT DEFAULT NULL,
   p_item_id TEXT DEFAULT NULL,
   p_item_quantity INTEGER DEFAULT 0,
-  p_expires_at TIMESTAMPTZ DEFAULT NULL
+  p_expires_at TIMESTAMPTZ DEFAULT NULL,
+  p_password TEXT DEFAULT NULL
 )
 RETURNS JSON
 LANGUAGE plpgsql
@@ -9443,28 +9675,29 @@ BEGIN
     p_subject, p_body, p_gamecoin, p_crypto, p_energy, p_internet, p_item_quantity
   );
 
-  IF LOWER(TRIM(p_target)) = '@everyone' THEN
+  IF LOWER(TRIM(p_target)) IN ('@everyone', '@spam') THEN
     INSERT INTO player_mail (
       sender_id, recipient_id, subject, body, mail_type,
       attachment_gamecoin, attachment_crypto, attachment_energy, attachment_internet,
       attachment_item_type, attachment_item_id, attachment_item_quantity,
-      is_claimed, expires_at, size_kb
+      attachment_password, is_claimed, expires_at, size_kb
     )
     SELECT
-      NULL, p.id, p_subject, p_body, 'admin',
+      NULL, p.id, p_subject, p_body,
+      CASE WHEN LOWER(TRIM(p_target)) = '@spam' THEN 'spam' ELSE 'admin' END,
       COALESCE(p_gamecoin, 0), COALESCE(p_crypto, 0), COALESCE(p_energy, 0), COALESCE(p_internet, 0),
       p_item_type, p_item_id, COALESCE(p_item_quantity, 0),
-      CASE WHEN v_has_attachment THEN FALSE ELSE TRUE END,
+      p_password, CASE WHEN v_has_attachment THEN FALSE ELSE TRUE END,
       p_expires_at, v_mail_size_kb
     FROM players p;
 
     GET DIAGNOSTICS v_count = ROW_COUNT;
-    RETURN json_build_object('success', true, 'target', '@everyone', 'count', v_count);
+    RETURN json_build_object('success', true, 'target', LOWER(TRIM(p_target)), 'count', v_count);
   ELSE
     BEGIN
       v_player_id := p_target::UUID;
     EXCEPTION WHEN OTHERS THEN
-      RETURN json_build_object('success', false, 'error', 'Invalid target. Use @everyone or a valid UUID.');
+      RETURN json_build_object('success', false, 'error', 'Invalid target. Use @everyone, @spam or a valid UUID.');
     END;
 
     IF NOT EXISTS (SELECT 1 FROM players WHERE id = v_player_id) THEN
@@ -9475,12 +9708,12 @@ BEGIN
       sender_id, recipient_id, subject, body, mail_type,
       attachment_gamecoin, attachment_crypto, attachment_energy, attachment_internet,
       attachment_item_type, attachment_item_id, attachment_item_quantity,
-      is_claimed, expires_at, size_kb
+      attachment_password, is_claimed, expires_at, size_kb
     ) VALUES (
       NULL, v_player_id, p_subject, p_body, 'admin',
       COALESCE(p_gamecoin, 0), COALESCE(p_crypto, 0), COALESCE(p_energy, 0), COALESCE(p_internet, 0),
       p_item_type, p_item_id, COALESCE(p_item_quantity, 0),
-      CASE WHEN v_has_attachment THEN FALSE ELSE TRUE END,
+      p_password, CASE WHEN v_has_attachment THEN FALSE ELSE TRUE END,
       p_expires_at, v_mail_size_kb
     );
 
@@ -9491,6 +9724,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION get_mail_unread_count TO authenticated;
 GRANT EXECUTE ON FUNCTION get_player_inbox TO authenticated;
+GRANT EXECUTE ON FUNCTION get_player_spam TO authenticated;
 GRANT EXECUTE ON FUNCTION get_player_sent TO authenticated;
 GRANT EXECUTE ON FUNCTION read_mail TO authenticated;
 GRANT EXECUTE ON FUNCTION send_player_mail TO authenticated;
@@ -9512,7 +9746,7 @@ WHERE size_kb = 0 OR size_kb IS NULL;
 
 -- Migración: agregar 'ticket' al constraint de mail_type
 ALTER TABLE player_mail DROP CONSTRAINT IF EXISTS player_mail_mail_type_check;
-ALTER TABLE player_mail ADD CONSTRAINT player_mail_mail_type_check CHECK (mail_type IN ('player', 'system', 'admin', 'ticket'));
+ALTER TABLE player_mail ADD CONSTRAINT player_mail_mail_type_check CHECK (mail_type IN ('player', 'system', 'admin', 'ticket', 'spam'));
 
 -- =====================================================
 -- SUPPORT TICKETS (@ticket)

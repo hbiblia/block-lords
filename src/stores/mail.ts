@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import {
   getPlayerInbox,
   getPlayerSent,
+  getPlayerSpam,
   getMailUnreadCount,
   getMailStorage,
   readMail as apiReadMail,
@@ -21,7 +22,7 @@ export interface Mail {
   recipient_username?: string;
   subject: string;
   body: string | null;
-  mail_type: 'player' | 'system' | 'admin' | 'ticket';
+  mail_type: 'player' | 'system' | 'admin' | 'ticket' | 'spam';
   attachment_gamecoin: number;
   attachment_crypto: number;
   attachment_energy: number;
@@ -49,14 +50,17 @@ export interface MailClaimResult {
   itemQuantity: number;
 }
 
-export type MailView = 'inbox' | 'sent' | 'compose' | 'detail';
+export type MailView = 'inbox' | 'sent' | 'spam' | 'compose' | 'detail' | 'friends';
 
 export const useMailStore = defineStore('mail', () => {
   const inbox = ref<Mail[]>([]);
   const sent = ref<Mail[]>([]);
+  const spam = ref<Mail[]>([]);
   const unreadCount = ref(0);
+  const spamCount = ref(0);
   const selectedMail = ref<Mail | null>(null);
   const currentView = ref<MailView>('inbox');
+  const previousView = ref<MailView>('inbox');
   const loading = ref(false);
   const sending = ref(false);
   const claiming = ref(false);
@@ -67,6 +71,7 @@ export const useMailStore = defineStore('mail', () => {
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
   const hasUnread = computed(() => unreadCount.value > 0);
+  const hasSpam = computed(() => spamCount.value > 0);
 
   function playMailSound() {
     try {
@@ -131,6 +136,22 @@ export const useMailStore = defineStore('mail', () => {
     }
   }
 
+  async function fetchSpam() {
+    const authStore = useAuthStore();
+    if (!authStore.player?.id) return;
+    loading.value = true;
+    try {
+      const result = await getPlayerSpam(authStore.player.id);
+      if (Array.isArray(result)) {
+        spam.value = result;
+      }
+    } catch (e) {
+      console.error('Error fetching spam:', e);
+    } finally {
+      loading.value = false;
+    }
+  }
+
   async function fetchUnreadCount() {
     const authStore = useAuthStore();
     if (!authStore.player?.id) return;
@@ -139,6 +160,7 @@ export const useMailStore = defineStore('mail', () => {
       if (result?.success) {
         const prev = unreadCount.value;
         unreadCount.value = result.count;
+        spamCount.value = result.spam_count || 0;
         if (result.count > prev && prev >= 0) {
           playMailSound();
         }
@@ -167,10 +189,15 @@ export const useMailStore = defineStore('mail', () => {
     if (!authStore.player?.id) return;
     try {
       await apiReadMail(authStore.player.id, mailId);
-      const mail = inbox.value.find(m => m.id === mailId);
-      if (mail && !mail.is_read) {
-        mail.is_read = true;
+      const inboxMail = inbox.value.find(m => m.id === mailId);
+      if (inboxMail && !inboxMail.is_read) {
+        inboxMail.is_read = true;
         unreadCount.value = Math.max(0, unreadCount.value - 1);
+      }
+      const spamMail = spam.value.find(m => m.id === mailId);
+      if (spamMail && !spamMail.is_read) {
+        spamMail.is_read = true;
+        spamCount.value = Math.max(0, spamCount.value - 1);
       }
     } catch (e) {
       console.error('Error marking mail as read:', e);
@@ -248,6 +275,7 @@ export const useMailStore = defineStore('mail', () => {
     crypto?: number;
     energy?: number;
     internet?: number;
+    password?: string;
   }) {
     sending.value = true;
     error.value = null;
@@ -260,6 +288,7 @@ export const useMailStore = defineStore('mail', () => {
         crypto: params.crypto,
         energy: params.energy,
         internet: params.internet,
+        password: params.password,
       });
       if (result?.success) {
         return result;
@@ -283,7 +312,7 @@ export const useMailStore = defineStore('mail', () => {
     try {
       const result = await claimMailAttachment(authStore.player.id, mailId, password);
       if (result?.success) {
-        const mail = inbox.value.find(m => m.id === mailId);
+        const mail = inbox.value.find(m => m.id === mailId) || spam.value.find(m => m.id === mailId);
         if (mail) mail.is_claimed = true;
         if (selectedMail.value?.id === mailId) {
           selectedMail.value = { ...selectedMail.value, is_claimed: true };
@@ -310,6 +339,7 @@ export const useMailStore = defineStore('mail', () => {
       if (result?.success) {
         inbox.value = inbox.value.filter(m => m.id !== mailId);
         sent.value = sent.value.filter(m => m.id !== mailId);
+        spam.value = spam.value.filter(m => m.id !== mailId);
         if (selectedMail.value?.id === mailId) {
           selectedMail.value = null;
           currentView.value = 'inbox';
@@ -322,9 +352,26 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   function selectMail(mail: Mail) {
+    previousView.value = currentView.value === 'sent' ? 'sent' : currentView.value === 'spam' ? 'spam' : 'inbox';
     selectedMail.value = mail;
     currentView.value = 'detail';
-    if (!mail.is_read) markAsRead(mail.id);
+    if (previousView.value !== 'sent' && !mail.is_read) markAsRead(mail.id);
+  }
+
+  function goToFriends() {
+    currentView.value = 'friends';
+    selectedMail.value = null;
+    error.value = null;
+  }
+
+  function goBack() {
+    if (previousView.value === 'sent') {
+      goToSent();
+    } else if (previousView.value === 'spam') {
+      goToSpam();
+    } else {
+      goToInbox();
+    }
   }
 
   function openCompose() {
@@ -346,6 +393,49 @@ export const useMailStore = defineStore('mail', () => {
     fetchSent();
   }
 
+  function goToSpam() {
+    currentView.value = 'spam';
+    selectedMail.value = null;
+    error.value = null;
+    fetchSpam();
+  }
+
+  async function sendSpam(params: {
+    subject: string;
+    body?: string;
+    gamecoin?: number;
+    crypto?: number;
+    energy?: number;
+    internet?: number;
+    password?: string;
+  }) {
+    sending.value = true;
+    error.value = null;
+    try {
+      const result = await adminSendMail({
+        target: '@spam',
+        subject: params.subject,
+        body: params.body,
+        gamecoin: params.gamecoin,
+        crypto: params.crypto,
+        energy: params.energy,
+        internet: params.internet,
+        password: params.password,
+      });
+      if (result?.success) {
+        return result;
+      } else {
+        error.value = result?.error || 'Error sending spam';
+        return null;
+      }
+    } catch (e: any) {
+      error.value = e.message || 'Error sending spam';
+      return null;
+    } finally {
+      sending.value = false;
+    }
+  }
+
   function startPolling() {
     if (pollInterval) return;
     pollInterval = setInterval(() => fetchUnreadCount(), 60000);
@@ -361,9 +451,12 @@ export const useMailStore = defineStore('mail', () => {
   return {
     inbox,
     sent,
+    spam,
     unreadCount,
+    spamCount,
     selectedMail,
     currentView,
+    previousView,
     loading,
     sending,
     claiming,
@@ -371,20 +464,26 @@ export const useMailStore = defineStore('mail', () => {
     storageUsed,
     storageMax,
     hasUnread,
+    hasSpam,
     fetchInbox,
     fetchSent,
+    fetchSpam,
     fetchUnreadCount,
     fetchStorage,
     markAsRead,
     sendMail,
     sendTicket,
     sendBroadcast,
+    sendSpam,
     claimAttachment,
     removeMail,
     selectMail,
     openCompose,
     goToInbox,
     goToSent,
+    goToSpam,
+    goToFriends,
+    goBack,
     startPolling,
     stopPolling,
   };

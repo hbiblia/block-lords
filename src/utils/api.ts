@@ -1787,6 +1787,12 @@ export async function getPlayerSent(playerId: string): Promise<any> {
   });
 }
 
+export async function getPlayerSpam(playerId: string): Promise<any> {
+  return rpcWithRetry('get_player_spam', {
+    p_player_id: playerId,
+  });
+}
+
 export async function getMailUnreadCount(playerId: string): Promise<any> {
   return rpcWithRetry('get_mail_unread_count', {
     p_player_id: playerId,
@@ -1871,6 +1877,7 @@ export async function adminSendMail(params: {
   crypto?: number;
   energy?: number;
   internet?: number;
+  password?: string;
 }): Promise<any> {
   return rpcWithRetry('admin_send_mail', {
     p_target: params.target,
@@ -1880,9 +1887,52 @@ export async function adminSendMail(params: {
     p_crypto: params.crypto || 0,
     p_energy: params.energy || 0,
     p_internet: params.internet || 0,
+    p_password: params.password || null,
   }, { critical: true, maxRetries: 3 });
 }
 
 export async function adminGetTickets(): Promise<any> {
   return rpcWithRetry('admin_get_tickets', {});
+}
+
+// === FRIENDS ===
+
+export async function sendFriendRequest(senderId: string, receiverUsername: string): Promise<any> {
+  return rpcWithRetry('send_friend_request', {
+    p_sender_id: senderId,
+    p_receiver_username: receiverUsername,
+  });
+}
+
+export async function acceptFriendRequest(playerId: string, requestId: string): Promise<any> {
+  return rpcWithRetry('accept_friend_request', {
+    p_player_id: playerId,
+    p_request_id: requestId,
+  });
+}
+
+export async function rejectFriendRequest(playerId: string, requestId: string): Promise<any> {
+  return rpcWithRetry('reject_friend_request', {
+    p_player_id: playerId,
+    p_request_id: requestId,
+  });
+}
+
+export async function removeFriend(playerId: string, friendId: string): Promise<any> {
+  return rpcWithRetry('remove_friend', {
+    p_player_id: playerId,
+    p_friend_id: friendId,
+  });
+}
+
+export async function getFriends(playerId: string): Promise<any> {
+  return rpcWithRetry('get_friends', {
+    p_player_id: playerId,
+  });
+}
+
+export async function getFriendRequests(playerId: string): Promise<any> {
+  return rpcWithRetry('get_friend_requests', {
+    p_player_id: playerId,
+  });
 }

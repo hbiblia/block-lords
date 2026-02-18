@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useMailStore, type Mail } from '@/stores/mail';
 import { useAuthStore } from '@/stores/auth';
 import { useToastStore } from '@/stores/toast';
+import { useFriendsStore } from '@/stores/friends';
 import { playSound } from '@/utils/sounds';
 import { formatNumber } from '@/utils/format';
 
@@ -11,6 +12,7 @@ const { t } = useI18n();
 const mailStore = useMailStore();
 const authStore = useAuthStore();
 const toastStore = useToastStore();
+const friendsStore = useFriendsStore();
 
 const props = defineProps<{
   show: boolean;
@@ -118,13 +120,15 @@ function playSendAnimation(): Promise<void> {
   });
 }
 
-// Claim password prompt
+// Confirm claim
+const confirmClaimMail = ref<Mail | null>(null);
 const claimPassword = ref('');
-const showClaimPassword = ref(false);
-const claimingMailId = ref<string | null>(null);
 
 // Confirm delete
 const confirmDeleteId = ref<string | null>(null);
+
+// Friends
+const friendUsername = ref('');
 
 // Starred mails (local only, cosmetic)
 const starredIds = ref<Set<string>>(new Set());
@@ -142,6 +146,7 @@ watch(() => props.show, (val) => {
   if (val) {
     mailStore.fetchInbox();
     mailStore.fetchUnreadCount();
+    friendsStore.fetchRequests();
     mailStore.currentView = 'inbox';
     mailStore.selectedMail = null;
     mailStore.error = null;
@@ -298,11 +303,35 @@ async function handleSend() {
       crypto: composeCrypto.value || undefined,
       energy: composeEnergy.value || undefined,
       internet: composeInternet.value || undefined,
+      password: showPasswordField.value ? composePassword.value.trim() || undefined : undefined,
     });
     if (result) {
       playSound('purchase');
       await playSendAnimation();
       toastStore.success(t('mail.broadcastSent'), '📢');
+      resetCompose();
+      mailStore.goToInbox();
+    } else {
+      playSound('error');
+    }
+    return;
+  }
+
+  // Spam mode: admin send to spam
+  if (isSpamMode.value) {
+    const result = await mailStore.sendSpam({
+      subject: composeSubject.value.trim(),
+      body: composeBody.value.trim() || undefined,
+      gamecoin: composeGamecoin.value || undefined,
+      crypto: composeCrypto.value || undefined,
+      energy: composeEnergy.value || undefined,
+      internet: composeInternet.value || undefined,
+      password: showPasswordField.value ? composePassword.value.trim() || undefined : undefined,
+    });
+    if (result) {
+      playSound('purchase');
+      await playSendAnimation();
+      toastStore.success(t('mail.spamSent'), '⚠️');
       resetCompose();
       mailStore.goToInbox();
     } else {
@@ -337,30 +366,21 @@ async function handleSend() {
 
 // === CLAIM ===
 function startClaim(mail: Mail) {
-  if (mail.has_password && !mail.is_claimed) {
-    claimingMailId.value = mail.id;
-    claimPassword.value = '';
-    showClaimPassword.value = true;
-  } else {
-    doClaim(mail.id);
-  }
+  confirmClaimMail.value = mail;
+  claimPassword.value = '';
 }
 
-async function doClaim(mailId: string, password?: string) {
-  const result = await mailStore.claimAttachment(mailId, password);
+async function confirmClaim() {
+  if (!confirmClaimMail.value) return;
+  const mail = confirmClaimMail.value;
+  const password = mail.has_password ? claimPassword.value : undefined;
+  const result = await mailStore.claimAttachment(mail.id, password);
   if (result) {
     playSound('success');
     toastStore.success(t('mail.claimSuccess'), '📦');
-    showClaimPassword.value = false;
-    claimingMailId.value = null;
+    confirmClaimMail.value = null;
   } else {
     playSound('error');
-  }
-}
-
-function submitClaimPassword() {
-  if (claimingMailId.value) {
-    doClaim(claimingMailId.value, claimPassword.value);
   }
 }
 
@@ -377,6 +397,35 @@ async function confirmDelete() {
 }
 
 const currentMail = computed(() => mailStore.selectedMail);
+
+// === FRIENDS ===
+async function handleAddFriend() {
+  if (!friendUsername.value.trim()) return;
+  const result = await friendsStore.sendRequest(friendUsername.value.trim());
+  if (result) {
+    friendUsername.value = '';
+    toastStore.success(result.auto_accepted ? t('friends.autoAccepted') : t('friends.requestSent'), '👥');
+  } else {
+    playSound('error');
+  }
+}
+
+async function handleAcceptRequest(requestId: string) {
+  const result = await friendsStore.acceptRequest(requestId);
+  if (result) {
+    toastStore.success(t('friends.accepted'), '👥');
+  }
+}
+
+async function handleAddFriendFromMail() {
+  if (!currentMail.value?.sender_username) return;
+  const result = await friendsStore.sendRequest(currentMail.value.sender_username);
+  if (result) {
+    toastStore.success(result.auto_accepted ? t('friends.autoAccepted') : t('friends.requestSent'), '👥');
+  } else {
+    playSound('error');
+  }
+}
 
 // Storage display
 const storagePercent = computed(() => {
@@ -405,11 +454,12 @@ const estimatedSizeKb = computed(() => {
 
 const isTicketMode = computed(() => composeTo.value.trim().toLowerCase() === '@ticket');
 const isEveryoneMode = computed(() => composeTo.value.trim().toLowerCase() === '@everyone');
+const isSpamMode = computed(() => composeTo.value.trim().toLowerCase() === '@spam');
 const isAdmin = computed(() => authStore.player?.role === 'admin');
 
 const showAtSuggestions = computed(() => {
   const val = composeTo.value.trim().toLowerCase();
-  return val.startsWith('@') && val !== '@ticket' && val !== '@everyone';
+  return val.startsWith('@') && val !== '@ticket' && val !== '@everyone' && val !== '@spam';
 });
 
 const atSuggestions = computed(() => {
@@ -419,6 +469,7 @@ const atSuggestions = computed(() => {
   ];
   if (isAdmin.value) {
     options.push({ value: '@everyone', label: '@everyone', desc: t('mail.everyoneHint', 'Todos los jugadores'), icon: '📢' });
+    options.push({ value: '@spam', label: '@spam', desc: t('mail.spamHint', 'Enviar a spam'), icon: '⚠️' });
   }
   if (!val || val === '@') return options;
   return options.filter(o => o.value.startsWith(val));
@@ -503,19 +554,40 @@ function getResourceSizeLabel(key: string): string {
             <button
               @click="mailStore.goToInbox(); mailStore.fetchInbox()"
               class="gmail-nav-item"
-              :class="{ 'gmail-nav-active': mailStore.currentView === 'inbox' || mailStore.currentView === 'detail' }"
+              :class="{ 'gmail-nav-active': mailStore.currentView === 'inbox' || (mailStore.currentView === 'detail' && mailStore.previousView === 'inbox') }"
             >
               <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8l9-5 9 5v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8z"/><polyline points="3,8 12,14 21,8"/></svg>
               <span class="flex-1 text-left">{{ t('mail.inbox') }}</span>
               <span v-if="mailStore.hasUnread" class="gmail-badge">{{ mailStore.unreadCount }}</span>
             </button>
             <button
+              @click="mailStore.goToSpam()"
+              class="gmail-nav-item"
+              :class="{ 'gmail-nav-active': mailStore.currentView === 'spam' || (mailStore.currentView === 'detail' && mailStore.previousView === 'spam') }"
+            >
+              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7v10l10 5 10-5V7L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="16" r="0.5"/></svg>
+              <span class="flex-1 text-left">{{ t('mail.spam') }}</span>
+              <span v-if="mailStore.hasSpam" class="gmail-badge gmail-badge-spam">{{ mailStore.spamCount }}</span>
+            </button>
+            <button
               @click="mailStore.goToSent()"
               class="gmail-nav-item"
-              :class="{ 'gmail-nav-active': mailStore.currentView === 'sent' }"
+              :class="{ 'gmail-nav-active': mailStore.currentView === 'sent' || (mailStore.currentView === 'detail' && mailStore.previousView === 'sent') }"
             >
               <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
               <span class="flex-1 text-left">{{ t('mail.sent') }}</span>
+              <span v-if="mailStore.sent.length > 0" class="gmail-badge-muted">{{ mailStore.sent.length }}</span>
+            </button>
+
+            <!-- Friends -->
+            <button
+              @click="mailStore.goToFriends(); friendsStore.fetchFriends(); friendsStore.fetchRequests()"
+              class="gmail-nav-item"
+              :class="{ 'gmail-nav-active': mailStore.currentView === 'friends' }"
+            >
+              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+              <span class="flex-1 text-left">{{ t('friends.title') }}</span>
+              <span v-if="friendsStore.requests.length > 0" class="gmail-badge">{{ friendsStore.requests.length }}</span>
             </button>
 
             <!-- Storage info -->
@@ -617,7 +689,8 @@ function getResourceSizeLabel(key: string): string {
                 <div
                   v-for="mail in mailStore.sent"
                   :key="mail.id"
-                  class="gmail-row"
+                  class="gmail-row cursor-pointer"
+                  @click="mailStore.selectMail(mail)"
                 >
                   <span class="gmail-star shrink-0 opacity-0">☆</span>
                   <div class="gmail-sender shrink-0 text-white/40">
@@ -632,6 +705,7 @@ function getResourceSizeLabel(key: string): string {
                       <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
                     </span>
                     <span v-if="mail.is_claimed" class="text-[9px] text-green-400/60">claimed</span>
+                    <span v-if="mail.is_read" class="text-[9px] text-blue-400/60">{{ t('mail.seen') }}</span>
                   </div>
                   <span class="gmail-date">{{ formatDate(mail.created_at) }}</span>
                   <span class="gmail-size shrink-0">{{ mail.size_kb }} KB</span>
@@ -639,11 +713,99 @@ function getResourceSizeLabel(key: string): string {
               </div>
             </div>
 
+            <!-- ===== SPAM LIST ===== -->
+            <div v-if="mailStore.currentView === 'spam'">
+              <div class="gmail-toolbar">
+                <span class="text-[10px] text-white/30">{{ mailStore.spam.length }} spam</span>
+              </div>
+              <div v-if="mailStore.loading" class="flex items-center justify-center h-40">
+                <span class="text-white/30 text-xs animate-pulse">{{ t('common.loading') }}</span>
+              </div>
+              <div v-else-if="mailStore.spam.length === 0" class="flex flex-col items-center justify-center h-40 gap-2">
+                <p class="text-white/30 text-sm">{{ t('mail.noSpamMail') }}</p>
+              </div>
+              <div v-else>
+                <div
+                  v-for="mail in mailStore.spam"
+                  :key="mail.id"
+                  class="gmail-row cursor-pointer"
+                  @click="mailStore.selectMail(mail)"
+                >
+                  <span class="gmail-star shrink-0 opacity-0">☆</span>
+                  <div class="gmail-sender shrink-0" :class="{ 'font-bold': !mail.is_read }">
+                    {{ mail.sender_username }}
+                  </div>
+                  <div class="gmail-subject-area flex-1 min-w-0">
+                    <span class="gmail-subject" :class="{ 'font-bold text-white/90': !mail.is_read }">{{ mail.subject }}</span>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0 ml-1">
+                    <span v-if="!mail.is_read" class="gmail-new-badge">new</span>
+                    <span v-if="mail.has_attachment" class="gmail-attach-icon">
+                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                    </span>
+                    <span v-if="mail.has_password" class="text-[10px] text-amber-400/70">🔒</span>
+                  </div>
+                  <span class="gmail-date shrink-0" :class="{ 'font-bold': !mail.is_read }">{{ formatDate(mail.created_at) }}</span>
+                  <span class="gmail-size shrink-0">{{ mail.size_kb }} KB</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ===== FRIENDS VIEW ===== -->
+            <div v-if="mailStore.currentView === 'friends'">
+              <div class="gmail-toolbar">
+                <span class="text-[10px] text-white/30">{{ t('friends.title') }}</span>
+              </div>
+
+              <!-- Add friend -->
+              <div class="p-3 border-b border-white/5">
+                <div class="flex gap-2">
+                  <input
+                    v-model="friendUsername"
+                    type="text"
+                    :placeholder="t('friends.addPlaceholder')"
+                    class="gmail-input flex-1"
+                    @keydown.enter="handleAddFriend"
+                  />
+                  <button @click="handleAddFriend" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-500 transition-colors">
+                    {{ t('friends.add') }}
+                  </button>
+                </div>
+                <p v-if="friendsStore.error" class="text-[11px] text-red-400 mt-2">{{ friendsStore.error }}</p>
+              </div>
+
+              <!-- Pending requests -->
+              <div v-if="friendsStore.requests.length > 0" class="p-3 border-b border-white/5">
+                <h4 class="text-[11px] text-white/40 font-bold mb-2 uppercase">{{ t('friends.pending') }} ({{ friendsStore.requests.length }})</h4>
+                <div v-for="req in friendsStore.requests" :key="req.request_id" class="gmail-row">
+                  <span class="text-xs text-white/70 flex-1">{{ req.sender_username }}</span>
+                  <div class="flex gap-1 shrink-0">
+                    <button @click="handleAcceptRequest(req.request_id)" class="px-2 py-1 bg-emerald-600 text-white text-[10px] rounded hover:bg-emerald-500">{{ t('friends.accept') }}</button>
+                    <button @click="friendsStore.rejectRequest(req.request_id)" class="px-2 py-1 bg-red-600/50 text-white text-[10px] rounded hover:bg-red-500/50">{{ t('friends.reject') }}</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Friends list -->
+              <div class="p-3">
+                <h4 class="text-[11px] text-white/40 font-bold mb-2 uppercase">{{ t('friends.title') }} ({{ friendsStore.friends.length }})</h4>
+                <div v-if="friendsStore.friends.length === 0" class="flex flex-col items-center justify-center h-32 gap-2">
+                  <p class="text-white/30 text-sm">{{ t('friends.noFriends') }}</p>
+                </div>
+                <div v-else>
+                  <div v-for="friend in friendsStore.friends" :key="friend.friendship_id" class="gmail-row">
+                    <span class="text-xs text-white/70 flex-1">{{ friend.username }}</span>
+                    <button @click="friendsStore.deleteFriend(friend.friend_id)" class="text-[10px] text-red-400/60 hover:text-red-400 shrink-0">{{ t('friends.remove') }}</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- ===== DETAIL VIEW ===== -->
             <div v-if="mailStore.currentView === 'detail' && currentMail" class="gmail-detail">
               <!-- Back link -->
-              <button @click="mailStore.goToInbox()" class="gmail-back-link">
-                &larr; {{ t('mail.back') }} to {{ t('mail.inbox') }}
+              <button @click="mailStore.goBack()" class="gmail-back-link">
+                &larr; {{ t('mail.back') }} to {{ mailStore.previousView === 'sent' ? t('mail.sent') : mailStore.previousView === 'spam' ? t('mail.spam') : t('mail.inbox') }}
               </button>
 
               <!-- Subject line -->
@@ -652,18 +814,40 @@ function getResourceSizeLabel(key: string): string {
                 <span v-if="currentMail.mail_type === 'admin'" class="gmail-label-admin ml-2">SYS</span>
               </div>
 
-              <!-- Sender info -->
+              <!-- Sender/Recipient info -->
               <div class="gmail-detail-sender">
                 <div class="gmail-avatar">
-                  {{ (currentMail.sender_username || 'S').charAt(0).toUpperCase() }}
+                  {{ mailStore.previousView === 'sent'
+                    ? (currentMail.recipient_username || 'R').charAt(0).toUpperCase()
+                    : (currentMail.sender_username || 'S').charAt(0).toUpperCase() }}
                 </div>
                 <div class="flex-1 min-w-0">
-                  <div class="flex items-baseline gap-2">
-                    <span class="text-sm font-bold text-white/90">{{ currentMail.sender_username }}</span>
-                    <span class="text-[10px] text-white/25">&lt;{{ currentMail.sender_username }}@lootmail.game&gt;</span>
-                  </div>
-                  <div class="text-[10px] text-white/30 mt-0.5">{{ formatDateFull(currentMail.created_at) }} <span class="ml-2 text-white/20">{{ currentMail.size_kb }} KB</span></div>
+                  <!-- Sent mail: show recipient -->
+                  <template v-if="mailStore.previousView === 'sent'">
+                    <div class="flex items-baseline gap-2">
+                      <span class="text-sm font-bold text-white/90">To: {{ currentMail.recipient_username }}</span>
+                      <span class="text-[10px] text-white/25">&lt;{{ currentMail.recipient_username }}@lootmail.game&gt;</span>
+                    </div>
+                    <div class="text-[10px] text-white/30 mt-0.5">
+                      {{ formatDateFull(currentMail.created_at) }}
+                      <span class="ml-2 text-white/20">{{ currentMail.size_kb }} KB</span>
+                      <span v-if="currentMail.is_read" class="ml-2 text-blue-400/70">{{ t('mail.seen') }}</span>
+                      <span v-else class="ml-2 text-white/30">{{ t('mail.notSeen') }}</span>
+                    </div>
+                  </template>
+                  <!-- Inbox mail: show sender -->
+                  <template v-else>
+                    <div class="flex items-baseline gap-2">
+                      <span class="text-sm font-bold text-white/90">{{ currentMail.sender_username }}</span>
+                      <span class="text-[10px] text-white/25">&lt;{{ currentMail.sender_username }}@lootmail.game&gt;</span>
+                    </div>
+                    <div class="text-[10px] text-white/30 mt-0.5">{{ formatDateFull(currentMail.created_at) }} <span class="ml-2 text-white/20">{{ currentMail.size_kb }} KB</span></div>
+                  </template>
                 </div>
+                <!-- Add friend (spam detail only) -->
+                <button v-if="mailStore.previousView === 'spam' && currentMail.sender_username" @click="handleAddFriendFromMail" class="gmail-toolbar-btn" :title="t('friends.add')">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                </button>
                 <!-- Delete -->
                 <button @click="requestDelete(currentMail.id)" class="gmail-toolbar-btn" title="Delete">
                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
@@ -681,7 +865,7 @@ function getResourceSizeLabel(key: string): string {
                 <div class="gmail-attach-header">
                   <svg class="w-4 h-4 text-white/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
                   <span>{{ t('mail.attachments') }}</span>
-                  <span v-if="currentMail.has_password && !currentMail.is_claimed" class="gmail-lock-badge">🔒 {{ t('mail.passwordRequired') }}</span>
+                  <span v-if="currentMail.has_password && mailStore.previousView !== 'sent' && !currentMail.is_claimed" class="gmail-lock-badge">🔒 {{ t('mail.passwordRequired') }}</span>
                 </div>
 
                 <!-- Attachment chips -->
@@ -703,34 +887,30 @@ function getResourceSizeLabel(key: string): string {
                   </div>
                 </div>
 
-                <!-- Claim area -->
-                <div v-if="!currentMail.is_claimed">
-                  <div v-if="showClaimPassword && claimingMailId === currentMail.id" class="flex gap-2 mb-2">
-                    <input
-                      v-model="claimPassword"
-                      type="text"
-                      :placeholder="t('mail.passwordPlaceholder')"
-                      class="gmail-input flex-1"
-                      @keydown.enter="submitClaimPassword"
-                    />
-                    <button @click="submitClaimPassword" :disabled="mailStore.claiming" class="gmail-btn-primary px-4">
-                      {{ mailStore.claiming ? '...' : 'OK' }}
+                <!-- Claim area (only for inbox mails) -->
+                <template v-if="mailStore.previousView !== 'sent'">
+                  <div v-if="!currentMail.is_claimed">
+                    <button
+                      @click="startClaim(currentMail)"
+                      :disabled="mailStore.claiming"
+                      class="gmail-btn-claim"
+                    >
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      {{ t('mail.claimAttachment') }}
                     </button>
                   </div>
-                  <button
-                    v-else
-                    @click="startClaim(currentMail)"
-                    :disabled="mailStore.claiming"
-                    class="gmail-btn-claim"
-                  >
-                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    {{ mailStore.claiming ? t('mail.claiming') : t('mail.claimAttachment') }}
-                  </button>
-                </div>
-                <div v-else class="flex items-center gap-2 py-2">
-                  <svg class="w-4 h-4 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg>
-                  <span class="text-xs text-green-400/80">{{ t('mail.claimed') }}</span>
-                </div>
+                  <div v-else class="flex items-center gap-2 py-2">
+                    <svg class="w-4 h-4 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg>
+                    <span class="text-xs text-green-400/80">{{ t('mail.claimed') }}</span>
+                  </div>
+                </template>
+                <!-- Sent mail: show claim status read-only -->
+                <template v-else>
+                  <div class="flex items-center gap-2 py-2">
+                    <span v-if="currentMail.is_claimed" class="text-xs text-green-400/80">{{ t('mail.claimed') }}</span>
+                    <span v-else class="text-xs text-white/30">{{ t('mail.notClaimed') }}</span>
+                  </div>
+                </template>
 
                 <p v-if="mailStore.error" class="text-[11px] text-red-400 mt-2">{{ mailStore.error }}</p>
               </div>
@@ -753,6 +933,11 @@ function getResourceSizeLabel(key: string): string {
                 <div v-if="isEveryoneMode" class="flex items-center gap-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/20 mb-2">
                   <span class="text-sm">📢</span>
                   <span class="text-[11px] text-amber-300">{{ t('mail.everyoneHint') }}</span>
+                </div>
+                <!-- Spam mode banner -->
+                <div v-if="isSpamMode" class="flex items-center gap-2 px-3 py-2 rounded bg-orange-500/10 border border-orange-500/20 mb-2">
+                  <span class="text-sm">⚠️</span>
+                  <span class="text-[11px] text-orange-300">{{ t('mail.spamHint') }}</span>
                 </div>
 
                 <!-- To -->
@@ -827,13 +1012,13 @@ function getResourceSizeLabel(key: string): string {
                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
                     {{ t('mail.addAttachment') }}
                   </button>
-                  <button v-if="attachedResources.length > 0 && !isEveryoneMode" @click="showPasswordField = !showPasswordField" class="gmail-extra-btn" :class="{ 'gmail-extra-btn-active': showPasswordField }">
+                  <button v-if="attachedResources.length > 0" @click="showPasswordField = !showPasswordField" class="gmail-extra-btn" :class="{ 'gmail-extra-btn-active': showPasswordField }">
                     🔒 {{ t('mail.password') }}
                   </button>
                 </div>
 
-                <!-- Password field (hidden in ticket and everyone mode) -->
-                <div v-if="!isTicketMode && !isEveryoneMode && showPasswordField && attachedResources.length > 0" class="gmail-compose-attachments">
+                <!-- Password field (hidden in ticket mode) -->
+                <div v-if="!isTicketMode && showPasswordField && attachedResources.length > 0" class="gmail-compose-attachments">
                   <div class="gmail-attach-field">
                     <label>🔒 {{ t('mail.password') }}</label>
                     <input v-model="composePassword" type="text" maxlength="50" :placeholder="t('mail.passwordPlaceholder')" class="gmail-input" />
@@ -850,11 +1035,11 @@ function getResourceSizeLabel(key: string): string {
                     @click="handleSend"
                     :disabled="mailStore.sending || !composeSubject.trim() || !composeTo.trim()"
                     class="gmail-btn-send"
-                    :class="{ '!bg-fuchsia-600 hover:!bg-fuchsia-500': isTicketMode, '!bg-amber-600 hover:!bg-amber-500': isEveryoneMode }"
+                    :class="{ '!bg-fuchsia-600 hover:!bg-fuchsia-500': isTicketMode, '!bg-amber-600 hover:!bg-amber-500': isEveryoneMode, '!bg-orange-600 hover:!bg-orange-500': isSpamMode }"
                   >
-                    {{ mailStore.sending ? t('mail.sending') : (isTicketMode ? t('mail.sendTicket') : isEveryoneMode ? t('mail.sendBroadcast') : t('mail.send')) }}
+                    {{ mailStore.sending ? t('mail.sending') : (isTicketMode ? t('mail.sendTicket') : isEveryoneMode ? t('mail.sendBroadcast') : isSpamMode ? t('mail.sendSpam') : t('mail.send')) }}
                   </button>
-                  <span v-if="!isEveryoneMode" class="text-[10px] text-white/25">{{ t('mail.sendCost', { cost: 5 }) }}</span>
+                  <span v-if="!isEveryoneMode && !isSpamMode" class="text-[10px] text-white/25">{{ t('mail.sendCost', { cost: 5 }) }}</span>
                   <span v-if="isTicketMode" class="text-[10px] text-fuchsia-400/50">{{ t('mail.ticketLimit') }}</span>
                   <span v-else class="text-[10px] text-white/20 ml-auto font-mono">{{ t('mail.estimatedSize', { size: estimatedSizeKb }) }}</span>
                 </div>
@@ -965,6 +1150,50 @@ function getResourceSizeLabel(key: string): string {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Claim confirmation -->
+      <div v-if="confirmClaimMail" class="fixed inset-0 z-[65] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50" @click="confirmClaimMail = null" />
+        <div class="relative bg-[#303134] border border-white/10 rounded-lg p-5 max-w-sm w-full shadow-2xl">
+          <p class="text-sm text-white/80 mb-3 text-center">{{ t('mail.confirmClaim') }}</p>
+          <div class="flex flex-wrap gap-2 justify-center mb-3">
+            <div v-if="confirmClaimMail.attachment_gamecoin > 0" class="gmail-attach-chip gmail-chip-gc text-xs">
+              <span>🪙</span> {{ formatNumber(confirmClaimMail.attachment_gamecoin) }} GC
+            </div>
+            <div v-if="confirmClaimMail.attachment_crypto > 0" class="gmail-attach-chip gmail-chip-crypto text-xs">
+              <span>💎</span> {{ confirmClaimMail.attachment_crypto }} BLC
+            </div>
+            <div v-if="confirmClaimMail.attachment_energy > 0" class="gmail-attach-chip gmail-chip-energy text-xs">
+              <span>⚡</span> {{ formatNumber(confirmClaimMail.attachment_energy) }} Energy
+            </div>
+            <div v-if="confirmClaimMail.attachment_internet > 0" class="gmail-attach-chip gmail-chip-internet text-xs">
+              <span>📡</span> {{ formatNumber(confirmClaimMail.attachment_internet) }} Internet
+            </div>
+            <div v-if="confirmClaimMail.attachment_item_type && confirmClaimMail.attachment_item_quantity > 0" class="gmail-attach-chip gmail-chip-item text-xs">
+              <span>📦</span> {{ confirmClaimMail.attachment_item_quantity }}x {{ confirmClaimMail.attachment_item_type }}
+            </div>
+          </div>
+          <div v-if="confirmClaimMail.has_password" class="mb-3">
+            <input
+              v-model="claimPassword"
+              type="text"
+              :placeholder="t('mail.passwordPlaceholder')"
+              class="gmail-input w-full"
+              @keydown.enter="confirmClaim"
+            />
+          </div>
+          <p v-if="mailStore.error" class="text-[11px] text-red-400 mb-2 text-center">{{ mailStore.error }}</p>
+          <div class="flex gap-2 justify-center">
+            <button @click="confirmClaimMail = null" class="px-4 py-1.5 border border-white/10 text-white/50 text-xs rounded hover:bg-white/5 transition-colors">
+              {{ t('common.cancel') }}
+            </button>
+            <button @click="confirmClaim" :disabled="mailStore.claiming" class="px-4 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-500 transition-colors">
+              {{ mailStore.claiming ? t('mail.claiming') : t('mail.claimAttachment') }}
+            </button>
           </div>
         </div>
       </div>
@@ -1090,6 +1319,20 @@ function getResourceSizeLabel(key: string): string {
   font-weight: 800;
   background: #c2185b;
   color: white;
+  padding: 0 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+  line-height: 18px;
+}
+.gmail-badge-spam {
+  background: #e65100;
+}
+.gmail-badge-muted {
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.35);
   padding: 0 6px;
   border-radius: 10px;
   min-width: 18px;
