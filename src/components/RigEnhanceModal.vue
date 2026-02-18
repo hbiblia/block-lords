@@ -331,29 +331,12 @@ const canRepair = computed(() => {
   return !props.rig.is_active && canStillRepair.value;
 });
 
-// Cost based on how much will be restored (30% of base_price converted to GC)
+// Cost based on how much will be restored (30% of repair_cost already in GC)
 const repairCost = computed(() => {
   if (!props.rig) return 0;
-  const basePrice = props.rig.rig.base_price ?? 0;
-  const currency = props.rig.rig.currency ?? 'gamecoin';
-
-  // Convert price to GameCoin based on currency
-  // Rates: 1 Crypto = 50 GC, 1 RON = 5,000,000 GC
-  let priceInGC: number;
-  switch (currency) {
-    case 'crypto':
-      priceInGC = basePrice * 50;
-      break;
-    case 'ron':
-      priceInGC = basePrice * 5000000;
-      break;
-    default:
-      priceInGC = basePrice;
-  }
-
+  const repairCostGC = props.rig.rig.repair_cost ?? 0;
   const percentToRepair = repairBonus.value / 100;
-  // 30% of price in GC (70% discount)
-  return Math.ceil(priceInGC * percentToRepair * 0.30);
+  return Math.ceil(repairCostGC * percentToRepair * 0.30);
 });
 
 // Repairs are always paid in GameCoin
@@ -384,23 +367,10 @@ const nextRepairInfo = computed(() => {
   // If repair would not improve condition (current >= 100), mark as not beneficial
   const isBeneficial = conditionRestored > 0;
 
-  const basePrice = props.rig.rig.base_price ?? 0;
-  const currency = props.rig.rig.currency ?? 'gamecoin';
-
-  let priceInGC: number;
-  switch (currency) {
-    case 'crypto':
-      priceInGC = basePrice * 50;
-      break;
-    case 'ron':
-      priceInGC = basePrice * 5000000;
-      break;
-    default:
-      priceInGC = basePrice;
-  }
+  const repairCostGC = props.rig.rig.repair_cost ?? 0;
 
   // Cost is based on condition restored, not bonus
-  const maxCost = Math.ceil(priceInGC * (Math.max(0, conditionRestored) / 100) * 0.30);
+  const maxCost = Math.ceil(repairCostGC * (Math.max(0, conditionRestored) / 100) * 0.30);
 
   return {
     number: timesRepaired.value + 1,

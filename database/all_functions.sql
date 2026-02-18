@@ -636,14 +636,13 @@ DECLARE
   v_rig RECORD;
   v_player players%ROWTYPE;
   v_repair_cost NUMERIC;
-  v_price_in_gc NUMERIC;
   v_times_repaired INTEGER;
   v_repair_bonus NUMERIC;
   v_new_max_condition NUMERIC;
   v_new_condition NUMERIC;
   v_condition_restored NUMERIC;
 BEGIN
-  SELECT pr.*, r.base_price as base_repair_cost, r.name as rig_name, r.currency as rig_currency
+  SELECT pr.*, r.repair_cost as base_repair_cost, r.name as rig_name
   INTO v_rig
   FROM player_rigs pr
   JOIN rigs r ON r.id = pr.rig_id
@@ -686,20 +685,8 @@ BEGIN
   v_new_condition := LEAST(v_rig.condition + v_repair_bonus, 100);
   v_condition_restored := v_new_condition - v_rig.condition;
 
-  -- Convertir precio del rig a GameCoin según su moneda
-  -- Tasas: 1 Crypto = 50 GC, 1 RON = 5,000,000 GC
-  CASE COALESCE(v_rig.rig_currency, 'gamecoin')
-    WHEN 'crypto' THEN
-      v_price_in_gc := v_rig.base_repair_cost * 50;
-    WHEN 'ron' THEN
-      v_price_in_gc := v_rig.base_repair_cost * 5000000;
-    ELSE
-      v_price_in_gc := v_rig.base_repair_cost;
-  END CASE;
-
-  -- Calcular costo basado en la condición restaurada (30% del precio en GC)
-  -- Descuento del 70% para que no sea tan caro
-  v_repair_cost := (v_condition_restored / 100.0) * v_price_in_gc * 0.30;
+  -- Calcular costo basado en la condición restaurada (30% del repair_cost ya en GC)
+  v_repair_cost := (v_condition_restored / 100.0) * v_rig.base_repair_cost * 0.30;
 
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
 
