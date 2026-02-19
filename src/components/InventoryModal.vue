@@ -52,8 +52,20 @@ function closeWorkshop() {
   workshopItem.value = null;
 }
 
-function onModded() {
-  inventoryStore.refresh();
+async function onModded(playerCoolingItemId: string) {
+  await inventoryStore.refresh();
+
+  // Buscar el item actualizado y actualizar workshopItem + selección del grid
+  const updated = inventoryStore.moddedCoolingItems.find(
+    (m) => m.player_cooling_item_id === playerCoolingItemId
+  );
+  if (updated) {
+    workshopItem.value = updated;
+    // Actualizar selección al grupo correcto del item
+    const modSig = (updated.mods || []).map(m => m.component_id).sort().join(',');
+    const groupKey = `${updated.cooling_item_id}|${modSig}`;
+    selectedItem.value = { type: 'modded_cooling', id: groupKey };
+  }
 }
 
 // Group cards by card_id (same type + same value)
@@ -70,6 +82,40 @@ const groupedCards = computed(() => {
         amount: card.amount,
         tier: card.tier,
         codes: [{ id: card.id, code: card.code }],
+      });
+    }
+  }
+  return Array.from(groups.values());
+});
+
+// Group modded cooling items by base type + installed component types
+interface GroupedModdedCooling {
+  groupKey: string;
+  cooling_item_id: string;
+  items: ModdedCoolingItem[];
+  representative: ModdedCoolingItem;
+  count: number;
+}
+
+const groupedModdedCooling = computed<GroupedModdedCooling[]>(() => {
+  const groups = new Map<string, GroupedModdedCooling>();
+  for (const item of inventoryStore.moddedCoolingItems) {
+    const modSignature = (item.mods || [])
+      .map(m => m.component_id)
+      .sort()
+      .join(',');
+    const key = `${item.cooling_item_id}|${modSignature}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.items.push(item);
+      existing.count++;
+    } else {
+      groups.set(key, {
+        groupKey: key,
+        cooling_item_id: item.cooling_item_id,
+        items: [item],
+        representative: item,
+        count: 1,
       });
     }
   }
@@ -414,9 +460,11 @@ const allItems = computed<ItemSlot[]>(() => [
     type: 'cooling' as const, id: c.inventory_id, icon: '❄️',
     label: `-${c.cooling_power}°`, badge: `x${c.quantity}`, tier: c.tier,
   })),
-  ...inventoryStore.moddedCoolingItems.map(c => ({
-    type: 'modded_cooling' as const, id: c.player_cooling_item_id, icon: '❄️',
-    label: `-${c.effective_cooling_power.toFixed(1)}°`, badge: `${c.mod_slots_used}/${c.max_mod_slots}`, tier: c.tier,
+  ...groupedModdedCooling.value.map(g => ({
+    type: 'modded_cooling' as const, id: g.groupKey, icon: '❄️',
+    label: `-${g.representative.effective_cooling_power.toFixed(1)}°`,
+    badge: g.count > 1 ? `x${g.count}` : `${g.representative.mod_slots_used}/${g.representative.max_mod_slots}`,
+    tier: g.representative.tier,
   })),
   ...inventoryStore.materialItems.map(m => ({
     type: 'material' as const, id: m.material_id, icon: m.icon,
@@ -513,10 +561,10 @@ const selectedCooling = computed(() => {
   const id = selectedItem.value!.id;
   if (selectedItem.value!.type === 'cooling') {
     const unmodded = inventoryStore.coolingItems.find(c => c.inventory_id === id);
-    if (unmodded) return { item: unmodded, modded: false as const };
+    if (unmodded) return { item: unmodded, modded: false as const, count: unmodded.quantity, group: null as GroupedModdedCooling | null };
   } else {
-    const modded = inventoryStore.moddedCoolingItems.find(c => c.player_cooling_item_id === id);
-    if (modded) return { item: modded, modded: true as const };
+    const group = groupedModdedCooling.value.find(g => g.groupKey === id);
+    if (group) return { item: group.representative, modded: true as const, count: group.count, group };
   }
   return null;
 });
@@ -809,7 +857,7 @@ async function applyPatchToRig(rigId: string) {
                       <p class="text-[10px] sm:text-xs text-fuchsia-400 uppercase">{{ t('inventory.cooling.modded') }} · 🧩 {{ selectedCooling.item.mod_slots_used }}/{{ selectedCooling.item.max_mod_slots }}</p>
                     </template>
                   </div>
-                  <span v-if="!selectedCooling.modded" class="text-xs font-mono text-text-muted">x{{ selectedCooling.item.quantity }}</span>
+                  <span class="text-xs font-mono text-text-muted">x{{ selectedCooling.count }}</span>
                 </div>
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
                   <div class="text-center p-1.5 rounded bg-bg-secondary">
@@ -838,8 +886,8 @@ async function applyPatchToRig(rigId: string) {
                   </button>
                   <button
                     @click="selectedCooling.modded
-                      ? requestDeleteItem('modded_cooling', selectedCooling.item.player_cooling_item_id, getCoolingName(selectedCooling.item.cooling_item_id, selectedCooling.item.name))
-                      : requestDeleteItem('cooling', selectedCooling.item.inventory_id, getCoolingName(selectedCooling.item.id), selectedCooling.item.quantity)"
+                      ? requestDeleteItem('modded_cooling', selectedCooling.item.player_cooling_item_id, getCoolingName(selectedCooling.item.cooling_item_id, selectedCooling.item.name), selectedCooling.count)
+                      : requestDeleteItem('cooling', selectedCooling.item.inventory_id, getCoolingName(selectedCooling.item.id), selectedCooling.count)"
                     :disabled="using"
                     class="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
                     :title="t('inventory.delete.button', 'Descartar')"

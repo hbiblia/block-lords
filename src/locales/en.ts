@@ -253,6 +253,7 @@ export default {
     connectionError: 'Connection error while changing rig state.',
     confirmStop: 'Stop rig?',
     confirmStopMessage: 'Are you sure you want to stop this rig?',
+    selectMode: 'Which mining mode?',
     // Mining center
     currentBlock: 'Current Block',
     premiumBonus: '+50% Bonus',
@@ -2008,6 +2009,10 @@ export default {
     repairPriceDown: {
       title: 'Repair Price Reduction',
       description: 'Rig repair costs have been <strong class="text-emerald-400">reduced to 30%</strong> of the base repair cost. Repairs are now much more affordable so you can keep your rigs running longer.',
+    },
+    soloMining: {
+      title: 'Solo Mining Mode (Alpha)',
+      description: 'New <strong class="text-amber-400">Solo Mining</strong> mode! <strong class="text-red-400">(Alpha version)</strong> Mine your own blocks independently. Blocks come in 4 types: <strong class="text-orange-400">Bronze (3 seeds)</strong>, <strong class="text-gray-300">Silver (4 seeds)</strong>, <strong class="text-yellow-400">Gold (5 seeds)</strong>, and <strong class="text-cyan-400">Diamond (6 seeds, 50,000 crypto)</strong>. Your rigs must find <strong class="text-emerald-400">all seeds</strong> within <strong class="text-red-400">30 minutes</strong> to claim the block reward. If time runs out, you lose the block. Higher risk, higher reward! Requires <strong class="text-amber-400">Premium</strong>.',
     },
     button: 'Got it!',
   },

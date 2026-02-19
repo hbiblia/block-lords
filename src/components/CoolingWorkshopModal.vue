@@ -19,7 +19,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  modded: [];
+  modded: [playerCoolingItemId: string];
 }>();
 
 // State
@@ -254,7 +254,7 @@ async function confirmInstall() {
 
       // Refresh inventory data
       await inventoryStore.refresh();
-      emit('modded');
+      emit('modded', result.player_cooling_item_id);
     } else {
       rollPhase.value = 'idle';
       playSound('error');

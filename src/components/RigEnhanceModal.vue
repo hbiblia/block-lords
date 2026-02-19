@@ -1069,6 +1069,11 @@ async function confirmUse() {
       await loadData();
       await authStore.fetchPlayer();
       await miningStore.reloadRigs();
+      if (type === 'install' || type === 'destroy_cooling') {
+        await miningStore.loadRigsCooling();
+      } else if (type === 'boost' || type === 'destroy_boost') {
+        await miningStore.loadRigsBoosts();
+      }
       emit('updated');
 
       // Show toast notification based on action type
@@ -1093,10 +1098,11 @@ async function confirmUse() {
       processingError.value = result?.error || t('common.error');
       playSound('error');
     }
-  } catch (e) {
+  } catch (e: unknown) {
     console.error('Error:', e);
     processingStatus.value = 'error';
-    processingError.value = t('common.error');
+    const err = e as Record<string, unknown>;
+    processingError.value = (err?.message as string) || (err?.details as string) || t('common.error');
     playSound('error');
   } finally {
     confirmAction.value = null;

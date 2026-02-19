@@ -85,6 +85,12 @@ ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS max_condition NUMERIC DEFAULT 1
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS times_repaired INTEGER DEFAULT 0;
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS patch_count INTEGER DEFAULT 0;
 
+-- Mining mode per-rig (pool o solo, independiente por rig)
+ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS mining_mode TEXT DEFAULT 'pool';
+-- Migrar: rigs activos heredan el modo del jugador
+UPDATE player_rigs pr SET mining_mode = COALESCE(p.mining_mode, 'pool')
+FROM players p WHERE p.id = pr.player_id AND pr.is_active = true AND pr.mining_mode = 'pool';
+
 -- Permitir múltiples rigs del mismo tipo por jugador (eliminar constraint único)
 ALTER TABLE player_rigs DROP CONSTRAINT IF EXISTS player_rigs_player_id_rig_id_key;
 
@@ -474,6 +480,7 @@ BEGIN
     SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
     FROM (
       SELECT pr.id, pr.is_active, pr.condition, pr.temperature, pr.acquired_at, pr.activated_at,
+             COALESCE(pr.mining_mode, 'pool') as mining_mode,
              COALESCE(pr.max_condition, 100) as max_condition,
              COALESCE(pr.times_repaired, 0) as times_repaired,
              COALESCE(pr.patch_count, 0) as patch_count,
@@ -493,6 +500,7 @@ BEGIN
              ) as rig
       FROM player_rigs pr
       JOIN rigs r ON r.id = pr.rig_id
+      JOIN players p ON p.id = pr.player_id
       LEFT JOIN upgrade_costs uc_h ON uc_h.level = COALESCE(pr.hashrate_level, 1)
       LEFT JOIN upgrade_costs uc_e ON uc_e.level = COALESCE(pr.efficiency_level, 1)
       LEFT JOIN upgrade_costs uc_t ON uc_t.level = COALESCE(pr.thermal_level, 1)
@@ -505,7 +513,7 @@ $$;
 
 -- Toggle rig (encender/apagar)
 -- Anti-exploit: Si el usuario apaga y enciende muy rápido (<60s), la temperatura se multiplica x10
-CREATE OR REPLACE FUNCTION toggle_rig(p_player_id UUID, p_rig_id UUID)
+CREATE OR REPLACE FUNCTION toggle_rig(p_player_id UUID, p_rig_id UUID, p_mining_mode TEXT DEFAULT 'pool')
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -585,7 +593,8 @@ BEGIN
     SET is_active = true,
         activated_at = NOW(),
         deactivated_at = NULL,
-        temperature = v_new_temperature
+        temperature = v_new_temperature,
+        mining_mode = COALESCE(p_mining_mode, 'pool')
     WHERE id = p_rig_id
     RETURNING * INTO v_rig;
 
@@ -1504,8 +1513,11 @@ BEGIN
   ORDER BY b.height DESC
   LIMIT 1;
 
-  SELECT COUNT(DISTINCT player_id) INTO v_active_miners
-  FROM player_rigs WHERE is_active = true;
+  SELECT COUNT(DISTINCT pr.player_id) INTO v_active_miners
+  FROM player_rigs pr
+  JOIN players p ON p.id = pr.player_id
+  WHERE pr.is_active = true
+    AND COALESCE(pr.mining_mode, 'pool') = 'pool';
 
   RETURN json_build_object(
     'difficulty', COALESCE(v_stats.difficulty, 1000),
@@ -1716,7 +1728,8 @@ DECLARE
 BEGIN
   -- Procesar jugadores que están ONLINE o tienen rigs con autonomous mining boost
   FOR v_player IN
-    SELECT p.id, p.energy, p.internet, is_player_premium(p.id) as is_premium
+    SELECT p.id, p.energy, p.internet, is_player_premium(p.id) as is_premium,
+           COALESCE(p.mining_mode, 'pool') as mining_mode
     FROM players p
     WHERE EXISTS (SELECT 1 FROM player_rigs pr WHERE pr.player_id = p.id AND pr.is_active = true)
       AND (
@@ -1758,22 +1771,22 @@ BEGIN
       v_durability_mult := COALESCE((v_boosts->>'durability')::NUMERIC, 1.0);
       -- Obtener refrigeración instalada en este rig específico
       -- Eficiencia del cooling basada en durabilidad:
-      -- >= 50%: eficiencia lineal (durability/100)
-      -- < 50%: penalización adicional (durability/100 * durability/50)
-      -- Esto hace que cooling degradado sea menos efectivo
+      -- >= 15%: eficiencia lineal (durability/100)
+      -- < 15%: penalización adicional (durability/100 * durability/15)
+      -- Esto hace que cooling muy degradado sea menos efectivo
       -- Con mods: aplica bonus/penalización de cooling_power_mod y energy_cost_mod
       SELECT
         COALESCE(SUM(
           ci.cooling_power
           * (1 + COALESCE((SELECT SUM((m->>'cooling_power_mod')::NUMERIC) FROM jsonb_array_elements(COALESCE(pci.mods, '[]'::jsonb)) m), 0) / 100.0)
-          * (CASE WHEN rc.durability >= 50 THEN rc.durability / 100.0
-                  ELSE (rc.durability / 100.0) * (rc.durability / 50.0) END)
+          * (CASE WHEN rc.durability >= 15 THEN rc.durability / 100.0
+                  ELSE (rc.durability / 100.0) * (rc.durability / 15.0) END)
         ), 0),
         COALESCE(SUM(
           ci.energy_cost
           * (1 + COALESCE((SELECT SUM((m->>'energy_cost_mod')::NUMERIC) FROM jsonb_array_elements(COALESCE(pci.mods, '[]'::jsonb)) m), 0) / 100.0)
-          * (CASE WHEN rc.durability >= 50 THEN rc.durability / 100.0
-                  ELSE (rc.durability / 100.0) * (rc.durability / 50.0) END)
+          * (CASE WHEN rc.durability >= 15 THEN rc.durability / 100.0
+                  ELSE (rc.durability / 100.0) * (rc.durability / 15.0) END)
         ), 0)
       INTO v_rig_cooling_power, v_rig_cooling_energy
       FROM rig_cooling rc
@@ -1844,6 +1857,11 @@ BEGIN
         v_temp_increase := GREATEST(0, v_heat_after_upgrade - v_rig_cooling_power) * v_temp_mult;
       END IF;
 
+      -- Solo mining: temperatura sube 2x mas rapido (overclock)
+      IF v_player.mining_mode = 'solo' THEN
+        v_temp_increase := v_temp_increase * 2.0;
+      END IF;
+
       -- Calcular nueva temperatura
       v_new_temp := v_rig.temperature + v_temp_increase;
 
@@ -1900,6 +1918,11 @@ BEGIN
 
       -- Aplicar multiplicador de boost de durability_shield
       v_deterioration := v_deterioration * v_durability_mult;
+
+      -- Solo mining: condicion se degrada 3x mas rapido (overclock)
+      IF v_player.mining_mode = 'solo' THEN
+        v_deterioration := v_deterioration * 3.0;
+      END IF;
 
       -- Premium: -25% desgaste (multiplicador 0.75)
       IF v_player.is_premium THEN
@@ -2849,16 +2872,16 @@ BEGIN
       RETURN json_build_object('success', false, 'error', 'Item modded no encontrado');
     END IF;
 
-    -- Verificar si ya hay un cooling del mismo tipo instalado (NO se permite stackear modded con otro)
+    -- Verificar si este item modded ya está instalado en algún rig
     SELECT * INTO v_existing
     FROM rig_cooling
-    WHERE player_rig_id = p_rig_id AND cooling_item_id = p_cooling_id;
+    WHERE player_cooling_item_id = p_player_cooling_item_id;
 
     IF v_existing IS NOT NULL THEN
-      RETURN json_build_object('success', false, 'error', 'Ya hay un cooling de este tipo instalado. Retíralo primero.');
+      RETURN json_build_object('success', false, 'error', 'Este item modded ya está instalado en un rig');
     END IF;
 
-    -- Insertar en rig_cooling con referencia al item modded
+    -- Insertar modded cooling en el rig (puede coexistir con unmodded del mismo tipo)
     INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability, player_cooling_item_id, player_id)
     VALUES (p_rig_id, p_cooling_id, 100, p_player_cooling_item_id, p_player_id);
 
@@ -2886,10 +2909,10 @@ BEGIN
       RETURN json_build_object('success', false, 'error', 'No tienes este item en tu inventario');
     END IF;
 
-    -- Verificar si este cooling ya está instalado en el rig
+    -- Verificar si este cooling (sin mods) ya está instalado en el rig
     SELECT * INTO v_existing
     FROM rig_cooling
-    WHERE player_rig_id = p_rig_id AND cooling_item_id = p_cooling_id;
+    WHERE player_rig_id = p_rig_id AND cooling_item_id = p_cooling_id AND player_cooling_item_id IS NULL;
 
     -- Remover del inventario
     IF v_inventory_item.quantity > 1 THEN
@@ -2901,7 +2924,7 @@ BEGIN
     END IF;
 
     IF v_existing IS NOT NULL THEN
-      -- Ya está instalado: stackear durabilidad (máximo 200%)
+      -- Ya está instalado (sin mods): stackear durabilidad (máximo 200%)
       v_new_durability := LEAST(v_max_durability, v_existing.durability + 100);
 
       UPDATE rig_cooling
@@ -2922,7 +2945,7 @@ BEGIN
         'stacked', true
       );
     ELSE
-      -- No está instalado: insertar nuevo
+      -- No hay uno sin mods instalado: insertar nuevo
       INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability, player_id)
       VALUES (p_rig_id, p_cooling_id, 100, p_player_id);
 
@@ -7682,6 +7705,7 @@ BEGIN
     JOIN rigs r ON r.id = pr.rig_id
     JOIN players p ON p.id = pr.player_id
     WHERE pr.is_active = true
+      AND COALESCE(pr.mining_mode, 'pool') = 'pool'  -- Excluir rigs en modo solo
       AND p.energy > 0
       AND p.internet > 0
       AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
@@ -7832,7 +7856,7 @@ BEGIN
         AND p.internet > 0
         AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
         AND NOT is_player_in_mining_cooldown(pr.player_id)
-        -- ✅ Incluye al bot (con su rig S9 de 1000 hashrate)
+        AND COALESCE(pr.mining_mode, 'pool') = 'pool'  -- Excluir rigs en modo solo
     ),
     active_miners = (
       SELECT COUNT(DISTINCT pr.player_id)
@@ -7843,7 +7867,7 @@ BEGIN
         AND p.internet > 0
         AND (p.is_online = true OR rig_has_autonomous_boost(pr.id))
         AND NOT is_player_in_mining_cooldown(pr.player_id)
-        -- ✅ Incluye al bot en el conteo de mineros activos
+        AND COALESCE(pr.mining_mode, 'pool') = 'pool'  -- Excluir rigs en modo solo
     ),
     updated_at = NOW()
   WHERE id = 'current';
@@ -7873,7 +7897,7 @@ DECLARE
   v_volatility NUMERIC := 0.5;       -- Volatilidad alta (estilo crypto real)
   v_reversion_speed NUMERIC := 0.02; -- Recuperación lenta (las caídas duran)
   v_min_rate NUMERIC := 0.5;         -- Permite crashes del -95%
-  v_max_rate NUMERIC := 30.0;
+  v_max_rate NUMERIC := 1000.0;
   v_change NUMERIC;
   v_mean_reversion NUMERIC;
   -- Factores económicos
@@ -8024,6 +8048,7 @@ BEGIN
     SELECT player_id, shares_count
     FROM player_shares
     WHERE mining_block_id = p_mining_block_id
+      AND shares_count > 0
     ORDER BY shares_count DESC
   LOOP
     v_participants_count := v_participants_count + 1;
@@ -8397,6 +8422,534 @@ BEGIN
 END;
 $$;
 
+-- =====================================================
+-- SOLO MINING SYSTEM
+-- =====================================================
+
+-- Inicializar bloque solo
+CREATE OR REPLACE FUNCTION initialize_solo_block(p_player_id UUID, p_rental_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rental solo_mining_rentals%ROWTYPE;
+  v_block_number INTEGER;
+  v_new_block_id UUID;
+  v_seed_value INTEGER;
+  v_existing_seeds INT[];
+  v_num_seeds INTEGER;
+  v_block_type TEXT;
+  v_reward NUMERIC;
+  v_roll NUMERIC;
+  v_last_block RECORD;
+  i INTEGER;
+BEGIN
+  SELECT * INTO v_rental FROM solo_mining_rentals
+  WHERE id = p_rental_id AND player_id = p_player_id AND is_active = true;
+  IF v_rental.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'No active rental');
+  END IF;
+  IF v_rental.expires_at <= NOW() THEN
+    RETURN json_build_object('success', false, 'error', 'Rental expired');
+  END IF;
+
+  SELECT * INTO v_last_block FROM solo_mining_blocks
+  WHERE player_id = p_player_id AND status = 'active' LIMIT 1;
+  IF v_last_block.id IS NOT NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Already have active solo block');
+  END IF;
+
+  v_roll := random();
+  IF v_roll < 0.30 THEN
+    v_block_type := 'bronze'; v_num_seeds := 3; v_reward := 4000;
+  ELSIF v_roll < 0.65 THEN
+    v_block_type := 'silver'; v_num_seeds := 4; v_reward := 6000;
+  ELSIF v_roll < 0.90 THEN
+    v_block_type := 'gold'; v_num_seeds := 5; v_reward := 10000;
+  ELSE
+    v_block_type := 'diamond'; v_num_seeds := 7; v_reward := 50000;
+  END IF;
+
+  SELECT COALESCE(MAX(block_number), 0) + 1 INTO v_block_number
+  FROM solo_mining_blocks WHERE player_id = p_player_id;
+
+  INSERT INTO solo_mining_blocks (
+    player_id, rental_id, block_number, block_type,
+    total_seeds, reward, started_at, target_close_at
+  ) VALUES (
+    p_player_id, p_rental_id, v_block_number, v_block_type,
+    v_num_seeds, v_reward, NOW(), NOW() + INTERVAL '30 minutes'
+  ) RETURNING id INTO v_new_block_id;
+
+  v_existing_seeds := ARRAY[]::INT[];
+  FOR i IN 1..v_num_seeds LOOP
+    LOOP
+      v_seed_value := FLOOR(RANDOM() * 10000)::INTEGER;
+      EXIT WHEN NOT (v_seed_value = ANY(v_existing_seeds));
+    END LOOP;
+    v_existing_seeds := array_append(v_existing_seeds, v_seed_value);
+    INSERT INTO solo_mining_seeds (solo_block_id, seed_number, seed_index)
+    VALUES (v_new_block_id, v_seed_value, i);
+  END LOOP;
+
+  RETURN json_build_object(
+    'success', true, 'block_id', v_new_block_id,
+    'block_number', v_block_number, 'block_type', v_block_type,
+    'total_seeds', v_num_seeds, 'reward', v_reward,
+    'started_at', NOW(), 'target_close_at', NOW() + INTERVAL '30 minutes'
+  );
+END;
+$$;
+
+-- Activar solo mining
+CREATE OR REPLACE FUNCTION activate_solo_mining(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_expires_at TIMESTAMPTZ;
+  v_rental_id UUID;
+  v_existing_rental RECORD;
+  v_first_block JSON;
+BEGIN
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+
+  IF NOT is_player_premium(p_player_id) THEN
+    RETURN json_build_object('success', false, 'error', 'Premium required for solo mining');
+  END IF;
+
+  SELECT * INTO v_existing_rental FROM solo_mining_rentals
+  WHERE player_id = p_player_id AND is_active = true AND expires_at > NOW() LIMIT 1;
+  IF v_existing_rental.id IS NOT NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Already have active solo mining',
+      'expires_at', v_existing_rental.expires_at);
+  END IF;
+
+  v_expires_at := v_player.premium_until;
+  UPDATE players SET mining_mode = 'solo' WHERE id = p_player_id;
+
+  INSERT INTO solo_mining_rentals (player_id, expires_at, ron_paid)
+  VALUES (p_player_id, v_expires_at, 0)
+  RETURNING id INTO v_rental_id;
+
+  v_first_block := initialize_solo_block(p_player_id, v_rental_id);
+
+  RETURN json_build_object(
+    'success', true, 'rental_id', v_rental_id,
+    'expires_at', v_expires_at,
+    'first_block', v_first_block
+  );
+END;
+$$;
+
+-- Completar bloque solo
+CREATE OR REPLACE FUNCTION complete_solo_block(p_player_id UUID, p_block_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_block solo_mining_blocks%ROWTYPE;
+  v_pending_id UUID;
+BEGIN
+  SELECT * INTO v_block FROM solo_mining_blocks
+  WHERE id = p_block_id AND player_id = p_player_id;
+  IF v_block.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Block not found');
+  END IF;
+  IF v_block.status != 'active' THEN
+    RETURN json_build_object('success', false, 'error', 'Block not active');
+  END IF;
+
+  UPDATE solo_mining_blocks SET status = 'completed', completed_at = NOW()
+  WHERE id = p_block_id;
+
+  INSERT INTO pending_blocks (
+    block_id, block_number, player_id, reward,
+    is_premium, materials_dropped, created_at
+  ) VALUES (
+    NULL, v_block.block_number, p_player_id, v_block.reward,
+    false, '[]'::JSONB, NOW()
+  ) RETURNING id INTO v_pending_id;
+
+  UPDATE players SET blocks_mined = COALESCE(blocks_mined, 0) + 1
+  WHERE id = p_player_id;
+
+  BEGIN
+    PERFORM update_mission_progress(p_player_id, 'mine_blocks', 1);
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+
+  RETURN json_build_object(
+    'success', true, 'block_id', p_block_id,
+    'block_type', v_block.block_type, 'reward', v_block.reward,
+    'pending_block_id', v_pending_id
+  );
+END;
+$$;
+
+-- Process solo mining tick
+CREATE OR REPLACE FUNCTION process_solo_mining_tick()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_solo_player RECORD;
+  v_rig RECORD;
+  v_solo_block solo_mining_blocks%ROWTYPE;
+  v_rental RECORD;
+  v_effective_hashrate NUMERIC;
+  v_scans_per_tick INTEGER;
+  v_scan_value INTEGER;
+  v_seeds_found_this_tick INTEGER;
+  v_total_players_processed INTEGER := 0;
+  v_total_seeds_found INTEGER := 0;
+  v_blocks_completed INTEGER := 0;
+  v_blocks_failed INTEGER := 0;
+  v_player_total_hashrate NUMERIC;
+  v_boosts JSON;
+  v_hashrate_mult NUMERIC;
+  v_luck_mult NUMERIC;
+  v_upgrade_hashrate_bonus NUMERIC;
+  v_rep_multiplier NUMERIC;
+  v_temp_penalty NUMERIC;
+  v_condition_penalty NUMERIC;
+  v_warmup_mult NUMERIC;
+  v_hash_flux NUMERIC;
+  v_init_result JSON;
+  i INTEGER;
+BEGIN
+  FOR v_solo_player IN
+    SELECT DISTINCT p.id as player_id, p.energy, p.internet, p.reputation_score
+    FROM players p
+    JOIN solo_mining_rentals smr ON smr.player_id = p.id
+    WHERE smr.is_active = true AND smr.expires_at > NOW()
+      AND p.energy > 0 AND p.internet > 0
+      AND EXISTS (
+        SELECT 1 FROM player_rigs pr_solo WHERE pr_solo.player_id = p.id
+          AND pr_solo.is_active = true AND pr_solo.mining_mode = 'solo'
+      )
+      AND (p.is_online = true OR EXISTS (
+        SELECT 1 FROM player_rigs pr2 WHERE pr2.player_id = p.id
+          AND pr2.is_active = true
+          AND rig_has_autonomous_boost(pr2.id)
+      ))
+  LOOP
+    SELECT * INTO v_solo_block FROM solo_mining_blocks
+    WHERE player_id = v_solo_player.player_id AND status = 'active' LIMIT 1;
+
+    IF v_solo_block.id IS NULL THEN
+      SELECT * INTO v_rental FROM solo_mining_rentals
+      WHERE player_id = v_solo_player.player_id AND is_active = true AND expires_at > NOW() LIMIT 1;
+      IF v_rental.id IS NOT NULL THEN
+        v_init_result := initialize_solo_block(v_solo_player.player_id, v_rental.id);
+        SELECT * INTO v_solo_block FROM solo_mining_blocks
+        WHERE player_id = v_solo_player.player_id AND status = 'active' LIMIT 1;
+      END IF;
+      IF v_solo_block.id IS NULL THEN CONTINUE; END IF;
+    END IF;
+
+    IF NOW() >= v_solo_block.target_close_at THEN
+      UPDATE solo_mining_blocks SET status = 'failed', completed_at = NOW()
+      WHERE id = v_solo_block.id;
+      v_blocks_failed := v_blocks_failed + 1;
+
+      -- No reward if not all seeds found
+
+      SELECT * INTO v_rental FROM solo_mining_rentals
+      WHERE player_id = v_solo_player.player_id AND is_active = true AND expires_at > NOW() LIMIT 1;
+      IF v_rental.id IS NOT NULL THEN
+        v_init_result := initialize_solo_block(v_solo_player.player_id, v_rental.id);
+      END IF;
+      CONTINUE;
+    END IF;
+
+    v_player_total_hashrate := 0;
+    FOR v_rig IN
+      SELECT pr.id as rig_id, pr.player_id, pr.condition, pr.temperature,
+             r.hashrate, COALESCE(pr.hashrate_level, 1) as hashrate_level,
+             pr.activated_at, COALESCE(pr.patch_count, 0) as patch_count
+      FROM player_rigs pr
+      JOIN rigs r ON r.id = pr.rig_id
+      WHERE pr.player_id = v_solo_player.player_id AND pr.is_active = true
+        AND pr.mining_mode = 'solo'
+    LOOP
+      v_boosts := get_rig_boost_multipliers(v_rig.rig_id);
+      v_hashrate_mult := COALESCE((v_boosts->>'hashrate')::NUMERIC, 1.0);
+
+      SELECT COALESCE(hashrate_bonus, 0) INTO v_upgrade_hashrate_bonus
+      FROM upgrade_costs WHERE level = v_rig.hashrate_level;
+      IF v_upgrade_hashrate_bonus IS NULL THEN v_upgrade_hashrate_bonus := 0; END IF;
+      v_hashrate_mult := v_hashrate_mult * (1 + v_upgrade_hashrate_bonus / 100.0);
+
+      IF v_solo_player.reputation_score >= 80 THEN
+        v_rep_multiplier := 1 + (v_solo_player.reputation_score - 80) * 0.01;
+      ELSIF v_solo_player.reputation_score < 50 THEN
+        v_rep_multiplier := 0.5 + (v_solo_player.reputation_score / 100.0);
+      ELSE
+        v_rep_multiplier := 1;
+      END IF;
+
+      v_temp_penalty := 1;
+      IF v_rig.temperature > 50 THEN
+        v_temp_penalty := GREATEST(0.3, 1 - ((v_rig.temperature - 50) * 0.014));
+      END IF;
+
+      IF v_rig.condition >= 80 THEN v_condition_penalty := 1.0;
+      ELSE v_condition_penalty := 0.3 + (v_rig.condition / 80.0) * 0.7;
+      END IF;
+
+      v_effective_hashrate := v_rig.hashrate * v_condition_penalty * v_rep_multiplier
+                              * v_temp_penalty * v_hashrate_mult;
+
+      IF v_rig.patch_count > 0 THEN
+        v_effective_hashrate := v_effective_hashrate * POWER(0.90, v_rig.patch_count);
+      END IF;
+
+      IF v_rig.activated_at IS NOT NULL THEN
+        v_warmup_mult := LEAST(1.0, (1 + FLOOR(EXTRACT(EPOCH FROM (NOW() - v_rig.activated_at)) / 30.0)) * 0.20);
+        v_warmup_mult := GREATEST(0.0, v_warmup_mult);
+        v_effective_hashrate := v_effective_hashrate * v_warmup_mult;
+      END IF;
+
+      v_hash_flux := 0.97 + (random() * 0.06);
+      v_effective_hashrate := v_effective_hashrate * v_hash_flux;
+      v_player_total_hashrate := v_player_total_hashrate + v_effective_hashrate;
+    END LOOP;
+
+    v_scans_per_tick := GREATEST(1, FLOOR(v_player_total_hashrate / 100)::INTEGER);
+    v_seeds_found_this_tick := 0;
+
+    FOR i IN 1..v_scans_per_tick LOOP
+      v_scan_value := FLOOR(RANDOM() * 10000)::INTEGER;
+      UPDATE solo_mining_seeds sms_upd
+      SET found = true, found_at = NOW()
+      WHERE sms_upd.solo_block_id = v_solo_block.id
+        AND sms_upd.seed_number = v_scan_value
+        AND sms_upd.found = false;
+      IF FOUND THEN
+        v_seeds_found_this_tick := v_seeds_found_this_tick + 1;
+        v_total_seeds_found := v_total_seeds_found + 1;
+      END IF;
+    END LOOP;
+
+    UPDATE solo_mining_blocks
+    SET seeds_found = seeds_found + v_seeds_found_this_tick,
+        total_scans = total_scans + v_scans_per_tick
+    WHERE id = v_solo_block.id;
+
+    IF (v_solo_block.seeds_found + v_seeds_found_this_tick) >= v_solo_block.total_seeds THEN
+      PERFORM complete_solo_block(v_solo_player.player_id, v_solo_block.id);
+      v_blocks_completed := v_blocks_completed + 1;
+
+      SELECT * INTO v_rental FROM solo_mining_rentals
+      WHERE player_id = v_solo_player.player_id AND is_active = true AND expires_at > NOW() LIMIT 1;
+      IF v_rental.id IS NOT NULL THEN
+        v_init_result := initialize_solo_block(v_solo_player.player_id, v_rental.id);
+      END IF;
+    END IF;
+
+    v_total_players_processed := v_total_players_processed + 1;
+  END LOOP;
+
+  RETURN json_build_object(
+    'success', true,
+    'solo_players_processed', v_total_players_processed,
+    'seeds_found', v_total_seeds_found,
+    'blocks_completed', v_blocks_completed,
+    'blocks_failed', v_blocks_failed
+  );
+END;
+$$;
+
+-- Obtener estado de solo mining
+CREATE OR REPLACE FUNCTION get_solo_mining_status(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rental RECORD;
+  v_block RECORD;
+  v_seeds JSON;
+  v_blocks_completed INTEGER;
+  v_blocks_failed INTEGER;
+  v_total_earned NUMERIC;
+  v_recent_blocks JSON;
+  v_mining_mode TEXT;
+BEGIN
+  SELECT mining_mode INTO v_mining_mode FROM players WHERE id = p_player_id;
+
+  SELECT * INTO v_rental FROM solo_mining_rentals
+  WHERE player_id = p_player_id AND is_active = true AND expires_at > NOW()
+  ORDER BY created_at DESC LIMIT 1;
+
+  IF v_rental.id IS NULL THEN
+    RETURN json_build_object(
+      'active', false, 'has_rental', false,
+      'mining_mode', COALESCE(v_mining_mode, 'pool')
+    );
+  END IF;
+
+  SELECT * INTO v_block FROM solo_mining_blocks
+  WHERE player_id = p_player_id AND status = 'active' LIMIT 1;
+
+  IF v_block.id IS NOT NULL THEN
+    SELECT json_agg(json_build_object(
+      'index', sms.seed_index, 'found', sms.found,
+      'seed_number', CASE WHEN sms.found THEN sms.seed_number ELSE NULL END,
+      'found_at', sms.found_at
+    ) ORDER BY sms.seed_index)
+    INTO v_seeds
+    FROM solo_mining_seeds sms WHERE sms.solo_block_id = v_block.id;
+  END IF;
+
+  SELECT COUNT(*) FILTER (WHERE status = 'completed'),
+         COUNT(*) FILTER (WHERE status = 'failed'),
+         COALESCE(SUM(reward) FILTER (WHERE status = 'completed'), 0)
+  INTO v_blocks_completed, v_blocks_failed, v_total_earned
+  FROM solo_mining_blocks
+  WHERE player_id = p_player_id AND rental_id = v_rental.id;
+
+  SELECT json_agg(block_info ORDER BY block_number DESC)
+  INTO v_recent_blocks
+  FROM (
+    SELECT block_number, block_type, total_seeds, seeds_found,
+           reward, status, started_at, completed_at, total_scans
+    FROM solo_mining_blocks
+    WHERE player_id = p_player_id AND rental_id = v_rental.id
+    ORDER BY block_number DESC LIMIT 10
+  ) block_info;
+
+  RETURN json_build_object(
+    'active', true, 'has_rental', true,
+    'mining_mode', COALESCE(v_mining_mode, 'pool'),
+    'rental', json_build_object(
+      'id', v_rental.id, 'expires_at', v_rental.expires_at,
+      'activated_at', v_rental.activated_at,
+      'time_remaining_seconds', GREATEST(0, EXTRACT(EPOCH FROM (v_rental.expires_at - NOW())))
+    ),
+    'current_block', CASE WHEN v_block.id IS NOT NULL THEN json_build_object(
+      'id', v_block.id, 'block_number', v_block.block_number,
+      'block_type', v_block.block_type, 'total_seeds', v_block.total_seeds,
+      'seeds_found', v_block.seeds_found, 'reward', v_block.reward,
+      'started_at', v_block.started_at, 'target_close_at', v_block.target_close_at,
+      'time_remaining_seconds', GREATEST(0, EXTRACT(EPOCH FROM (v_block.target_close_at - NOW()))),
+      'total_scans', v_block.total_scans
+    ) ELSE NULL END,
+    'seeds', COALESCE(v_seeds, '[]'::JSON),
+    'session_stats', json_build_object(
+      'blocks_completed', v_blocks_completed,
+      'blocks_failed', v_blocks_failed,
+      'total_earned', v_total_earned
+    ),
+    'recent_blocks', COALESCE(v_recent_blocks, '[]'::JSON)
+  );
+END;
+$$;
+
+-- Verificar expiracion de alquileres solo mining
+CREATE OR REPLACE FUNCTION check_solo_rental_expiry()
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rental RECORD;
+  v_premium_until TIMESTAMPTZ;
+  v_count INTEGER := 0;
+BEGIN
+  FOR v_rental IN
+    SELECT * FROM solo_mining_rentals
+    WHERE is_active = true AND expires_at <= NOW()
+  LOOP
+    -- Check if player renewed premium
+    SELECT premium_until INTO v_premium_until FROM players WHERE id = v_rental.player_id;
+    IF v_premium_until IS NOT NULL AND v_premium_until > NOW() THEN
+      -- Premium renewed: extend rental to new premium expiry
+      UPDATE solo_mining_rentals SET expires_at = v_premium_until WHERE id = v_rental.id;
+    ELSE
+      -- No longer premium: deactivate
+      UPDATE solo_mining_rentals SET is_active = false WHERE id = v_rental.id;
+      UPDATE solo_mining_blocks SET status = 'expired'
+      WHERE player_id = v_rental.player_id AND status = 'active';
+      UPDATE players SET mining_mode = 'pool' WHERE id = v_rental.player_id;
+      v_count := v_count + 1;
+    END IF;
+  END LOOP;
+  RETURN v_count;
+END;
+$$;
+
+-- Desactivar solo mining manualmente
+CREATE OR REPLACE FUNCTION deactivate_solo_mining(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rental RECORD;
+BEGIN
+  SELECT * INTO v_rental FROM solo_mining_rentals
+  WHERE player_id = p_player_id AND is_active = true LIMIT 1;
+  IF v_rental.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'No active rental');
+  END IF;
+
+  UPDATE solo_mining_rentals SET is_active = false WHERE id = v_rental.id;
+  UPDATE solo_mining_blocks SET status = 'expired'
+  WHERE player_id = p_player_id AND status = 'active';
+  UPDATE players SET mining_mode = 'pool' WHERE id = p_player_id;
+
+  RETURN json_build_object('success', true, 'message', 'Solo mining deactivated');
+END;
+$$;
+
+-- Toggle mining mode
+CREATE OR REPLACE FUNCTION toggle_mining_mode(p_player_id UUID, p_mode TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current_mode TEXT;
+  v_has_rental BOOLEAN;
+BEGIN
+  IF p_mode NOT IN ('pool', 'solo') THEN
+    RETURN json_build_object('success', false, 'error', 'Invalid mode');
+  END IF;
+
+  SELECT mining_mode INTO v_current_mode FROM players WHERE id = p_player_id;
+  IF v_current_mode IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+
+  IF v_current_mode = p_mode THEN
+    RETURN json_build_object('success', true, 'mining_mode', p_mode);
+  END IF;
+
+  IF p_mode = 'solo' THEN
+    SELECT EXISTS(
+      SELECT 1 FROM solo_mining_rentals
+      WHERE player_id = p_player_id AND is_active = true AND expires_at > NOW()
+    ) INTO v_has_rental;
+    IF NOT v_has_rental THEN
+      RETURN json_build_object('success', false, 'error', 'No active rental');
+    END IF;
+  END IF;
+
+  UPDATE players SET mining_mode = p_mode WHERE id = p_player_id;
+  RETURN json_build_object('success', true, 'mining_mode', p_mode);
+END;
+$$;
+
 -- Función principal: Ejecuta el tick del sistema de shares (llamada por cron cada minuto)
 CREATE OR REPLACE FUNCTION game_tick_share_system()
 RETURNS JSON
@@ -8410,6 +8963,8 @@ DECLARE
   v_inactive_marked INTEGER := 0;
   v_rigs_shutdown INTEGER := 0;
   v_bot_id UUID := '00000000-0000-0000-0000-000000000001';
+  v_solo_expired INTEGER := 0;
+  v_solo_result JSON;
 BEGIN
   -- ✅ MANTENER AL BOT SIEMPRE ONLINE
   UPDATE players
@@ -8445,7 +9000,13 @@ BEGIN
   -- 2. Procesar decay de recursos (cada tick)
   v_resources_result := process_resource_decay();
 
-  -- 3. Generar shares para mineros activos
+  -- 2b. Verificar expiracion de alquileres solo mining
+  v_solo_expired := check_solo_rental_expiry();
+
+  -- 2c. Procesar solo mining (escaneo de seeds)
+  v_solo_result := process_solo_mining_tick();
+
+  -- 3. Generar shares para mineros activos (pool)
   v_shares_result := generate_shares_tick();
 
   -- 4. Verificar y cerrar bloques si es necesario
@@ -8459,6 +9020,11 @@ BEGIN
     'resources_processed', v_resources_result,
     'players_marked_offline', v_inactive_marked,
     'rigs_shutdown', v_rigs_shutdown,
+    'solo_rentals_expired', v_solo_expired,
+    'solo_players_processed', COALESCE((v_solo_result->>'solo_players_processed')::INTEGER, 0),
+    'solo_seeds_found', COALESCE((v_solo_result->>'seeds_found')::INTEGER, 0),
+    'solo_blocks_completed', COALESCE((v_solo_result->>'blocks_completed')::INTEGER, 0),
+    'solo_blocks_failed', COALESCE((v_solo_result->>'blocks_failed')::INTEGER, 0),
     'timestamp', NOW()
   );
 END;
@@ -8571,6 +9137,16 @@ GRANT EXECUTE ON FUNCTION get_current_mining_block_info TO authenticated;
 GRANT EXECUTE ON FUNCTION get_player_shares_info TO authenticated;
 GRANT EXECUTE ON FUNCTION game_tick_share_system TO authenticated;
 GRANT EXECUTE ON FUNCTION get_recent_mining_blocks TO authenticated;
+
+-- Solo mining grants
+GRANT EXECUTE ON FUNCTION activate_solo_mining TO authenticated;
+GRANT EXECUTE ON FUNCTION initialize_solo_block TO authenticated;
+GRANT EXECUTE ON FUNCTION process_solo_mining_tick TO authenticated;
+GRANT EXECUTE ON FUNCTION complete_solo_block TO authenticated;
+GRANT EXECUTE ON FUNCTION get_solo_mining_status TO authenticated;
+GRANT EXECUTE ON FUNCTION check_solo_rental_expiry TO authenticated;
+GRANT EXECUTE ON FUNCTION deactivate_solo_mining TO authenticated;
+GRANT EXECUTE ON FUNCTION toggle_mining_mode TO authenticated;
 
 -- =====================================================
 -- SISTEMA DE REGALOS (GIFTS)
@@ -14335,3 +14911,22 @@ GRANT EXECUTE ON FUNCTION place_prediction_bet TO authenticated;
 GRANT EXECUTE ON FUNCTION cancel_prediction_bet TO authenticated;
 GRANT EXECUTE ON FUNCTION get_player_predictions TO authenticated;
 GRANT EXECUTE ON FUNCTION get_prediction_price TO authenticated;
+
+-- =====================================================
+-- MIGRACIÓN: rig_cooling permite modded + unmodded del mismo tipo
+-- =====================================================
+-- El constraint viejo solo permite 1 cooling por tipo por rig.
+-- Nuevo esquema: unmodded stackea consigo mismo, modded es entrada separada.
+ALTER TABLE rig_cooling DROP CONSTRAINT IF EXISTS rig_cooling_player_rig_id_cooling_item_id_key;
+
+-- Solo 1 unmodded por tipo por rig (para stacking de durabilidad)
+DROP INDEX IF EXISTS rig_cooling_unmodded_unique;
+CREATE UNIQUE INDEX rig_cooling_unmodded_unique
+  ON rig_cooling(player_rig_id, cooling_item_id)
+  WHERE player_cooling_item_id IS NULL;
+
+-- Cada item modded solo puede instalarse una vez
+DROP INDEX IF EXISTS rig_cooling_modded_unique;
+CREATE UNIQUE INDEX rig_cooling_modded_unique
+  ON rig_cooling(player_cooling_item_id)
+  WHERE player_cooling_item_id IS NOT NULL;

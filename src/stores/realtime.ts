@@ -395,7 +395,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
                 block_id: pendingBlock.block_id,
                 reward: pendingBlock.reward,
                 is_premium: pendingBlock.is_premium,
-                is_pity: pendingBlock.is_pity,
                 materials_dropped: pendingBlock.materials_dropped || [],
                 created_at: pendingBlock.created_at,
               },

@@ -14,7 +14,6 @@ interface MaterialDrop {
 interface RewardEvent {
   reward: number;
   is_premium: boolean;
-  is_pity: boolean;
   materials_dropped: MaterialDrop[];
 }
 
@@ -30,7 +29,6 @@ const showCelebration = ref(false);
 const rewardAmount = ref(0);
 const displayedAmount = ref(0);
 const isPremium = ref(false);
-const isPity = ref(false);
 const materialsDropped = ref<MaterialDrop[]>([]);
 const coinParticles = ref<CoinParticle[]>([]);
 
@@ -82,7 +80,6 @@ function showNextReward() {
 
   rewardAmount.value = reward.reward;
   isPremium.value = reward.is_premium;
-  isPity.value = reward.is_pity;
   materialsDropped.value = reward.materials_dropped || [];
   coinParticles.value = generateParticles(materialsDropped.value.length > 0);
   showCelebration.value = true;
@@ -103,7 +100,7 @@ function showNextReward() {
 }
 
 function handlePendingBlockCreated(event: Event) {
-  const { reward, is_premium, is_pity, materials_dropped } = (event as CustomEvent).detail;
+  const { reward, is_premium, materials_dropped } = (event as CustomEvent).detail;
   if (!reward) return;
 
   // Dedup: ignore duplicate events for same reward within 5 seconds
@@ -116,7 +113,6 @@ function handlePendingBlockCreated(event: Event) {
   rewardQueue.push({
     reward: amount,
     is_premium: !!is_premium,
-    is_pity: !!is_pity,
     materials_dropped: Array.isArray(materials_dropped) ? materials_dropped : [],
   });
 
@@ -174,7 +170,7 @@ onUnmounted(() => {
           >
             <!-- Icon -->
             <div class="text-4xl mb-2 animate-bounce">
-              {{ isPity ? '🎁' : isPremium ? '👑' : '⛏️' }}
+              {{ isPremium ? '👑' : '⛏️' }}
             </div>
 
             <!-- Title -->
@@ -182,7 +178,7 @@ onUnmounted(() => {
               class="text-sm font-medium mb-1"
               :class="isPremium ? 'text-amber-400' : 'text-status-success'"
             >
-              {{ isPity ? t('reward.pityTitle') : t('reward.blockReward') }}
+              {{ t('reward.blockReward') }}
             </div>
 
             <!-- Reward Amount -->

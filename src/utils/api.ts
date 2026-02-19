@@ -279,10 +279,11 @@ export async function getPlayerRigs(playerId: string): Promise<any> {
   }, { critical: true });
 }
 
-export async function toggleRig(playerId: string, rigId: string) {
+export async function toggleRig(playerId: string, rigId: string, miningMode: string = 'pool') {
   const { data, error } = await supabase.rpc('toggle_rig', {
     p_player_id: playerId,
     p_rig_id: rigId,
+    p_mining_mode: miningMode,
   });
 
   if (error) throw error;
@@ -406,6 +407,43 @@ export async function getMiningEstimate(playerId: string): Promise<MiningEstimat
 export async function processMiningTick() {
   const { data, error } = await supabase.rpc('process_mining_tick');
 
+  if (error) throw error;
+  return data;
+}
+
+// === SOLO MINING ===
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getSoloMiningStatus(playerId: string): Promise<any> {
+  return rpcWithRetry('get_solo_mining_status', {
+    p_player_id: playerId,
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function activateSoloMining(playerId: string): Promise<any> {
+  const { data, error } = await supabase.rpc('activate_solo_mining', {
+    p_player_id: playerId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function deactivateSoloMining(playerId: string): Promise<any> {
+  const { data, error } = await supabase.rpc('deactivate_solo_mining', {
+    p_player_id: playerId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function toggleMiningMode(playerId: string, mode: 'pool' | 'solo'): Promise<any> {
+  const { data, error } = await supabase.rpc('toggle_mining_mode', {
+    p_player_id: playerId,
+    p_mode: mode,
+  });
   if (error) throw error;
   return data;
 }

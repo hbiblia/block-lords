@@ -38,6 +38,7 @@ interface PlayerRig {
   efficiency_bonus?: number;
   thermal_bonus?: number;
   patch_count?: number;
+  mining_mode?: 'pool' | 'solo';
   rig: Rig;
 }
 
@@ -257,7 +258,7 @@ export const useMiningStore = defineStore('mining', () => {
 
   const totalHashrate = computed(() =>
     rigs.value
-      .filter(r => r.is_active)
+      .filter(r => r.is_active && (r.mining_mode ?? 'pool') === 'pool')
       .reduce((sum, r) => sum + r.rig.hashrate, 0)
   );
 
@@ -265,7 +266,15 @@ export const useMiningStore = defineStore('mining', () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     warmupTick.value; // dependency to force recompute during warm-up
     return rigs.value
-      .filter(r => r.is_active)
+      .filter(r => r.is_active && (r.mining_mode ?? 'pool') === 'pool')
+      .reduce((sum, r) => sum + getRigEffectiveHashrate(r), 0);
+  });
+
+  const soloEffectiveHashrate = computed(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    warmupTick.value;
+    return rigs.value
+      .filter(r => r.is_active && r.mining_mode === 'solo')
       .reduce((sum, r) => sum + getRigEffectiveHashrate(r), 0);
   });
 
@@ -745,7 +754,7 @@ export const useMiningStore = defineStore('mining', () => {
   }
 
   // Toggle rig
-  async function toggleRig(rigId: string) {
+  async function toggleRig(rigId: string, miningMode: string = 'pool') {
     const authStore = useAuthStore();
     const notificationsStore = useNotificationsStore();
     const toastStore = useToastStore();
@@ -789,7 +798,7 @@ export const useMiningStore = defineStore('mining', () => {
     togglingRig.value = rigId;
 
     try {
-      const result = await apiToggleRig(authStore.player.id, rigId);
+      const result = await apiToggleRig(authStore.player.id, rigId, miningMode);
 
       if (!result.success) {
         await loadData();
@@ -1165,6 +1174,7 @@ export const useMiningStore = defineStore('mining', () => {
     isMining,
     totalHashrate,
     effectiveHashrate,
+    soloEffectiveHashrate,
     totalEnergyConsumption,
     totalInternetConsumption,
     miningChance,

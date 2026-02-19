@@ -949,3 +949,33 @@ CREATE POLICY "Treasury solo accesible por sistema"
 -- Canal prediction (filtrado por player_id)
 --   prediction_bets → UPDATE filter: player_id=eq.{playerId}
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE prediction_bets; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- =====================================================
+-- POLÍTICAS PARA SOLO MINING
+-- =====================================================
+
+-- Solo Mining Rentals (solo el dueño puede ver)
+ALTER TABLE solo_mining_rentals ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Players can view own rentals" ON solo_mining_rentals;
+CREATE POLICY "Players can view own rentals"
+  ON solo_mining_rentals FOR SELECT
+  USING (auth.uid() = player_id);
+
+-- Solo Mining Blocks (solo el dueño puede ver)
+ALTER TABLE solo_mining_blocks ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Players can view own solo blocks" ON solo_mining_blocks;
+CREATE POLICY "Players can view own solo blocks"
+  ON solo_mining_blocks FOR SELECT
+  USING (auth.uid() = player_id);
+
+-- Solo Mining Seeds (solo el dueño puede ver via bloque)
+ALTER TABLE solo_mining_seeds ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Players can view own seeds" ON solo_mining_seeds;
+CREATE POLICY "Players can view own seeds"
+  ON solo_mining_seeds FOR SELECT
+  USING (
+    solo_block_id IN (SELECT id FROM solo_mining_blocks WHERE player_id = auth.uid())
+  );

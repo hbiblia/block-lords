@@ -16,6 +16,8 @@ import { useRigStats } from '@/composables/useRigStats';
 import MiningTips from '@/components/MiningTips.vue';
 import MiningTour from '@/components/MiningTour.vue';
 import { useMiningTour } from '@/composables/useMiningTour';
+import { useSoloMiningStore } from '@/stores/solo-mining';
+import SoloMiningSection from '@/components/SoloMiningSection.vue';
 
 // Wake Lock to keep screen on while mining
 const { requestWakeLock, releaseWakeLock } = useWakeLock();
@@ -26,6 +28,20 @@ const { updateRigSound, stopRigSound } = useRigSound();
 const { t } = useI18n();
 const authStore = useAuthStore();
 const miningStore = useMiningStore();
+const soloMiningStore = useSoloMiningStore();
+
+// Tab visual state (no cambia el modo de minería real)
+const savedTab = localStorage.getItem('lootmine_mining_tab') as 'pool' | 'solo' | null;
+const activeTab = ref<'pool' | 'solo'>(savedTab ?? (soloMiningStore.isSoloMode ? 'solo' : 'pool'));
+
+watch(activeTab, (tab) => {
+  localStorage.setItem('lootmine_mining_tab', tab);
+});
+
+// Sincronizar tab cuando el modo real cambia (ej: al activar/desactivar solo)
+watch(() => soloMiningStore.isSoloMode, (isSolo) => {
+  activeTab.value = isSolo ? 'solo' : 'pool';
+});
 
 // Mining estimate
 const {
@@ -72,6 +88,11 @@ const showConfirmStopRig = ref(false);
 const rigToStop = ref<typeof miningStore.rigs[0] | null>(null);
 const stoppingRig = ref(false);
 const stopRigError = ref<string | null>(null);
+
+// Start rig mode selection
+const showModeSelect = ref(false);
+const rigToStart = ref<typeof miningStore.rigs[0] | null>(null);
+const startingRig = ref(false);
 
 // Mining simulation (visual only)
 const miningProgress = ref(0);
@@ -330,9 +351,36 @@ async function handleToggleRig(rigId: string) {
     return;
   }
 
-  // Turn on - handled by store
+  // Turn on - show mode selection if player has active solo rental
+  if (soloMiningStore.hasRental) {
+    rigToStart.value = rig;
+    showModeSelect.value = true;
+    return;
+  }
+
+  // No rental = pool only
   await miningStore.toggleRig(rigId);
   refreshEstimate();
+}
+
+async function confirmStartRig(mode: 'pool' | 'solo') {
+  if (!rigToStart.value || startingRig.value) return;
+
+  startingRig.value = true;
+
+  // Pass mode directly to toggleRig — each rig has its own mining_mode
+  await miningStore.toggleRig(rigToStart.value.id, mode);
+  refreshEstimate();
+  playSound('click');
+
+  showModeSelect.value = false;
+  rigToStart.value = null;
+  startingRig.value = false;
+}
+
+function cancelStartRig() {
+  showModeSelect.value = false;
+  rigToStart.value = null;
 }
 
 async function confirmStopRig() {
@@ -613,6 +661,10 @@ onMounted(() => {
   startUptimeTimer();
   requestWakeLock();
 
+  // Solo mining
+  soloMiningStore.loadStatus();
+  soloMiningStore.subscribe();
+
   // Nuevo sistema de shares
   miningStore.loadMiningBlockInfo();
   miningStore.loadPlayerShares();
@@ -681,6 +733,9 @@ onUnmounted(() => {
 
   window.removeEventListener('block-mined', handleBlockMined as EventListener);
   window.removeEventListener('start-mining-tour', startTour);
+
+  // Solo mining cleanup
+  soloMiningStore.unsubscribe();
 });
 </script>
 
@@ -713,6 +768,28 @@ onUnmounted(() => {
     <!-- Contextual Tips -->
     <MiningTips />
 
+    <!-- Mining Mode Toggle (solo visible con rental activo) -->
+    <div v-if="soloMiningStore.hasRental" class="flex gap-1 bg-bg-secondary rounded-t-xl p-1 border border-b-0 border-border">
+      <button @click="activeTab = 'pool'"
+        class="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+        :class="activeTab === 'pool'
+          ? 'bg-gradient-primary text-white shadow-lg'
+          : 'text-text-muted hover:text-text-primary'">
+        Pool Mining
+      </button>
+      <button @click="activeTab = 'solo'"
+        class="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1.5"
+        :class="activeTab === 'solo'
+          ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-lg'
+          : 'text-text-muted hover:text-text-primary'">
+        Solo Mining
+        <span v-if="rigs.some(r => r.is_active && r.mining_mode === 'solo')" class="w-1.5 h-1.5 rounded-full bg-status-success animate-pulse"></span>
+      </button>
+    </div>
+
+    <!-- Solo Mining Card (when solo tab active or no rental yet) -->
+    <SoloMiningSection v-if="activeTab === 'solo' || !soloMiningStore.hasRental" :attached-to-tabs="soloMiningStore.hasRental" />
+
     <!-- Primera carga - solo si no hay datos en cache -->
     <div v-if="loading && !dataLoaded" class="text-center py-20 text-text-muted">
       <div
@@ -724,8 +801,8 @@ onUnmounted(() => {
 
     <!-- Contenido (con datos en cache o cargados) -->
     <div v-else class="space-y-6">
-      <!-- Bloque Actual - Dashboard Unificado -->
-      <div id="tour-dashboard" class="card relative overflow-hidden p-3 sm:p-6">
+      <!-- Bloque Actual - Dashboard Unificado (solo en tab pool) -->
+      <div v-if="activeTab === 'pool'" id="tour-dashboard" class="card relative overflow-hidden p-3 sm:p-6" :class="soloMiningStore.hasRental ? 'rounded-t-none border-t-0' : ''">
         <div v-if="totalHashrate > 0"
           class="absolute inset-0 bg-gradient-to-r from-accent-primary/5 via-accent-secondary/5 to-accent-primary/5 animate-pulse">
         </div>
@@ -1048,8 +1125,10 @@ onUnmounted(() => {
                 <!-- Mining indicator dot -->
                 <div v-if="playerRig.is_active && playerRig.condition > 0" class="absolute top-2.5 right-2.5">
                   <span class="relative flex h-2.5 w-2.5">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-success opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-status-success"></span>
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                      :class="playerRig.mining_mode === 'solo' ? 'bg-cyan-400' : 'bg-status-success'"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5"
+                      :class="playerRig.mining_mode === 'solo' ? 'bg-cyan-400' : 'bg-status-success'"></span>
                   </span>
                 </div>
 
@@ -1105,6 +1184,14 @@ onUnmounted(() => {
                     <h3 class="font-semibold text-sm truncate" :class="getTierColor(playerRig.rig.tier)">
                       {{ getRigName(playerRig.rig.id) }}
                     </h3>
+                    <span v-if="playerRig.is_active && playerRig.mining_mode === 'solo'"
+                      class="text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shrink-0 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                      ⛏️ SOLO
+                    </span>
+                    <span v-else-if="playerRig.is_active && playerRig.mining_mode !== 'solo'"
+                      class="text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      ⛏️ POOL
+                    </span>
                     <span v-if="playerRig.is_active && playerRig.activated_at"
                       v-tooltip="t('mining.tooltips.uptime')"
                       class="text-[10px] text-text-secondary px-1.5 py-0.5 bg-bg-tertiary/80 rounded whitespace-nowrap shrink-0 cursor-help"
@@ -1484,9 +1571,9 @@ onUnmounted(() => {
                 <div class="font-semibold">{{ slotInfo.next_upgrade.name }}</div>
               </div>
               <div class="text-center text-2xl font-bold">
-                <span>{{ slotInfo.next_upgrade.currency === 'crypto' ? '💎' : '🪙' }}</span>
+                <span>{{ getSlotCurrencyIcon(slotInfo.next_upgrade.currency) }}</span>
                 {{ slotInfo.next_upgrade.price.toLocaleString() }}
-                <span class="text-sm">{{ slotInfo.next_upgrade.currency === 'crypto' ? 'Landwork' : 'GC' }}</span>
+                <span class="text-sm">{{ getSlotCurrencyName(slotInfo.next_upgrade.currency) }}</span>
               </div>
             </div>
 
@@ -1615,7 +1702,53 @@ onUnmounted(() => {
           </div>
         </div>
       </Transition>
+
+      <!-- Mining Mode Selection Modal -->
+      <Transition name="modal">
+        <div v-if="showModeSelect && rigToStart" class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          @click.self="cancelStartRig">
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+          <div class="relative bg-bg-primary border border-border rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+            <h3 class="text-lg font-bold mb-4 text-center">{{ t('mining.selectMode', '¿En qué modo quieres minar?') }}</h3>
+
+            <div class="bg-bg-secondary rounded-xl p-4 mb-4">
+              <div class="text-center mb-3">
+                <div class="text-3xl mb-2">⛏️</div>
+                <div class="font-semibold" :class="getTierColor(rigToStart.rig.tier)">{{ getRigName(rigToStart.rig.id) }}</div>
+              </div>
+              <div class="flex justify-center gap-4 text-sm text-text-muted">
+                <span>⚡ {{ rigToStart.rig.hashrate.toLocaleString() }} H/s</span>
+              </div>
+            </div>
+
+            <div class="flex gap-3">
+              <button @click="confirmStartRig('pool')" :disabled="startingRig"
+                class="flex-1 py-3 rounded-lg font-semibold transition-all bg-gradient-primary text-white hover:opacity-90 disabled:opacity-50">
+                <span v-if="startingRig" class="animate-spin">⏳</span>
+                <span v-else class="flex flex-col items-center gap-1">
+                  <span class="text-lg">🌐</span>
+                  <span>Pool</span>
+                </span>
+              </button>
+              <button @click="confirmStartRig('solo')" :disabled="startingRig"
+                class="flex-1 py-3 rounded-lg font-semibold transition-all bg-gradient-to-r from-cyan-600 to-cyan-500 text-white hover:opacity-90 disabled:opacity-50">
+                <span v-if="startingRig" class="animate-spin">⏳</span>
+                <span v-else class="flex flex-col items-center gap-1">
+                  <span class="text-lg">⛏️</span>
+                  <span>Solo</span>
+                </span>
+              </button>
+            </div>
+
+            <button @click="cancelStartRig" :disabled="startingRig"
+              class="w-full mt-3 py-2 rounded-lg text-sm text-text-muted hover:text-text-primary transition-colors">
+              {{ t('common.cancel', 'Cancelar') }}
+            </button>
+          </div>
+        </div>
+      </Transition>
     </Teleport>
+
   </div>
 </template>
 

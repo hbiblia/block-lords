@@ -156,11 +156,21 @@ export const useInventoryStore = defineStore('inventory', () => {
   );
 
   // Inventory slot system: count unique item types (1 type = 1 slot)
+  // Modded cooling items are grouped by cooling_item_id + component types
+  const moddedCoolingGroups = computed(() => {
+    const keys = new Set<string>();
+    for (const item of moddedCoolingItems.value) {
+      const modSig = (item.mods || []).map((m: { component_id: string }) => m.component_id).sort().join(',');
+      keys.add(`${item.cooling_item_id}|${modSig}`);
+    }
+    return keys.size;
+  });
+
   const slotsUsed = computed(() =>
     rigItems.value.length +
     new Set(cardItems.value.map(c => c.card_id)).size +
     coolingItems.value.length +
-    moddedCoolingItems.value.length +
+    moddedCoolingGroups.value +
     componentItems.value.length +
     boostItems.value.length +
     materialItems.value.length +
