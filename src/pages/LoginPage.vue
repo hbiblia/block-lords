@@ -13,16 +13,18 @@ async function handleGoogleLogin() {
   error.value = '';
   loading.value = true;
 
-  // Preservar código de referido antes de limpiar
+  // Preservar datos persistentes antes de limpiar
   const pendingRefCode = localStorage.getItem('pendingReferralCode');
+  const tourCompleted = localStorage.getItem('miningTourCompleted');
+  const lastSeenVersion = localStorage.getItem('lootmine-last-seen-version');
 
   // Limpiar localStorage al iniciar sesión para evitar datos obsoletos de sesiones anteriores
   localStorage.clear();
 
-  // Restaurar código de referido si existía
-  if (pendingRefCode) {
-    localStorage.setItem('pendingReferralCode', pendingRefCode);
-  }
+  // Restaurar datos persistentes
+  if (pendingRefCode) localStorage.setItem('pendingReferralCode', pendingRefCode);
+  if (tourCompleted) localStorage.setItem('miningTourCompleted', tourCompleted);
+  if (lastSeenVersion) localStorage.setItem('lootmine-last-seen-version', lastSeenVersion);
 
   try {
     const success = await authStore.loginWithGoogle();
