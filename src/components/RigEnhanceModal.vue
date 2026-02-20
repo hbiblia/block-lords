@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
 import { useToastStore } from '@/stores/toast';
 import { useMarketStore } from '@/stores/market';
+import { useInventoryStore } from '@/stores/inventory';
 import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCooling, getPlayerBoosts, installBoostToRig, getRigBoosts, getRigUpgrades, upgradeRig, removeCoolingFromRig, removeBoostFromRig, applyRigPatch } from '@/utils/api';
 import { formatCrypto } from '@/utils/format';
 import { playSound } from '@/utils/sounds';
@@ -15,6 +16,7 @@ const authStore = useAuthStore();
 const miningStore = useMiningStore();
 const toastStore = useToastStore();
 const marketStore = useMarketStore();
+const inventoryStore = useInventoryStore();
 
 interface RigData {
   id: string;
@@ -1071,6 +1073,8 @@ async function confirmUse() {
       await miningStore.reloadRigs();
       if (type === 'install' || type === 'destroy_cooling') {
         await miningStore.loadRigsCooling();
+        // Invalidate inventory store cache so modded/unmodded coolers are refreshed globally
+        inventoryStore.refresh();
       } else if (type === 'boost' || type === 'destroy_boost') {
         await miningStore.loadRigsBoosts();
       }
