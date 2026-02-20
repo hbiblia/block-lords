@@ -912,10 +912,10 @@ onUnmounted(() => {
                   {{ (networkStats.hashrate / 1000).toFixed(1) }}K
                 </div>
               </div>
-              <div v-tooltip="t('mining.tooltip.activeMiners')" class="text-center cursor-help">
-                <div class="text-[10px] sm:text-xs text-text-muted mb-0.5 sm:mb-1">👥 {{ t('mining.minersLabel') }}</div>
+              <div v-tooltip="t('mining.tooltip.onlinePlayers')" class="text-center cursor-help">
+                <div class="text-[10px] sm:text-xs text-text-muted mb-0.5 sm:mb-1">👥 {{ t('mining.onlineLabel') }}</div>
                 <div class="text-sm sm:text-base font-bold font-mono text-emerald-400">
-                  {{ networkStats.activeMiners }}
+                  {{ networkStats.onlinePlayers }}
                 </div>
               </div>
               <div v-tooltip="t('mining.tooltip.yourPower')" class="text-center cursor-help">

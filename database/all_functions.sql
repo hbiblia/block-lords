@@ -1499,6 +1499,7 @@ DECLARE
   v_stats network_stats%ROWTYPE;
   v_latest_block JSON;
   v_active_miners BIGINT;
+  v_online_players BIGINT;
 BEGIN
   SELECT * INTO v_stats FROM network_stats WHERE id = 'current';
 
@@ -1519,11 +1520,14 @@ BEGIN
   WHERE pr.is_active = true
     AND COALESCE(pr.mining_mode, 'pool') = 'pool';
 
+  SELECT COUNT(*) INTO v_online_players FROM players WHERE is_online = true;
+
   RETURN json_build_object(
     'difficulty', COALESCE(v_stats.difficulty, 1000),
     'hashrate', COALESCE(v_stats.hashrate, 0),
     'latestBlock', v_latest_block,
-    'activeMiners', v_active_miners
+    'activeMiners', v_active_miners,
+    'onlinePlayers', v_online_players
   );
 END;
 $$;

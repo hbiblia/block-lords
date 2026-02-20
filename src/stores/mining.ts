@@ -47,6 +47,7 @@ interface NetworkStats {
   hashrate: number;
   latestBlock: any;
   activeMiners: number;
+  onlinePlayers: number;
 }
 
 interface Block {
@@ -187,6 +188,7 @@ const DEFAULT_NETWORK_STATS: NetworkStats = {
   hashrate: 50000,
   latestBlock: null,
   activeMiners: 25,
+  onlinePlayers: 0,
 };
 
 const DEFAULT_SLOT_INFO: SlotInfo = {
