@@ -783,8 +783,9 @@ onUnmounted(() => {
         <span class="gradient-text">{{ t('mining.title') }}</span>
       </h1>
       <div class="flex items-center gap-3">
-        <span class="badge" :class="activeRigsCount > 0 ? 'badge-success' : 'badge-warning'">
-          {{ t('mining.activeRigs', { count: activeRigsCount }) }}
+        <span v-tooltip="t('mining.tooltip.onlinePlayers')" class="flex items-center gap-1.5 cursor-help">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-sm text-emerald-400">{{ networkStats.onlinePlayers }} {{ t('mining.onlineLabel') }}</span>
         </span>
       </div>
     </div>
@@ -912,10 +913,10 @@ onUnmounted(() => {
                   {{ (networkStats.hashrate / 1000).toFixed(1) }}K
                 </div>
               </div>
-              <div v-tooltip="t('mining.tooltip.onlinePlayers')" class="text-center cursor-help">
-                <div class="text-[10px] sm:text-xs text-text-muted mb-0.5 sm:mb-1">👥 {{ t('mining.onlineLabel') }}</div>
+              <div v-tooltip="t('mining.tooltip.activeMinersList')" class="text-center cursor-help">
+                <div class="text-[10px] sm:text-xs text-text-muted mb-0.5 sm:mb-1">👥 {{ t('mining.activeMinersLabel') }}</div>
                 <div class="text-sm sm:text-base font-bold font-mono text-emerald-400">
-                  {{ networkStats.onlinePlayers }}
+                  {{ networkStats.activeMiners }}
                 </div>
               </div>
               <div v-tooltip="t('mining.tooltip.yourPower')" class="text-center cursor-help">

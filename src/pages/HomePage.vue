@@ -125,10 +125,18 @@ onUnmounted(() => {
         {{ t('home.subtitle') }}
       </p>
 
-      <div v-if="!isAuthenticated" class="flex justify-center mb-6">
-        <RouterLink to="/login" class="btn-primary px-6 py-3">
-          {{ t('home.startMining') }}
-        </RouterLink>
+      <div v-if="!isAuthenticated">
+        <div v-if="!loadingStats && stats" class="flex justify-center items-center gap-2 mb-3">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-sm text-emerald-400 font-medium">
+            {{ formatNumber(stats.onlinePlayers) }} {{ t('home.stats.onlinePlayers').toLowerCase() }}
+          </span>
+        </div>
+        <div class="flex justify-center mb-6">
+          <RouterLink to="/login" class="btn-primary px-6 py-3">
+            {{ t('home.startMining') }}
+          </RouterLink>
+        </div>
       </div>
       <div v-else class="mb-6">
         <RouterLink to="/mining" class="btn-primary px-6 py-3">
