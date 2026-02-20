@@ -739,7 +739,7 @@ onMounted(() => {
         width: '100%',
         height: '480px',
         color: '#3f007e',
-        getAds: 'false'
+        getAds: 'true'
       };
 
       const loadVideoScript = () => {
