@@ -2947,7 +2947,9 @@ BEGIN
     ELSE
       -- No hay uno sin mods instalado: insertar nuevo
       INSERT INTO rig_cooling (player_rig_id, cooling_item_id, durability, player_id)
-      VALUES (p_rig_id, p_cooling_id, 100, p_player_id);
+      VALUES (p_rig_id, p_cooling_id, 100, p_player_id)
+      ON CONFLICT (player_rig_id, cooling_item_id) WHERE player_cooling_item_id IS NULL
+      DO UPDATE SET durability = LEAST(v_max_durability, rig_cooling.durability + 100);
 
       -- Marcar el rig como modificado (evita penalización por quick toggle)
       UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
@@ -8534,8 +8536,12 @@ BEGIN
   v_expires_at := v_player.premium_until;
   UPDATE players SET mining_mode = 'solo' WHERE id = p_player_id;
 
-  INSERT INTO solo_mining_rentals (player_id, expires_at, ron_paid)
-  VALUES (p_player_id, v_expires_at, 0)
+  -- Cambiar rigs activos a modo solo
+  UPDATE player_rigs SET mining_mode = 'solo'
+  WHERE player_id = p_player_id AND is_active = true;
+
+  INSERT INTO solo_mining_rentals (player_id, expires_at, ron_paid, is_active)
+  VALUES (p_player_id, v_expires_at, 0, true)
   RETURNING id INTO v_rental_id;
 
   v_first_block := initialize_solo_block(p_player_id, v_rental_id);
@@ -8605,6 +8611,7 @@ DECLARE
   v_rig RECORD;
   v_solo_block solo_mining_blocks%ROWTYPE;
   v_rental RECORD;
+  v_block_player RECORD;
   v_effective_hashrate NUMERIC;
   v_scans_per_tick INTEGER;
   v_scan_value INTEGER;
@@ -8626,6 +8633,29 @@ DECLARE
   v_init_result JSON;
   i INTEGER;
 BEGIN
+  -- Paso 0: Cerrar todos los bloques expirados (independiente del estado del player)
+  UPDATE solo_mining_blocks SET status = 'failed', completed_at = NOW()
+  WHERE status = 'active' AND target_close_at <= NOW();
+  GET DIAGNOSTICS v_blocks_failed = ROW_COUNT;
+
+  -- Paso 0.5: Crear bloque para todos los jugadores con rental activo que no tengan bloque
+  FOR v_block_player IN
+    SELECT DISTINCT p.id as player_id
+    FROM players p
+    JOIN solo_mining_rentals smr ON smr.player_id = p.id
+    WHERE smr.is_active = true AND smr.expires_at > NOW()
+      AND NOT EXISTS (
+        SELECT 1 FROM solo_mining_blocks smb
+        WHERE smb.player_id = p.id AND smb.status = 'active'
+      )
+  LOOP
+    SELECT * INTO v_rental FROM solo_mining_rentals
+    WHERE player_id = v_block_player.player_id AND is_active = true AND expires_at > NOW() LIMIT 1;
+    IF v_rental.id IS NOT NULL THEN
+      v_init_result := initialize_solo_block(v_block_player.player_id, v_rental.id);
+    END IF;
+  END LOOP;
+
   FOR v_solo_player IN
     SELECT DISTINCT p.id as player_id, p.energy, p.internet, p.reputation_score
     FROM players p
@@ -8654,21 +8684,6 @@ BEGIN
         WHERE player_id = v_solo_player.player_id AND status = 'active' LIMIT 1;
       END IF;
       IF v_solo_block.id IS NULL THEN CONTINUE; END IF;
-    END IF;
-
-    IF NOW() >= v_solo_block.target_close_at THEN
-      UPDATE solo_mining_blocks SET status = 'failed', completed_at = NOW()
-      WHERE id = v_solo_block.id;
-      v_blocks_failed := v_blocks_failed + 1;
-
-      -- No reward if not all seeds found
-
-      SELECT * INTO v_rental FROM solo_mining_rentals
-      WHERE player_id = v_solo_player.player_id AND is_active = true AND expires_at > NOW() LIMIT 1;
-      IF v_rental.id IS NOT NULL THEN
-        v_init_result := initialize_solo_block(v_solo_player.player_id, v_rental.id);
-      END IF;
-      CONTINUE;
     END IF;
 
     v_player_total_hashrate := 0;
@@ -8746,14 +8761,18 @@ BEGIN
     WHERE id = v_solo_block.id;
 
     IF (v_solo_block.seeds_found + v_seeds_found_this_tick) >= v_solo_block.total_seeds THEN
-      PERFORM complete_solo_block(v_solo_player.player_id, v_solo_block.id);
-      v_blocks_completed := v_blocks_completed + 1;
+      BEGIN
+        PERFORM complete_solo_block(v_solo_player.player_id, v_solo_block.id);
+        v_blocks_completed := v_blocks_completed + 1;
 
-      SELECT * INTO v_rental FROM solo_mining_rentals
-      WHERE player_id = v_solo_player.player_id AND is_active = true AND expires_at > NOW() LIMIT 1;
-      IF v_rental.id IS NOT NULL THEN
-        v_init_result := initialize_solo_block(v_solo_player.player_id, v_rental.id);
-      END IF;
+        SELECT * INTO v_rental FROM solo_mining_rentals
+        WHERE player_id = v_solo_player.player_id AND is_active = true AND expires_at > NOW() LIMIT 1;
+        IF v_rental.id IS NOT NULL THEN
+          v_init_result := initialize_solo_block(v_solo_player.player_id, v_rental.id);
+        END IF;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING 'Error completing solo block % for player %: % %', v_solo_block.id, v_solo_player.player_id, SQLERRM, SQLSTATE;
+      END;
     END IF;
 
     v_total_players_processed := v_total_players_processed + 1;
@@ -8908,6 +8927,10 @@ BEGIN
   WHERE player_id = p_player_id AND status = 'active';
   UPDATE players SET mining_mode = 'pool' WHERE id = p_player_id;
 
+  -- Devolver rigs activos a modo pool
+  UPDATE player_rigs SET mining_mode = 'pool'
+  WHERE player_id = p_player_id AND is_active = true AND mining_mode = 'solo';
+
   RETURN json_build_object('success', true, 'message', 'Solo mining deactivated');
 END;
 $$;
@@ -9004,7 +9027,12 @@ BEGIN
   v_solo_expired := check_solo_rental_expiry();
 
   -- 2c. Procesar solo mining (escaneo de seeds)
-  v_solo_result := process_solo_mining_tick();
+  BEGIN
+    v_solo_result := process_solo_mining_tick();
+  EXCEPTION WHEN OTHERS THEN
+    v_solo_result := json_build_object('success', false, 'error', SQLERRM, 'detail', SQLSTATE);
+    RAISE WARNING 'Solo mining tick error: % %', SQLERRM, SQLSTATE;
+  END;
 
   -- 3. Generar shares para mineros activos (pool)
   v_shares_result := generate_shares_tick();

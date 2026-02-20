@@ -97,7 +97,7 @@ const timeProgressPercent = computed(() => {
   <div>
     <!-- Sin alquiler activo: mostrar activacion -->
     <template v-if="!soloStore.isActive">
-      <div class="card relative overflow-hidden p-4 sm:p-6 text-center ">
+      <div class="card relative overflow-hidden p-4 sm:p-6 text-center mb-5">
         <div class="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-transparent to-cyan-500/5"></div>
         <div class="relative">
           <div class="text-4xl mb-3">⛏️</div>

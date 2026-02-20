@@ -768,8 +768,8 @@ onUnmounted(() => {
     <!-- Contextual Tips -->
     <MiningTips />
 
-    <!-- Mining Mode Toggle (solo visible con rental activo) -->
-    <div v-if="soloMiningStore.hasRental" class="flex gap-1 bg-bg-secondary rounded-t-xl p-1 border border-b-0 border-border">
+    <!-- Mining Mode Toggle (siempre visible) -->
+    <div class="flex gap-1 bg-bg-secondary rounded-t-xl p-1 border border-b-0 border-border">
       <button @click="activeTab = 'pool'"
         class="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all"
         :class="activeTab === 'pool'
@@ -787,8 +787,8 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <!-- Solo Mining Card (when solo tab active or no rental yet) -->
-    <SoloMiningSection v-if="activeTab === 'solo' || !soloMiningStore.hasRental" :attached-to-tabs="soloMiningStore.hasRental" />
+    <!-- Solo Mining Card (when solo tab active) -->
+    <SoloMiningSection v-if="activeTab === 'solo'" :attached-to-tabs="true" />
 
     <!-- Primera carga - solo si no hay datos en cache -->
     <div v-if="loading && !dataLoaded" class="text-center py-20 text-text-muted">
@@ -802,7 +802,7 @@ onUnmounted(() => {
     <!-- Contenido (con datos en cache o cargados) -->
     <div v-else class="space-y-6">
       <!-- Bloque Actual - Dashboard Unificado (solo en tab pool) -->
-      <div v-if="activeTab === 'pool'" id="tour-dashboard" class="card relative overflow-hidden p-3 sm:p-6" :class="soloMiningStore.hasRental ? 'rounded-t-none border-t-0' : ''">
+      <div v-if="activeTab === 'pool'" id="tour-dashboard" class="card relative overflow-hidden p-3 sm:p-6 rounded-t-none border-t-0">
         <div v-if="totalHashrate > 0"
           class="absolute inset-0 bg-gradient-to-r from-accent-primary/5 via-accent-secondary/5 to-accent-primary/5 animate-pulse">
         </div>
