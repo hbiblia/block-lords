@@ -731,15 +731,38 @@ onMounted(() => {
   window.addEventListener('block-mined', handleBlockMined as EventListener);
   window.addEventListener('start-mining-tour', startTour);
 
-  // Initialize AdSense (delay to ensure container has width)
+  // Initialize GameMonetize video ad
   setTimeout(() => {
     try {
-      const adEl = document.querySelector('.adsbygoogle[data-ad-slot="6463255272"]');
-      if (adEl && adEl.clientWidth > 0) {
-        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+      (window as any).VIDEO_OPTIONS = {
+        gameid: '4kci7og3klgj0ivy2wz3gdvd9dth5e7n',
+        width: '100%',
+        height: '480px',
+        color: '#3f007e',
+        getAds: 'false'
+      };
+
+      const loadVideoScript = () => {
+        if (!document.getElementById('gamemonetize-video-api')) {
+          const script = document.createElement('script');
+          script.id = 'gamemonetize-video-api';
+          script.src = 'https://api.gamemonetize.com/video.js';
+          const firstScript = document.getElementsByTagName('script')[0];
+          firstScript.parentNode?.insertBefore(script, firstScript);
+        }
+      };
+
+      // Load jQuery first if not present
+      if (!(window as any).jQuery) {
+        const jq = document.createElement('script');
+        jq.src = 'https://code.jquery.com/jquery-3.7.1.min.js';
+        jq.onload = loadVideoScript;
+        document.head.appendChild(jq);
+      } else {
+        loadVideoScript();
       }
     } catch (e) {
-      // AdSense not available
+      // GameMonetize not available
     }
   }, 1500);
 });
@@ -1576,13 +1599,10 @@ onUnmounted(() => {
           <!-- Exchange Rate Chart -->
           <ExchangeRateChart ref="exchangeRateChartRef" />
 
-          <!-- AdSense Banner -->
+          <!-- Ad Banner -->
           <div class="card p-3 text-center">
             <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
-            <div class="flex justify-center">
-              <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7500429866047477"
-                data-ad-slot="6463255272" data-ad-format="auto" data-full-width-responsive="true"></ins>
-            </div>
+            <div id="gamemonetize-video"></div>
           </div>
         </div>
       </div>
