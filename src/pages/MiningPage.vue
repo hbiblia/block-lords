@@ -500,14 +500,49 @@ function canUpgradeSlot(slot: { tier: string; xp: number }): boolean {
 
 const upgradingSlotId = ref<string | null>(null);
 
+// Tier upgrade celebration
+const showTierUpgrade = ref(false);
+const tierUpgradeData = ref<{ slotNumber: number; newTier: string; oldTier: string } | null>(null);
+
+function getTierEmoji(tier: string): string {
+  switch (tier) {
+    case 'standard': return '🥈';
+    case 'advanced': return '🥇';
+    case 'elite': return '💎';
+    default: return '⬆️';
+  }
+}
+
+function closeTierUpgrade() {
+  showTierUpgrade.value = false;
+  tierUpgradeData.value = null;
+}
+
 async function handleUpgradeSlotTier(slotId: string) {
   if (!authStore.player || upgradingSlotId.value) return;
+
+  // Capture old tier before upgrade
+  const slot = slotInfo.value?.slots?.find(s => s.id === slotId);
+  const oldTier = slot?.tier || 'basic';
+  const slotNumber = slot?.slot_number || 0;
+
   upgradingSlotId.value = slotId;
   try {
     const result = await upgradeSlotTier(authStore.player.id, slotId);
     if (result?.success) {
       playSound('purchase');
       await miningStore.loadData();
+
+      // Show celebration
+      tierUpgradeData.value = {
+        slotNumber,
+        newTier: result.new_tier || getNextTierName(oldTier).toLowerCase(),
+        oldTier,
+      };
+      showTierUpgrade.value = true;
+
+      // Auto-close after 3 seconds
+      setTimeout(() => closeTierUpgrade(), 3000);
     } else {
       playSound('error');
     }
@@ -517,6 +552,7 @@ async function handleUpgradeSlotTier(slotId: string) {
     upgradingSlotId.value = null;
   }
 }
+
 
 // Get slot data for a given rig
 function getSlotForRig(rigId: string) {
@@ -1747,6 +1783,73 @@ onUnmounted(() => {
           </div>
         </div>
       </Transition>
+
+      <!-- Tier Upgrade Celebration -->
+      <Transition name="tier-upgrade">
+        <div v-if="showTierUpgrade && tierUpgradeData"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          @click="closeTierUpgrade"
+        >
+          <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+
+          <!-- Particles -->
+          <div class="absolute inset-0 overflow-hidden pointer-events-none">
+            <div v-for="i in 20" :key="'p-' + i"
+              class="tier-particle absolute rounded-full"
+              :class="tierUpgradeData.newTier === 'elite' ? 'bg-amber-400' : tierUpgradeData.newTier === 'advanced' ? 'bg-fuchsia-400' : 'bg-sky-400'"
+              :style="{
+                left: Math.random() * 100 + '%',
+                top: Math.random() * 100 + '%',
+                width: (4 + Math.random() * 8) + 'px',
+                height: (4 + Math.random() * 8) + 'px',
+                animationDelay: (Math.random() * 0.8) + 's',
+                animationDuration: (1 + Math.random() * 1.5) + 's',
+              }"
+            ></div>
+          </div>
+
+          <!-- Content -->
+          <div class="relative text-center tier-upgrade-content">
+            <!-- Glow ring -->
+            <div class="tier-glow-ring mx-auto mb-6 w-28 h-28 rounded-full flex items-center justify-center"
+              :class="tierUpgradeData.newTier === 'elite' ? 'shadow-[0_0_60px_rgba(251,191,36,0.5)]' : tierUpgradeData.newTier === 'advanced' ? 'shadow-[0_0_60px_rgba(217,70,239,0.5)]' : 'shadow-[0_0_60px_rgba(56,189,248,0.5)]'"
+            >
+              <div class="w-24 h-24 rounded-full flex items-center justify-center border-4"
+                :class="tierUpgradeData.newTier === 'elite' ? 'border-amber-400 bg-amber-500/20' : tierUpgradeData.newTier === 'advanced' ? 'border-fuchsia-400 bg-fuchsia-500/20' : 'border-sky-400 bg-sky-500/20'"
+              >
+                <span class="text-5xl tier-emoji-bounce">{{ getTierEmoji(tierUpgradeData.newTier) }}</span>
+              </div>
+            </div>
+
+            <div class="text-sm text-text-muted mb-1 tier-fade-in" style="animation-delay: 0.2s">
+              Slot #{{ tierUpgradeData.slotNumber }}
+            </div>
+
+            <div class="text-2xl font-black uppercase tracking-wider tier-fade-in"
+              :class="tierUpgradeData.newTier === 'elite' ? 'text-amber-400' : tierUpgradeData.newTier === 'advanced' ? 'text-fuchsia-400' : 'text-sky-400'"
+              style="animation-delay: 0.3s"
+            >
+              {{ tierUpgradeData.newTier }}
+            </div>
+
+            <div class="flex items-center justify-center gap-2 mt-2 tier-fade-in" style="animation-delay: 0.5s">
+              <span class="text-xs uppercase font-medium px-2 py-0.5 rounded"
+                :class="getSlotTierColor(tierUpgradeData.oldTier) + ' ' + getSlotTierBg(tierUpgradeData.oldTier)">
+                {{ tierUpgradeData.oldTier }}
+              </span>
+              <span class="text-text-muted text-lg">→</span>
+              <span class="text-xs uppercase font-medium px-2 py-0.5 rounded"
+                :class="getSlotTierColor(tierUpgradeData.newTier) + ' ' + getSlotTierBg(tierUpgradeData.newTier)">
+                {{ tierUpgradeData.newTier }}
+              </span>
+            </div>
+
+            <div class="mt-4 text-text-muted text-xs tier-fade-in" style="animation-delay: 0.7s">
+              {{ t('mining.tierUpgraded', 'Tier upgraded!') }}
+            </div>
+          </div>
+        </div>
+      </Transition>
     </Teleport>
 
   </div>
@@ -1776,5 +1879,111 @@ onUnmounted(() => {
 .modal-enter-from .relative,
 .modal-leave-to .relative {
   transform: scale(0.95);
+}
+
+/* Tier Upgrade Celebration */
+.tier-upgrade-enter-active {
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tier-upgrade-leave-active {
+  transition: all 0.3s ease-out;
+}
+
+.tier-upgrade-enter-from {
+  opacity: 0;
+}
+
+.tier-upgrade-leave-to {
+  opacity: 0;
+}
+
+.tier-upgrade-content {
+  animation: tierContentPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes tierContentPop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.tier-emoji-bounce {
+  animation: emojiBounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
+}
+
+@keyframes emojiBounce {
+  0% {
+    transform: scale(0) rotate(-20deg);
+  }
+
+  60% {
+    transform: scale(1.3) rotate(5deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.tier-glow-ring {
+  animation: glowPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 0.85;
+  }
+}
+
+.tier-fade-in {
+  animation: tierFadeUp 0.4s ease-out both;
+}
+
+@keyframes tierFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tier-particle {
+  animation: particleFly 2s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes particleFly {
+  0% {
+    opacity: 0;
+    transform: scale(0) translateY(0);
+  }
+
+  20% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0.5) translateY(-200px) translateX(calc((var(--random, 0.5) - 0.5) * 200px));
+  }
 }
 </style>

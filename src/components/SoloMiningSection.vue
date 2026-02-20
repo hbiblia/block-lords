@@ -49,6 +49,30 @@ watch(isMining, (mining) => {
   else stopScanAnimation();
 });
 
+// Track recently found seeds for animation
+const recentlyFoundSeeds = ref<Set<number>>(new Set());
+const prevFoundSet = ref<Set<number>>(new Set());
+
+watch(() => soloStore.seeds, (newSeeds) => {
+  const currentFound = new Set(newSeeds.filter(s => s.found).map(s => s.index));
+  for (const idx of currentFound) {
+    if (!prevFoundSet.value.has(idx)) {
+      recentlyFoundSeeds.value.add(idx);
+      // Clear animation after it plays
+      setTimeout(() => {
+        recentlyFoundSeeds.value.delete(idx);
+      }, 2000);
+    }
+  }
+  prevFoundSet.value = currentFound;
+}, { deep: true });
+
+// Reset when block changes
+watch(() => soloStore.currentBlock?.block_number, () => {
+  recentlyFoundSeeds.value.clear();
+  prevFoundSet.value.clear();
+});
+
 const blockTypeConfig: Record<string, { color: string; icon: string; label: string; border: string; gradient: string }> = {
   bronze: { color: 'text-amber-600', icon: '🥉', label: 'Bronze', border: 'border-amber-600/30', gradient: 'from-amber-600/10' },
   silver: { color: 'text-gray-300', icon: '🥈', label: 'Silver', border: 'border-gray-300/30', gradient: 'from-gray-300/10' },
@@ -229,15 +253,34 @@ const timeProgressPercent = computed(() => {
               <div class="text-[10px] text-text-muted mb-2 uppercase tracking-wider">Seeds del bloque</div>
               <div class="flex flex-wrap gap-2 justify-center">
                 <div v-for="seed in soloStore.seeds" :key="seed.index"
-                  class="relative bg-bg-secondary rounded-xl px-3 py-2 min-w-[72px] text-center border transition-all duration-500"
-                  :class="seed.found
-                    ? `${currentBlockConfig.border} bg-gradient-to-b ${currentBlockConfig.gradient} to-transparent`
-                    : isMining ? 'border-cyan-500/20' : 'border-border/30'">
-                  <div class="font-mono text-lg font-bold tracking-wider"
-                    :class="seed.found ? currentBlockConfig.color : isMining ? 'text-cyan-500/40' : 'text-text-muted/30'">
+                  class="relative bg-bg-secondary rounded-xl px-3 py-2 min-w-[72px] text-center border transition-all duration-500 overflow-hidden"
+                  :class="[
+                    seed.found
+                      ? `${currentBlockConfig.border} bg-gradient-to-b ${currentBlockConfig.gradient} to-transparent`
+                      : isMining ? 'border-cyan-500/20' : 'border-border/30',
+                    recentlyFoundSeeds.has(seed.index) ? 'seed-found-flash' : ''
+                  ]">
+                  <!-- Found burst effect -->
+                  <div v-if="recentlyFoundSeeds.has(seed.index)" class="absolute inset-0 pointer-events-none">
+                    <div class="seed-ring absolute inset-0 rounded-xl border-2"
+                      :class="soloStore.blockType === 'gold' ? 'border-yellow-400' : soloStore.blockType === 'silver' ? 'border-gray-300' : soloStore.blockType === 'diamond' ? 'border-cyan-400' : 'border-amber-500'"></div>
+                    <div v-for="n in 6" :key="'spark-' + n"
+                      class="seed-spark absolute w-1.5 h-1.5 rounded-full"
+                      :class="soloStore.blockType === 'gold' ? 'bg-yellow-400' : soloStore.blockType === 'silver' ? 'bg-gray-300' : soloStore.blockType === 'diamond' ? 'bg-cyan-400' : 'bg-amber-500'"
+                      :style="{
+                        top: '50%', left: '50%',
+                        animationDelay: (n * 0.05) + 's',
+                        '--spark-angle': (n * 60) + 'deg',
+                      }"></div>
+                  </div>
+                  <div class="relative font-mono text-lg font-bold tracking-wider"
+                    :class="[
+                      seed.found ? currentBlockConfig.color : isMining ? 'text-cyan-500/40' : 'text-text-muted/30',
+                      recentlyFoundSeeds.has(seed.index) ? 'seed-number-pop' : ''
+                    ]">
                     {{ seed.found ? String(seed.seed_number).padStart(4, '0') : (isMining ? (scanningNumbers[seed.index] ?? '0000') : '????') }}
                   </div>
-                  <div class="text-[9px] mt-0.5"
+                  <div class="relative text-[9px] mt-0.5"
                     :class="seed.found ? 'text-status-success' : isMining ? 'text-cyan-500/60' : 'text-text-muted'">
                     {{ seed.found ? 'FOUND' : isMining ? 'SCANNING...' : `Seed ${seed.index}` }}
                   </div>
@@ -328,3 +371,86 @@ const timeProgressPercent = computed(() => {
     />
   </div>
 </template>
+
+<style scoped>
+/* Seed found: card flash glow */
+.seed-found-flash {
+  animation: seedFlash 1.5s ease-out forwards;
+}
+
+@keyframes seedFlash {
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+    transform: scale(1);
+  }
+
+  15% {
+    box-shadow: 0 0 20px 4px currentColor;
+    transform: scale(1.12);
+  }
+
+  30% {
+    transform: scale(0.97);
+  }
+
+  45% {
+    transform: scale(1.04);
+  }
+
+  100% {
+    box-shadow: 0 0 6px 1px currentColor;
+    transform: scale(1);
+  }
+}
+
+/* Seed number pop-in */
+.seed-number-pop {
+  animation: numberPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
+}
+
+@keyframes numberPop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Expanding ring */
+.seed-ring {
+  animation: ringExpand 0.8s ease-out forwards;
+}
+
+@keyframes ringExpand {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* Sparks flying outward */
+.seed-spark {
+  animation: sparkFly 0.7s ease-out both;
+}
+
+@keyframes sparkFly {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--spark-angle, 0deg)) translateY(0) scale(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--spark-angle, 0deg)) translateY(-30px) scale(0);
+    opacity: 0;
+  }
+}
+</style>

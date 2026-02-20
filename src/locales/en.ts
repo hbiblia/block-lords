@@ -190,6 +190,7 @@ export default {
     miners: 'Miners',
     lastBlock: 'Last Block',
     blockMined: 'Block Mined!',
+    tierUpgraded: 'Tier upgraded!',
     yourRigs: 'Your Rigs',
     noRigs: "You don't have any rigs. Buy one in the market.",
     goToMarket: 'Go to Market',
@@ -364,6 +365,7 @@ export default {
       boosts: 'Power-Ups',
       crypto: 'Buy Landwork',
       patch: 'Supplies',
+      exp: 'EXP Packs',
     },
     rigs: {
       description: 'Buy new rigs to increase your mining power...',
@@ -411,9 +413,14 @@ export default {
     patch: {
       name: 'Rig Patch',
       universal: 'Universal',
-      desc: 'Restores +50% rig condition. Penalty: -10% hashrate, +15% consumption.',
+      desc: 'Restores +35% rig condition. Penalty: -10% hashrate, +15% consumption.',
       type: 'Consumable',
       inventory: 'in inventory',
+    },
+    exp: {
+      xpAmount: 'Slot XP',
+      useTitle: 'Use EXP Pack',
+      noPacks: 'No EXP packs in inventory. Buy them in the market.',
     },
     confirmPurchase: {
       title: 'Confirm Purchase',
@@ -435,6 +442,7 @@ export default {
       errorBuyingBoost: 'Error purchasing boost. Please try again.',
       errorBuyingCrypto: 'Error purchasing Landwork package. Please try again.',
       errorBuyingPatch: 'Error purchasing patch. Please try again.',
+      errorBuyingExpPack: 'Error purchasing EXP pack. Please try again.',
       packageNotFound: 'Package not found.',
     },
     wallet: {
@@ -573,6 +581,11 @@ export default {
         crypto_premium: { name: 'Premium Pack', description: 'For serious miners.' },
         crypto_elite: { name: 'Elite Pack', description: 'Dominate the market.' },
         crypto_whale: { name: 'Whale Pack', description: 'Best value. Maximum power.' },
+      },
+      exp_packs: {
+        exp_small: { name: 'Small EXP Pack', description: 'Grants +100 XP to a mining slot.' },
+        exp_medium: { name: 'Medium EXP Pack', description: 'Grants +500 XP to a mining slot.' },
+        exp_large: { name: 'Large EXP Pack', description: 'Grants +2000 XP to a mining slot. Fast-track to elite.' },
       },
     },
     cooling_suffix: 'cooling',
@@ -1034,7 +1047,7 @@ export default {
       upgradeHashBonus: '<b>⚡ Hashrate Upgrade</b><br>+{value}% (+{abs} Hash)<br><span style="opacity:0.7">Permanent mining speed</span>',
       upgradeEffBonus: '<b>💡 Efficiency Upgrade</b><br>-{value}% (-{abs} W)<br><span style="opacity:0.7">Reduces energy & internet</span>',
       upgradeThermalBonus: '<b>❄️ Thermal Upgrade</b><br>-{value}% (-{abs}°)<br><span style="opacity:0.7">Reduces base heat</span>',
-      patchPenalties: '<b>🩹 Patches Applied: {count}</b><br>Hashrate: <span style="color:#f87171">-{hash}%</span><br>Consumption: <span style="color:#fbbf24">+{consumption}%</span><br><span style="opacity:0.7">Each patch restores +50% condition but adds cumulative penalties</span>',
+      patchPenalties: '<b>🩹 Patches Applied: {count}</b><br>Hashrate: <span style="color:#f87171">-{hash}%</span><br>Consumption: <span style="color:#fbbf24">+{consumption}%</span><br><span style="opacity:0.7">Each patch restores +35% condition but adds cumulative penalties</span>',
     },
   },
 
@@ -2004,7 +2017,7 @@ export default {
     },
     newSupply: {
       title: 'New Supply: Rig Patch',
-      description: 'A new item is available in the Market: <strong class="text-amber-400">🩹 Rig Patch</strong> (500 GC). It restores <strong class="text-emerald-400">+50% condition</strong> to your rig without counting as a repair. Trade-off: <strong class="text-red-400">-10% hashrate</strong> and <strong class="text-orange-400">+15% consumption</strong> per patch applied (cumulative).',
+      description: 'A new item is available in the Market: <strong class="text-amber-400">🩹 Rig Patch</strong> (500 GC). It restores <strong class="text-emerald-400">+35% condition</strong> to your rig without counting as a repair. Trade-off: <strong class="text-red-400">-10% hashrate</strong> and <strong class="text-orange-400">+15% consumption</strong> per patch applied (cumulative).',
     },
     repairPriceDown: {
       title: 'Repair Price Reduction',
@@ -2215,7 +2228,7 @@ export default {
       label: 'Direction',
       up: 'UP',
       down: 'DOWN',
-      upDesc: 'RON price will rise',
+      upDesc: 'WETH price will rise',
       downDesc: 'RON price will drop',
     },
     target: {
@@ -2234,12 +2247,15 @@ export default {
       potentialYield: 'Potential Yield',
       fee: 'Fee (5% on yield)',
       totalReturn: 'Total Return',
-      entryPrice: 'Entry Price',
-      targetPrice: 'Target Price',
+      entryPrice: 'Entry',
+      targetPrice: 'Target',
       currentPrice: 'Current Price',
+      estimated: 'estimated',
     },
     info: {
       noLoss: 'You never lose your bet! It stays active until the target is reached. Cancel anytime (2% fee).',
+      upHedge: 'UP bets are hedged to WETH. Actual yield depends on WETH appreciation.',
+      upHedgeDetail: 'Your RON is swapped to WETH on-chain. When WETH reaches the target, it is swapped back and the real profit becomes your yield. Cancel anytime (2% fee).',
     },
     actions: {
       placeBet: 'Place Prediction',
@@ -2271,6 +2287,7 @@ export default {
     },
     price: {
       ronUsdc: 'RON/USDC',
+      wethUsd: 'WETH/USD',
       loading: 'Loading price...',
       high24h: 'High 24h',
       low24h: 'Low 24h',
@@ -2279,6 +2296,7 @@ export default {
       max_active_bets: 'Maximum 3 active predictions',
       insufficient_balance: 'Insufficient balance',
       price_unavailable: 'Price unavailable',
+      weth_price_unavailable: 'WETH price unavailable',
       invalid_direction: 'Invalid direction',
       invalid_target: 'Invalid target',
       min_bet_half_ron: 'Minimum 0.5 RON',

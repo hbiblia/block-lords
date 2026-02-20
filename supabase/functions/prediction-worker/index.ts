@@ -19,7 +19,10 @@ const SLOT0_SELECTOR = '0x3850c7bd';
 const KATANA_V2_ROUTER = '0x7d0556d55ca1a92708681e2e231733ebd922597d';
 const WRON = '0xe514d9deb7966c8be0ca922de8a064264ea6bcd4';
 const USDC = '0x0b7007c13325c48911f73a2dad5fa5dcbf808adc';
+const WETH = '0xc99a6a985ed2cac1ef41640596c5a5f9f4e19ef5';
 const GET_AMOUNTS_OUT_SELECTOR = '0xd06ca61f';
+
+// === RON PRICE FUNCTIONS ===
 
 /**
  * Fetch RON/USDC price from Katana V3 pool on-chain.
@@ -133,10 +136,120 @@ async function fetchRonPrice(): Promise<number> {
   throw new Error('Could not fetch RON price from any source');
 }
 
+// === WETH PRICE FUNCTIONS ===
+
+function pad256(hex: string): string {
+  return hex.replace('0x', '').padStart(64, '0');
+}
+
+/**
+ * Fetch WETH/USD price from Katana V2 via getAmountsOut (1 WETH → USDC).
+ * Tries direct WETH→USDC first, then WETH→WRON→USDC.
+ */
+async function fetchWethPriceV2(): Promise<number> {
+  const oneWeth = BigInt('1000000000000000000');
+  const amountIn = pad256(oneWeth.toString(16));
+
+  // Try direct WETH → USDC
+  const wethPadded = pad256(WETH.slice(2));
+  const usdcPadded = pad256(USDC.slice(2));
+
+  const data2hop = GET_AMOUNTS_OUT_SELECTOR + amountIn +
+    pad256('40') + // offset to path array
+    pad256('2') +  // path length
+    wethPadded + usdcPadded;
+
+  try {
+    const response = await fetch(RONIN_RPC, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', method: 'eth_call',
+        params: [{ to: KATANA_V2_ROUTER, data: data2hop }, 'latest'], id: 1,
+      }),
+    });
+
+    const result = await response.json();
+    if (result.result && result.result !== '0x' && result.result.length > 130) {
+      const hex = result.result.slice(2);
+      const usdcHex = hex.slice(192, 256);
+      const usdcAmount = Number(BigInt('0x' + usdcHex));
+      const price = usdcAmount / 1e6;
+      if (price > 0) {
+        console.log(`WETH price from Katana V2 direct: $${price}`);
+        return price;
+      }
+    }
+  } catch (e) {
+    console.warn('WETH V2 direct failed:', e);
+  }
+
+  // Fallback: WETH → WRON → USDC (3-hop)
+  const wronPadded = pad256(WRON.slice(2));
+  const data3hop = GET_AMOUNTS_OUT_SELECTOR + amountIn +
+    pad256('40') + // offset
+    pad256('3') +  // path length
+    wethPadded + wronPadded + usdcPadded;
+
+  const response = await fetch(RONIN_RPC, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0', method: 'eth_call',
+      params: [{ to: KATANA_V2_ROUTER, data: data3hop }, 'latest'], id: 1,
+    }),
+  });
+
+  const result = await response.json();
+  if (!result.result || result.result === '0x') {
+    throw new Error('Empty V2 WETH 3-hop response');
+  }
+
+  const hex = result.result.slice(2);
+  // For 3-hop: offset(64) + length(64) + amount0(64) + amount1(64) + amount2(64)
+  const usdcHex = hex.slice(256, 320);
+  const usdcAmount = Number(BigInt('0x' + usdcHex));
+  const price = usdcAmount / 1e6;
+
+  if (price <= 0) throw new Error('Invalid WETH V2 3-hop price');
+  console.log(`WETH price from Katana V2 via WRON: $${price}`);
+  return price;
+}
+
+/**
+ * Fetch WETH/USD price with cascade: Katana V2 → CoinGecko.
+ */
+async function fetchWethPrice(): Promise<number> {
+  // 1. Katana V2 (direct or via WRON)
+  try {
+    return await fetchWethPriceV2();
+  } catch (e) {
+    console.warn('Katana V2 WETH price failed:', e);
+  }
+
+  // 2. CoinGecko (WETH on Ronin = bridged ETH)
+  try {
+    const res = await fetch(
+      'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd',
+      { headers: { 'Accept': 'application/json' } }
+    );
+    const data = await res.json();
+    const price = data?.ethereum?.usd;
+    if (price && price > 0) {
+      console.log(`WETH price from CoinGecko: $${price}`);
+      return price;
+    }
+  } catch (e) {
+    console.error('CoinGecko WETH price failed:', e);
+  }
+
+  throw new Error('Could not fetch WETH price from any source');
+}
+
 /**
  * Call hedge-swap edge function for swap operations.
  */
-async function callHedgeSwap(action: 'hedge' | 'unhedge', betId: string): Promise<{ success: boolean; error?: string }> {
+async function callHedgeSwap(action: 'hedge' | 'unhedge', betId: string): Promise<{ success: boolean; error?: string; ron_received?: string; tx_hash?: string }> {
   try {
     const url = `${Deno.env.get('SUPABASE_URL')}/functions/v1/hedge-swap`;
     const res = await fetch(url, {
@@ -165,25 +278,37 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Fetch current RON/USDC price
+    // 1. Fetch current prices (RON + WETH)
     const price = await fetchRonPrice();
     console.log(`RON/USDC price: $${price}`);
 
-    // 2. Record price snapshot
+    let wethPrice: number | null = null;
+    try {
+      wethPrice = await fetchWethPrice();
+      console.log(`WETH/USD price: $${wethPrice}`);
+    } catch (e) {
+      console.warn('WETH price fetch failed (UP bets unaffected this cycle):', e);
+    }
+
+    // 2. Record price snapshot (with WETH price if available)
     const { error: insertErr } = await supabase
       .from('prediction_price_snapshots')
-      .insert({ ron_usdc_price: price, source: 'katana' });
+      .insert({
+        ron_usdc_price: price,
+        weth_usd_price: wethPrice,
+        source: 'katana',
+      });
 
     if (insertErr) console.error('Error inserting price snapshot:', insertErr);
 
-    // 3. Batch settle: una sola llamada SQL para todas las bets que alcanzaron target
+    // 3. Batch settle: pass both prices
     const errors: string[] = [];
     let settledCount = 0;
     let unhedgedCount = 0;
 
     const { data: settleResult, error: settleErr } = await supabase.rpc(
       'settle_all_prediction_bets',
-      { p_current_price: price }
+      { p_current_price: price, p_current_weth_price: wethPrice }
     );
 
     if (settleErr) {
@@ -193,13 +318,32 @@ serve(async (req) => {
       settledCount = settleResult.settled_count;
       console.log(`Batch settled ${settledCount} bets`);
 
-      // Unhedge DOWN bets que lo necesitan (requiere llamadas externas individuales)
+      // Process settled bets that need unhedge
       for (const bet of (settleResult.settled_bets || [])) {
         if (bet.needs_unhedge) {
           const swapResult = await callHedgeSwap('unhedge', bet.bet_id);
           if (swapResult.success) {
-            unhedgedCount++;
-            console.log(`Unhedged bet ${bet.bet_id}`);
+            if (bet.direction === 'up' && swapResult.ron_received) {
+              // UP bets: finalize with actual RON received from WETH→RON swap
+              const { error: settleUpErr } = await supabase.rpc(
+                'settle_up_bet_with_swap',
+                {
+                  p_bet_id: bet.bet_id,
+                  p_ron_received: parseFloat(swapResult.ron_received),
+                  p_unhedge_tx_hash: swapResult.tx_hash || '',
+                }
+              );
+              if (settleUpErr) {
+                errors.push(`settle_up:${bet.bet_id}: ${settleUpErr.message}`);
+              } else {
+                unhedgedCount++;
+                console.log(`Settled UP bet ${bet.bet_id} with ${swapResult.ron_received} RON received`);
+              }
+            } else {
+              // DOWN bets: unhedge only (payout already done in SQL)
+              unhedgedCount++;
+              console.log(`Unhedged DOWN bet ${bet.bet_id}`);
+            }
           } else {
             errors.push(`unhedge:${bet.bet_id}: ${swapResult.error}`);
           }
@@ -207,22 +351,49 @@ serve(async (req) => {
       }
     }
 
-    // 4. Safety net: retry pending/failed hedges via hedge-swap function
+    // 4. Safety net: retry pending/failed hedges for BOTH directions
     let hedgeRetryCount = 0;
     const { data: pendingHedges } = await supabase
       .from('prediction_bets')
-      .select('id')
+      .select('id, direction')
       .eq('status', 'active')
-      .eq('direction', 'down')
       .in('hedge_status', ['pending', 'failed']);
 
     for (const bet of (pendingHedges || [])) {
       const result = await callHedgeSwap('hedge', bet.id);
       if (result.success) {
         hedgeRetryCount++;
-        console.log(`Retried hedge for bet ${bet.id}: success`);
+        console.log(`Retried hedge for ${bet.direction} bet ${bet.id}: success`);
       } else {
         errors.push(`hedge-retry:${bet.id}: ${result.error}`);
+      }
+    }
+
+    // 4b. Retry pending_unhedge UP bets (crash recovery)
+    const { data: pendingUnhedge } = await supabase
+      .from('prediction_bets')
+      .select('id')
+      .eq('status', 'pending_unhedge')
+      .eq('direction', 'up');
+
+    for (const bet of (pendingUnhedge || [])) {
+      const swapResult = await callHedgeSwap('unhedge', bet.id);
+      if (swapResult.success && swapResult.ron_received) {
+        const { error: settleUpErr } = await supabase.rpc(
+          'settle_up_bet_with_swap',
+          {
+            p_bet_id: bet.id,
+            p_ron_received: parseFloat(swapResult.ron_received),
+            p_unhedge_tx_hash: swapResult.tx_hash || '',
+          }
+        );
+        if (!settleUpErr) {
+          console.log(`Recovered pending_unhedge bet ${bet.id}`);
+        } else {
+          errors.push(`recover_unhedge:${bet.id}: ${settleUpErr.message}`);
+        }
+      } else {
+        errors.push(`recover_unhedge:${bet.id}: ${swapResult.error}`);
       }
     }
 
@@ -237,6 +408,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         price,
+        weth_price: wethPrice,
         settled: settledCount,
         unhedged: unhedgedCount,
         hedge_retries: hedgeRetryCount,

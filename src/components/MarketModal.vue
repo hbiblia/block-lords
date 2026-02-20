@@ -78,7 +78,7 @@ function handleClose() {
   emit('close');
 }
 
-const activeFilter = ref<'all' | 'rigs' | 'cooling' | 'energy' | 'internet' | 'boosts' | 'crypto' | 'patch'>('all');
+const activeFilter = ref<'all' | 'rigs' | 'cooling' | 'energy' | 'internet' | 'boosts' | 'crypto' | 'patch' | 'exp'>('all');
 
 // Mobile category popup
 const showMobileCategories = ref(false);
@@ -97,6 +97,7 @@ function getCategoryIcon(category: typeof activeFilter.value): string {
     case 'internet': return '📡';
     case 'boosts': return '🚀';
     case 'crypto': return '💎';
+    case 'exp': return '📖';
     default: return '🏪';
   }
 }
@@ -104,7 +105,7 @@ function getCategoryIcon(category: typeof activeFilter.value): string {
 // Confirmation dialog state
 const showConfirm = ref(false);
 const confirmAction = ref<{
-  type: 'rig' | 'cooling' | 'card' | 'boost' | 'crypto_package' | 'component' | 'patch';
+  type: 'rig' | 'cooling' | 'card' | 'boost' | 'crypto_package' | 'component' | 'patch' | 'exp_pack';
   id: string;
   name: string;
   price: number;
@@ -131,6 +132,7 @@ const internetCards = computed(() => marketStore.internetCards);
 const comboCards = computed(() => marketStore.comboCards);
 const boostItems = computed(() => marketStore.boostItems);
 const cryptoPackages = computed(() => marketStore.cryptoPackages);
+const expPacks = computed(() => marketStore.expPacks);
 
 const balance = computed(() => authStore.player?.gamecoin_balance ?? 0);
 const cryptoBalance = computed(() => authStore.player?.crypto_balance ?? 0);
@@ -353,6 +355,56 @@ function rangeColor(min: number, max: number, isInverse = false): string {
   if (min >= 0) return 'text-emerald-400';
   if (max <= 0) return 'text-rose-400';
   return 'text-amber-400';
+}
+
+function getExpPackName(id: string): string {
+  const key = `market.items.exp_packs.${id}.name`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  const pack = expPacks.value.find((p: { id: string }) => p.id === id);
+  return pack?.name ?? id;
+}
+
+function getExpPackDescription(id: string): string {
+  const key = `market.items.exp_packs.${id}.description`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  const pack = expPacks.value.find((p: { id: string }) => p.id === id);
+  return pack?.description ?? '';
+}
+
+function getExpPackOwned(id: string): number {
+  return marketStore.getExpPackOwned(id);
+}
+
+function requestBuyExpPack(pack: { id: string; name: string; xp_amount: number; base_price: number; tier: string }) {
+  confirmAction.value = {
+    type: 'exp_pack',
+    id: pack.id,
+    name: getExpPackName(pack.id),
+    price: pack.base_price,
+    description: `+${pack.xp_amount} XP`,
+    currency: 'gamecoin',
+  };
+  showConfirm.value = true;
+}
+
+async function buyExpPack(packId: string) {
+  if (!authStore.player) return;
+  showProcessingModal.value = true;
+  processingStatus.value = 'processing';
+  processingError.value = '';
+
+  const result = await marketStore.buyExpPack(packId);
+
+  if (result.success) {
+    closeProcessingModal();
+    toastStore.purchaseSuccess(confirmAction.value?.name ?? '');
+    emit('purchased');
+  } else {
+    processingStatus.value = 'error';
+    processingError.value = result.error ?? t('market.processing.errorBuyingExpPack', 'Error buying EXP pack');
+  }
 }
 
 function requestBuyComponent(comp: { id: string; base_price: number; tier: string }) {
@@ -605,6 +657,8 @@ async function confirmPurchase() {
     await buyCryptoPackage(id);
   } else if (type === 'component') {
     await buyComponent(id);
+  } else if (type === 'exp_pack') {
+    await buyExpPack(id);
   }
 
   confirmAction.value = null;
@@ -750,6 +804,16 @@ watch(() => props.show, (newVal) => {
             >
               <span>🩹</span>
               <span>{{ t('market.tabs.patch', 'Supplies') }}</span>
+            </button>
+            <button
+              @click="activeFilter = 'exp'"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left"
+              :class="activeFilter === 'exp'
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
+            >
+              <span>📖</span>
+              <span>{{ t('market.tabs.exp', 'EXP Packs') }}</span>
             </button>
           </div>
 
@@ -1190,6 +1254,50 @@ watch(() => props.show, (newVal) => {
                 </div>
               </template>
 
+              <!-- EXP Packs -->
+              <template v-if="activeFilter === 'all' || activeFilter === 'exp'">
+                <div
+                  v-for="pack in expPacks"
+                  :key="pack.id"
+                  class="rounded-lg border p-2.5 sm:p-4 flex flex-col bg-emerald-500/10 border-emerald-500/30 transition-all hover:scale-[1.01]"
+                >
+                  <div class="flex items-start justify-between mb-1 sm:mb-2">
+                    <div class="min-w-0 flex-1">
+                      <h4 class="font-medium text-xs sm:text-sm text-emerald-400 truncate">{{ getExpPackName(pack.id) }}</h4>
+                      <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ pack.tier }}</p>
+                    </div>
+                    <span class="text-lg sm:text-2xl ml-1">📖</span>
+                  </div>
+
+                  <div class="flex items-center justify-between mb-1 sm:mb-2">
+                    <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.exp.xpAmount', 'Slot XP') }}</span>
+                    <span class="font-mono font-bold text-sm sm:text-lg text-emerald-400">+{{ pack.xp_amount }}</span>
+                  </div>
+
+                  <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ getExpPackDescription(pack.id) }}</p>
+
+                  <!-- Show owned quantity if any -->
+                  <div v-if="getExpPackOwned(pack.id) > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
+                    <span class="px-1.5 sm:px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                      {{ getExpPackOwned(pack.id) }} {{ t('market.cooling.inventory') }}
+                    </span>
+                  </div>
+
+                  <div class="mt-auto">
+                    <button
+                      @click="requestBuyExpPack(pack)"
+                      class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
+                      :class="balance >= pack.base_price
+                        ? 'bg-emerald-500 text-white hover:bg-emerald-400'
+                        : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
+                      :disabled="purchaseDisabled || balance < pack.base_price"
+                    >
+                      {{ buying ? '...' : `${formatNumber(pack.base_price)} 🪙` }}
+                    </button>
+                  </div>
+                </div>
+              </template>
+
               <!-- Crypto Packages (RON) -->
               <template v-if="activeFilter === 'all' || activeFilter === 'crypto'">
                 <div
@@ -1276,7 +1384,7 @@ watch(() => props.show, (newVal) => {
         <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
           <div class="text-center mb-4">
             <div class="text-4xl mb-3">
-              {{ confirmAction.type === 'rig' ? '⛏️' : confirmAction.type === 'cooling' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'crypto_package' ? '💎' : confirmAction.type === 'patch' ? '🩹' : '💳' }}
+              {{ confirmAction.type === 'rig' ? '⛏️' : confirmAction.type === 'cooling' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'crypto_package' ? '💎' : confirmAction.type === 'patch' ? '🩹' : confirmAction.type === 'exp_pack' ? '📖' : '💳' }}
             </div>
             <h3 class="text-lg font-bold mb-1">{{ t('market.confirmPurchase.title') }}</h3>
             <p class="text-text-muted text-sm">{{ t('market.confirmPurchase.question') }}</p>
@@ -1435,6 +1543,16 @@ watch(() => props.show, (newVal) => {
               >
                 <span class="text-lg">🩹</span>
                 <span class="text-[10px] font-medium">{{ t('market.tabs.patch', 'Supplies') }}</span>
+              </button>
+              <button
+                @click="selectCategory('exp')"
+                class="flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-colors"
+                :class="activeFilter === 'exp'
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
+              >
+                <span class="text-lg">📖</span>
+                <span class="text-[10px] font-medium">EXP</span>
               </button>
             </div>
           </div>

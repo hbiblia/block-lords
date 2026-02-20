@@ -35,11 +35,12 @@ const numericAmount = computed(() => {
   return isNaN(n) ? 0 : n;
 });
 
-const SWAP_FRICTION_PCT = 3; // Estimated roundtrip swap cost for DOWN bets
+const SWAP_FRICTION_DOWN = 3; // Estimated roundtrip swap cost for DOWN bets (RON→USDC→RON)
+const SWAP_FRICTION_UP = 6;   // Estimated roundtrip swap cost for UP bets (RON→WETH→RON)
 const effectivePercent = computed(() =>
   direction.value === 'down'
-    ? Math.max(targetPercent.value - SWAP_FRICTION_PCT, 1)
-    : targetPercent.value
+    ? Math.max(targetPercent.value - SWAP_FRICTION_DOWN, 1)
+    : Math.max(targetPercent.value - SWAP_FRICTION_UP, 1)
 );
 const estimatedYield = computed(() => numericAmount.value * effectivePercent.value / 100);
 const yieldFee = computed(() => estimatedYield.value * 0.05);
@@ -52,6 +53,7 @@ const errorMessage = computed(() => {
   if (numericAmount.value > 0 && numericAmount.value < 0.5) return t('prediction.bet.min');
   if (numericAmount.value > playerBalance.value) return t('prediction.errors.insufficient_balance');
   if (predictionStore.currentPrice === null) return t('prediction.errors.price_unavailable');
+  if (direction.value === 'up' && predictionStore.currentWethPrice === null) return t('prediction.errors.weth_price_unavailable');
   return '';
 });
 
@@ -60,6 +62,7 @@ const canSubmit = computed(() =>
   numericAmount.value <= playerBalance.value &&
   predictionStore.canPlaceBet &&
   predictionStore.currentPrice !== null &&
+  (direction.value === 'down' || predictionStore.currentWethPrice !== null) &&
   !predictionStore.placing
 );
 
@@ -118,6 +121,11 @@ function formatProgress(bet: PredictionBet): string {
   return Number(bet.progress_percent || 0).toFixed(1);
 }
 
+function formatWethPrice(price: number | null | undefined): string {
+  if (price == null) return '—';
+  return '$' + Number(price).toFixed(2);
+}
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -170,6 +178,24 @@ function timeAgo(dateStr: string): string {
                   <span v-if="predictionStore.high24h">H: {{ formatPrice(predictionStore.high24h) }}</span>
                   <span v-if="predictionStore.low24h" class="ml-1">L: {{ formatPrice(predictionStore.low24h) }}</span>
                 </div>
+              </div>
+            </div>
+            <!-- WETH/USD price mini-ticker -->
+            <div v-if="predictionStore.currentWethPrice" class="mt-1 glass rounded-lg px-3 py-1.5 flex items-center justify-between">
+              <div>
+                <p class="text-[10px] text-text-muted leading-none">{{ t('prediction.price.wethUsd') }}</p>
+                <p class="text-sm font-bold font-mono text-white leading-tight">
+                  {{ formatWethPrice(predictionStore.currentWethPrice) }}
+                </p>
+              </div>
+              <div class="text-right">
+                <span v-if="predictionStore.wethPriceChangePercent > 0" class="text-status-success text-xs font-bold">
+                  ▲ +{{ Math.abs(predictionStore.wethPriceChangePercent).toFixed(2) }}%
+                </span>
+                <span v-else-if="predictionStore.wethPriceChangePercent < 0" class="text-status-danger text-xs font-bold">
+                  ▼ -{{ Math.abs(predictionStore.wethPriceChangePercent).toFixed(2) }}%
+                </span>
+                <span v-else class="text-text-muted text-xs">—</span>
               </div>
             </div>
           </div>
@@ -275,12 +301,19 @@ function timeAgo(dateStr: string): string {
                     {{ direction === 'up' ? '📈' : '📉' }} {{ direction === 'up' ? t('prediction.direction.up') : t('prediction.direction.down') }} {{ targetPercent }}%
                   </span>
                 </div>
-                <div class="flex justify-between">
+                <div v-if="direction === 'down'" class="flex justify-between">
                   <span class="text-text-muted">{{ t('prediction.summary.entryPrice') }} → {{ t('prediction.summary.targetPrice') }}</span>
                   <span class="text-white font-mono">{{ formatPrice(predictionStore.currentPrice) }} → <span class="text-accent-primary font-bold">{{ formatPrice(targetPrice) }}</span></span>
                 </div>
+                <div v-else class="flex justify-between">
+                  <span class="text-text-muted">WETH {{ t('prediction.summary.entryPrice') }} → {{ t('prediction.summary.targetPrice') }}</span>
+                  <span class="text-white font-mono">{{ formatWethPrice(predictionStore.currentWethPrice) }} → <span class="text-accent-primary font-bold">{{ predictionStore.currentWethPrice ? formatWethPrice(predictionStore.currentWethPrice * (1 + targetPercent / 100)) : '—' }}</span></span>
+                </div>
+                <div v-if="direction === 'up'" class="text-[10px] text-accent-primary/70 italic">
+                  {{ t('prediction.info.upHedge') }}
+                </div>
                 <div class="border-t border-border pt-1 mt-1 flex justify-between">
-                  <span class="text-text-muted">{{ t('prediction.summary.potentialYield') }} <span class="text-text-muted/50">(- 5% fee)</span></span>
+                  <span class="text-text-muted">{{ t('prediction.summary.potentialYield') }} <span class="text-text-muted/50">({{ direction === 'up' ? t('prediction.summary.estimated') : '- 5% fee' }})</span></span>
                   <span class="text-status-success font-bold">+{{ formatRon(netYield) }} RON</span>
                 </div>
                 <div class="flex justify-between font-bold">
@@ -291,7 +324,7 @@ function timeAgo(dateStr: string): string {
 
               <!-- No-loss notice -->
               <p class="text-[10px] text-accent-primary/70 leading-tight">
-                {{ t('prediction.info.noLoss') }}
+                {{ direction === 'up' ? t('prediction.info.upHedgeDetail') : t('prediction.info.noLoss') }}
               </p>
 
               <!-- Place Button -->
@@ -331,10 +364,15 @@ function timeAgo(dateStr: string): string {
                 </div>
 
                 <!-- Prices inline -->
-                <div class="flex justify-between text-[10px] font-mono">
+                <div v-if="bet.direction === 'down'" class="flex justify-between text-[10px] font-mono">
                   <span class="text-text-muted">{{ formatPrice(bet.entry_price) }}</span>
                   <span class="text-white font-bold">{{ formatPrice(bet.current_price) }}</span>
                   <span class="text-accent-primary font-bold">{{ formatPrice(bet.target_price) }}</span>
+                </div>
+                <div v-else class="flex justify-between text-[10px] font-mono">
+                  <span class="text-text-muted">WETH {{ formatWethPrice(bet.entry_weth_price) }}</span>
+                  <span class="text-white font-bold">{{ formatWethPrice(bet.current_weth_price ?? predictionStore.currentWethPrice) }}</span>
+                  <span class="text-accent-primary font-bold">{{ formatWethPrice(bet.target_weth_price) }}</span>
                 </div>
 
                 <!-- Progress Bar -->
@@ -434,8 +472,8 @@ function timeAgo(dateStr: string): string {
                   <span class="text-white font-bold">{{ formatRon(numericAmount) }} RON</span>
                 </div>
                 <div class="flex justify-between">
-                  <span class="text-text-muted">{{ t('prediction.summary.targetPrice') }}</span>
-                  <span class="text-accent-primary font-mono">{{ formatPrice(targetPrice) }}</span>
+                  <span class="text-text-muted">{{ direction === 'up' ? 'WETH Target' : t('prediction.summary.targetPrice') }}</span>
+                  <span class="text-accent-primary font-mono">{{ direction === 'up' ? (predictionStore.currentWethPrice ? formatWethPrice(predictionStore.currentWethPrice * (1 + targetPercent / 100)) : '—') : formatPrice(targetPrice) }}</span>
                 </div>
                 <div class="flex justify-between border-t border-border pt-1.5">
                   <span class="text-text-muted">{{ t('prediction.summary.potentialYield') }}</span>

@@ -190,6 +190,7 @@
     miners: 'Mineros',
     lastBlock: 'Último Bloque',
     blockMined: '¡Bloque Minado!',
+    tierUpgraded: '¡Tier mejorado!',
     yourRigs: 'Tus Rigs',
     noRigs: 'No tienes rigs. Compra uno en el mercado.',
     goToMarket: 'Ir al Mercado',
@@ -364,6 +365,7 @@
       boosts: 'Power-Ups',
       crypto: 'Comprar Landwork',
       patch: 'Suministros',
+      exp: 'Packs de EXP',
     },
     rigs: {
       description: 'Compra nuevos rigs para aumentar tu poder de minería...',
@@ -411,9 +413,14 @@
     patch: {
       name: 'Parche de Rig',
       universal: 'Universal',
-      desc: 'Restaura +50% de condición del rig. Penalización: -10% hashrate, +15% consumo.',
+      desc: 'Restaura +35% de condición del rig. Penalización: -10% hashrate, +15% consumo.',
       type: 'Consumible',
       inventory: 'en inventario',
+    },
+    exp: {
+      xpAmount: 'XP del Slot',
+      useTitle: 'Usar Pack de EXP',
+      noPacks: 'No tienes packs de EXP en inventario. Compra en el mercado.',
     },
     confirmPurchase: {
       title: 'Confirmar Compra',
@@ -435,6 +442,7 @@
       errorBuyingBoost: 'Error al comprar el boost. Por favor intenta de nuevo.',
       errorBuyingCrypto: 'Error al comprar paquete de Landwork. Por favor intenta de nuevo.',
       errorBuyingPatch: 'Error al comprar el parche. Por favor intenta de nuevo.',
+      errorBuyingExpPack: 'Error al comprar el pack de EXP. Por favor intenta de nuevo.',
       packageNotFound: 'Paquete no encontrado.',
     },
     wallet: {
@@ -573,6 +581,11 @@
         crypto_premium: { name: 'Pack Premium', description: 'Para mineros serios.' },
         crypto_elite: { name: 'Pack Elite', description: 'Domina el mercado.' },
         crypto_whale: { name: 'Pack Ballena', description: 'Mejor valor. Máximo poder.' },
+      },
+      exp_packs: {
+        exp_small: { name: 'Pack EXP Pequeño', description: 'Otorga +100 XP a un slot de minería.' },
+        exp_medium: { name: 'Pack EXP Mediano', description: 'Otorga +500 XP a un slot de minería.' },
+        exp_large: { name: 'Pack EXP Grande', description: 'Otorga +2000 XP a un slot de minería. Vía rápida a elite.' },
       },
     },
     cooling_suffix: 'refrigeración',
@@ -1034,7 +1047,7 @@
       upgradeHashBonus: '<b>⚡ Upgrade Hashrate</b><br>+{value}% (+{abs} Hash)<br><span style="opacity:0.7">Velocidad de minado permanente</span>',
       upgradeEffBonus: '<b>💡 Upgrade Eficiencia</b><br>-{value}% (-{abs} W)<br><span style="opacity:0.7">Reduce energía e internet</span>',
       upgradeThermalBonus: '<b>❄️ Upgrade Térmico</b><br>-{value}% (-{abs}°)<br><span style="opacity:0.7">Reduce calor base</span>',
-      patchPenalties: '<b>🩹 Suministros Aplicados: {count}</b><br>Hashrate: <span style="color:#f87171">-{hash}%</span><br>Consumo: <span style="color:#fbbf24">+{consumption}%</span><br><span style="opacity:0.7">Cada suministro restaura +50% condición pero añade penalizaciones acumulativas</span>',
+      patchPenalties: '<b>🩹 Suministros Aplicados: {count}</b><br>Hashrate: <span style="color:#f87171">-{hash}%</span><br>Consumo: <span style="color:#fbbf24">+{consumption}%</span><br><span style="opacity:0.7">Cada suministro restaura +35% condición pero añade penalizaciones acumulativas</span>',
     },
   },
 
@@ -2004,7 +2017,7 @@
     },
     newSupply: {
       title: 'Nuevo Suministro: Rig Patch',
-      description: 'Un nuevo item disponible en el Mercado: <strong class="text-amber-400">🩹 Rig Patch</strong> (500 GC). Restaura <strong class="text-emerald-400">+50% condición</strong> a tu rig sin contar como reparación. A cambio: <strong class="text-red-400">-10% hashrate</strong> y <strong class="text-orange-400">+15% consumo</strong> por parche aplicado (acumulativo).',
+      description: 'Un nuevo item disponible en el Mercado: <strong class="text-amber-400">🩹 Rig Patch</strong> (500 GC). Restaura <strong class="text-emerald-400">+35% condición</strong> a tu rig sin contar como reparación. A cambio: <strong class="text-red-400">-10% hashrate</strong> y <strong class="text-orange-400">+15% consumo</strong> por parche aplicado (acumulativo).',
     },
     repairPriceDown: {
       title: 'Bajada de Precio de Reparación',
@@ -2215,7 +2228,7 @@
       label: 'Dirección',
       up: 'SUBE',
       down: 'BAJA',
-      upDesc: 'El precio de RON subirá',
+      upDesc: 'El precio de WETH subirá',
       downDesc: 'El precio de RON bajará',
     },
     target: {
@@ -2234,12 +2247,15 @@
       potentialYield: 'Yield potencial',
       fee: 'Fee (5% sobre yield)',
       totalReturn: 'Retorno total',
-      entryPrice: 'Precio entrada',
-      targetPrice: 'Precio objetivo',
+      entryPrice: 'Entrada',
+      targetPrice: 'Objetivo',
       currentPrice: 'Precio actual',
+      estimated: 'estimado',
     },
     info: {
       noLoss: 'Nunca pierdes tu apuesta. Se mantiene activa hasta alcanzar el objetivo. Cancela cuando quieras (2% fee).',
+      upHedge: 'Las apuestas UP se cubren con WETH. El yield real depende de la apreciacion de WETH.',
+      upHedgeDetail: 'Tu RON se convierte a WETH on-chain. Cuando WETH alcanza el objetivo, se convierte de vuelta y la ganancia real es tu yield. Cancela cuando quieras (2% fee).',
     },
     actions: {
       placeBet: 'Crear Predicción',
@@ -2271,6 +2287,7 @@
     },
     price: {
       ronUsdc: 'RON/USDC',
+      wethUsd: 'WETH/USD',
       loading: 'Cargando precio...',
       high24h: 'Máx 24h',
       low24h: 'Mín 24h',
@@ -2279,6 +2296,7 @@
       max_active_bets: 'Máximo 3 predicciones activas',
       insufficient_balance: 'Balance insuficiente',
       price_unavailable: 'Precio no disponible',
+      weth_price_unavailable: 'Precio WETH no disponible',
       invalid_direction: 'Dirección inválida',
       invalid_target: 'Objetivo inválido',
       min_bet_half_ron: 'Mínimo 0.5 RON',

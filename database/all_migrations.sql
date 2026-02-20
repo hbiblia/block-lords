@@ -1214,12 +1214,56 @@ CREATE TABLE IF NOT EXISTS prediction_treasury (
 );
 
 -- =====================================================
+-- WETH HEDGE FOR UP BETS
+-- =====================================================
+
+-- Nuevas columnas para hedge WETH en prediction_bets
+ALTER TABLE prediction_bets ADD COLUMN IF NOT EXISTS hedge_weth_amount DECIMAL(18, 8) DEFAULT 0;
+ALTER TABLE prediction_bets ADD COLUMN IF NOT EXISTS entry_weth_price DECIMAL(18, 8);
+ALTER TABLE prediction_bets ADD COLUMN IF NOT EXISTS target_weth_price DECIMAL(18, 8);
+ALTER TABLE prediction_bets ADD COLUMN IF NOT EXISTS exit_weth_price DECIMAL(18, 8);
+ALTER TABLE prediction_bets ADD COLUMN IF NOT EXISTS unhedge_ron_received DECIMAL(18, 8);
+
+-- Status: agregar 'pending_unhedge' (UP bets esperando swap WETH→RON)
+ALTER TABLE prediction_bets DROP CONSTRAINT IF EXISTS prediction_bets_status_check;
+ALTER TABLE prediction_bets ADD CONSTRAINT prediction_bets_status_check
+  CHECK (status IN ('active', 'won', 'cancelled', 'pending_unhedge'));
+
+-- Precio WETH en snapshots
+ALTER TABLE prediction_price_snapshots ADD COLUMN IF NOT EXISTS weth_usd_price DECIMAL(18, 8);
+
+-- Treasury: agregar 'hedge_loss' para cuando swap devuelve menos que la apuesta
+ALTER TABLE prediction_treasury DROP CONSTRAINT IF EXISTS prediction_treasury_event_type_check;
+ALTER TABLE prediction_treasury ADD CONSTRAINT prediction_treasury_event_type_check
+  CHECK (event_type IN ('yield_fee', 'cancel_fee', 'yield_payout', 'supplement', 'hedge_loss'));
+
+-- =====================================================
 -- SUPPORT TICKETS (@ticket)
 -- =====================================================
 
 -- Agregar 'ticket' al constraint de mail_type
 ALTER TABLE player_mail DROP CONSTRAINT IF EXISTS player_mail_mail_type_check;
 ALTER TABLE player_mail ADD CONSTRAINT player_mail_mail_type_check CHECK (mail_type IN ('player', 'system', 'admin', 'ticket'));
+
+-- =====================================================
+-- EXP PACKS (Purchasable XP for slots)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS exp_packs (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  xp_amount INTEGER NOT NULL CHECK (xp_amount > 0),
+  base_price DECIMAL(10, 2) NOT NULL CHECK (base_price >= 0),
+  tier TEXT NOT NULL CHECK (tier IN ('basic', 'standard', 'advanced')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO exp_packs (id, name, description, xp_amount, base_price, tier) VALUES
+  ('exp_small',  'Small EXP Pack',  '+100 slot XP',  100,  500,  'basic'),
+  ('exp_medium', 'Medium EXP Pack', '+500 slot XP',  500,  2000, 'standard'),
+  ('exp_large',  'Large EXP Pack',  '+2000 slot XP', 2000, 7000, 'advanced')
+ON CONFLICT (id) DO NOTHING;
 
 -- =====================================================
 -- NOTA: Las funciones están en all_functions.sql

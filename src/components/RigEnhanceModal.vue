@@ -1675,7 +1675,7 @@ function closeProcessingModal() {
               </div>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">{{ t('rigManage.conditionBonus') }}</span>
-                <span class="font-bold text-status-success">+50%</span>
+                <span class="font-bold text-status-success">+35%</span>
               </div>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-text-muted text-sm">Hashrate</span>

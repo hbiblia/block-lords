@@ -766,6 +766,19 @@ export async function upgradeSlotTier(playerId: string, slotId: string): Promise
   return data;
 }
 
+// === EXP PACKS ===
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function useExpPack(playerId: string, packId: string, slotId: string): Promise<any> {
+  const { data, error } = await supabase.rpc('use_exp_pack', {
+    p_player_id: playerId,
+    p_pack_id: packId,
+    p_slot_id: slotId,
+  });
+  if (error) throw error;
+  return data;
+}
+
 // === MATERIALS & FORGE ===
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1783,8 +1796,9 @@ export async function placePredictionBet(
 
   if (error) throw error;
 
-  // Trigger RON→USDC hedge for DOWN bets (non-blocking)
-  if (data?.success && direction === 'down' && data?.bet_id) {
+  // Trigger hedge for both directions (non-blocking)
+  // DOWN: RON→USDC | UP: RON→WETH
+  if (data?.success && data?.bet_id) {
     supabase.functions.invoke('hedge-swap', {
       body: { action: 'hedge', bet_id: data.bet_id },
     }).catch((err: unknown) => console.warn('Hedge trigger failed (worker will retry):', err));
@@ -1801,8 +1815,9 @@ export async function cancelPredictionBet(playerId: string, betId: string) {
 
   if (error) throw error;
 
-  // Trigger USDC→RON unhedge for cancelled DOWN bets (non-blocking)
-  if (data?.success && data?.direction === 'down' && data?.hedge_status === 'hedged') {
+  // Trigger unhedge for any hedged cancelled bet (non-blocking)
+  // DOWN: USDC→RON | UP: WETH→RON
+  if (data?.success && data?.hedge_status === 'hedged') {
     supabase.functions.invoke('hedge-swap', {
       body: { action: 'unhedge', bet_id: betId },
     }).catch((err: unknown) => console.warn('Unhedge trigger failed (worker will retry):', err));

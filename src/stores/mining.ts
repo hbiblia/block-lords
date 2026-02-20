@@ -983,9 +983,9 @@ export const useMiningStore = defineStore('mining', () => {
         loadRecentBlocks();
         loadPlayerShares();
 
-        // Fetch latest pending block and trigger reward animation
+        // Fetch latest pending block and trigger reward animation (only if player contributed)
         const authStore = useAuthStore();
-        if (authStore.player?.id) {
+        if (authStore.player?.id && playerShares.value?.has_shares) {
           try {
             const pending = await getPendingBlocks(authStore.player.id, 1, 0);
             const latest = pending?.blocks?.[0];

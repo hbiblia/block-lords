@@ -737,7 +737,7 @@ END;
 $$;
 
 -- Aplicar parche de emergencia al rig (consume 1 patch del inventario)
--- Restaura +50% condición pero penaliza permanentemente:
+-- Restaura +35% condición pero penaliza permanentemente:
 --   -10% hashrate por parche (multiplicativo: POWER(0.90, patch_count))
 --   +15% consumo por parche (multiplicativo: POWER(1.15, patch_count))
 CREATE OR REPLACE FUNCTION apply_rig_patch(p_player_id UUID, p_rig_id UUID)
@@ -779,10 +779,10 @@ BEGIN
 
   v_current_patches := COALESCE(v_rig.patch_count, 0);
 
-  -- Restaurar 50% de condición (respetando max_condition)
+  -- Restaurar +35% de condición (ignora max_condition, tope absoluto 100%)
   v_new_condition := LEAST(
-    v_rig.condition + 50,
-    COALESCE(v_rig.max_condition, 100)
+    v_rig.condition + 35,
+    100
   );
   v_condition_restored := v_new_condition - v_rig.condition;
 
@@ -3076,6 +3076,17 @@ BEGIN
         SELECT pi.id as inventory_id, pi.item_id, pi.quantity
         FROM player_inventory pi
         WHERE pi.player_id = p_player_id AND pi.item_type = 'patch' AND pi.quantity > 0
+      ) t
+    ),
+    'exp_packs', (
+      SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+      FROM (
+        SELECT pi.id as inventory_id, pi.item_id, pi.quantity,
+               ep.name, ep.description, ep.xp_amount, ep.base_price, ep.tier
+        FROM player_inventory pi
+        JOIN exp_packs ep ON ep.id = pi.item_id
+        WHERE pi.player_id = p_player_id AND pi.item_type = 'exp_pack' AND pi.quantity > 0
+        ORDER BY ep.xp_amount ASC
       ) t
     ),
     'cards', (
@@ -8070,11 +8081,11 @@ BEGIN
     v_player_reward := GREATEST(0.01, v_player_reward);
 
     -- === SLOT XP SYSTEM ===
-    -- XP based on block type: Bronze=8, Silver=12, Gold=20
+    -- XP based on block type (min 125, scales with reward value)
     v_xp_per_block := CASE v_mining_block.block_type
-      WHEN 'gold' THEN 20
-      WHEN 'silver' THEN 12
-      ELSE 8
+      WHEN 'gold' THEN 320
+      WHEN 'silver' THEN 190
+      ELSE 125
     END;
 
     -- Award XP to all non-destroyed slots that have a rig installed
@@ -8586,6 +8597,18 @@ BEGIN
 
   UPDATE players SET blocks_mined = COALESCE(blocks_mined, 0) + 1
   WHERE id = p_player_id;
+
+  -- === SLOT XP for solo mining (min 125, scales with reward value) ===
+  UPDATE player_slots
+  SET xp = COALESCE(xp, 0) + CASE v_block.block_type
+    WHEN 'diamond' THEN 1600
+    WHEN 'gold' THEN 320
+    WHEN 'silver' THEN 190
+    ELSE 125
+  END
+  WHERE player_id = p_player_id
+    AND NOT is_destroyed
+    AND player_rig_id IS NOT NULL;
 
   BEGIN
     PERFORM update_mission_progress(p_player_id, 'mine_blocks', 1);
@@ -14520,6 +14543,8 @@ DECLARE
   v_player_role TEXT;
   v_current_price DECIMAL;
   v_target_price DECIMAL;
+  v_weth_price DECIMAL;
+  v_target_weth_price DECIMAL;
   v_bet_id UUID;
 BEGIN
   -- Solo admin puede usar prediction
@@ -14571,7 +14596,18 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'price_unavailable');
   END IF;
 
+  -- Para UP bets: obtener precio WETH para hedge
   IF p_direction = 'up' THEN
+    SELECT weth_usd_price INTO v_weth_price
+    FROM prediction_price_snapshots
+    WHERE weth_usd_price IS NOT NULL
+    ORDER BY recorded_at DESC LIMIT 1;
+
+    IF v_weth_price IS NULL OR v_weth_price <= 0 THEN
+      RETURN jsonb_build_object('success', false, 'error', 'weth_price_unavailable');
+    END IF;
+
+    v_target_weth_price := v_weth_price * (1 + p_target_percent / 100);
     v_target_price := v_current_price * (1 + p_target_percent / 100);
   ELSE
     v_target_price := v_current_price * (1 - p_target_percent / 100);
@@ -14586,12 +14622,14 @@ BEGIN
     player_id, direction, target_percent,
     bet_amount_lw, bet_amount_ron, exchange_rate,
     entry_price, target_price, status,
-    hedge_status
+    hedge_status,
+    entry_weth_price, target_weth_price
   ) VALUES (
     p_player_id, p_direction, p_target_percent,
     p_bet_amount, p_bet_amount, 1,
     v_current_price, v_target_price, 'active',
-    CASE WHEN p_direction = 'down' THEN 'pending' ELSE 'none' END
+    'pending',  -- Ambas direcciones ahora requieren hedge
+    v_weth_price, v_target_weth_price
   ) RETURNING id INTO v_bet_id;
 
   RETURN jsonb_build_object(
@@ -14600,7 +14638,9 @@ BEGIN
     'direction', p_direction,
     'entry_price', v_current_price,
     'target_price', v_target_price,
-    'bet_amount_ron', p_bet_amount
+    'bet_amount_ron', p_bet_amount,
+    'entry_weth_price', v_weth_price,
+    'target_weth_price', v_target_weth_price
   );
 END;
 $$;
@@ -14649,7 +14689,8 @@ BEGIN
     'fee', v_cancel_fee,
     'direction', v_bet.direction,
     'hedge_status', v_bet.hedge_status,
-    'hedge_usdc_amount', v_bet.hedge_usdc_amount
+    'hedge_usdc_amount', v_bet.hedge_usdc_amount,
+    'hedge_weth_amount', v_bet.hedge_weth_amount
   );
 END;
 $$;
@@ -14726,8 +14767,12 @@ END;
 $$;
 
 -- Resolver TODAS las apuestas que alcanzaron su target (batch, llamado por worker)
--- Una sola llamada en vez de N llamadas individuales
-CREATE OR REPLACE FUNCTION settle_all_prediction_bets(p_current_price DECIMAL)
+-- DOWN bets: se resuelven y pagan en SQL (yield estimado)
+-- UP bets: se marcan pending_unhedge, el worker hace el swap y llama settle_up_bet_with_swap
+CREATE OR REPLACE FUNCTION settle_all_prediction_bets(
+  p_current_price DECIMAL,
+  p_current_weth_price DECIMAL DEFAULT NULL
+)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -14744,65 +14789,150 @@ BEGIN
     SELECT * FROM prediction_bets
     WHERE status = 'active'
       AND (
-        (direction = 'up'   AND p_current_price >= target_price) OR
-        (direction = 'down' AND p_current_price <= target_price)
+        (direction = 'down' AND p_current_price <= target_price) OR
+        (direction = 'up'   AND hedge_status = 'hedged'
+                            AND p_current_weth_price IS NOT NULL
+                            AND target_weth_price IS NOT NULL
+                            AND p_current_weth_price >= target_weth_price)
       )
     FOR UPDATE
   LOOP
-    -- Calcular yield
     IF v_bet.direction = 'down' THEN
+      -- DOWN: yield estimado, pagar en SQL (igual que antes)
       v_yield := v_bet.bet_amount_lw * GREATEST(v_bet.target_percent - 3, 1) / 100;
-    ELSE
-      v_yield := v_bet.bet_amount_lw * v_bet.target_percent / 100;
-    END IF;
-    v_fee := v_yield * 0.05;
-    v_total_payout := v_bet.bet_amount_lw + v_yield - v_fee;
+      v_fee := v_yield * 0.05;
+      v_total_payout := v_bet.bet_amount_lw + v_yield - v_fee;
 
-    -- Actualizar bet
-    UPDATE prediction_bets
-    SET status = 'won',
-        exit_price = p_current_price,
-        yield_earned_lw = v_yield,
-        fee_amount_lw = v_fee,
-        settled_at = NOW()
-    WHERE id = v_bet.id;
+      UPDATE prediction_bets
+      SET status = 'won',
+          exit_price = p_current_price,
+          yield_earned_lw = v_yield,
+          fee_amount_lw = v_fee,
+          settled_at = NOW()
+      WHERE id = v_bet.id;
 
-    -- Pagar al jugador (RON)
-    UPDATE players
-    SET ron_balance = ron_balance + v_total_payout, updated_at = NOW()
-    WHERE id = v_bet.player_id;
+      UPDATE players
+      SET ron_balance = ron_balance + v_total_payout, updated_at = NOW()
+      WHERE id = v_bet.player_id;
 
-    -- Registrar en treasury
-    INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
-    VALUES ('yield_fee', v_fee, v_bet.id, '5% yield fee', 'ron');
+      INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
+      VALUES ('yield_fee', v_fee, v_bet.id, '5% yield fee', 'ron');
 
-    INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
-    VALUES ('yield_payout', v_yield - v_fee, v_bet.id, 'Net yield payout', 'ron');
+      INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
+      VALUES ('yield_payout', v_yield - v_fee, v_bet.id, 'Net yield payout', 'ron');
 
-    v_settled_count := v_settled_count + 1;
-
-    -- Acumular info para DOWN bets que necesitan unhedge
-    IF v_bet.direction = 'down' AND v_bet.hedge_status = 'hedged' THEN
       v_settled_bets := v_settled_bets || jsonb_build_array(jsonb_build_object(
         'bet_id', v_bet.id,
         'direction', 'down',
         'hedge_status', v_bet.hedge_status,
-        'needs_unhedge', true
+        'needs_unhedge', v_bet.hedge_status = 'hedged'
       ));
     ELSE
+      -- UP: marcar pending_unhedge, el worker hara el swap WETH→RON
+      -- y llamara settle_up_bet_with_swap con el RON real recibido
+      UPDATE prediction_bets
+      SET status = 'pending_unhedge',
+          exit_price = p_current_price,
+          exit_weth_price = p_current_weth_price,
+          settled_at = NOW()
+      WHERE id = v_bet.id;
+
       v_settled_bets := v_settled_bets || jsonb_build_array(jsonb_build_object(
         'bet_id', v_bet.id,
-        'direction', v_bet.direction,
+        'direction', 'up',
         'hedge_status', v_bet.hedge_status,
-        'needs_unhedge', false
+        'needs_unhedge', true
       ));
     END IF;
+
+    v_settled_count := v_settled_count + 1;
   END LOOP;
 
   RETURN jsonb_build_object(
     'success', true,
     'settled_count', v_settled_count,
     'settled_bets', v_settled_bets
+  );
+END;
+$$;
+
+-- Resolver UP bet con resultado real del swap WETH→RON (llamado por worker)
+CREATE OR REPLACE FUNCTION settle_up_bet_with_swap(
+  p_bet_id UUID,
+  p_ron_received DECIMAL,
+  p_unhedge_tx_hash TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_bet prediction_bets%ROWTYPE;
+  v_yield DECIMAL;
+  v_fee DECIMAL;
+  v_total_payout DECIMAL;
+BEGIN
+  SELECT * INTO v_bet FROM prediction_bets
+  WHERE id = p_bet_id AND status = 'pending_unhedge'
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'bet_not_found');
+  END IF;
+
+  -- Yield = RON real recibido - monto original apostado
+  v_yield := GREATEST(p_ron_received - v_bet.bet_amount_lw, 0);
+
+  IF v_yield > 0 THEN
+    v_fee := v_yield * 0.05;
+    v_total_payout := p_ron_received - v_fee;
+
+    UPDATE prediction_bets
+    SET status = 'won',
+        yield_earned_lw = v_yield,
+        fee_amount_lw = v_fee,
+        unhedge_tx_hash = p_unhedge_tx_hash,
+        unhedge_ron_received = p_ron_received
+    WHERE id = p_bet_id;
+
+    UPDATE players
+    SET ron_balance = ron_balance + v_total_payout, updated_at = NOW()
+    WHERE id = v_bet.player_id;
+
+    INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
+    VALUES ('yield_fee', v_fee, p_bet_id, '5% yield fee (UP hedge)', 'ron');
+
+    INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
+    VALUES ('yield_payout', v_yield - v_fee, p_bet_id, 'Net yield payout (UP hedge)', 'ron');
+  ELSE
+    -- WETH no aprecio lo suficiente tras friccion del swap; devolver lo recibido
+    v_fee := 0;
+    v_total_payout := p_ron_received;
+
+    UPDATE prediction_bets
+    SET status = 'won',
+        yield_earned_lw = 0,
+        fee_amount_lw = 0,
+        unhedge_tx_hash = p_unhedge_tx_hash,
+        unhedge_ron_received = p_ron_received
+    WHERE id = p_bet_id;
+
+    UPDATE players
+    SET ron_balance = ron_balance + v_total_payout, updated_at = NOW()
+    WHERE id = v_bet.player_id;
+
+    INSERT INTO prediction_treasury (event_type, amount, bet_id, description, currency)
+    VALUES ('hedge_loss', v_bet.bet_amount_lw - p_ron_received, p_bet_id,
+            'UP hedge returned less than bet amount', 'ron');
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'player_id', v_bet.player_id,
+    'payout', v_total_payout,
+    'yield', v_yield,
+    'fee', COALESCE(v_fee, 0),
+    'ron_received', p_ron_received
   );
 END;
 $$;
@@ -14819,10 +14949,16 @@ DECLARE
   v_active JSONB;
   v_history JSONB;
   v_current_price DECIMAL;
+  v_current_weth_price DECIMAL;
   v_stats JSONB;
 BEGIN
   SELECT ron_usdc_price INTO v_current_price
   FROM prediction_price_snapshots
+  ORDER BY recorded_at DESC LIMIT 1;
+
+  SELECT weth_usd_price INTO v_current_weth_price
+  FROM prediction_price_snapshots
+  WHERE weth_usd_price IS NOT NULL
   ORDER BY recorded_at DESC LIMIT 1;
 
   SELECT COALESCE(jsonb_agg(row_to_json ORDER BY created_at DESC), '[]'::jsonb)
@@ -14832,11 +14968,13 @@ BEGIN
       b.id, b.direction, b.target_percent,
       b.bet_amount_lw, b.bet_amount_ron,
       b.entry_price, b.target_price,
+      b.entry_weth_price, b.target_weth_price,
       v_current_price AS current_price,
+      v_current_weth_price AS current_weth_price,
       CASE
-        WHEN b.direction = 'up' AND b.target_price > b.entry_price THEN
+        WHEN b.direction = 'up' AND b.target_weth_price IS NOT NULL AND b.target_weth_price > b.entry_weth_price THEN
           LEAST(100, GREATEST(0,
-            ((COALESCE(v_current_price, b.entry_price) - b.entry_price) / (b.target_price - b.entry_price)) * 100
+            ((COALESCE(v_current_weth_price, b.entry_weth_price) - b.entry_weth_price) / (b.target_weth_price - b.entry_weth_price)) * 100
           ))
         WHEN b.direction = 'down' AND b.entry_price > b.target_price THEN
           LEAST(100, GREATEST(0,
@@ -14846,7 +14984,7 @@ BEGIN
       END AS progress_percent,
       CASE WHEN b.direction = 'down'
         THEN b.bet_amount_lw * GREATEST(b.target_percent - 3, 1) / 100
-        ELSE b.bet_amount_lw * b.target_percent / 100
+        ELSE b.bet_amount_lw * GREATEST(b.target_percent - 6, 1) / 100
       END AS potential_yield,
       b.created_at
     FROM prediction_bets b
@@ -14884,6 +15022,7 @@ BEGIN
   RETURN jsonb_build_object(
     'success', true,
     'current_price', v_current_price,
+    'current_weth_price', v_current_weth_price,
     'active', v_active,
     'history', v_history,
     'stats', v_stats
@@ -14903,6 +15042,9 @@ DECLARE
   v_change_pct DECIMAL;
   v_high_24h DECIMAL;
   v_low_24h DECIMAL;
+  v_weth_current DECIMAL;
+  v_weth_prev DECIMAL;
+  v_weth_change_pct DECIMAL;
 BEGIN
   SELECT ron_usdc_price INTO v_current
   FROM prediction_price_snapshots
@@ -14923,12 +15065,32 @@ BEGIN
   FROM prediction_price_snapshots
   WHERE recorded_at >= NOW() - INTERVAL '24 hours';
 
+  -- WETH price
+  SELECT weth_usd_price INTO v_weth_current
+  FROM prediction_price_snapshots
+  WHERE weth_usd_price IS NOT NULL
+  ORDER BY recorded_at DESC LIMIT 1;
+
+  SELECT weth_usd_price INTO v_weth_prev
+  FROM prediction_price_snapshots
+  WHERE weth_usd_price IS NOT NULL
+  ORDER BY recorded_at DESC LIMIT 1 OFFSET 1;
+
+  v_weth_change_pct := CASE
+    WHEN v_weth_prev IS NOT NULL AND v_weth_prev > 0
+    THEN ((v_weth_current - v_weth_prev) / v_weth_prev) * 100
+    ELSE 0
+  END;
+
   RETURN jsonb_build_object(
     'price', v_current,
     'previous_price', v_prev,
     'change_percent', ROUND(v_change_pct, 4),
     'high_24h', v_high_24h,
     'low_24h', v_low_24h,
+    'weth_price', v_weth_current,
+    'weth_previous_price', v_weth_prev,
+    'weth_change_percent', ROUND(v_weth_change_pct, 4),
     'updated_at', NOW()
   );
 END;
@@ -14937,6 +15099,7 @@ $$;
 -- Grants para prediction
 GRANT EXECUTE ON FUNCTION place_prediction_bet TO authenticated;
 GRANT EXECUTE ON FUNCTION cancel_prediction_bet TO authenticated;
+GRANT EXECUTE ON FUNCTION settle_up_bet_with_swap TO authenticated;
 GRANT EXECUTE ON FUNCTION get_player_predictions TO authenticated;
 GRANT EXECUTE ON FUNCTION get_prediction_price TO authenticated;
 
@@ -14958,3 +15121,124 @@ DROP INDEX IF EXISTS rig_cooling_modded_unique;
 CREATE UNIQUE INDEX rig_cooling_modded_unique
   ON rig_cooling(player_cooling_item_id)
   WHERE player_cooling_item_id IS NOT NULL;
+
+-- =====================================================
+-- EXP PACKS: Comprar y usar packs de EXP para slots
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION buy_exp_pack(p_player_id UUID, p_pack_id TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player players%ROWTYPE;
+  v_pack exp_packs%ROWTYPE;
+BEGIN
+  SELECT * INTO v_player FROM players WHERE id = p_player_id;
+  IF v_player IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+
+  SELECT * INTO v_pack FROM exp_packs WHERE id = p_pack_id;
+  IF v_pack IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Pack not found');
+  END IF;
+
+  -- Check inventory capacity
+  IF NOT EXISTS (SELECT 1 FROM player_inventory WHERE player_id = p_player_id AND item_type = 'exp_pack' AND item_id = p_pack_id AND quantity > 0) THEN
+    IF count_inventory_slots(p_player_id) >= get_max_inventory_slots(p_player_id) THEN
+      RETURN json_build_object('success', false, 'error', 'inventory_full');
+    END IF;
+  ELSE
+    IF (SELECT quantity FROM player_inventory WHERE player_id = p_player_id AND item_type = 'exp_pack' AND item_id = p_pack_id) >= 10 THEN
+      RETURN json_build_object('success', false, 'error', 'stack_full');
+    END IF;
+  END IF;
+
+  -- Verificar balance
+  IF v_player.gamecoin_balance < v_pack.base_price THEN
+    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+  END IF;
+
+  -- Descontar GameCoin
+  UPDATE players SET gamecoin_balance = gamecoin_balance - v_pack.base_price WHERE id = p_player_id;
+
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'exp_pack_purchase', -v_pack.base_price, 'gamecoin', 'Compra de ' || v_pack.name);
+
+  -- Agregar al inventario
+  INSERT INTO player_inventory (player_id, item_type, item_id)
+  VALUES (p_player_id, 'exp_pack', p_pack_id)
+  ON CONFLICT (player_id, item_type, item_id)
+  DO UPDATE SET quantity = player_inventory.quantity + 1;
+
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION use_exp_pack(p_player_id UUID, p_pack_id TEXT, p_slot_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_pack exp_packs%ROWTYPE;
+  v_slot player_slots%ROWTYPE;
+  v_inv_qty INTEGER;
+  v_new_xp INTEGER;
+BEGIN
+  -- Validar pack existe
+  SELECT * INTO v_pack FROM exp_packs WHERE id = p_pack_id;
+  IF v_pack IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Pack not found');
+  END IF;
+
+  -- Validar jugador tiene pack en inventario
+  SELECT quantity INTO v_inv_qty
+  FROM player_inventory
+  WHERE player_id = p_player_id AND item_type = 'exp_pack' AND item_id = p_pack_id;
+
+  IF v_inv_qty IS NULL OR v_inv_qty <= 0 THEN
+    RETURN json_build_object('success', false, 'error', 'No pack in inventory');
+  END IF;
+
+  -- Validar slot existe y pertenece al jugador
+  SELECT * INTO v_slot FROM player_slots
+  WHERE id = p_slot_id AND player_id = p_player_id AND NOT is_destroyed;
+
+  IF v_slot IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Slot not found');
+  END IF;
+
+  -- Consumir 1 pack del inventario
+  IF v_inv_qty = 1 THEN
+    DELETE FROM player_inventory
+    WHERE player_id = p_player_id AND item_type = 'exp_pack' AND item_id = p_pack_id;
+  ELSE
+    UPDATE player_inventory
+    SET quantity = quantity - 1
+    WHERE player_id = p_player_id AND item_type = 'exp_pack' AND item_id = p_pack_id;
+  END IF;
+
+  -- Aplicar XP al slot
+  v_new_xp := COALESCE(v_slot.xp, 0) + v_pack.xp_amount;
+  UPDATE player_slots SET xp = v_new_xp WHERE id = p_slot_id;
+
+  -- Loguear transaccion
+  INSERT INTO transactions (player_id, type, amount, currency, description)
+  VALUES (p_player_id, 'exp_pack_used', 0, 'gamecoin',
+          'Usado ' || v_pack.name || ' en slot #' || v_slot.slot_number || ' (+' || v_pack.xp_amount || ' XP)');
+
+  RETURN json_build_object(
+    'success', true,
+    'xp_granted', v_pack.xp_amount,
+    'new_xp', v_new_xp,
+    'slot_number', v_slot.slot_number,
+    'slot_tier', COALESCE(v_slot.tier, 'basic')
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION buy_exp_pack TO authenticated;
+GRANT EXECUTE ON FUNCTION use_exp_pack TO authenticated;

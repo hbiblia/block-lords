@@ -25,6 +25,9 @@ export interface PredictionBet {
   progress_percent: number;
   potential_yield: number;
   created_at: string;
+  entry_weth_price?: number;
+  target_weth_price?: number;
+  current_weth_price?: number;
 }
 
 export interface PredictionHistory {
@@ -63,6 +66,8 @@ export const usePredictionStore = defineStore('prediction', () => {
   const priceChangePercent = ref<number>(0);
   const high24h = ref<number | null>(null);
   const low24h = ref<number | null>(null);
+  const currentWethPrice = ref<number | null>(null);
+  const wethPriceChangePercent = ref<number>(0);
 
   // Loading states
   const loading = ref(false);
@@ -108,6 +113,9 @@ export const usePredictionStore = defineStore('prediction', () => {
         if (data.current_price != null) {
           currentPrice.value = data.current_price;
         }
+        if (data.current_weth_price != null) {
+          currentWethPrice.value = data.current_weth_price;
+        }
       }
     } catch (e) {
       console.error('Error loading predictions:', e);
@@ -126,6 +134,8 @@ export const usePredictionStore = defineStore('prediction', () => {
         priceChangePercent.value = data.change_percent ?? 0;
         high24h.value = data.high_24h;
         low24h.value = data.low_24h;
+        currentWethPrice.value = data.weth_price ?? null;
+        wethPriceChangePercent.value = data.weth_change_percent ?? 0;
       }
     } catch (e) {
       console.error('Error loading prediction price:', e);
@@ -270,6 +280,8 @@ export const usePredictionStore = defineStore('prediction', () => {
     priceChangePercent.value = 0;
     high24h.value = null;
     low24h.value = null;
+    currentWethPrice.value = null;
+    wethPriceChangePercent.value = 0;
     loading.value = false;
     refreshing.value = false;
     placing.value = false;
@@ -286,6 +298,8 @@ export const usePredictionStore = defineStore('prediction', () => {
     priceChangePercent,
     high24h,
     low24h,
+    currentWethPrice,
+    wethPriceChangePercent,
     loading,
     refreshing,
     placing,

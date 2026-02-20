@@ -67,6 +67,15 @@ export interface CoolingComponent {
   durability_max: number;
 }
 
+interface ExpPack {
+  id: string;
+  name: string;
+  description: string;
+  xp_amount: number;
+  base_price: number;
+  tier: string;
+}
+
 interface CoolingQuantity {
   installed: number;
   inventory: number;
@@ -98,6 +107,7 @@ interface MarketCache {
   prepaidCards: PrepaidCard[];
   boostItems: BoostItem[];
   cryptoPackages: CryptoPackage[];
+  expPacks: ExpPack[];
 }
 
 // Default data for new accounts (shown while real data loads)
@@ -127,6 +137,12 @@ const DEFAULT_BOOSTS: BoostItem[] = [
 const DEFAULT_CRYPTO_PACKAGES: CryptoPackage[] = [
   { id: 'crypto-1', name: 'Starter Pack', description: '100 crypto', crypto_amount: 100, ron_price: 1, bonus_percent: 0, tier: 'common', is_featured: false, total_crypto: 100 },
   { id: 'crypto-2', name: 'Value Pack', description: '550 crypto', crypto_amount: 500, ron_price: 5, bonus_percent: 10, tier: 'uncommon', is_featured: true, total_crypto: 550 },
+];
+
+const DEFAULT_EXP_PACKS: ExpPack[] = [
+  { id: 'exp_small', name: 'Small EXP Pack', description: '+100 slot XP', xp_amount: 100, base_price: 500, tier: 'basic' },
+  { id: 'exp_medium', name: 'Medium EXP Pack', description: '+500 slot XP', xp_amount: 500, base_price: 2000, tier: 'standard' },
+  { id: 'exp_large', name: 'Large EXP Pack', description: '+2000 slot XP', xp_amount: 2000, base_price: 7000, tier: 'advanced' },
 ];
 
 function loadFromCache(): MarketCache | null {
@@ -159,6 +175,7 @@ export const useMarketStore = defineStore('market', () => {
   const prepaidCards = ref<PrepaidCard[]>(cached?.prepaidCards ?? DEFAULT_CARDS);
   const boostItems = ref<BoostItem[]>(cached?.boostItems ?? DEFAULT_BOOSTS);
   const cryptoPackages = ref<CryptoPackage[]>(cached?.cryptoPackages ?? DEFAULT_CRYPTO_PACKAGES);
+  const expPacks = ref<ExpPack[]>(cached?.expPacks ?? DEFAULT_EXP_PACKS);
 
   // Cooling components catalog
   const coolingComponents = ref<CoolingComponent[]>([]);
@@ -170,6 +187,7 @@ export const useMarketStore = defineStore('market', () => {
   const cardQuantities = ref<Record<string, number>>({});
   const boostQuantities = ref<Record<string, number>>({});
   const patchQuantity = ref(0);
+  const expPackQuantities = ref<Record<string, number>>({});
 
   // Loading states - always have data (cached or default), so never show initial loading
   const loadingCatalogs = ref(false);
@@ -236,6 +254,10 @@ export const useMarketStore = defineStore('market', () => {
     return componentQuantities.value[id] || 0;
   }
 
+  function getExpPackOwned(id: string): number {
+    return expPackQuantities.value[id] || 0;
+  }
+
   // Track if we've already fetched from server this session
   const catalogsFetched = ref(false);
 
@@ -245,13 +267,14 @@ export const useMarketStore = defineStore('market', () => {
 
     loadingCatalogs.value = true;
     try {
-      const [rigsRes, coolingRes, cardsRes, boostsRes, cryptoRes, componentsRes] = await Promise.all([
+      const [rigsRes, coolingRes, cardsRes, boostsRes, cryptoRes, componentsRes, expPacksRes] = await Promise.all([
         supabase.from('rigs').select('*').order('base_price', { ascending: true }),
         supabase.from('cooling_items').select('*').order('base_price', { ascending: true }),
         supabase.from('prepaid_cards').select('*').order('base_price', { ascending: true }),
         supabase.from('boost_items').select('*').order('boost_type').order('base_price', { ascending: true }),
         supabase.rpc('get_crypto_packages'),
         supabase.rpc('get_cooling_components'),
+        supabase.from('exp_packs').select('*').order('base_price', { ascending: true }),
       ]);
 
       rigs.value = rigsRes.data ?? [];
@@ -260,6 +283,7 @@ export const useMarketStore = defineStore('market', () => {
       boostItems.value = boostsRes.data ?? [];
       cryptoPackages.value = cryptoRes.data ?? [];
       coolingComponents.value = componentsRes.data ?? [];
+      expPacks.value = expPacksRes.data ?? [];
       catalogsFetched.value = true;
 
       // Save to localStorage cache
@@ -269,6 +293,7 @@ export const useMarketStore = defineStore('market', () => {
         prepaidCards: prepaidCards.value,
         boostItems: boostItems.value,
         cryptoPackages: cryptoPackages.value,
+        expPacks: expPacks.value,
       });
     } catch (e) {
       console.error('Error loading market catalogs:', e);
@@ -286,7 +311,7 @@ export const useMarketStore = defineStore('market', () => {
     const playerId = authStore.player.id;
 
     try {
-      const [playerRigsRes, rigInventoryRes, playerCoolingRes, inventoryCoolingRes, inventoryCardsRes, inventoryBoostsRes, inventoryComponentsRes, inventoryPatchRes] = await Promise.all([
+      const [playerRigsRes, rigInventoryRes, playerCoolingRes, inventoryCoolingRes, inventoryCardsRes, inventoryBoostsRes, inventoryComponentsRes, inventoryPatchRes, inventoryExpPacksRes] = await Promise.all([
         supabase.from('player_rigs').select('rig_id').eq('player_id', playerId),
         supabase.from('player_rig_inventory').select('rig_id, quantity').eq('player_id', playerId),
         supabase.from('player_cooling').select('cooling_item_id').eq('player_id', playerId),
@@ -295,6 +320,7 @@ export const useMarketStore = defineStore('market', () => {
         supabase.from('player_boosts').select('boost_id, quantity').eq('player_id', playerId),
         supabase.from('player_inventory').select('item_id, quantity').eq('player_id', playerId).eq('item_type', 'component'),
         supabase.from('player_inventory').select('quantity').eq('player_id', playerId).eq('item_type', 'patch').eq('item_id', 'rig_patch').maybeSingle(),
+        supabase.from('player_inventory').select('item_id, quantity').eq('player_id', playerId).eq('item_type', 'exp_pack'),
       ]);
 
       // Build rig quantities map (installed + inventory)
@@ -352,6 +378,13 @@ export const useMarketStore = defineStore('market', () => {
 
       // Patch quantity
       patchQuantity.value = inventoryPatchRes.data?.quantity ?? 0;
+
+      // Build exp pack quantities map
+      const expQty: Record<string, number> = {};
+      for (const e of inventoryExpPacksRes.data ?? []) {
+        expQty[e.item_id] = (expQty[e.item_id] || 0) + (e.quantity || 1);
+      }
+      expPackQuantities.value = expQty;
     } catch (e) {
       console.error('Error loading player quantities:', e);
     } finally {
@@ -680,6 +713,48 @@ export const useMarketStore = defineStore('market', () => {
     }
   }
 
+  async function buyExpPack(packId: string): Promise<{ success: boolean; error?: string }> {
+    const authStore = useAuthStore();
+    if (!authStore.player) return { success: false, error: 'No player' };
+
+    buying.value = true;
+    try {
+      const { data, error } = await supabase.rpc('buy_exp_pack', {
+        p_player_id: authStore.player.id,
+        p_pack_id: packId,
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        await loadPlayerQuantities();
+        await authStore.fetchPlayer();
+        const inventoryStore = useInventoryStore();
+        inventoryStore.refresh();
+        playSound('purchase');
+        return { success: true };
+      }
+
+      if (data?.error === 'inventory_full') {
+        playSound('error');
+        return { success: false, error: 'Inventario lleno' };
+      }
+      if (data?.error === 'stack_full') {
+        playSound('error');
+        return { success: false, error: 'Stack máximo alcanzado (10)' };
+      }
+
+      playSound('error');
+      return { success: false, error: data?.error ?? 'Error buying EXP pack' };
+    } catch (e) {
+      console.error('Error buying exp pack:', e);
+      playSound('error');
+      return { success: false, error: 'Connection error' };
+    } finally {
+      buying.value = false;
+    }
+  }
+
   async function buyCryptoPackage(
     packageId: string
   ): Promise<{ success: boolean; error?: string; cryptoReceived?: number }> {
@@ -767,6 +842,7 @@ export const useMarketStore = defineStore('market', () => {
     cardQuantities.value = {};
     boostQuantities.value = {};
     patchQuantity.value = 0;
+    expPackQuantities.value = {};
     // Keep catalogs loaded
   }
 
@@ -778,6 +854,7 @@ export const useMarketStore = defineStore('market', () => {
     prepaidCards,
     boostItems,
     cryptoPackages,
+    expPacks,
 
     // Computed
     rigsForSale,
@@ -796,6 +873,7 @@ export const useMarketStore = defineStore('market', () => {
     getCardOwned,
     getBoostOwned,
     getPatchOwned,
+    getExpPackOwned,
     patchQuantity,
 
     // Actions
@@ -809,6 +887,7 @@ export const useMarketStore = defineStore('market', () => {
     buyCard,
     buyBoost,
     buyPatch,
+    buyExpPack,
     buyCryptoPackage,
     buyCryptoPackageWithWallet,
     clearState,
