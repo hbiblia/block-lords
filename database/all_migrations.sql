@@ -519,7 +519,7 @@ CREATE TABLE IF NOT EXISTS player_slots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   slot_number INTEGER NOT NULL CHECK (slot_number >= 1 AND slot_number <= 20),
-  max_uses INTEGER NOT NULL CHECK (max_uses IN (2, 3)),
+  max_uses INTEGER NOT NULL CHECK (max_uses IN (2, 3, 4)),
   uses_remaining INTEGER NOT NULL CHECK (uses_remaining >= 0),
   player_rig_id UUID REFERENCES player_rigs(id) ON DELETE SET NULL,
   is_destroyed BOOLEAN DEFAULT false,
@@ -574,7 +574,7 @@ END $$;
 ALTER TABLE player_slots DROP CONSTRAINT IF EXISTS player_slots_max_uses_check;
 UPDATE player_slots SET uses_remaining = 3 WHERE uses_remaining > 3;
 UPDATE player_slots SET max_uses = 3 WHERE max_uses > 3;
-ALTER TABLE player_slots ADD CONSTRAINT player_slots_max_uses_check CHECK (max_uses IN (2, 3));
+ALTER TABLE player_slots ADD CONSTRAINT player_slots_max_uses_check CHECK (max_uses IN (2, 3, 4));
 
 -- =====================================================
 -- 10. RON WITHDRAWALS

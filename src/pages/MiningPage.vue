@@ -1199,10 +1199,12 @@ onUnmounted(() => {
                 <div class="flex items-center gap-2 cursor-pointer hover:brightness-110"
                   @click="openSlotDurabilityInfo(getSlotForRig(playerRig.id)!)">
                   <div class="flex-1 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
-                    <div class="h-full bg-cyan-500 rounded-full transition-all"
+                    <div class="h-full rounded-full transition-all"
+                      :class="getSlotForRig(playerRig.id)!.max_uses > 3 ? 'bg-emerald-400' : 'bg-cyan-500'"
                       :style="{ width: (getSlotForRig(playerRig.id)!.uses_remaining / getSlotForRig(playerRig.id)!.max_uses * 100) + '%' }">
                     </div>
                   </div>
+                  <span v-if="getSlotForRig(playerRig.id)!.max_uses > 3" class="text-[9px] text-emerald-400 shrink-0" title="Durability Shield">🛡️</span>
                   <span class="text-[9px] text-text-muted font-mono whitespace-nowrap shrink-0">
                     {{ getSlotForRig(playerRig.id)!.uses_remaining }}/{{ getSlotForRig(playerRig.id)!.max_uses }} uses
                   </span>
@@ -1385,10 +1387,12 @@ onUnmounted(() => {
                 <div class="flex items-center gap-2 cursor-pointer hover:brightness-110"
                   @click="openSlotDurabilityInfo(slot)">
                   <div class="flex-1 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
-                    <div class="h-full bg-cyan-500 rounded-full transition-all"
+                    <div class="h-full rounded-full transition-all"
+                      :class="slot.max_uses > 3 ? 'bg-emerald-400' : 'bg-cyan-500'"
                       :style="{ width: (slot.uses_remaining / slot.max_uses * 100) + '%' }">
                     </div>
                   </div>
+                  <span v-if="slot.max_uses > 3" class="text-[9px] text-emerald-400 shrink-0" title="Durability Shield">🛡️</span>
                   <span class="text-[9px] text-text-muted font-mono whitespace-nowrap shrink-0">
                     {{ slot.uses_remaining }}/{{ slot.max_uses }} uses
                   </span>
@@ -1644,15 +1648,24 @@ onUnmounted(() => {
           <div class="relative bg-bg-primary border border-border rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <h3 class="text-lg font-bold mb-4 text-center">{{ t('slots.durabilityTitle') }}</h3>
 
+            <!-- Durability Shield badge -->
+            <div v-if="slotDurabilityModalData.max_uses > 3"
+              class="flex items-center justify-center gap-1.5 mb-3 py-1.5 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mx-auto w-fit">
+              <span class="text-sm">🛡️</span>
+              <span class="text-xs font-semibold text-emerald-400">Durability Shield (+1 use)</span>
+            </div>
+
             <!-- Visual bar -->
             <div class="flex gap-px w-full h-3 rounded-lg overflow-hidden mb-3">
               <div v-for="i in slotDurabilityModalData.max_uses" :key="i"
                 class="flex-1 h-full transition-colors"
-                :class="i <= slotDurabilityModalData.uses_remaining ? 'bg-cyan-500' : 'bg-gray-700/60'">
+                :class="i <= slotDurabilityModalData.uses_remaining
+                  ? (slotDurabilityModalData.max_uses > 3 ? 'bg-emerald-400' : 'bg-cyan-500')
+                  : 'bg-gray-700/60'">
               </div>
             </div>
             <p class="text-center text-sm font-semibold mb-4"
-              :class="slotDurabilityModalData.uses_remaining <= 1 ? 'text-status-danger' : 'text-cyan-400'">
+              :class="slotDurabilityModalData.uses_remaining <= 1 ? 'text-status-danger' : (slotDurabilityModalData.max_uses > 3 ? 'text-emerald-400' : 'text-cyan-400')">
               {{ t('slots.usesRemaining', { uses: slotDurabilityModalData.uses_remaining, max: slotDurabilityModalData.max_uses }) }}
             </p>
 

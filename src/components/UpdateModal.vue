@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '2.7.0';
+const CURRENT_VERSION = '2.8.0';
 const STORAGE_KEY = 'lootmine-last-seen-version';
 
 const route = useRoute();
@@ -63,12 +63,28 @@ function closeModal() {
 
         <!-- Contenido scrollable -->
         <div class="space-y-3 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- Solo Mining -->
+          <!-- Forge Descriptions -->
           <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
             <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>⛏️</span> {{ t('updateModal.soloMining.title') }}
+              <span>🔨</span> {{ t('updateModal.forgeDescriptions.title') }}
             </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.soloMining.description')"></p>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.forgeDescriptions.description')"></p>
+          </div>
+
+          <!-- Slot XP Boost -->
+          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
+            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+              <span>⚡</span> {{ t('updateModal.slotXpBoost.title') }}
+            </h3>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.slotXpBoost.description')"></p>
+          </div>
+
+          <!-- Inventory Improvements -->
+          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
+            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+              <span>🎒</span> {{ t('updateModal.inventoryImproved.title') }}
+            </h3>
+            <p class="text-text-muted text-sm" v-html="t('updateModal.inventoryImproved.description')"></p>
           </div>
 
         </div>

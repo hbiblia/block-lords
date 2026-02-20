@@ -2027,6 +2027,18 @@ export default {
       title: 'Solo Mining Mode (Alpha)',
       description: 'New <strong class="text-amber-400">Solo Mining</strong> mode! <strong class="text-red-400">(Alpha version)</strong> Mine your own blocks independently. Blocks come in 4 types: <strong class="text-orange-400">Bronze (3 seeds)</strong>, <strong class="text-gray-300">Silver (4 seeds)</strong>, <strong class="text-yellow-400">Gold (5 seeds)</strong>, and <strong class="text-cyan-400">Diamond (6 seeds, 50,000 crypto)</strong>. Your rigs must find <strong class="text-emerald-400">all seeds</strong> within <strong class="text-red-400">30 minutes</strong> to claim the block reward. If time runs out, you lose the block. Higher risk, higher reward! Requires <strong class="text-amber-400">Premium</strong>.',
     },
+    forgeDescriptions: {
+      title: 'Forge: Improved Descriptions',
+      description: 'All Forge recipes now have <strong class="text-orange-400">detailed descriptions</strong> explaining exactly what they do and what they apply to (slot or rig). The <strong class="text-emerald-400">🛡️ Durability Shield</strong> now shows a visual indicator on the protected slot and filters out slots already at maximum.',
+    },
+    slotXpBoost: {
+      title: 'Slot XP per Block Increase',
+      description: 'The XP slots receive per mined block has been <strong class="text-amber-400">significantly increased</strong>.<br>🥉 Bronze: 8 → <strong class="text-orange-400">125 XP</strong><br>🥈 Silver: 12 → <strong class="text-gray-300">190 XP</strong><br>🥇 Gold: 20 → <strong class="text-yellow-400">320 XP</strong><br>Tier up much faster!',
+    },
+    inventoryImproved: {
+      title: 'Improved Inventory',
+      description: 'Inventory items now display their <strong class="text-amber-400">actual names</strong> instead of just stats. Cards, cooling, XP packs and more are easily identifiable. Also, <strong class="text-cyan-400">icons and text are larger</strong> for better readability.',
+    },
     button: 'Got it!',
   },
 
@@ -2116,8 +2128,14 @@ export default {
     energy: 'Energy',
     heat: 'Heat',
     uses: 'use(s)',
-    addsToInventory: 'Adds to inventory',
-    protectsSlot: 'Prevents next slot destruction',
+    descXpGrant: '⚡ +{value} XP to slot for tier upgrade',
+    descHashrate: '⛏️ +{value}% permanent hashrate to rig',
+    descEfficiency: '🔋 -{value}% permanent energy consumption to rig',
+    descThermal: '❄️ -{value}% permanent heat generation to rig',
+    descCooling: '🧊 Cooling component, added to inventory',
+    slotDurabilityUse: '🛡️ +{value} extra use before slot is destroyed (max {max})',
+    slotAlreadyShielded: 'Already shielded',
+    protectsSlot: '🔒 Protects slot: prevents next destruction',
     categories: {
       all: 'All',
       tier_kit: 'Tier Kits',

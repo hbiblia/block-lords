@@ -8654,12 +8654,25 @@ DECLARE
   v_warmup_mult NUMERIC;
   v_hash_flux NUMERIC;
   v_init_result JSON;
+  v_expired_block RECORD;
   i INTEGER;
 BEGIN
   -- Paso 0: Cerrar todos los bloques expirados (independiente del estado del player)
-  UPDATE solo_mining_blocks SET status = 'failed', completed_at = NOW()
-  WHERE status = 'active' AND target_close_at <= NOW();
-  GET DIAGNOSTICS v_blocks_failed = ROW_COUNT;
+  -- Si encontró todos los seeds → completado con recompensa, si no → fallido
+  FOR v_expired_block IN
+    SELECT smb.id, smb.player_id, smb.seeds_found, smb.total_seeds
+    FROM solo_mining_blocks smb
+    WHERE smb.status = 'active' AND smb.target_close_at <= NOW()
+  LOOP
+    IF v_expired_block.seeds_found >= v_expired_block.total_seeds THEN
+      PERFORM complete_solo_block(v_expired_block.player_id, v_expired_block.id);
+      v_blocks_completed := v_blocks_completed + 1;
+    ELSE
+      UPDATE solo_mining_blocks SET status = 'failed', completed_at = NOW()
+      WHERE id = v_expired_block.id;
+      v_blocks_failed := v_blocks_failed + 1;
+    END IF;
+  END LOOP;
 
   -- Paso 0.5: Crear bloque para todos los jugadores con rental activo que no tengan bloque
   FOR v_block_player IN
@@ -8765,6 +8778,12 @@ BEGIN
     v_scans_per_tick := GREATEST(1, FLOOR(v_player_total_hashrate / 100)::INTEGER);
     v_seeds_found_this_tick := 0;
 
+    -- Si ya encontró todos los seeds, no escanear más (esperar a que expire)
+    IF v_solo_block.seeds_found >= v_solo_block.total_seeds THEN
+      v_total_players_processed := v_total_players_processed + 1;
+      CONTINUE;
+    END IF;
+
     FOR i IN 1..v_scans_per_tick LOOP
       v_scan_value := FLOOR(RANDOM() * 10000)::INTEGER;
       UPDATE solo_mining_seeds sms_upd
@@ -8783,20 +8802,8 @@ BEGIN
         total_scans = total_scans + v_scans_per_tick
     WHERE id = v_solo_block.id;
 
-    IF (v_solo_block.seeds_found + v_seeds_found_this_tick) >= v_solo_block.total_seeds THEN
-      BEGIN
-        PERFORM complete_solo_block(v_solo_player.player_id, v_solo_block.id);
-        v_blocks_completed := v_blocks_completed + 1;
-
-        SELECT * INTO v_rental FROM solo_mining_rentals
-        WHERE player_id = v_solo_player.player_id AND is_active = true AND expires_at > NOW() LIMIT 1;
-        IF v_rental.id IS NOT NULL THEN
-          v_init_result := initialize_solo_block(v_solo_player.player_id, v_rental.id);
-        END IF;
-      EXCEPTION WHEN OTHERS THEN
-        RAISE WARNING 'Error completing solo block % for player %: % %', v_solo_block.id, v_solo_player.player_id, SQLERRM, SQLSTATE;
-      END;
-    END IF;
+    -- El bloque se cierra solo al expirar el tiempo (Paso 0).
+    -- Si encontró todos los seeds, simplemente deja de escanear hasta que expire.
 
     v_total_players_processed := v_total_players_processed + 1;
   END LOOP;
@@ -14282,6 +14289,10 @@ BEGIN
 
       IF v_slot IS NULL THEN
         RETURN json_build_object('success', false, 'error', 'Slot not found');
+      END IF;
+
+      IF v_slot.max_uses >= 4 THEN
+        RETURN json_build_object('success', false, 'error', 'Slot already at maximum durability');
       END IF;
 
       UPDATE player_slots

@@ -50,8 +50,11 @@ watch(isMining, (mining) => {
 });
 
 // Track recently found seeds for animation
+// Initialize with already-found seeds so they don't trigger the animation on load
 const recentlyFoundSeeds = ref<Set<number>>(new Set());
-const prevFoundSet = ref<Set<number>>(new Set());
+const prevFoundSet = ref<Set<number>>(
+  new Set(soloStore.seeds.filter(s => s.found).map(s => s.index))
+);
 
 watch(() => soloStore.seeds, (newSeeds) => {
   const currentFound = new Set(newSeeds.filter(s => s.found).map(s => s.index));
@@ -71,6 +74,29 @@ watch(() => soloStore.seeds, (newSeeds) => {
 watch(() => soloStore.currentBlock?.block_number, () => {
   recentlyFoundSeeds.value.clear();
   prevFoundSet.value.clear();
+  showAllSeedsFound.value = false;
+});
+
+// All seeds found celebration
+const showAllSeedsFound = ref(false);
+let allSeedsTimeout: number | null = null;
+
+watch(() => soloStore.seedsFound, (found, oldFound) => {
+  if (
+    found > 0 &&
+    found === soloStore.seedsTotal &&
+    oldFound < soloStore.seedsTotal &&
+    soloStore.currentBlock
+  ) {
+    // Small delay so the last seed animation plays first
+    setTimeout(() => {
+      showAllSeedsFound.value = true;
+      if (allSeedsTimeout) clearTimeout(allSeedsTimeout);
+      allSeedsTimeout = window.setTimeout(() => {
+        showAllSeedsFound.value = false;
+      }, 5000);
+    }, 800);
+  }
 });
 
 const blockTypeConfig: Record<string, { color: string; icon: string; label: string; border: string; gradient: string }> = {
@@ -288,6 +314,48 @@ const timeProgressPercent = computed(() => {
               </div>
             </div>
 
+            <!-- All Seeds Found Celebration -->
+            <Transition name="seeds-complete">
+              <div v-if="showAllSeedsFound"
+                class="relative mb-3 sm:mb-4 rounded-xl overflow-hidden">
+                <!-- Animated background -->
+                <div class="absolute inset-0 seeds-complete-bg rounded-xl"
+                  :class="soloStore.blockType === 'diamond' ? 'bg-cyan-500/10' : soloStore.blockType === 'gold' ? 'bg-yellow-500/10' : soloStore.blockType === 'silver' ? 'bg-gray-300/10' : 'bg-amber-500/10'">
+                </div>
+
+                <!-- Floating particles -->
+                <div class="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+                  <div v-for="n in 12" :key="'cp-' + n"
+                    class="complete-particle absolute w-1.5 h-1.5 rounded-full"
+                    :class="soloStore.blockType === 'diamond' ? 'bg-cyan-400' : soloStore.blockType === 'gold' ? 'bg-yellow-400' : soloStore.blockType === 'silver' ? 'bg-gray-300' : 'bg-amber-500'"
+                    :style="{
+                      left: (Math.random() * 100) + '%',
+                      bottom: '-5%',
+                      animationDelay: (n * 0.15) + 's',
+                      animationDuration: (1.5 + Math.random()) + 's',
+                    }">
+                  </div>
+                </div>
+
+                <!-- Content -->
+                <div class="relative z-10 py-5 sm:py-6 text-center">
+                  <div class="complete-emoji text-4xl sm:text-5xl mb-2">
+                    {{ soloStore.blockType === 'diamond' ? '💎' : soloStore.blockType === 'gold' ? '🥇' : soloStore.blockType === 'silver' ? '🥈' : '🥉' }}
+                  </div>
+                  <div class="complete-text text-lg sm:text-xl font-bold"
+                    :class="currentBlockConfig.color">
+                    ¡Bloque Completado!
+                  </div>
+                  <div class="complete-reward mt-1 text-sm sm:text-base font-mono font-bold text-white">
+                    +{{ formatNumber(soloStore.blockReward) }} crypto
+                  </div>
+                  <div class="complete-sub mt-1 text-[10px] sm:text-xs text-text-muted">
+                    🔑 {{ soloStore.seedsTotal }}/{{ soloStore.seedsTotal }} seeds encontrados
+                  </div>
+                </div>
+              </div>
+            </Transition>
+
             <!-- Grid de Stats (estilo pool con border-left) -->
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-3">
               <!-- Hashrate -->
@@ -450,6 +518,108 @@ const timeProgressPercent = computed(() => {
 
   100% {
     transform: translate(-50%, -50%) rotate(var(--spark-angle, 0deg)) translateY(-30px) scale(0);
+    opacity: 0;
+  }
+}
+/* === All Seeds Found Celebration === */
+
+/* Transition */
+.seeds-complete-enter-active {
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.seeds-complete-leave-active {
+  transition: all 0.4s ease-in;
+}
+
+.seeds-complete-enter-from {
+  opacity: 0;
+  transform: scale(0.8) translateY(10px);
+}
+
+.seeds-complete-leave-to {
+  opacity: 0;
+  transform: scale(0.95) translateY(-5px);
+}
+
+/* Pulsing background */
+.seeds-complete-bg {
+  animation: completeBgPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes completeBgPulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Emoji bounce */
+.complete-emoji {
+  animation: completeEmojiBounce 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes completeEmojiBounce {
+  0% {
+    transform: scale(0) rotate(-15deg);
+    opacity: 0;
+  }
+
+  60% {
+    transform: scale(1.3) rotate(5deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* Text slide up */
+.complete-text {
+  animation: completeSlideUp 0.5s ease-out 0.2s both;
+}
+
+.complete-reward {
+  animation: completeSlideUp 0.5s ease-out 0.35s both;
+}
+
+.complete-sub {
+  animation: completeSlideUp 0.5s ease-out 0.5s both;
+}
+
+@keyframes completeSlideUp {
+  0% {
+    transform: translateY(15px);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Floating particles */
+.complete-particle {
+  animation: particleFloat 2s ease-out infinite;
+}
+
+@keyframes particleFloat {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: translateY(-120px) scale(0);
     opacity: 0;
   }
 }

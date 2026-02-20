@@ -109,9 +109,14 @@ function needsRigTarget(recipe: ForgeRecipe): boolean {
   return recipe.result_type === 'rig_boost';
 }
 
-// Available slots for targeting (non-destroyed, non-elite for tier kits)
+// Available slots for targeting (non-destroyed)
+// For durability_shield: also exclude slots already at max (max_uses >= 4)
 const availableSlots = computed(() => {
   const slots = miningStore.slotInfo?.slots || [];
+  const recipe = selectedRecipe.value;
+  if (recipe?.id === 'durability_shield') {
+    return slots.filter(s => !s.is_destroyed && s.max_uses < 4);
+  }
   return slots.filter(s => !s.is_destroyed);
 });
 
@@ -221,15 +226,15 @@ function getMaterialName(name: string): string {
 
 function getResultDescription(recipe: ForgeRecipe): string {
   switch (recipe.result_type) {
-    case 'xp_grant': return `+${recipe.result_value} XP`;
+    case 'xp_grant': return t('forge.descXpGrant', { value: recipe.result_value });
     case 'rig_boost':
-      if (recipe.id === 'hashrate_booster') return `+${recipe.result_value}% Hashrate`;
-      if (recipe.id === 'efficiency_module') return `-${recipe.result_value}% ${t('forge.energy')}`;
-      if (recipe.id === 'thermal_paste_pro') return `-${recipe.result_value}% ${t('forge.heat')}`;
+      if (recipe.id === 'hashrate_booster') return t('forge.descHashrate', { value: recipe.result_value });
+      if (recipe.id === 'efficiency_module') return t('forge.descEfficiency', { value: recipe.result_value });
+      if (recipe.id === 'thermal_paste_pro') return t('forge.descThermal', { value: recipe.result_value });
       return `+${recipe.result_value}%`;
-    case 'cooling_component': return t('forge.addsToInventory');
+    case 'cooling_component': return t('forge.descCooling');
     case 'slot_buff':
-      if (recipe.id === 'durability_shield') return `+${recipe.result_value} ${t('forge.uses')}`;
+      if (recipe.id === 'durability_shield') return t('forge.slotDurabilityUse', { value: recipe.result_value, max: 4 });
       if (recipe.id === 'slot_protector') return t('forge.protectsSlot');
       return '';
     default: return '';
@@ -400,7 +405,7 @@ function getResultDescription(recipe: ForgeRecipe): string {
                 <select v-model="selectedTargetSlotId" class="w-full bg-bg-tertiary border border-border/30 rounded-lg px-3 py-2 text-sm text-text-primary">
                   <option value="">-- {{ t('forge.selectSlot') }} --</option>
                   <option v-for="slot in availableSlots" :key="slot.id" :value="slot.id">
-                    Slot #{{ slot.slot_number }} ({{ slot.tier || 'basic' }} · {{ slot.xp || 0 }} XP)
+                    Slot #{{ slot.slot_number }} ({{ slot.tier || 'basic' }} · {{ slot.xp || 0 }} XP · {{ slot.uses_remaining }}/{{ slot.max_uses }}{{ slot.max_uses > 3 ? ' 🛡️' : '' }})
                   </option>
                 </select>
               </div>

@@ -2027,6 +2027,18 @@
       title: 'Modo Solo Mining (Alpha)',
       description: '¡Nuevo modo <strong class="text-amber-400">Solo Mining</strong>! <strong class="text-red-400">(Versión Alpha)</strong> Mina tus propios bloques de forma independiente. Los bloques vienen en 4 tipos: <strong class="text-orange-400">Bronze (3 seeds)</strong>, <strong class="text-gray-300">Silver (4 seeds)</strong>, <strong class="text-yellow-400">Gold (5 seeds)</strong>, y <strong class="text-cyan-400">Diamond (6 seeds, 50,000 crypto)</strong>. Debes encontrar <strong class="text-emerald-400">todos los seeds</strong> en <strong class="text-red-400">30 minutos</strong> para obtener la recompensa del bloque. Si se acaba el tiempo, pierdes el bloque. ¡Mayor riesgo, mayor recompensa! Requiere <strong class="text-amber-400">Premium</strong>.',
     },
+    forgeDescriptions: {
+      title: 'Forja: Descripciones Mejoradas',
+      description: 'Todas las recetas de la Forja ahora tienen <strong class="text-orange-400">descripciones detalladas</strong> que explican exactamente qué hacen y a qué se aplican (slot o rig). El <strong class="text-emerald-400">🛡️ Escudo de Durabilidad</strong> ahora muestra un indicador visual en el slot protegido y filtra slots que ya tienen el máximo.',
+    },
+    slotXpBoost: {
+      title: 'Aumento de XP por Bloque',
+      description: 'La XP que reciben los slots por bloque minado se ha <strong class="text-amber-400">aumentado significativamente</strong>.<br>🥉 Bronze: 8 → <strong class="text-orange-400">125 XP</strong><br>🥈 Silver: 12 → <strong class="text-gray-300">190 XP</strong><br>🥇 Gold: 20 → <strong class="text-yellow-400">320 XP</strong><br>¡Sube de tier mucho más rápido!',
+    },
+    inventoryImproved: {
+      title: 'Inventario Mejorado',
+      description: 'Los items del inventario ahora muestran sus <strong class="text-amber-400">nombres reales</strong> en vez de solo stats. Tarjetas, cooling, packs de XP y más se identifican fácilmente. Además, los <strong class="text-cyan-400">iconos y textos son más grandes</strong> para mejor legibilidad.',
+    },
     button: '¡Entendido!',
   },
 
@@ -2116,8 +2128,14 @@
     energy: 'Energía',
     heat: 'Calor',
     uses: 'uso(s)',
-    addsToInventory: 'Se agrega al inventario',
-    protectsSlot: 'Previene la próxima destrucción del slot',
+    descXpGrant: '⚡ +{value} XP al slot para subir de tier',
+    descHashrate: '⛏️ +{value}% hashrate permanente al rig',
+    descEfficiency: '🔋 -{value}% consumo de energía permanente al rig',
+    descThermal: '❄️ -{value}% generación de calor permanente al rig',
+    descCooling: '🧊 Componente de cooling, se agrega al inventario',
+    slotDurabilityUse: '🛡️ +{value} uso extra al slot antes de destruirse (máx {max})',
+    slotAlreadyShielded: 'Ya tiene escudo',
+    protectsSlot: '🔒 Protege el slot: evita la próxima destrucción',
     categories: {
       all: 'Todos',
       tier_kit: 'Kits de Tier',

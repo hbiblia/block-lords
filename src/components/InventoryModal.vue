@@ -454,16 +454,16 @@ const allItems = computed<ItemSlot[]>(() => [
   ...groupedCards.value.map(g => ({
     type: 'card' as const, id: g.card_id,
     icon: g.card_type === 'combo' ? '⚡📡' : g.card_type === 'energy' ? '⚡' : '📡',
-    label: `+${g.amount}${g.card_type === 'combo' ? '' : '%'}`, badge: `x${g.codes.length}`,
+    label: getCardName(g.card_id), badge: `x${g.codes.length}`,
     tier: g.tier, cardType: g.card_type,
   })),
   ...inventoryStore.coolingItems.map(c => ({
     type: 'cooling' as const, id: c.inventory_id, icon: '❄️',
-    label: `-${c.cooling_power}°`, badge: `x${c.quantity}`, tier: c.tier,
+    label: getCoolingName(c.id, c.name), badge: `x${c.quantity}`, tier: c.tier,
   })),
   ...groupedModdedCooling.value.map(g => ({
     type: 'modded_cooling' as const, id: g.groupKey, icon: '❄️',
-    label: `-${g.representative.effective_cooling_power.toFixed(1)}°`,
+    label: getCoolingName(g.representative.cooling_item_id, g.representative.name),
     badge: g.count > 1 ? `x${g.count}` : `${g.representative.mod_slots_used}/${g.representative.max_mod_slots}`,
     tier: g.representative.tier,
   })),
@@ -485,7 +485,7 @@ const allItems = computed<ItemSlot[]>(() => [
   })),
   ...inventoryStore.expPackItems.map(e => ({
     type: 'exp_pack' as const, id: e.item_id, icon: '📖',
-    label: `+${e.xp_amount} XP`, badge: `x${e.quantity}`, tier: e.tier,
+    label: e.name || getExpPackName(e.item_id), badge: `x${e.quantity}`, tier: e.tier,
   })),
 ]);
 
@@ -805,11 +805,11 @@ async function applyPatchToRig(rigId: string) {
                       : 'hover:scale-[1.02] hover:brightness-110'
                   ]"
                 >
-                  <span class="absolute top-0 left-0.5 text-[7px] uppercase font-bold" :class="getSlotTierColor(item)">{{ getSlotTierLetter(item) }}</span>
-                  <span v-if="item.type === 'modded_cooling'" class="absolute top-0 right-0 text-[7px] bg-fuchsia-500/40 text-fuchsia-300 rounded px-0.5">🔧</span>
-                  <span class="text-lg sm:text-xl leading-none">{{ item.icon }}</span>
-                  <span class="text-[7px] sm:text-[8px] truncate w-full text-center leading-tight" :class="getSlotLabelColor(item)">{{ item.label }}</span>
-                  <span class="absolute bottom-0 right-0.5 text-[8px] font-mono font-bold text-white bg-black/50 px-0.5 rounded">{{ item.badge }}</span>
+                  <span class="absolute top-0 left-0.5 text-[8px] sm:text-[9px] uppercase font-bold" :class="getSlotTierColor(item)">{{ getSlotTierLetter(item) }}</span>
+                  <span v-if="item.type === 'modded_cooling'" class="absolute top-0 right-0 text-[8px] bg-fuchsia-500/40 text-fuchsia-300 rounded px-0.5">🔧</span>
+                  <span class="text-xl sm:text-2xl leading-none">{{ item.icon }}</span>
+                  <span class="text-[9px] sm:text-[10px] w-full text-center leading-tight line-clamp-2 break-words" :class="getSlotLabelColor(item)">{{ item.label }}</span>
+                  <span class="absolute bottom-0 right-0.5 text-[9px] sm:text-[10px] font-mono font-bold text-white bg-black/50 px-0.5 rounded">{{ item.badge }}</span>
                 </button>
 
                 <!-- Empty slots -->
