@@ -23,7 +23,7 @@ function startScanAnimation() {
     const newNums: Record<number, string> = {};
     for (const seed of soloStore.seeds) {
       if (!seed.found) {
-        newNums[seed.index] = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+        newNums[seed.index] = String(Math.floor(Math.random() * soloStore.config.pool_size)).padStart(4, '0');
       }
     }
     scanningNumbers.value = newNums;
@@ -38,7 +38,7 @@ const isMining = computed(() =>
   soloStore.currentBlock && miningStore.soloEffectiveHashrate > 0 && soloStore.blockTimeRemaining > 0
 );
 
-const scansPerSecond = computed(() => Math.floor(miningStore.soloEffectiveHashrate / 100));
+const scansPerSecond = computed(() => Math.floor(miningStore.soloEffectiveHashrate / soloStore.config.scan_divisor));
 
 onMounted(() => { if (isMining.value) startScanAnimation(); });
 onUnmounted(() => stopScanAnimation());
@@ -74,12 +74,22 @@ watch(() => soloStore.seeds, (newSeeds) => {
 watch(() => soloStore.currentBlock?.block_number, () => {
   recentlyFoundSeeds.value.clear();
   prevFoundSet.value.clear();
-  showAllSeedsFound.value = false;
+  // Don't reset showAllSeedsFound here — let the timeout handle it
+  // so the celebration stays visible even after the block closes
 });
 
 // All seeds found celebration
 const showAllSeedsFound = ref(false);
 let allSeedsTimeout: number | null = null;
+
+// Capture block info at the moment all seeds are found, so we can show
+// the celebration even after the server closes the block
+const completedBlockInfo = ref<{ type: string; reward: number; seedsTotal: number } | null>(null);
+
+const completedBlockConfig = computed(() => {
+  const type = completedBlockInfo.value?.type ?? 'bronze';
+  return blockTypeConfig[type] ?? blockTypeConfig.bronze;
+});
 
 watch(() => soloStore.seedsFound, (found, oldFound) => {
   if (
@@ -88,12 +98,19 @@ watch(() => soloStore.seedsFound, (found, oldFound) => {
     oldFound < soloStore.seedsTotal &&
     soloStore.currentBlock
   ) {
+    // Snapshot the block info before it gets cleared
+    completedBlockInfo.value = {
+      type: soloStore.blockType ?? 'bronze',
+      reward: soloStore.blockReward,
+      seedsTotal: soloStore.seedsTotal,
+    };
     // Small delay so the last seed animation plays first
     setTimeout(() => {
       showAllSeedsFound.value = true;
       if (allSeedsTimeout) clearTimeout(allSeedsTimeout);
       allSeedsTimeout = window.setTimeout(() => {
         showAllSeedsFound.value = false;
+        completedBlockInfo.value = null;
       }, 5000);
     }, 800);
   }
@@ -137,7 +154,7 @@ const timeAlertLevel = computed(() => {
 });
 
 const timeProgressPercent = computed(() => {
-  const total = 1800; // 30 min
+  const total = soloStore.config.block_time_minutes * 60;
   const remaining = soloStore.blockTimeRemaining;
   return Math.max(0, 100 - (remaining / total * 100));
 });
@@ -314,48 +331,6 @@ const timeProgressPercent = computed(() => {
               </div>
             </div>
 
-            <!-- All Seeds Found Celebration -->
-            <Transition name="seeds-complete">
-              <div v-if="showAllSeedsFound"
-                class="relative mb-3 sm:mb-4 rounded-xl overflow-hidden">
-                <!-- Animated background -->
-                <div class="absolute inset-0 seeds-complete-bg rounded-xl"
-                  :class="soloStore.blockType === 'diamond' ? 'bg-cyan-500/10' : soloStore.blockType === 'gold' ? 'bg-yellow-500/10' : soloStore.blockType === 'silver' ? 'bg-gray-300/10' : 'bg-amber-500/10'">
-                </div>
-
-                <!-- Floating particles -->
-                <div class="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
-                  <div v-for="n in 12" :key="'cp-' + n"
-                    class="complete-particle absolute w-1.5 h-1.5 rounded-full"
-                    :class="soloStore.blockType === 'diamond' ? 'bg-cyan-400' : soloStore.blockType === 'gold' ? 'bg-yellow-400' : soloStore.blockType === 'silver' ? 'bg-gray-300' : 'bg-amber-500'"
-                    :style="{
-                      left: (Math.random() * 100) + '%',
-                      bottom: '-5%',
-                      animationDelay: (n * 0.15) + 's',
-                      animationDuration: (1.5 + Math.random()) + 's',
-                    }">
-                  </div>
-                </div>
-
-                <!-- Content -->
-                <div class="relative z-10 py-5 sm:py-6 text-center">
-                  <div class="complete-emoji text-4xl sm:text-5xl mb-2">
-                    {{ soloStore.blockType === 'diamond' ? '💎' : soloStore.blockType === 'gold' ? '🥇' : soloStore.blockType === 'silver' ? '🥈' : '🥉' }}
-                  </div>
-                  <div class="complete-text text-lg sm:text-xl font-bold"
-                    :class="currentBlockConfig.color">
-                    ¡Bloque Completado!
-                  </div>
-                  <div class="complete-reward mt-1 text-sm sm:text-base font-mono font-bold text-white">
-                    +{{ formatNumber(soloStore.blockReward) }} crypto
-                  </div>
-                  <div class="complete-sub mt-1 text-[10px] sm:text-xs text-text-muted">
-                    🔑 {{ soloStore.seedsTotal }}/{{ soloStore.seedsTotal }} seeds encontrados
-                  </div>
-                </div>
-              </div>
-            </Transition>
-
             <!-- Grid de Stats (estilo pool con border-left) -->
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-3">
               <!-- Hashrate -->
@@ -377,7 +352,7 @@ const timeProgressPercent = computed(() => {
                   <div class="text-[10px] text-text-muted">Scans/tick</div>
                 </div>
                 <div class="text-lg sm:text-xl font-bold font-mono text-amber-400">
-                  {{ Math.floor(miningStore.soloEffectiveHashrate / 100) }}
+                  {{ Math.floor(miningStore.soloEffectiveHashrate / soloStore.config.scan_divisor) }}
                 </div>
                 <div class="text-[10px] text-text-muted">por tick</div>
               </div>
@@ -420,8 +395,50 @@ const timeProgressPercent = computed(() => {
             </div>
           </template>
 
+          <!-- All Seeds Found Celebration (outside currentBlock template so it persists after block closes) -->
+          <Transition name="seeds-complete">
+            <div v-if="showAllSeedsFound"
+              class="relative mb-3 sm:mb-4 rounded-xl overflow-hidden">
+              <!-- Animated background -->
+              <div class="absolute inset-0 seeds-complete-bg rounded-xl"
+                :class="completedBlockConfig.gradient.replace('from-', 'bg-').replace('/10', '/10')">
+              </div>
+
+              <!-- Floating particles -->
+              <div class="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+                <div v-for="n in 12" :key="'cp-' + n"
+                  class="complete-particle absolute w-1.5 h-1.5 rounded-full"
+                  :class="completedBlockInfo?.type === 'diamond' ? 'bg-cyan-400' : completedBlockInfo?.type === 'gold' ? 'bg-yellow-400' : completedBlockInfo?.type === 'silver' ? 'bg-gray-300' : 'bg-amber-500'"
+                  :style="{
+                    left: (Math.random() * 100) + '%',
+                    bottom: '-5%',
+                    animationDelay: (n * 0.15) + 's',
+                    animationDuration: (1.5 + Math.random()) + 's',
+                  }">
+                </div>
+              </div>
+
+              <!-- Content -->
+              <div class="relative z-10 py-5 sm:py-6 text-center">
+                <div class="complete-emoji text-4xl sm:text-5xl mb-2">
+                  {{ completedBlockInfo?.type === 'diamond' ? '💎' : completedBlockInfo?.type === 'gold' ? '🥇' : completedBlockInfo?.type === 'silver' ? '🥈' : '🥉' }}
+                </div>
+                <div class="complete-text text-lg sm:text-xl font-bold"
+                  :class="completedBlockConfig.color">
+                  ¡Bloque Completado!
+                </div>
+                <div class="complete-reward mt-1 text-sm sm:text-base font-mono font-bold text-white">
+                  +{{ formatNumber(completedBlockInfo?.reward ?? 0) }} crypto
+                </div>
+                <div class="complete-sub mt-1 text-[10px] sm:text-xs text-text-muted">
+                  🔑 {{ completedBlockInfo?.seedsTotal ?? 0 }}/{{ completedBlockInfo?.seedsTotal ?? 0 }} seeds encontrados
+                </div>
+              </div>
+            </div>
+          </Transition>
+
           <!-- Sin bloque activo: esperando -->
-          <div v-else class="text-center py-8 text-text-muted">
+          <div v-if="!soloStore.currentBlock" class="text-center py-8 text-text-muted">
             <div class="text-4xl mb-3">⏳</div>
             <div class="text-lg font-medium mb-1">Esperando bloque...</div>
             <div class="text-sm">El siguiente bloque se asignara automaticamente</div>

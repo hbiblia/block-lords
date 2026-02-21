@@ -979,3 +979,26 @@ CREATE POLICY "Players can view own seeds"
   USING (
     solo_block_id IN (SELECT id FROM solo_mining_blocks WHERE player_id = auth.uid())
   );
+
+-- =====================================================
+-- POLÍTICAS PARA GAME_CONFIG (configuración global)
+-- =====================================================
+
+ALTER TABLE game_config ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Config global pública" ON game_config;
+CREATE POLICY "Config global pública"
+  ON game_config FOR SELECT
+  USING (true);
+-- Nota: INSERT/UPDATE/DELETE solo via funciones SECURITY DEFINER
+
+-- =====================================================
+-- POLÍTICAS PARA EXP_PACKS (catálogo público)
+-- =====================================================
+
+ALTER TABLE exp_packs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Catálogo de exp packs público" ON exp_packs;
+CREATE POLICY "Catálogo de exp packs público"
+  ON exp_packs FOR SELECT
+  USING (true);

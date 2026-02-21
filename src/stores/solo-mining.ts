@@ -54,6 +54,12 @@ interface SoloRecentBlock {
   total_scans: number;
 }
 
+interface SoloConfig {
+  pool_size: number;
+  scan_divisor: number;
+  block_time_minutes: number;
+}
+
 interface SoloMiningState {
   active: boolean;
   has_rental: boolean;
@@ -63,6 +69,7 @@ interface SoloMiningState {
   seeds: SoloSeed[];
   session_stats: SoloSessionStats;
   recent_blocks: SoloRecentBlock[];
+  config: SoloConfig;
 }
 
 const STORAGE_KEY = 'lootmine_solo_mining_cache';
@@ -81,6 +88,8 @@ function saveToCache(data: SoloMiningState) {
   } catch { /* ignore */ }
 }
 
+const DEFAULT_CONFIG: SoloConfig = { pool_size: 10000, scan_divisor: 100, block_time_minutes: 30 };
+
 const DEFAULT_STATE: SoloMiningState = {
   active: false,
   has_rental: false,
@@ -90,6 +99,7 @@ const DEFAULT_STATE: SoloMiningState = {
   seeds: [],
   session_stats: { blocks_completed: 0, blocks_failed: 0, total_earned: 0 },
   recent_blocks: [],
+  config: { ...DEFAULT_CONFIG },
 };
 
 export const useSoloMiningStore = defineStore('soloMining', () => {
@@ -126,6 +136,7 @@ export const useSoloMiningStore = defineStore('soloMining', () => {
   const sessionStats = computed(() => status.value.session_stats);
   const recentBlocks = computed(() => status.value.recent_blocks);
   const totalScans = computed(() => status.value.current_block?.total_scans ?? 0);
+  const config = computed(() => status.value.config ?? DEFAULT_CONFIG);
 
   // Actions
   async function loadStatus() {
@@ -148,6 +159,7 @@ export const useSoloMiningStore = defineStore('soloMining', () => {
         seeds: raw.seeds ?? [],
         session_stats: raw.session_stats ?? { blocks_completed: 0, blocks_failed: 0, total_earned: 0 },
         recent_blocks: raw.recent_blocks ?? [],
+        config: raw.config ?? status.value.config ?? { ...DEFAULT_CONFIG },
       };
 
       status.value = data;
@@ -323,7 +335,7 @@ export const useSoloMiningStore = defineStore('soloMining', () => {
     isActive, miningMode, isSoloMode, hasRental,
     currentBlock, seeds, seedsFound, seedsTotal, seedProgress,
     blockType, blockReward, blockTimeRemaining, rentalTimeRemaining,
-    sessionStats, recentBlocks, totalScans,
+    sessionStats, recentBlocks, totalScans, config,
     // Actions
     loadStatus, activate, deactivate, toggleMode,
     subscribe, unsubscribe, clearState,
