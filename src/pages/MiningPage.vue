@@ -1272,13 +1272,20 @@ onUnmounted(() => {
 
                 <!-- Action buttons -->
                 <div :id="rigIndex === 0 ? 'tour-rig-actions' : undefined" class="flex gap-2">
-                  <button @click="handleToggleRig(playerRig.id)" :disabled="playerRig.condition <= 0"
+                  <button @click="handleToggleRig(playerRig.id)" :disabled="playerRig.condition <= 0 || miningStore.togglingRig === playerRig.id"
                     class="flex-1 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50" :class="playerRig.condition <= 0
                       ? 'bg-status-danger/10 text-status-danger cursor-not-allowed'
-                      : playerRig.is_active
-                        ? 'bg-status-danger/10 text-status-danger hover:bg-status-danger/20'
-                        : 'bg-status-success/10 text-status-success hover:bg-status-success/20'">
-                    {{ playerRig.condition <= 0 ? '🔧 ' + t('mining.repairInInventory') : (playerRig.is_active ? '⏹ ' + t('mining.stop') : '▶ ' + t('mining.start')) }}
+                      : miningStore.togglingRig === playerRig.id
+                        ? 'bg-accent-primary/10 text-accent-primary animate-pulse'
+                        : playerRig.is_active
+                          ? 'bg-status-danger/10 text-status-danger hover:bg-status-danger/20'
+                          : 'bg-status-success/10 text-status-success hover:bg-status-success/20'">
+                    <template v-if="miningStore.togglingRig === playerRig.id">
+                      ⏳ {{ t('mining.applying', 'Aplicando...') }}
+                    </template>
+                    <template v-else>
+                      {{ playerRig.condition <= 0 ? '🔧 ' + t('mining.repairInInventory') : (playerRig.is_active ? '⏹ ' + t('mining.stop') : '▶ ' + t('mining.start')) }}
+                    </template>
                   </button>
                   <button @click="openRigStats(playerRig)"
                     class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all bg-bg-tertiary hover:bg-bg-tertiary/80 text-text-muted hover:text-white"

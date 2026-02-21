@@ -205,6 +205,7 @@
     repairInInventory: 'Reparar en Inventario',
     stop: 'Detener',
     start: 'Iniciar',
+    applying: 'Aplicando...',
     manage: 'Administrar',
     recentBlocks: 'Bloques Recientes',
     noBlocks: 'Sin bloques aún',
@@ -2054,6 +2055,31 @@
       title: 'Inventario Mejorado',
       description: 'Los items del inventario ahora muestran sus <strong class="text-amber-400">nombres reales</strong> en vez de solo stats. Tarjetas, cooling, packs de XP y más se identifican fácilmente. Además, los <strong class="text-cyan-400">iconos y textos son más grandes</strong> para mejor legibilidad.',
     },
+    tickSystem: {
+      title: 'Sistema de Actualización Optimizado',
+      description: 'Todos los datos de minería ahora se actualizan con un <strong class="text-amber-400">sistema centralizado de tick</strong> cada 30 segundos. Esto reemplaza las múltiples conexiones Realtime por un mecanismo <strong class="text-emerald-400">más eficiente y estable</strong>. Temperatura, condición, cooling, boosts, energía e internet se sincronizan automáticamente. Los <strong class="text-cyan-400">contadores de tiempo se interpolan cada segundo</strong> para una experiencia fluida.',
+    },
+    rigToggleFeedback: {
+      title: 'Feedback Visual en Rigs',
+      description: 'Al encender o apagar un rig, el botón ahora muestra <strong class="text-amber-400">⏳ Aplicando...</strong> con animación mientras se procesa la acción. El estado del rig se actualiza <strong class="text-emerald-400">instantáneamente</strong> de forma optimista y luego se confirma con el servidor.',
+    },
+    soloRecentBlocks: {
+      title: 'Bloques Recientes de Solo Mining',
+      description: 'El tab de <strong class="text-amber-400">Solo Mining</strong> ahora muestra tus <strong class="text-cyan-400">bloques recientes</strong> con colores por tipo (Bronze, Silver, Gold, Diamond), estado completado/fallido, recompensa obtenida y scans realizados.',
+    },
+    soloRewardsUp: {
+      title: 'Aumento de Recompensas Solo Mining',
+      description: 'Las recompensas de bloques de solo mining se han <strong class="text-amber-400">aumentado significativamente</strong>:<br>🥉 Bronze: 4,000 → <strong class="text-orange-400">6,000</strong><br>🥈 Silver: 6,000 → <strong class="text-gray-300">10,000</strong><br>🥇 Gold: 10,000 → <strong class="text-yellow-400">20,000</strong><br>💎 Diamond: 50,000 → <strong class="text-cyan-400">60,000</strong>',
+    },
+    soloBeta: {
+      title: 'Solo Mining entra en Beta',
+      description: 'Solo Mining pasa de <strong class="text-red-400">Alpha</strong> a <strong class="text-emerald-400">Beta</strong>! Después de pruebas y ajustes, el modo es ahora más estable y balanceado. Las recompensas han sido ajustadas, el historial de bloques es visible y la experiencia es más fluida en general.',
+    },
+    soloAutoClose: {
+      title: 'Cierre automático al encontrar Seeds',
+      description: 'Cuando se encuentran todos los seeds, el bloque ahora se <strong class="text-emerald-400">cierra automáticamente</strong> y se <strong class="text-amber-400">crea uno nuevo</strong> de inmediato. ¡No más esperar a que termine el timer!',
+    },
+    groupSystem: 'Sistema y UX',
     button: '¡Entendido!',
   },
 

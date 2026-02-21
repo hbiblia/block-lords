@@ -205,6 +205,7 @@ export default {
     repairInInventory: 'Repair in Inventory',
     stop: 'Stop',
     start: 'Start',
+    applying: 'Applying...',
     manage: 'Manage',
     recentBlocks: 'Recent Blocks',
     noBlocks: 'No blocks yet',
@@ -2054,6 +2055,31 @@ export default {
       title: 'Improved Inventory',
       description: 'Inventory items now display their <strong class="text-amber-400">actual names</strong> instead of just stats. Cards, cooling, XP packs and more are easily identifiable. Also, <strong class="text-cyan-400">icons and text are larger</strong> for better readability.',
     },
+    tickSystem: {
+      title: 'Optimized Update System',
+      description: 'All mining data now updates via a <strong class="text-amber-400">centralized tick system</strong> every 30 seconds. This replaces multiple Realtime connections with a <strong class="text-emerald-400">more efficient and stable</strong> mechanism. Temperature, condition, cooling, boosts, energy and internet sync automatically. <strong class="text-cyan-400">Timers interpolate every second</strong> for a smooth experience.',
+    },
+    rigToggleFeedback: {
+      title: 'Visual Rig Feedback',
+      description: 'When turning a rig on or off, the button now shows <strong class="text-amber-400">⏳ Applying...</strong> with animation while processing. Rig state updates <strong class="text-emerald-400">instantly</strong> with optimistic update, then confirms with the server.',
+    },
+    soloRecentBlocks: {
+      title: 'Solo Mining Recent Blocks',
+      description: 'The <strong class="text-amber-400">Solo Mining</strong> tab now displays your <strong class="text-cyan-400">recent blocks</strong> with type-specific colors (Bronze, Silver, Gold, Diamond), completed/failed status, earned reward and total scans.',
+    },
+    soloRewardsUp: {
+      title: 'Solo Mining Rewards Increased',
+      description: 'Solo mining block rewards have been <strong class="text-amber-400">significantly increased</strong>:<br>🥉 Bronze: 4,000 → <strong class="text-orange-400">6,000</strong><br>🥈 Silver: 6,000 → <strong class="text-gray-300">10,000</strong><br>🥇 Gold: 10,000 → <strong class="text-yellow-400">20,000</strong><br>💎 Diamond: 50,000 → <strong class="text-cyan-400">60,000</strong>',
+    },
+    soloBeta: {
+      title: 'Solo Mining enters Beta',
+      description: 'Solo Mining moves from <strong class="text-red-400">Alpha</strong> to <strong class="text-emerald-400">Beta</strong>! After testing and adjustments, the mode is now more stable and balanced. Rewards have been tuned, block history is visible, and the experience is smoother overall.',
+    },
+    soloAutoClose: {
+      title: 'Auto-close on Seeds Found',
+      description: 'When all seeds are found, the block now <strong class="text-emerald-400">closes automatically</strong> and a <strong class="text-amber-400">new block is created</strong> right away. No more waiting for the timer to end!',
+    },
+    groupSystem: 'System & UX',
     button: 'Got it!',
   },
 

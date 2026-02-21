@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
 // Versión actual de la app (actualizar esto cuando haya cambios importantes)
-const CURRENT_VERSION = '2.8.0';
+const CURRENT_VERSION = '2.9.0';
 const STORAGE_KEY = 'lootmine-last-seen-version';
 
 const route = useRoute();
@@ -62,29 +62,56 @@ function closeModal() {
         </div>
 
         <!-- Contenido scrollable -->
-        <div class="space-y-3 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          <!-- Forge Descriptions -->
-          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
-            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>🔨</span> {{ t('updateModal.forgeDescriptions.title') }}
-            </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.forgeDescriptions.description')"></p>
+        <div class="space-y-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
+
+          <!-- Grupo: Solo Mining -->
+          <div>
+            <p class="text-[10px] font-bold uppercase tracking-widest text-amber-400/70 mb-2">⛏️ Solo Mining</p>
+            <div class="space-y-2">
+              <div class="p-2 bg-white/5 border border-border/30 rounded-lg">
+                <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+                  <span>💰</span> {{ t('updateModal.soloRewardsUp.title') }}
+                </h3>
+                <p class="text-text-muted text-sm" v-html="t('updateModal.soloRewardsUp.description')"></p>
+              </div>
+              <div class="p-2 bg-white/5 border border-border/30 rounded-lg">
+                <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+                  <span>📋</span> {{ t('updateModal.soloRecentBlocks.title') }}
+                </h3>
+                <p class="text-text-muted text-sm" v-html="t('updateModal.soloRecentBlocks.description')"></p>
+              </div>
+              <div class="p-2 bg-white/5 border border-border/30 rounded-lg">
+                <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+                  <span>🚀</span> {{ t('updateModal.soloBeta.title') }}
+                </h3>
+                <p class="text-text-muted text-sm" v-html="t('updateModal.soloBeta.description')"></p>
+              </div>
+              <div class="p-2 bg-white/5 border border-border/30 rounded-lg">
+                <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+                  <span>🔄</span> {{ t('updateModal.soloAutoClose.title') }}
+                </h3>
+                <p class="text-text-muted text-sm" v-html="t('updateModal.soloAutoClose.description')"></p>
+              </div>
+            </div>
           </div>
 
-          <!-- Slot XP Boost -->
-          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
-            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>⚡</span> {{ t('updateModal.slotXpBoost.title') }}
-            </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.slotXpBoost.description')"></p>
-          </div>
-
-          <!-- Inventory Improvements -->
-          <div class="p-3 bg-white/5 border border-border/30 rounded-lg">
-            <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
-              <span>🎒</span> {{ t('updateModal.inventoryImproved.title') }}
-            </h3>
-            <p class="text-text-muted text-sm" v-html="t('updateModal.inventoryImproved.description')"></p>
+          <!-- Grupo: System & UX -->
+          <div>
+            <p class="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70 mb-2">🔧 {{ t('updateModal.groupSystem') }}</p>
+            <div class="space-y-2">
+              <div class="p-2 bg-white/5 border border-border/30 rounded-lg">
+                <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+                  <span>⚡</span> {{ t('updateModal.tickSystem.title') }}
+                </h3>
+                <p class="text-text-muted text-sm" v-html="t('updateModal.tickSystem.description')"></p>
+              </div>
+              <div class="p-2 bg-white/5 border border-border/30 rounded-lg">
+                <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+                  <span>🖥️</span> {{ t('updateModal.rigToggleFeedback.title') }}
+                </h3>
+                <p class="text-text-muted text-sm" v-html="t('updateModal.rigToggleFeedback.description')"></p>
+              </div>
+            </div>
           </div>
 
         </div>

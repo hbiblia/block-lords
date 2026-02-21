@@ -671,9 +671,15 @@ export const useMiningStore = defineStore('mining', () => {
           toastStore.rigToggled(rig.rig.id, true);
         }
       } else {
+        // Optimistic update for turning OFF
+        rig.is_active = false;
+        rig.activated_at = null;
         playSound('click');
         toastStore.rigToggled(rig.rig.id, false);
       }
+
+      // Refresh full state from server (replaces realtime handler)
+      await loadData();
 
       return result;
     } catch (e) {
