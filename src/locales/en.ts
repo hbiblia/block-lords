@@ -2033,7 +2033,7 @@ export default {
     },
     newSupply: {
       title: 'New Supply: Rig Patch',
-      description: 'A new item is available in the Market: <strong class="text-amber-400">🩹 Rig Patch</strong> (500 GC). It restores <strong class="text-emerald-400">+35% condition</strong> to your rig without counting as a repair. Trade-off: <strong class="text-red-400">-10% hashrate</strong> and <strong class="text-orange-400">+15% consumption</strong> per patch applied (cumulative).',
+      description: 'A new item is available in the Market: <strong class="text-amber-400">🩹 Rig Patch</strong> (10,000 GC). It restores <strong class="text-emerald-400">+35% condition</strong> to your rig without counting as a repair. Trade-off: <strong class="text-red-400">-10% hashrate</strong> and <strong class="text-orange-400">+15% consumption</strong> per patch applied (cumulative).',
     },
     repairPriceDown: {
       title: 'Repair Price Reduction',

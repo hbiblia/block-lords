@@ -2033,7 +2033,7 @@
     },
     newSupply: {
       title: 'Nuevo Suministro: Rig Patch',
-      description: 'Un nuevo item disponible en el Mercado: <strong class="text-amber-400">🩹 Rig Patch</strong> (500 GC). Restaura <strong class="text-emerald-400">+35% condición</strong> a tu rig sin contar como reparación. A cambio: <strong class="text-red-400">-10% hashrate</strong> y <strong class="text-orange-400">+15% consumo</strong> por parche aplicado (acumulativo).',
+      description: 'Un nuevo item disponible en el Mercado: <strong class="text-amber-400">🩹 Rig Patch</strong> (10,000 GC). Restaura <strong class="text-emerald-400">+35% condición</strong> a tu rig sin contar como reparación. A cambio: <strong class="text-red-400">-10% hashrate</strong> y <strong class="text-orange-400">+15% consumo</strong> por parche aplicado (acumulativo).',
     },
     repairPriceDown: {
       title: 'Bajada de Precio de Reparación',

@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS game_config (
   premium_cost_ron NUMERIC NOT NULL DEFAULT 5,                 -- Costo premium mensual en RON
   premium_max_resources INT NOT NULL DEFAULT 1000,             -- Recursos máximos para premium
   premium_reward_multiplier NUMERIC NOT NULL DEFAULT 1.5,      -- Multiplicador de recompensa premium
-  rig_patch_cost_gamecoin INT NOT NULL DEFAULT 500,            -- Costo de patch en gamecoin
+  rig_patch_cost_gamecoin INT NOT NULL DEFAULT 10000,           -- Costo de patch en gamecoin
 
   -- ========== EXCHANGE RATE (Stochastic) ==========
   exchange_rate_mean NUMERIC NOT NULL DEFAULT 10.0,            -- Media de equilibrio

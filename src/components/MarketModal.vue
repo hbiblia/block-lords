@@ -573,8 +573,8 @@ function requestBuyPatch() {
     type: 'patch',
     id: 'rig_patch',
     name: t('market.patch.name', 'Rig Patch'),
-    price: 500,
-    description: t('market.patch.desc', 'Restores +50% rig condition. Penalty: -10% hashrate, +15% consumption.'),
+    price: 10000,
+    description: t('market.patch.desc', 'Restores +35% rig condition. Penalty: -10% hashrate, +15% consumption.'),
     currency: 'gamecoin',
   };
   showConfirm.value = true;
@@ -1251,7 +1251,7 @@ watch(() => props.show, (newVal) => {
 
                   <div class="flex items-center justify-between mb-0.5 sm:mb-1">
                     <span class="text-[10px] sm:text-xs text-text-muted">{{ t('rigManage.condition') }}</span>
-                    <span class="font-mono font-bold text-xs sm:text-sm text-status-success">+50%</span>
+                    <span class="font-mono font-bold text-xs sm:text-sm text-status-success">+35%</span>
                   </div>
 
                   <div class="flex items-center justify-between mb-0.5 sm:mb-1">
@@ -1264,7 +1264,7 @@ watch(() => props.show, (newVal) => {
                     <span class="font-mono text-xs sm:text-sm text-status-warning">+15%</span>
                   </div>
 
-                  <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ t('market.patch.desc', 'Restores +50% rig condition. Penalty: -10% hashrate, +15% consumption.') }}</p>
+                  <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ t('market.patch.desc', 'Restores +35% rig condition. Penalty: -10% hashrate, +15% consumption.') }}</p>
 
                   <div v-if="marketStore.getPatchOwned() > 0" class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs mb-1 sm:mb-2">
                     <span class="px-1.5 sm:px-2 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-400">
@@ -1276,12 +1276,12 @@ watch(() => props.show, (newVal) => {
                     <button
                       @click="requestBuyPatch()"
                       class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
-                      :class="balance >= 500
+                      :class="balance >= 10000
                         ? 'bg-fuchsia-500 text-white hover:bg-fuchsia-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-                      :disabled="purchaseDisabled || balance < 500"
+                      :disabled="purchaseDisabled || balance < 10000"
                     >
-                      {{ buying ? '...' : '500 🪙' }}
+                      {{ buying ? '...' : '10,000 🪙' }}
                     </button>
                   </div>
                 </div>

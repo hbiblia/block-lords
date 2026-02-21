@@ -1085,7 +1085,7 @@ async function applyPatchToRig(rigId: string) {
                 <div class="grid grid-cols-3 gap-2 mt-2">
                   <div class="text-center p-1.5 rounded bg-bg-secondary">
                     <div class="text-[10px] text-text-muted">{{ t('rigManage.condition', 'Condición') }}</div>
-                    <div class="font-mono font-bold text-sm text-emerald-400">+50%</div>
+                    <div class="font-mono font-bold text-sm text-emerald-400">+35%</div>
                   </div>
                   <div class="text-center p-1.5 rounded bg-bg-secondary">
                     <div class="text-[10px] text-text-muted">Hashrate</div>
