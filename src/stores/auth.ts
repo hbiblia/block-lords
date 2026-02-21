@@ -4,6 +4,7 @@ import { supabase } from '@/utils/supabase';
 import { createPlayerProfile, getPlayerProfile, applyPassiveRegeneration, applyReferralCode, connectionState, pingApi, updatePlayerHeartbeat } from '@/utils/api';
 import { useNotificationsStore } from './notifications';
 import { useInventoryStore } from './inventory';
+import { useGameConfigStore } from './game-config';
 import type { User, Session } from '@supabase/supabase-js';
 
 // Timeout para inicialización (10 segundos)
@@ -210,7 +211,8 @@ export const useAuthStore = defineStore('auth', () => {
           }
         }
 
-        // Marcar como online (no bloquear, ejecutar en background)
+        // Cargar config del juego y marcar online (background, no bloquear)
+        useGameConfigStore().fetchSettings();
         (async () => {
           try {
             await supabase.rpc('update_online_status', { p_player_id: userId, p_is_online: true });

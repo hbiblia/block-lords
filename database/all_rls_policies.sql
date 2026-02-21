@@ -981,14 +981,14 @@ CREATE POLICY "Players can view own seeds"
   );
 
 -- =====================================================
--- POLÍTICAS PARA GAME_CONFIG (configuración global)
+-- POLÍTICAS PARA GAME_SETTINGS (configuración global key-value)
 -- =====================================================
 
-ALTER TABLE game_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_settings ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Config global pública" ON game_config;
+DROP POLICY IF EXISTS "Config global pública" ON game_settings;
 CREATE POLICY "Config global pública"
-  ON game_config FOR SELECT
+  ON game_settings FOR SELECT
   USING (true);
 -- Nota: INSERT/UPDATE/DELETE solo via funciones SECURITY DEFINER
 

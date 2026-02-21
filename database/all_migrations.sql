@@ -1266,6 +1266,105 @@ INSERT INTO exp_packs (id, name, description, xp_amount, base_price, tier) VALUE
 ON CONFLICT (id) DO NOTHING;
 
 -- =====================================================
+-- GAME SETTINGS (key-value configuration table)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS game_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  value_type TEXT NOT NULL DEFAULT 'numeric' CHECK (value_type IN ('numeric', 'int', 'text', 'bool')),
+  category TEXT NOT NULL DEFAULT 'general',
+  description TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO game_settings (key, value, value_type, category, description) VALUES
+  -- ECONOMÍA
+  ('crypto_to_ron_rate',        '0.00001',  'numeric', 'economy',       'Tasa de conversión crypto→RON'),
+  ('min_crypto_conversion',     '100000',   'numeric', 'economy',       'Mínimo crypto para convertir a RON'),
+  ('withdrawal_fee_standard',   '0.25',     'numeric', 'economy',       'Fee retiro estándar (25%)'),
+  ('withdrawal_fee_premium',    '0.10',     'numeric', 'economy',       'Fee retiro premium (10%)'),
+  ('min_withdrawal_ron',        '0.01',     'numeric', 'economy',       'Mínimo retiro en RON'),
+  ('premium_cost_ron',          '5',        'numeric', 'economy',       'Costo premium mensual en RON'),
+  ('premium_max_resources',     '1000',     'int',     'economy',       'Recursos máximos para premium'),
+  ('premium_reward_multiplier', '1.5',      'numeric', 'economy',       'Multiplicador de recompensa premium'),
+  ('rig_patch_cost_gamecoin',   '10000',    'int',     'economy',       'Costo de patch en gamecoin'),
+  -- EXCHANGE RATE (Stochastic)
+  ('exchange_rate_mean',            '10.0',  'numeric', 'exchange_rate', 'Media de equilibrio'),
+  ('exchange_rate_volatility',      '0.5',   'numeric', 'exchange_rate', 'Volatilidad'),
+  ('exchange_rate_reversion_speed', '0.02',  'numeric', 'exchange_rate', 'Velocidad de reversión a la media'),
+  ('exchange_rate_min',             '0.5',   'numeric', 'exchange_rate', 'Tasa mínima'),
+  ('exchange_rate_max',             '1000.0','numeric', 'exchange_rate', 'Tasa máxima'),
+  -- POOL MINING: Recompensas
+  ('base_mining_reward',         '100',   'numeric', 'pool_mining', 'Recompensa base (sistema halving)'),
+  ('reward_halving_interval',    '10000', 'int',     'pool_mining', 'Bloques entre cada halving'),
+  ('pool_bronze_reward',         '4000',  'numeric', 'pool_mining', 'Recompensa bloque bronce'),
+  ('pool_silver_reward',         '6000',  'numeric', 'pool_mining', 'Recompensa bloque plata'),
+  ('pool_gold_reward',           '10000', 'numeric', 'pool_mining', 'Recompensa bloque oro'),
+  ('mining_tick_duration_minutes','0.5',  'numeric', 'pool_mining', 'Duración del tick de minería (0.5 = 30s)'),
+  -- POOL MINING: Probabilidades de bloque
+  ('bronze_prob_5',     '0.80', 'numeric', 'pool_mining', 'Prob bronce (≤5 mineros)'),
+  ('silver_cutoff_5',   '0.97', 'numeric', 'pool_mining', 'Cutoff plata (≤5 mineros)'),
+  ('bronze_prob_15',    '0.70', 'numeric', 'pool_mining', 'Prob bronce (≤15 mineros)'),
+  ('silver_cutoff_15',  '0.95', 'numeric', 'pool_mining', 'Cutoff plata (≤15 mineros)'),
+  ('bronze_prob_30',    '0.60', 'numeric', 'pool_mining', 'Prob bronce (≤30 mineros)'),
+  ('silver_cutoff_30',  '0.90', 'numeric', 'pool_mining', 'Cutoff plata (≤30 mineros)'),
+  ('bronze_prob_high',  '0.50', 'numeric', 'pool_mining', 'Prob bronce (>30 mineros)'),
+  ('silver_cutoff_high','0.85', 'numeric', 'pool_mining', 'Cutoff plata (>30 mineros)'),
+  -- POOL MINING: Dificultad
+  ('difficulty_adjust_period',     '1000',    'int',     'pool_mining', 'Período de ajuste (bloques)'),
+  ('target_block_time_seconds',    '600',     'int',     'pool_mining', 'Tiempo objetivo por bloque (10min)'),
+  ('min_difficulty',               '100',     'numeric', 'pool_mining', 'Dificultad mínima'),
+  ('max_difficulty',               '1000000', 'numeric', 'pool_mining', 'Dificultad máxima'),
+  ('max_difficulty_change',        '0.25',    'numeric', 'pool_mining', 'Cambio máximo por ajuste (±25%)'),
+  ('default_difficulty',           '15000',   'numeric', 'pool_mining', 'Dificultad por defecto'),
+  ('default_target_shares',        '100',     'int',     'pool_mining', 'Shares objetivo por defecto'),
+  ('difficulty_smoothing_factor',  '0.7',     'numeric', 'pool_mining', 'Factor de suavizado adaptativo'),
+  ('difficulty_no_activity_ratio', '0.5',     'numeric', 'pool_mining', 'Reducción si no hay actividad'),
+  -- MECÁNICAS DE RIG
+  ('quick_toggle_threshold_seconds', '60',   'int',     'rig_mechanics', 'Umbral de toggle rápido'),
+  ('quick_toggle_temp_penalty',      '10',   'int',     'rig_mechanics', 'Penalización de temperatura (x10)'),
+  ('power_flux_min',                 '0.85', 'numeric', 'rig_mechanics', 'Consumo mínimo ratio'),
+  ('power_flux_range',               '0.15', 'numeric', 'rig_mechanics', 'Rango de fluctuación'),
+  -- REGENERACIÓN DE RECURSOS
+  ('energy_regen_minutes',    '10',   'int',     'resource_regen', 'Intervalo regeneración energía'),
+  ('internet_regen_minutes',  '15',   'int',     'resource_regen', 'Intervalo regeneración internet'),
+  ('offline_time_cap_minutes','1440', 'int',     'resource_regen', 'Cap tiempo offline (24h)'),
+  ('resource_regen_cap_ratio','0.5',  'numeric', 'resource_regen', 'Cap de regeneración (50%)'),
+  -- REPUTACIÓN
+  ('rep_high_threshold',  '80',   'int',     'reputation', 'Umbral reputación alta'),
+  ('rep_high_bonus_rate', '0.01', 'numeric', 'reputation', 'Bonus por punto sobre umbral'),
+  ('rep_low_threshold',   '50',   'int',     'reputation', 'Umbral reputación baja'),
+  ('rep_low_base',        '0.5',  'numeric', 'reputation', 'Base para rep baja'),
+  -- PROGRESIÓN
+  ('streak_cooldown_hours',   '20',   'int',     'progression', 'Cooldown entre claims de streak'),
+  ('streak_expiration_hours', '48',   'int',     'progression', 'Expiración del streak'),
+  ('streak_gamecoin_per_day', '10',   'int',     'progression', 'Gamecoin base por día de streak'),
+  ('epic_mission_chance',     '0.25', 'numeric', 'progression', 'Probabilidad de misión épica'),
+  -- SOLO MINING: Dificultad
+  ('solo_pool_size',          '10000', 'int',     'solo_mining', 'Tamaño del pool solo'),
+  ('solo_scan_divisor',       '100',   'int',     'solo_mining', 'Divisor de escaneo solo'),
+  ('solo_block_time_minutes', '30',    'int',     'solo_mining', 'Tiempo de bloque solo (minutos)'),
+  -- SOLO MINING: Bloques
+  ('solo_bronze_prob',    '0.30',  'numeric', 'solo_mining', 'Prob bloque bronce solo'),
+  ('solo_bronze_seeds',   '3',     'int',     'solo_mining', 'Seeds bloque bronce solo'),
+  ('solo_bronze_reward',  '6000',  'numeric', 'solo_mining', 'Recompensa bronce solo'),
+  ('solo_silver_prob',    '0.65',  'numeric', 'solo_mining', 'Prob bloque plata solo'),
+  ('solo_silver_seeds',   '4',     'int',     'solo_mining', 'Seeds bloque plata solo'),
+  ('solo_silver_reward',  '10000', 'numeric', 'solo_mining', 'Recompensa plata solo'),
+  ('solo_gold_prob',      '0.90',  'numeric', 'solo_mining', 'Prob bloque oro solo'),
+  ('solo_gold_seeds',     '5',     'int',     'solo_mining', 'Seeds bloque oro solo'),
+  ('solo_gold_reward',    '20000', 'numeric', 'solo_mining', 'Recompensa oro solo'),
+  ('solo_diamond_seeds',  '7',     'int',     'solo_mining', 'Seeds bloque diamante solo'),
+  ('solo_diamond_reward', '60000', 'numeric', 'solo_mining', 'Recompensa diamante solo'),
+  -- SOLO MINING: XP
+  ('solo_xp_bronze',  '125',  'int', 'solo_mining', 'XP bloque bronce solo'),
+  ('solo_xp_silver',  '190',  'int', 'solo_mining', 'XP bloque plata solo'),
+  ('solo_xp_gold',    '320',  'int', 'solo_mining', 'XP bloque oro solo'),
+  ('solo_xp_diamond', '1600', 'int', 'solo_mining', 'XP bloque diamante solo')
+ON CONFLICT (key) DO NOTHING;
+
+-- =====================================================
 -- NOTA: Las funciones están en all_functions.sql
 -- NOTA: Las políticas RLS están en all_rls_policies.sql
 -- =====================================================

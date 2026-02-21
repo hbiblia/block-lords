@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMarketStore } from '@/stores/market';
 import { useToastStore } from '@/stores/toast';
+import { useGameConfigStore } from '@/stores/game-config';
 import { formatGamecoin, formatCrypto, formatNumber, formatRon } from '@/utils/format';
 import { playSound } from '@/utils/sounds';
 
@@ -63,6 +64,7 @@ const { t } = useI18n();
 const authStore = useAuthStore();
 const marketStore = useMarketStore();
 const toastStore = useToastStore();
+const configStore = useGameConfigStore();
 
 const props = defineProps<{
   show: boolean;
@@ -573,7 +575,7 @@ function requestBuyPatch() {
     type: 'patch',
     id: 'rig_patch',
     name: t('market.patch.name', 'Rig Patch'),
-    price: 10000,
+    price: configStore.rigPatchCost,
     description: t('market.patch.desc', 'Restores +35% rig condition. Penalty: -10% hashrate, +15% consumption.'),
     currency: 'gamecoin',
   };
@@ -1276,12 +1278,12 @@ watch(() => props.show, (newVal) => {
                     <button
                       @click="requestBuyPatch()"
                       class="w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
-                      :class="balance >= 10000
+                      :class="balance >= configStore.rigPatchCost
                         ? 'bg-fuchsia-500 text-white hover:bg-fuchsia-400'
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
-                      :disabled="purchaseDisabled || balance < 10000"
+                      :disabled="purchaseDisabled || balance < configStore.rigPatchCost"
                     >
-                      {{ buying ? '...' : '10,000 🪙' }}
+                      {{ buying ? '...' : configStore.rigPatchCost.toLocaleString() + ' 🪙' }}
                     </button>
                   </div>
                 </div>

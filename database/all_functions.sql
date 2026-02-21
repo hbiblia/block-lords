@@ -95,117 +95,42 @@ FROM players p WHERE p.id = pr.player_id AND pr.is_active = true AND pr.mining_m
 ALTER TABLE player_rigs DROP CONSTRAINT IF EXISTS player_rigs_player_id_rig_id_key;
 
 -- =====================================================
--- GAME CONFIG (single-row configuration table)
--- Must be created BEFORE functions that reference the game_config type
+-- GAME SETTINGS HELPERS (deben existir ANTES de las funciones que las usan)
 -- =====================================================
 
-CREATE TABLE IF NOT EXISTS game_config (
-  id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-
-  -- ========== ECONOMÍA ==========
-  crypto_to_ron_rate NUMERIC NOT NULL DEFAULT 0.00001,         -- Tasa de conversión crypto→RON
-  min_crypto_conversion NUMERIC NOT NULL DEFAULT 100000,       -- Mínimo crypto para convertir a RON
-  withdrawal_fee_standard NUMERIC NOT NULL DEFAULT 0.25,       -- Fee retiro estándar (25%)
-  withdrawal_fee_premium NUMERIC NOT NULL DEFAULT 0.10,        -- Fee retiro premium (10%)
-  min_withdrawal_ron NUMERIC NOT NULL DEFAULT 0.01,            -- Mínimo retiro en RON
-  premium_cost_ron NUMERIC NOT NULL DEFAULT 5,                 -- Costo premium mensual en RON
-  premium_max_resources INT NOT NULL DEFAULT 1000,             -- Recursos máximos para premium
-  premium_reward_multiplier NUMERIC NOT NULL DEFAULT 1.5,      -- Multiplicador de recompensa premium
-  rig_patch_cost_gamecoin INT NOT NULL DEFAULT 10000,           -- Costo de patch en gamecoin
-
-  -- ========== EXCHANGE RATE (Stochastic) ==========
-  exchange_rate_mean NUMERIC NOT NULL DEFAULT 10.0,            -- Media de equilibrio
-  exchange_rate_volatility NUMERIC NOT NULL DEFAULT 0.5,       -- Volatilidad
-  exchange_rate_reversion_speed NUMERIC NOT NULL DEFAULT 0.02, -- Velocidad de reversión a la media
-  exchange_rate_min NUMERIC NOT NULL DEFAULT 0.5,              -- Tasa mínima
-  exchange_rate_max NUMERIC NOT NULL DEFAULT 1000.0,           -- Tasa máxima
-
-  -- ========== POOL MINING: Recompensas ==========
-  base_mining_reward NUMERIC NOT NULL DEFAULT 100,             -- Recompensa base (sistema halving)
-  reward_halving_interval INT NOT NULL DEFAULT 10000,          -- Bloques entre cada halving
-  pool_bronze_reward NUMERIC NOT NULL DEFAULT 4000,            -- Recompensa bloque bronce
-  pool_silver_reward NUMERIC NOT NULL DEFAULT 6000,            -- Recompensa bloque plata
-  pool_gold_reward NUMERIC NOT NULL DEFAULT 10000,             -- Recompensa bloque oro
-  mining_tick_duration_minutes NUMERIC NOT NULL DEFAULT 0.5,   -- Duración del tick de minería (0.5 = 30s)
-
-  -- ========== POOL MINING: Probabilidades de bloque (por cantidad de mineros) ==========
-  bronze_prob_5 NUMERIC NOT NULL DEFAULT 0.80,                 -- Prob bronce (≤5 mineros)
-  silver_cutoff_5 NUMERIC NOT NULL DEFAULT 0.97,               -- Cutoff plata (≤5 mineros)
-  bronze_prob_15 NUMERIC NOT NULL DEFAULT 0.70,                -- Prob bronce (≤15 mineros)
-  silver_cutoff_15 NUMERIC NOT NULL DEFAULT 0.95,              -- Cutoff plata (≤15 mineros)
-  bronze_prob_30 NUMERIC NOT NULL DEFAULT 0.60,                -- Prob bronce (≤30 mineros)
-  silver_cutoff_30 NUMERIC NOT NULL DEFAULT 0.90,              -- Cutoff plata (≤30 mineros)
-  bronze_prob_high NUMERIC NOT NULL DEFAULT 0.50,              -- Prob bronce (>30 mineros)
-  silver_cutoff_high NUMERIC NOT NULL DEFAULT 0.85,            -- Cutoff plata (>30 mineros)
-
-  -- ========== POOL MINING: Dificultad ==========
-  difficulty_adjust_period INT NOT NULL DEFAULT 1000,          -- Período de ajuste (bloques)
-  target_block_time_seconds INT NOT NULL DEFAULT 600,          -- Tiempo objetivo por bloque (10min)
-  min_difficulty NUMERIC NOT NULL DEFAULT 100,                 -- Dificultad mínima
-  max_difficulty NUMERIC NOT NULL DEFAULT 1000000,             -- Dificultad máxima
-  max_difficulty_change NUMERIC NOT NULL DEFAULT 0.25,         -- Cambio máximo por ajuste (±25%)
-  default_difficulty NUMERIC NOT NULL DEFAULT 15000,           -- Dificultad por defecto
-  default_target_shares INT NOT NULL DEFAULT 100,              -- Shares objetivo por defecto
-  difficulty_smoothing_factor NUMERIC NOT NULL DEFAULT 0.7,    -- Factor de suavizado adaptativo
-  difficulty_no_activity_ratio NUMERIC NOT NULL DEFAULT 0.5,   -- Reducción si no hay actividad
-
-  -- ========== MECÁNICAS DE RIG ==========
-  quick_toggle_threshold_seconds INT NOT NULL DEFAULT 60,      -- Umbral de toggle rápido
-  quick_toggle_temp_penalty INT NOT NULL DEFAULT 10,           -- Penalización de temperatura (x10)
-  power_flux_min NUMERIC NOT NULL DEFAULT 0.85,                -- Consumo mínimo ratio
-  power_flux_range NUMERIC NOT NULL DEFAULT 0.15,              -- Rango de fluctuación
-
-  -- ========== REGENERACIÓN DE RECURSOS ==========
-  energy_regen_minutes INT NOT NULL DEFAULT 10,                -- Intervalo regeneración energía
-  internet_regen_minutes INT NOT NULL DEFAULT 15,              -- Intervalo regeneración internet
-  offline_time_cap_minutes INT NOT NULL DEFAULT 1440,          -- Cap tiempo offline (24h)
-  resource_regen_cap_ratio NUMERIC NOT NULL DEFAULT 0.5,       -- Cap de regeneración (50%)
-
-  -- ========== REPUTACIÓN ==========
-  rep_high_threshold INT NOT NULL DEFAULT 80,                  -- Umbral reputación alta
-  rep_high_bonus_rate NUMERIC NOT NULL DEFAULT 0.01,           -- Bonus por punto sobre umbral
-  rep_low_threshold INT NOT NULL DEFAULT 50,                   -- Umbral reputación baja
-  rep_low_base NUMERIC NOT NULL DEFAULT 0.5,                   -- Base para rep baja
-
-  -- ========== PROGRESIÓN ==========
-  streak_cooldown_hours INT NOT NULL DEFAULT 20,               -- Cooldown entre claims de streak
-  streak_expiration_hours INT NOT NULL DEFAULT 48,             -- Expiración del streak
-  streak_gamecoin_per_day INT NOT NULL DEFAULT 10,             -- Gamecoin base por día de streak
-  epic_mission_chance NUMERIC NOT NULL DEFAULT 0.25,           -- Probabilidad de misión épica
-
-  -- ========== SOLO MINING: Dificultad ==========
-  solo_pool_size INT NOT NULL DEFAULT 10000,
-  solo_scan_divisor INT NOT NULL DEFAULT 100,
-  solo_block_time_minutes INT NOT NULL DEFAULT 30,
-  -- Solo Mining: Bloques
-  solo_bronze_prob NUMERIC NOT NULL DEFAULT 0.30,
-  solo_bronze_seeds INT NOT NULL DEFAULT 3,
-  solo_bronze_reward NUMERIC NOT NULL DEFAULT 6000,
-  solo_silver_prob NUMERIC NOT NULL DEFAULT 0.65,
-  solo_silver_seeds INT NOT NULL DEFAULT 4,
-  solo_silver_reward NUMERIC NOT NULL DEFAULT 10000,
-  solo_gold_prob NUMERIC NOT NULL DEFAULT 0.90,
-  solo_gold_seeds INT NOT NULL DEFAULT 5,
-  solo_gold_reward NUMERIC NOT NULL DEFAULT 20000,
-  solo_diamond_seeds INT NOT NULL DEFAULT 7,
-  solo_diamond_reward NUMERIC NOT NULL DEFAULT 60000,
-  -- Solo Mining: XP
-  solo_xp_bronze INT NOT NULL DEFAULT 125,
-  solo_xp_silver INT NOT NULL DEFAULT 190,
-  solo_xp_gold INT NOT NULL DEFAULT 320,
-  solo_xp_diamond INT NOT NULL DEFAULT 1600,
-
-  -- Metadata
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-INSERT INTO game_config (id) VALUES (1) ON CONFLICT DO NOTHING;
-
--- Helper para leer config (STABLE = cacheable dentro del mismo statement)
-CREATE OR REPLACE FUNCTION get_game_config()
-RETURNS game_config
+CREATE OR REPLACE FUNCTION get_game_settings_json()
+RETURNS JSONB
 LANGUAGE sql STABLE SECURITY DEFINER
-AS $$ SELECT * FROM game_config WHERE id = 1; $$;
+AS $$ SELECT jsonb_object_agg(key, value) FROM game_settings; $$;
+
+CREATE OR REPLACE FUNCTION gs_int(p_key TEXT)
+RETURNS INTEGER
+LANGUAGE sql STABLE SECURITY DEFINER
+AS $$ SELECT (get_game_settings_json() ->> p_key)::INTEGER; $$;
+
+CREATE OR REPLACE FUNCTION gs_numeric(p_key TEXT)
+RETURNS NUMERIC
+LANGUAGE sql STABLE SECURITY DEFINER
+AS $$ SELECT (get_game_settings_json() ->> p_key)::NUMERIC; $$;
+
+CREATE OR REPLACE FUNCTION gs_text(p_key TEXT)
+RETURNS TEXT
+LANGUAGE sql STABLE SECURITY DEFINER
+AS $$ SELECT get_game_settings_json() ->> p_key; $$;
+
+CREATE OR REPLACE FUNCTION get_game_settings()
+RETURNS JSONB
+LANGUAGE sql STABLE SECURITY DEFINER
+AS $$
+  SELECT jsonb_object_agg(key,
+    CASE value_type
+      WHEN 'int' THEN to_jsonb(value::INTEGER)
+      WHEN 'numeric' THEN to_jsonb(value::NUMERIC)
+      WHEN 'bool' THEN to_jsonb(value::BOOLEAN)
+      ELSE to_jsonb(value)
+    END
+  ) FROM game_settings;
+$$;
 
 -- =====================================================
 -- 1. FUNCIONES DE UTILIDAD
@@ -384,9 +309,9 @@ DECLARE
   v_energy_gained NUMERIC := 0;
   v_internet_gained NUMERIC := 0;
   v_was_offline BOOLEAN;
-  v_cfg game_config;
+
 BEGIN
-  v_cfg := get_game_config();
+
 
   -- LOCK: Seleccionar con FOR UPDATE para evitar race conditions
   SELECT * INTO v_player FROM players WHERE id = p_player_id FOR UPDATE;
@@ -407,18 +332,18 @@ BEGIN
   IF v_was_offline THEN
     v_minutes_offline := EXTRACT(EPOCH FROM (NOW() - v_player.last_seen)) / 60.0;
 
-    -- Cap de tiempo offline (desde game_config)
-    v_minutes_offline := LEAST(v_minutes_offline, v_cfg.offline_time_cap_minutes);
+    -- Cap de tiempo offline (desde game_settings)
+    v_minutes_offline := LEAST(v_minutes_offline, gs_int('offline_time_cap_minutes'));
 
     -- Solo regenerar si estuvo offline al menos el mínimo de regen de energía
-    IF v_minutes_offline >= v_cfg.energy_regen_minutes THEN
-      -- Calcular regeneración (desde game_config)
-      v_energy_regen := FLOOR(v_minutes_offline / v_cfg.energy_regen_minutes);
-      v_internet_regen := FLOOR(v_minutes_offline / v_cfg.internet_regen_minutes);
+    IF v_minutes_offline >= gs_int('energy_regen_minutes') THEN
+      -- Calcular regeneración (desde game_settings)
+      v_energy_regen := FLOOR(v_minutes_offline / gs_int('energy_regen_minutes'));
+      v_internet_regen := FLOOR(v_minutes_offline / gs_int('internet_regen_minutes'));
 
-      -- Calcular cap (desde game_config)
-      v_max_energy_cap := COALESCE(v_player.max_energy, 300) * v_cfg.resource_regen_cap_ratio;
-      v_max_internet_cap := COALESCE(v_player.max_internet, 300) * v_cfg.resource_regen_cap_ratio;
+      -- Calcular cap (desde game_settings)
+      v_max_energy_cap := COALESCE(v_player.max_energy, 300) * gs_numeric('resource_regen_cap_ratio');
+      v_max_internet_cap := COALESCE(v_player.max_internet, 300) * gs_numeric('resource_regen_cap_ratio');
 
       -- Aplicar regeneración con cap
       v_new_energy := LEAST(v_max_energy_cap, v_player.energy + v_energy_regen);
@@ -643,13 +568,13 @@ DECLARE
   v_new_temperature NUMERIC;
   v_seconds_since_off NUMERIC;
   v_quick_toggle_penalty BOOLEAN := false;
-  v_quick_toggle_threshold NUMERIC;  -- Desde game_config
-  v_temperature_multiplier NUMERIC;  -- Desde game_config
-  v_cfg game_config;
+  v_quick_toggle_threshold NUMERIC;  -- Desde game_settings
+  v_temperature_multiplier NUMERIC;  -- Desde game_settings
+
 BEGIN
-  v_cfg := get_game_config();
-  v_quick_toggle_threshold := v_cfg.quick_toggle_threshold_seconds;
-  v_temperature_multiplier := v_cfg.quick_toggle_temp_penalty;
+
+  v_quick_toggle_threshold := gs_int('quick_toggle_threshold_seconds');
+  v_temperature_multiplier := gs_int('quick_toggle_temp_penalty');
 
   -- Obtener el rig (sin lock explícito - el UPDATE es atómico)
   SELECT * INTO v_rig
@@ -947,12 +872,12 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_cfg game_config;
+
   v_player players%ROWTYPE;
   v_price NUMERIC;
 BEGIN
-  v_cfg := get_game_config();
-  v_price := v_cfg.rig_patch_cost_gamecoin;
+
+  v_price := gs_int('rig_patch_cost_gamecoin');
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF v_player IS NULL THEN
     RETURN json_build_object('success', false, 'error', 'Player not found');
@@ -1770,12 +1695,12 @@ RETURNS NUMERIC
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_cfg game_config;
+
   v_halvings INT;
 BEGIN
-  v_cfg := get_game_config();
-  v_halvings := p_block_height / v_cfg.reward_halving_interval;
-  RETURN v_cfg.base_mining_reward / POWER(2, v_halvings);
+
+  v_halvings := p_block_height / gs_int('reward_halving_interval');
+  RETURN gs_numeric('base_mining_reward') / POWER(2, v_halvings);
 END;
 $$;
 
@@ -1853,9 +1778,9 @@ DECLARE
   v_heat_after_upgrade NUMERIC;
   v_active_rig_count INT;
   v_consumption_flux NUMERIC;
-  v_cfg game_config;
+
 BEGIN
-  v_cfg := get_game_config();
+
 
   -- Procesar jugadores que están ONLINE o tienen rigs con autonomous mining boost
   FOR v_player IN
@@ -1925,8 +1850,8 @@ BEGIN
       LEFT JOIN player_cooling_items pci ON pci.id = rc.player_cooling_item_id
       WHERE rc.player_rig_id = v_rig.id AND rc.durability > 0;
 
-      -- Fluctuación variable de consumo por rig (desde game_config)
-      v_consumption_flux := v_cfg.power_flux_min + (random() * v_cfg.power_flux_range);
+      -- Fluctuación variable de consumo por rig (desde game_settings)
+      v_consumption_flux := gs_numeric('power_flux_min') + (random() * gs_numeric('power_flux_range'));
 
       -- Calcular consumo de energía del rig:
       -- Base + penalización por temperatura + consumo de refrigeración
@@ -2269,7 +2194,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_cfg game_config;
+
   v_current_difficulty NUMERIC;
   v_current_hashrate NUMERIC;
   v_last_adjustment_block INTEGER;
@@ -2290,12 +2215,12 @@ DECLARE
   v_new_difficulty NUMERIC;
   v_blocks_in_period INTEGER;
 BEGIN
-  v_cfg := get_game_config();
-  v_adjustment_period := v_cfg.difficulty_adjust_period;
-  v_target_block_time := v_cfg.target_block_time_seconds;
-  v_max_change := v_cfg.max_difficulty_change;
-  v_min_difficulty := v_cfg.min_difficulty;
-  v_max_difficulty := v_cfg.max_difficulty;
+
+  v_adjustment_period := gs_int('difficulty_adjust_period');
+  v_target_block_time := gs_int('target_block_time_seconds');
+  v_max_change := gs_numeric('max_difficulty_change');
+  v_min_difficulty := gs_numeric('min_difficulty');
+  v_max_difficulty := gs_numeric('max_difficulty');
 
   -- Obtener estado actual de la red
   SELECT difficulty, hashrate, COALESCE(last_adjustment_block, 0), last_difficulty_adjustment
@@ -2304,7 +2229,7 @@ BEGIN
 
   -- Valor por defecto si no existe
   IF v_current_difficulty IS NULL THEN
-    v_current_difficulty := v_cfg.default_difficulty;
+    v_current_difficulty := gs_numeric('default_difficulty');
   END IF;
 
   -- Obtener altura del bloque más reciente
@@ -3621,15 +3546,15 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_cfg game_config;
+
   v_player players%ROWTYPE;
   v_exchange_rate NUMERIC;
   v_min_amount NUMERIC;
   v_ron_received NUMERIC;
 BEGIN
-  v_cfg := get_game_config();
-  v_exchange_rate := v_cfg.crypto_to_ron_rate;
-  v_min_amount := v_cfg.min_crypto_conversion;
+
+  v_exchange_rate := gs_numeric('crypto_to_ron_rate');
+  v_min_amount := gs_numeric('min_crypto_conversion');
   -- Validar cantidad mínima
   IF p_crypto_amount < v_min_amount THEN
     RETURN json_build_object('success', false, 'error', 'Mínimo ' || v_min_amount || ' crypto para convertir a RON');
@@ -3676,12 +3601,12 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_cfg game_config;
+
   v_rate NUMERIC;
   v_previous_rate NUMERIC;
   v_updated_at TIMESTAMPTZ;
 BEGIN
-  v_cfg := get_game_config();
+
 
   SELECT
     COALESCE(exchange_rate_crypto_gamecoin, 25.0),
@@ -3693,8 +3618,8 @@ BEGIN
   RETURN json_build_object(
     'crypto_to_gamecoin', COALESCE(v_rate, 25.0),
     'crypto_to_gamecoin_previous', COALESCE(v_previous_rate, 25.0),
-    'crypto_to_ron', v_cfg.crypto_to_ron_rate,
-    'min_crypto_for_ron', v_cfg.min_crypto_conversion,
+    'crypto_to_ron', gs_numeric('crypto_to_ron_rate'),
+    'min_crypto_for_ron', gs_numeric('min_crypto_conversion'),
     'rate_updated_at', v_updated_at
   );
 END;
@@ -3870,9 +3795,9 @@ DECLARE
   v_item_id TEXT;
   v_actual_card_id TEXT;
   v_card_type TEXT;
-  v_cfg game_config;
+
 BEGIN
-  v_cfg := get_game_config();
+
   -- Obtener streak actual
   SELECT * INTO v_streak FROM player_streaks WHERE player_id = p_player_id;
 
@@ -3928,8 +3853,8 @@ BEGIN
     ORDER BY day_number DESC
     LIMIT 1;
 
-    -- Escalar recompensa base (desde game_config)
-    v_gamecoin_reward := v_cfg.streak_gamecoin_per_day * v_new_streak;
+    -- Escalar recompensa base (desde game_settings)
+    v_gamecoin_reward := gs_int('streak_gamecoin_per_day') * v_new_streak;
     v_crypto_reward := 0;
     v_item_type := NULL;
     v_item_id := NULL;
@@ -4034,8 +3959,8 @@ BEGIN
   SET current_streak = v_new_streak,
       longest_streak = GREATEST(COALESCE(longest_streak, 0), v_new_streak),
       last_claim_date = CURRENT_DATE,
-      next_claim_available = NOW() + (v_cfg.streak_cooldown_hours || ' hours')::INTERVAL,
-      streak_expires_at = NOW() + (v_cfg.streak_expiration_hours || ' hours')::INTERVAL,
+      next_claim_available = NOW() + (gs_int('streak_cooldown_hours') || ' hours')::INTERVAL,
+      streak_expires_at = NOW() + (gs_int('streak_expiration_hours') || ' hours')::INTERVAL,
       updated_at = NOW()
   WHERE player_id = p_player_id;
 
@@ -4065,8 +3990,8 @@ BEGIN
     'cryptoEarned', v_crypto_reward,
     'itemType', v_item_type,
     'itemId', v_item_id,
-    'nextClaimAvailable', NOW() + (v_cfg.streak_cooldown_hours || ' hours')::INTERVAL,
-    'streakExpiresAt', NOW() + (v_cfg.streak_expiration_hours || ' hours')::INTERVAL
+    'nextClaimAvailable', NOW() + (gs_int('streak_cooldown_hours') || ' hours')::INTERVAL,
+    'streakExpiresAt', NOW() + (gs_int('streak_expiration_hours') || ' hours')::INTERVAL
   );
 END;
 $$;
@@ -4090,11 +4015,11 @@ DECLARE
   v_epic_mission missions%ROWTYPE;
   v_mission missions%ROWTYPE;
   v_assigned_count INTEGER := 0;
-  v_epic_chance FLOAT;  -- Desde game_config
-  v_cfg game_config;
+  v_epic_chance FLOAT;  -- Desde game_settings
+
 BEGIN
-  v_cfg := get_game_config();
-  v_epic_chance := v_cfg.epic_mission_chance;
+
+  v_epic_chance := gs_numeric('epic_mission_chance');
 
   -- Asignar achievements permanentes (solo si no existen aún)
   FOR v_mission IN
@@ -6100,26 +6025,21 @@ $$;
 
 CREATE OR REPLACE FUNCTION get_block_reward_multiplier(p_player_id UUID)
 RETURNS DECIMAL LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_cfg game_config;
 BEGIN
-  v_cfg := get_game_config();
-  IF is_player_premium(p_player_id) THEN RETURN v_cfg.premium_reward_multiplier; ELSE RETURN 1.0; END IF;
+  IF is_player_premium(p_player_id) THEN RETURN gs_numeric('premium_reward_multiplier'); ELSE RETURN 1.0; END IF;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION get_withdrawal_fee_rate(p_player_id UUID)
 RETURNS DECIMAL LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_cfg game_config;
 BEGIN
-  v_cfg := get_game_config();
-  IF is_player_premium(p_player_id) THEN RETURN v_cfg.withdrawal_fee_premium; ELSE RETURN v_cfg.withdrawal_fee_standard; END IF;
+  IF is_player_premium(p_player_id) THEN RETURN gs_numeric('withdrawal_fee_premium'); ELSE RETURN gs_numeric('withdrawal_fee_standard'); END IF;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION get_premium_resource_bonus()
 RETURNS INTEGER LANGUAGE plpgsql AS $$
-DECLARE v_cfg game_config;
-BEGIN v_cfg := get_game_config(); RETURN v_cfg.premium_max_resources; END;
+BEGIN RETURN gs_int('premium_max_resources'); END;
 $$;
 
 CREATE OR REPLACE FUNCTION get_effective_max_energy(p_player_id UUID)
@@ -6272,12 +6192,12 @@ $$;
 
 CREATE OR REPLACE FUNCTION purchase_premium(p_player_id UUID)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_cfg game_config; v_player players%ROWTYPE; v_price DECIMAL; v_new_expires TIMESTAMPTZ; v_subscription_id UUID;
+DECLARE v_player players%ROWTYPE; v_price DECIMAL; v_new_expires TIMESTAMPTZ; v_subscription_id UUID;
   v_premium_max INTEGER;
 BEGIN
-  v_cfg := get_game_config();
-  v_price := v_cfg.premium_cost_ron;
-  v_premium_max := v_cfg.premium_max_resources;
+
+  v_price := gs_numeric('premium_cost_ron');
+  v_premium_max := gs_int('premium_max_resources');
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF v_player.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
   IF v_player.premium_until IS NOT NULL AND v_player.premium_until > NOW() THEN
@@ -6307,15 +6227,15 @@ $$;
 
 CREATE OR REPLACE FUNCTION get_premium_status(p_player_id UUID)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_cfg game_config; v_player players%ROWTYPE; v_is_premium BOOLEAN; v_days_remaining INTEGER;
+DECLARE v_player players%ROWTYPE; v_is_premium BOOLEAN; v_days_remaining INTEGER;
 BEGIN
-  v_cfg := get_game_config();
+
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF v_player.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
   v_is_premium := COALESCE(v_player.premium_until > NOW(), false);
   v_days_remaining := CASE WHEN v_is_premium THEN EXTRACT(DAY FROM (v_player.premium_until - NOW()))::INTEGER ELSE 0 END;
   RETURN json_build_object('success', true, 'is_premium', v_is_premium, 'expires_at', v_player.premium_until,
-    'days_remaining', v_days_remaining, 'price', v_cfg.premium_cost_ron, 'benefits', json_build_object('block_bonus', '+50%', 'withdrawal_fee', '10%', 'resource_bonus', '+700'));
+    'days_remaining', v_days_remaining, 'price', gs_numeric('premium_cost_ron'), 'benefits', json_build_object('block_bonus', '+50%', 'withdrawal_fee', '10%', 'resource_bonus', '+700'));
 END;
 $$;
 
@@ -6340,12 +6260,12 @@ $$;
 
 CREATE OR REPLACE FUNCTION request_ron_withdrawal(p_player_id UUID, p_amount DECIMAL DEFAULT NULL)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_cfg game_config; v_player players%ROWTYPE; v_pending_count INTEGER; v_withdrawal_id UUID;
+DECLARE v_player players%ROWTYPE; v_pending_count INTEGER; v_withdrawal_id UUID;
   v_min_withdrawal DECIMAL; v_fee_rate DECIMAL; v_fee DECIMAL; v_net_amount DECIMAL; v_is_premium BOOLEAN;
   v_withdraw_amount DECIMAL;
 BEGIN
-  v_cfg := get_game_config();
-  v_min_withdrawal := v_cfg.min_withdrawal_ron;
+
+  v_min_withdrawal := gs_numeric('min_withdrawal_ron');
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF v_player.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
   IF v_player.ron_wallet IS NULL OR v_player.ron_wallet = '' THEN RETURN json_build_object('success', false, 'error', 'No tienes wallet'); END IF;
@@ -6477,9 +6397,9 @@ DECLARE v_player players%ROWTYPE; v_hours_offline NUMERIC; v_regen_rate NUMERIC 
   v_energy_regen NUMERIC := 0; v_internet_regen NUMERIC := 0; v_new_energy NUMERIC; v_new_internet NUMERIC;
   v_max_energy_cap NUMERIC; v_max_internet_cap NUMERIC; v_effective_max_energy NUMERIC; v_effective_max_internet NUMERIC;
   v_premium_expired BOOLEAN := false; v_free_max INTEGER := 300;
-  v_cfg game_config;
+
 BEGIN
-  v_cfg := get_game_config();
+
   SELECT * INTO v_player FROM players WHERE id = p_player_id;
   IF v_player IS NULL THEN RETURN json_build_object('success', false, 'error', 'Jugador no encontrado'); END IF;
 
@@ -6494,12 +6414,12 @@ BEGIN
   END IF;
 
   IF v_player.last_seen IS NULL THEN RETURN json_build_object('success', true, 'energyGained', 0, 'internetGained', 0); END IF;
-  v_hours_offline := LEAST(v_cfg.offline_time_cap_minutes / 60.0, EXTRACT(EPOCH FROM (NOW() - v_player.last_seen)) / 3600);
+  v_hours_offline := LEAST(gs_int('offline_time_cap_minutes') / 60.0, EXTRACT(EPOCH FROM (NOW() - v_player.last_seen)) / 3600);
   IF v_hours_offline < 0.0833 THEN RETURN json_build_object('success', true, 'energyGained', 0, 'internetGained', 0); END IF;
   v_effective_max_energy := get_effective_max_energy(p_player_id);
   v_effective_max_internet := get_effective_max_internet(p_player_id);
-  v_max_energy_cap := v_effective_max_energy * v_cfg.resource_regen_cap_ratio;
-  v_max_internet_cap := v_effective_max_internet * v_cfg.resource_regen_cap_ratio;
+  v_max_energy_cap := v_effective_max_energy * gs_numeric('resource_regen_cap_ratio');
+  v_max_internet_cap := v_effective_max_internet * gs_numeric('resource_regen_cap_ratio');
   IF v_player.energy < v_max_energy_cap THEN
     v_energy_regen := LEAST(v_max_energy_cap - v_player.energy, v_hours_offline * v_regen_rate);
     v_new_energy := LEAST(v_max_energy_cap, v_player.energy + v_energy_regen);
@@ -7752,7 +7672,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_cfg game_config;
+
   v_block_number INTEGER;
   v_difficulty NUMERIC;
   v_target_shares NUMERIC;
@@ -7765,45 +7685,45 @@ DECLARE
   v_bronze_prob NUMERIC;
   v_silver_cutoff NUMERIC;
 BEGIN
-  v_cfg := get_game_config();
+
 
   -- Obtener configuración actual
   SELECT difficulty, target_shares_per_block, COALESCE(active_miners, 0)
   INTO v_difficulty, v_target_shares, v_active_miners
   FROM network_stats WHERE id = 'current';
 
-  IF v_difficulty IS NULL THEN v_difficulty := v_cfg.default_difficulty; END IF;
-  IF v_target_shares IS NULL THEN v_target_shares := v_cfg.default_target_shares; END IF;
+  IF v_difficulty IS NULL THEN v_difficulty := gs_numeric('default_difficulty'); END IF;
+  IF v_target_shares IS NULL THEN v_target_shares := gs_int('default_target_shares'); END IF;
 
   -- Calcular número de bloque
   SELECT COALESCE(MAX(block_number), 0) + 1 INTO v_block_number FROM mining_blocks;
 
   -- Probabilidades dinámicas según mineros activos
   IF v_active_miners <= 5 THEN
-    v_bronze_prob := v_cfg.bronze_prob_5;
-    v_silver_cutoff := v_cfg.silver_cutoff_5;
+    v_bronze_prob := gs_numeric('bronze_prob_5');
+    v_silver_cutoff := gs_numeric('silver_cutoff_5');
   ELSIF v_active_miners <= 15 THEN
-    v_bronze_prob := v_cfg.bronze_prob_15;
-    v_silver_cutoff := v_cfg.silver_cutoff_15;
+    v_bronze_prob := gs_numeric('bronze_prob_15');
+    v_silver_cutoff := gs_numeric('silver_cutoff_15');
   ELSIF v_active_miners <= 30 THEN
-    v_bronze_prob := v_cfg.bronze_prob_30;
-    v_silver_cutoff := v_cfg.silver_cutoff_30;
+    v_bronze_prob := gs_numeric('bronze_prob_30');
+    v_silver_cutoff := gs_numeric('silver_cutoff_30');
   ELSE
-    v_bronze_prob := v_cfg.bronze_prob_high;
-    v_silver_cutoff := v_cfg.silver_cutoff_high;
+    v_bronze_prob := gs_numeric('bronze_prob_high');
+    v_silver_cutoff := gs_numeric('silver_cutoff_high');
   END IF;
 
   v_random := RANDOM();
 
   IF v_random < v_bronze_prob THEN
     v_block_type := 'bronze';
-    v_reward := v_cfg.pool_bronze_reward;
+    v_reward := gs_numeric('pool_bronze_reward');
   ELSIF v_random < v_silver_cutoff THEN
     v_block_type := 'silver';
-    v_reward := v_cfg.pool_silver_reward;
+    v_reward := gs_numeric('pool_silver_reward');
   ELSE
     v_block_type := 'gold';
-    v_reward := v_cfg.pool_gold_reward;
+    v_reward := gs_numeric('pool_gold_reward');
   END IF;
 
   -- Calcular tiempo objetivo (30 minutos)
@@ -7852,7 +7772,7 @@ DECLARE
   v_effective_hashrate NUMERIC;
   v_shares_probability NUMERIC;
   v_shares_generated NUMERIC;
-  v_tick_duration NUMERIC;  -- Desde game_config
+  v_tick_duration NUMERIC;  -- Desde game_settings
   v_total_shares_generated NUMERIC := 0;
   v_players_processed INTEGER := 0;
   v_rep_multiplier NUMERIC;
@@ -7869,10 +7789,10 @@ DECLARE
   v_new_accumulator NUMERIC;      -- ⚙️ Nuevo acumulador después de generación
   v_warmup_mult NUMERIC;          -- Multiplicador de calentamiento al encender rig
   v_hash_flux NUMERIC;             -- Fluctuación variable de hashrate (±3%)
-  v_cfg game_config;
+
 BEGIN
-  v_cfg := get_game_config();
-  v_tick_duration := v_cfg.mining_tick_duration_minutes;
+
+  v_tick_duration := gs_numeric('mining_tick_duration_minutes');
 
   -- Obtener bloque de minería actual
   SELECT current_mining_block_id, difficulty
@@ -7885,7 +7805,7 @@ BEGIN
     SELECT difficulty INTO v_difficulty FROM network_stats WHERE id = 'current';
   END IF;
 
-  IF v_difficulty IS NULL THEN v_difficulty := v_cfg.default_difficulty; END IF;
+  IF v_difficulty IS NULL THEN v_difficulty := gs_numeric('default_difficulty'); END IF;
 
   -- Procesar cada rig activo
   FOR v_rig IN
@@ -7916,11 +7836,11 @@ BEGIN
     IF v_upgrade_hashrate_bonus IS NULL THEN v_upgrade_hashrate_bonus := 0; END IF;
     v_hashrate_mult := v_hashrate_mult * (1 + v_upgrade_hashrate_bonus / 100.0);
 
-    -- Multiplicador de reputación (desde game_config)
-    IF v_rig.reputation_score >= v_cfg.rep_high_threshold THEN
-      v_rep_multiplier := 1 + (v_rig.reputation_score - v_cfg.rep_high_threshold) * v_cfg.rep_high_bonus_rate;
-    ELSIF v_rig.reputation_score < v_cfg.rep_low_threshold THEN
-      v_rep_multiplier := v_cfg.rep_low_base + (v_rig.reputation_score / 100.0);
+    -- Multiplicador de reputación (desde game_settings)
+    IF v_rig.reputation_score >= gs_int('rep_high_threshold') THEN
+      v_rep_multiplier := 1 + (v_rig.reputation_score - gs_int('rep_high_threshold')) * gs_numeric('rep_high_bonus_rate');
+    ELSIF v_rig.reputation_score < gs_int('rep_low_threshold') THEN
+      v_rep_multiplier := gs_numeric('rep_low_base') + (v_rig.reputation_score / 100.0);
     ELSE
       v_rep_multiplier := 1;
     END IF;
@@ -8026,8 +7946,8 @@ BEGIN
         r.hashrate *
         GREATEST(0.3, pr.condition / 100.0) *  -- condition penalty
         CASE
-          WHEN p.reputation_score >= v_cfg.rep_high_threshold THEN 1 + (p.reputation_score - v_cfg.rep_high_threshold) * v_cfg.rep_high_bonus_rate
-          WHEN p.reputation_score < v_cfg.rep_low_threshold THEN v_cfg.rep_low_base + (p.reputation_score / 100.0)
+          WHEN p.reputation_score >= gs_int('rep_high_threshold') THEN 1 + (p.reputation_score - gs_int('rep_high_threshold')) * gs_numeric('rep_high_bonus_rate')
+          WHEN p.reputation_score < gs_int('rep_low_threshold') THEN gs_numeric('rep_low_base') + (p.reputation_score / 100.0)
           ELSE 1
         END *  -- reputation multiplier
         CASE
@@ -8084,7 +8004,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_cfg game_config;
+
   v_current_rate NUMERIC;
   v_new_rate NUMERIC;
   v_mean_rate NUMERIC;
@@ -8103,12 +8023,12 @@ DECLARE
   v_rate_5_ago NUMERIC;
   v_momentum NUMERIC := 0;
 BEGIN
-  v_cfg := get_game_config();
-  v_mean_rate := v_cfg.exchange_rate_mean;
-  v_volatility := v_cfg.exchange_rate_volatility;
-  v_reversion_speed := v_cfg.exchange_rate_reversion_speed;
-  v_min_rate := v_cfg.exchange_rate_min;
-  v_max_rate := v_cfg.exchange_rate_max;
+
+  v_mean_rate := gs_numeric('exchange_rate_mean');
+  v_volatility := gs_numeric('exchange_rate_volatility');
+  v_reversion_speed := gs_numeric('exchange_rate_reversion_speed');
+  v_min_rate := gs_numeric('exchange_rate_min');
+  v_max_rate := gs_numeric('exchange_rate_max');
 
   -- Obtener rate actual
   SELECT COALESCE(exchange_rate_crypto_gamecoin, 25.0)
@@ -8380,7 +8300,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_cfg game_config;
+
   v_mining_block mining_blocks%ROWTYPE;
   v_current_difficulty NUMERIC;
   v_target_shares NUMERIC;
@@ -8395,11 +8315,11 @@ DECLARE
   v_max_difficulty NUMERIC;
   v_should_adjust BOOLEAN := false;
 BEGIN
-  v_cfg := get_game_config();
-  v_smoothing_factor := v_cfg.difficulty_smoothing_factor;
-  v_max_change := v_cfg.max_difficulty_change;
-  v_min_difficulty := v_cfg.min_difficulty;
-  v_max_difficulty := v_cfg.max_difficulty;
+
+  v_smoothing_factor := gs_numeric('difficulty_smoothing_factor');
+  v_max_change := gs_numeric('max_difficulty_change');
+  v_min_difficulty := gs_numeric('min_difficulty');
+  v_max_difficulty := gs_numeric('max_difficulty');
   -- Obtener bloque
   SELECT * INTO v_mining_block FROM mining_blocks WHERE id = p_mining_block_id;
 
@@ -8456,7 +8376,7 @@ BEGIN
     v_adjustment_ratio := v_actual_shares / v_target_shares;
   ELSE
     -- Si no hubo shares, reducir dificultad significativamente
-    v_adjustment_ratio := v_cfg.difficulty_no_activity_ratio;
+    v_adjustment_ratio := gs_numeric('difficulty_no_activity_ratio');
   END IF;
 
   -- Aplicar suavizado: nueva_dificultad = actual * (1 + smoothing * (ratio - 1))
@@ -8640,7 +8560,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_cfg game_config;
+
   v_rental solo_mining_rentals%ROWTYPE;
   v_block_number INTEGER;
   v_new_block_id UUID;
@@ -8654,8 +8574,8 @@ DECLARE
   v_block_interval INTERVAL;
   i INTEGER;
 BEGIN
-  v_cfg := get_game_config();
-  v_block_interval := (v_cfg.solo_block_time_minutes || ' minutes')::INTERVAL;
+
+  v_block_interval := (gs_int('solo_block_time_minutes') || ' minutes')::INTERVAL;
 
   SELECT * INTO v_rental FROM solo_mining_rentals
   WHERE id = p_rental_id AND player_id = p_player_id AND is_active = true;
@@ -8673,14 +8593,14 @@ BEGIN
   END IF;
 
   v_roll := random();
-  IF v_roll < v_cfg.solo_bronze_prob THEN
-    v_block_type := 'bronze'; v_num_seeds := v_cfg.solo_bronze_seeds; v_reward := v_cfg.solo_bronze_reward;
-  ELSIF v_roll < v_cfg.solo_silver_prob THEN
-    v_block_type := 'silver'; v_num_seeds := v_cfg.solo_silver_seeds; v_reward := v_cfg.solo_silver_reward;
-  ELSIF v_roll < v_cfg.solo_gold_prob THEN
-    v_block_type := 'gold'; v_num_seeds := v_cfg.solo_gold_seeds; v_reward := v_cfg.solo_gold_reward;
+  IF v_roll < gs_numeric('solo_bronze_prob') THEN
+    v_block_type := 'bronze'; v_num_seeds := gs_int('solo_bronze_seeds'); v_reward := gs_numeric('solo_bronze_reward');
+  ELSIF v_roll < gs_numeric('solo_silver_prob') THEN
+    v_block_type := 'silver'; v_num_seeds := gs_int('solo_silver_seeds'); v_reward := gs_numeric('solo_silver_reward');
+  ELSIF v_roll < gs_numeric('solo_gold_prob') THEN
+    v_block_type := 'gold'; v_num_seeds := gs_int('solo_gold_seeds'); v_reward := gs_numeric('solo_gold_reward');
   ELSE
-    v_block_type := 'diamond'; v_num_seeds := v_cfg.solo_diamond_seeds; v_reward := v_cfg.solo_diamond_reward;
+    v_block_type := 'diamond'; v_num_seeds := gs_int('solo_diamond_seeds'); v_reward := gs_numeric('solo_diamond_reward');
   END IF;
 
   SELECT COALESCE(MAX(block_number), 0) + 1 INTO v_block_number
@@ -8697,7 +8617,7 @@ BEGIN
   v_existing_seeds := ARRAY[]::INT[];
   FOR i IN 1..v_num_seeds LOOP
     LOOP
-      v_seed_value := FLOOR(RANDOM() * v_cfg.solo_pool_size)::INTEGER;
+      v_seed_value := FLOOR(RANDOM() * gs_int('solo_pool_size'))::INTEGER;
       EXIT WHEN NOT (v_seed_value = ANY(v_existing_seeds));
     END LOOP;
     v_existing_seeds := array_append(v_existing_seeds, v_seed_value);
@@ -8771,11 +8691,11 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_cfg game_config;
+
   v_block solo_mining_blocks%ROWTYPE;
   v_pending_id UUID;
 BEGIN
-  v_cfg := get_game_config();
+
 
   SELECT * INTO v_block FROM solo_mining_blocks
   WHERE id = p_block_id AND player_id = p_player_id;
@@ -8800,13 +8720,13 @@ BEGIN
   UPDATE players SET blocks_mined = COALESCE(blocks_mined, 0) + 1
   WHERE id = p_player_id;
 
-  -- === SLOT XP for solo mining (configurable via game_config) ===
+  -- === SLOT XP for solo mining (configurable via game_settings) ===
   UPDATE player_slots
   SET xp = COALESCE(xp, 0) + CASE v_block.block_type
-    WHEN 'diamond' THEN v_cfg.solo_xp_diamond
-    WHEN 'gold' THEN v_cfg.solo_xp_gold
-    WHEN 'silver' THEN v_cfg.solo_xp_silver
-    ELSE v_cfg.solo_xp_bronze
+    WHEN 'diamond' THEN gs_int('solo_xp_diamond')
+    WHEN 'gold' THEN gs_int('solo_xp_gold')
+    WHEN 'silver' THEN gs_int('solo_xp_silver')
+    ELSE gs_int('solo_xp_bronze')
   END
   WHERE player_id = p_player_id
     AND NOT is_destroyed
@@ -8832,7 +8752,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_cfg game_config;
+
   v_solo_player RECORD;
   v_rig RECORD;
   v_solo_block solo_mining_blocks%ROWTYPE;
@@ -8860,7 +8780,7 @@ DECLARE
   v_expired_block RECORD;
   i INTEGER;
 BEGIN
-  v_cfg := get_game_config();
+
   -- Paso 0: Cerrar todos los bloques expirados (independiente del estado del player)
   -- Si encontró todos los seeds → completado con recompensa, si no → fallido
   FOR v_expired_block IN
@@ -8979,7 +8899,7 @@ BEGIN
       v_player_total_hashrate := v_player_total_hashrate + v_effective_hashrate;
     END LOOP;
 
-    v_scans_per_tick := GREATEST(1, FLOOR(v_player_total_hashrate / v_cfg.solo_scan_divisor)::INTEGER);
+    v_scans_per_tick := GREATEST(1, FLOOR(v_player_total_hashrate / gs_int('solo_scan_divisor'))::INTEGER);
     v_seeds_found_this_tick := 0;
 
     -- Si ya encontró todos los seeds, no escanear más (esperar a que expire)
@@ -8989,7 +8909,7 @@ BEGIN
     END IF;
 
     FOR i IN 1..v_scans_per_tick LOOP
-      v_scan_value := FLOOR(RANDOM() * v_cfg.solo_pool_size)::INTEGER;
+      v_scan_value := FLOOR(RANDOM() * gs_int('solo_pool_size'))::INTEGER;
       UPDATE solo_mining_seeds sms_upd
       SET found = true, found_at = NOW()
       WHERE sms_upd.solo_block_id = v_solo_block.id
@@ -9107,11 +9027,11 @@ BEGIN
       'total_earned', v_total_earned
     ),
     'recent_blocks', COALESCE(v_recent_blocks, '[]'::JSON),
-    'config', (SELECT json_build_object(
-      'pool_size', solo_pool_size,
-      'scan_divisor', solo_scan_divisor,
-      'block_time_minutes', solo_block_time_minutes
-    ) FROM game_config WHERE id = 1)
+    'config', json_build_object(
+      'pool_size', gs_int('solo_pool_size'),
+      'scan_divisor', gs_int('solo_scan_divisor'),
+      'block_time_minutes', gs_int('solo_block_time_minutes')
+    )
   );
 END;
 $$;
@@ -9408,9 +9328,13 @@ GRANT EXECUTE ON FUNCTION get_player_shares_info TO authenticated;
 GRANT EXECUTE ON FUNCTION game_tick_share_system TO authenticated;
 GRANT EXECUTE ON FUNCTION get_recent_mining_blocks TO authenticated;
 
--- Game config grants
-GRANT SELECT ON game_config TO authenticated;
-GRANT EXECUTE ON FUNCTION get_game_config TO authenticated;
+-- Game settings grants
+GRANT SELECT ON game_settings TO authenticated;
+GRANT EXECUTE ON FUNCTION get_game_settings_json TO authenticated;
+GRANT EXECUTE ON FUNCTION gs_int TO authenticated;
+GRANT EXECUTE ON FUNCTION gs_numeric TO authenticated;
+GRANT EXECUTE ON FUNCTION gs_text TO authenticated;
+GRANT EXECUTE ON FUNCTION get_game_settings TO authenticated;
 
 -- Solo mining grants
 GRANT EXECUTE ON FUNCTION activate_solo_mining TO authenticated;
