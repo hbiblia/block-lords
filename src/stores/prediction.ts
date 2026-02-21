@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { supabase } from '@/utils/supabase';
 import { useAuthStore } from './auth';
 import { useToastStore } from './toast';
 import { playSound } from '@/utils/sounds';
@@ -75,9 +74,9 @@ export const usePredictionStore = defineStore('prediction', () => {
   const placing = ref(false);
   const cancelling = ref<string | null>(null);
 
-  // Realtime
-  let predictionChannel: ReturnType<typeof supabase.channel> | null = null;
   let pricePollingInterval: number | null = null;
+  // Track active bet IDs to detect wins
+  let previousActiveBetIds: Set<string> = new Set();
 
   // ===== COMPUTED =====
 
@@ -107,8 +106,30 @@ export const usePredictionStore = defineStore('prediction', () => {
     try {
       const data = await getPlayerPredictions(authStore.player.id);
       if (data?.success) {
-        activeBets.value = data.active || [];
-        history.value = data.history || [];
+        const newActive = data.active || [];
+        const newHistory = data.history || [];
+
+        // Detect won bets: was active before, now in history as 'won'
+        if (previousActiveBetIds.size > 0) {
+          const newActiveIds = new Set(newActive.map((b: PredictionBet) => b.id));
+          for (const prevId of previousActiveBetIds) {
+            if (!newActiveIds.has(prevId)) {
+              const wonBet = newHistory.find((h: PredictionHistory) => h.id === prevId && h.status === 'won');
+              if (wonBet) {
+                playSound('reward');
+                const toastStore = useToastStore();
+                toastStore.success(
+                  `Predicción ganada! +${Number(wonBet.yield_earned_lw || 0).toFixed(4)} RON de yield`
+                );
+                authStore.fetchPlayer();
+              }
+            }
+          }
+        }
+        previousActiveBetIds = new Set(newActive.map((b: PredictionBet) => b.id));
+
+        activeBets.value = newActive;
+        history.value = newHistory;
         stats.value = data.stats || null;
         if (data.current_price != null) {
           currentPrice.value = data.current_price;
@@ -232,46 +253,8 @@ export const usePredictionStore = defineStore('prediction', () => {
     }
   }
 
-  // ===== REALTIME =====
-
-  function subscribeToRealtime() {
-    const authStore = useAuthStore();
-    if (!authStore.player?.id) return;
-
-    predictionChannel = supabase
-      .channel(`predictions:${authStore.player.id}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'prediction_bets',
-        filter: `player_id=eq.${authStore.player.id}`,
-      }, (payload) => {
-        const newData = payload.new as Record<string, unknown>;
-        if (newData.status === 'won') {
-          playSound('reward');
-          const toastStore = useToastStore();
-          const yieldAmount = Number(newData.yield_earned_lw || 0).toFixed(4);
-          toastStore.success(
-            `Predicción ganada! +${yieldAmount} RON de yield`
-          );
-          loadData();
-          const authStore = useAuthStore();
-          authStore.fetchPlayer();
-        }
-      })
-      .subscribe();
-  }
-
-  function unsubscribeFromRealtime() {
-    if (predictionChannel) {
-      supabase.removeChannel(predictionChannel);
-      predictionChannel = null;
-    }
-    stopPricePolling();
-  }
-
   function clearState() {
-    unsubscribeFromRealtime();
+    stopPricePolling();
     activeBets.value = [];
     history.value = [];
     stats.value = null;
@@ -317,11 +300,9 @@ export const usePredictionStore = defineStore('prediction', () => {
     placeBet,
     cancelBet,
 
-    // Polling & Realtime
+    // Polling
     startPricePolling,
     stopPricePolling,
-    subscribeToRealtime,
-    unsubscribeFromRealtime,
     clearState,
   };
 });

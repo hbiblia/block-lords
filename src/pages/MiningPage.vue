@@ -109,6 +109,15 @@ function startTour() {
   showTour.value = true;
 }
 
+// Solo mining recent blocks
+const soloRecentBlocks = computed(() => soloMiningStore.recentBlocks);
+const soloBlockTypeConfig: Record<string, { icon: string; color: string; bg: string }> = {
+  bronze: { icon: '🥉', color: 'text-amber-600', bg: 'bg-amber-600/10' },
+  silver: { icon: '🥈', color: 'text-gray-300', bg: 'bg-gray-300/10' },
+  gold: { icon: '🥇', color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
+  diamond: { icon: '💎', color: 'text-cyan-400', bg: 'bg-cyan-400/10' },
+};
+
 // Recent blocks panel
 const recentBlocksCollapsed = ref(localStorage.getItem('recentBlocksCollapsed') !== 'false');
 function toggleRecentBlocks() {
@@ -116,15 +125,18 @@ function toggleRecentBlocks() {
   localStorage.setItem('recentBlocksCollapsed', String(recentBlocksCollapsed.value));
 }
 
+// Solo recent blocks panel
+const soloRecentBlocksCollapsed = ref(localStorage.getItem('soloRecentBlocksCollapsed') !== 'false');
+function toggleSoloRecentBlocks() {
+  soloRecentBlocksCollapsed.value = !soloRecentBlocksCollapsed.value;
+  localStorage.setItem('soloRecentBlocksCollapsed', String(soloRecentBlocksCollapsed.value));
+}
+
 
 // Uptime timer
 const uptimeKey = ref(0);
 let uptimeInterval: number | null = null;
 
-// Polling intervals (stored for cleanup)
-let blockInfoInterval: number | null = null;
-let playerSharesInterval: number | null = null;
-let rigsRefreshInterval: number | null = null;
 
 // Computed from store
 const rigs = computed(() => miningStore.rigs);
@@ -409,26 +421,6 @@ function cancelStopRig() {
   stopRigError.value = null;
 }
 
-// Block mined handler
-function handleBlockMined(event: CustomEvent) {
-  const { block, winner } = event.detail;
-  miningStore.handleBlockMined(block, winner);
-
-  // Refresh exchange rate chart when a block is mined (rates may change)
-  exchangeRateChartRef.value?.refresh();
-
-  if (winner?.id === authStore.player?.id) {
-    lastBlockFound.value = block;
-    showBlockFound.value = true;
-    miningProgress.value = 100;
-
-    setTimeout(() => {
-      showBlockFound.value = false;
-      miningProgress.value = 0;
-    }, 3000);
-  }
-}
-
 // UI Helpers
 function getTierColor(tier: string): string {
   switch (tier) {
@@ -692,45 +684,17 @@ function stopUptimeTimer() {
 
 onMounted(() => {
   miningStore.loadData();
-  miningStore.subscribeToRealtime();
   startMiningSimulation();
   startUptimeTimer();
   requestWakeLock();
 
   // Solo mining
   soloMiningStore.loadStatus();
-  soloMiningStore.subscribe();
-
-  // Nuevo sistema de shares
-  miningStore.loadMiningBlockInfo();
-  miningStore.loadPlayerShares();
-  miningStore.subscribeToMiningBlocks();
-
-  // Actualizar bloque info cada segundo para countdown
-  blockInfoInterval = setInterval(() => {
-    miningStore.loadMiningBlockInfo();
-  }, 1000) as unknown as number;
-
-  // Actualizar shares del jugador cada 30 segundos (respaldo por si realtime falla)
-  playerSharesInterval = setInterval(() => {
-    miningStore.loadPlayerShares();
-  }, 30000) as unknown as number;
-
-  // Actualizar datos de rigs cada 30 segundos (temperatura, condición, etc.)
-  // Necesario porque realtime skippea UPDATEs de player_rigs para evitar flood del game_tick
-  rigsRefreshInterval = setInterval(async () => {
-    if (rigs.value.some(r => r.is_active)) {
-      await miningStore.reloadRigs();
-      captureSnapshots();
-    }
-  }, 30000) as unknown as number;
 
   // Captura inicial de stats
   captureSnapshots();
 
-  window.addEventListener('block-mined', handleBlockMined as EventListener);
   window.addEventListener('start-mining-tour', startTour);
-
 });
 
 // Auto-start tour for first-time users
@@ -744,23 +708,13 @@ onUnmounted(() => {
   stopMiningSimulation();
   stopUptimeTimer();
   stopRigSound();
-  miningStore.unsubscribeFromRealtime();
   releaseWakeLock();
-
-  // Limpiar intervalos de polling
-  if (blockInfoInterval) clearInterval(blockInfoInterval);
-  if (playerSharesInterval) clearInterval(playerSharesInterval);
-  if (rigsRefreshInterval) clearInterval(rigsRefreshInterval);
 
   // Limpiar listeners de inicialización de sonido (si aún no se ejecutaron)
   document.removeEventListener('click', initRigSoundOnInteraction);
   document.removeEventListener('keydown', initRigSoundOnInteraction);
 
-  window.removeEventListener('block-mined', handleBlockMined as EventListener);
   window.removeEventListener('start-mining-tour', startTour);
-
-  // Solo mining cleanup
-  soloMiningStore.unsubscribe();
 });
 </script>
 
@@ -1449,8 +1403,8 @@ onUnmounted(() => {
 
         <!-- Sidebar -->
         <div id="tour-sidebar" class="space-y-4">
-          <!-- Recent Blocks -->
-          <div class="card p-3">
+          <!-- Recent Blocks (Pool) -->
+          <div v-if="activeTab === 'pool'" class="card p-3">
             <div class="flex items-center justify-between mb-2">
               <h3 class="text-sm font-semibold flex items-center gap-1.5 text-text-muted">
                 <span>📦</span> {{ t('mining.recentBlocks') }}
@@ -1555,6 +1509,95 @@ onUnmounted(() => {
                     </span>
                     <span class="font-mono text-amber-400 cursor-help" v-tooltip="t('mining.tooltip.topContributorValue', { username: block.top_contributor.username, pct: block.top_contributor.percentage.toFixed(1) })">
                       {{ block.top_contributor.percentage.toFixed(1) }}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Solo Recent Blocks -->
+          <div v-if="activeTab === 'solo'" class="card p-3">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-semibold flex items-center gap-1.5 text-text-muted">
+                <span>⛏️</span> {{ t('mining.soloRecentBlocks') }}
+                <span v-if="soloRecentBlocks.length > 0" class="text-xs bg-bg-secondary text-text-muted px-1.5 py-0.5 rounded-full font-mono">{{ soloRecentBlocks.length }}</span>
+              </h3>
+              <button
+                @click="toggleSoloRecentBlocks"
+                class="text-text-muted hover:text-white transition-colors p-0.5 rounded"
+                :title="soloRecentBlocksCollapsed ? t('mining.showBlocks') : t('mining.hideBlocks')"
+              >
+                <span class="text-xs transition-transform duration-200 inline-block" :class="soloRecentBlocksCollapsed ? 'rotate-180' : 'rotate-0'">▲</span>
+              </button>
+            </div>
+
+            <div v-if="soloRecentBlocks.length === 0" class="text-center py-4 text-text-muted text-xs">
+              {{ t('mining.noSoloRecentBlocks') }}
+            </div>
+
+            <div v-else class="space-y-1.5">
+              <div v-for="(block, index) in (soloRecentBlocksCollapsed ? soloRecentBlocks.slice(0, 2) : soloRecentBlocks.slice(0, 10))" :key="block.block_number"
+                class="px-2.5 py-2 rounded-lg" :class="[
+                  block.status === 'completed'
+                    ? (soloBlockTypeConfig[block.block_type] ?? soloBlockTypeConfig.bronze).bg
+                    : 'bg-bg-secondary/50'
+                ]">
+                <!-- Row 1: Block number + Time -->
+                <div class="flex items-center justify-between mb-1">
+                  <div class="flex items-center gap-1.5">
+                    <span v-if="index === 0" class="text-xs" v-tooltip="t('mining.tooltip.latestBlock')">🆕</span>
+                    <span class="text-xs cursor-help" v-tooltip="(soloBlockTypeConfig[block.block_type] ?? soloBlockTypeConfig.bronze).icon + ' ' + block.block_type">{{ (soloBlockTypeConfig[block.block_type] ?? soloBlockTypeConfig.bronze).icon }}</span>
+                    <span class="text-sm font-medium cursor-help"
+                      :class="block.status === 'completed' ? (soloBlockTypeConfig[block.block_type] ?? soloBlockTypeConfig.bronze).color : 'text-text-muted'"
+                      v-tooltip="block.status === 'completed' ? t('mining.soloRecentBlock.completed') : t('mining.soloRecentBlock.failed')">
+                      {{ t('mining.recentBlock.blockLabel') }} <span class="font-mono">#{{ block.block_number }}</span>
+                    </span>
+                  </div>
+                  <span class="text-[10px] text-text-muted cursor-help" :key="uptimeKey"
+                    v-tooltip="t('mining.tooltip.blockClosedTime')">{{ block.completed_at ? formatTimeAgo(block.completed_at) : '' }}</span>
+                </div>
+
+                <!-- Row 2: Completed block -->
+                <div v-if="block.status === 'completed'" class="space-y-0.5">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.soloRecentBlock.seedsTooltip')">Seeds</span>
+                    <span class="font-mono text-status-success cursor-help" v-tooltip="`${block.seeds_found}/${block.total_seeds}`">
+                      {{ block.seeds_found }}/{{ block.total_seeds }}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.soloRecentBlock.rewardTooltip')">{{ t('mining.soloRecentBlock.reward') }}</span>
+                    <span class="font-mono text-status-warning cursor-help" v-tooltip="`+${block.reward.toFixed(6)} ₿`">
+                      +{{ block.reward.toFixed(3) }} ₿
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.soloRecentBlock.scansTooltip')">{{ t('mining.soloRecentBlock.scans') }}</span>
+                    <span class="font-mono text-text-secondary cursor-help" v-tooltip="`${block.total_scans} scans`">
+                      {{ block.total_scans.toLocaleString() }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Row 2: Failed block -->
+                <div v-else class="space-y-0.5">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.soloRecentBlock.seedsTooltip')">Seeds</span>
+                    <span class="font-mono text-status-error cursor-help" v-tooltip="`${block.seeds_found}/${block.total_seeds}`">
+                      {{ block.seeds_found }}/{{ block.total_seeds }}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.soloRecentBlock.missedRewardTooltip')">{{ t('mining.soloRecentBlock.reward') }}</span>
+                    <span class="font-mono text-text-muted line-through cursor-help" v-tooltip="t('mining.soloRecentBlock.missedRewardTooltip')">
+                      {{ block.reward.toFixed(3) }} ₿
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-text-muted cursor-help" v-tooltip="t('mining.soloRecentBlock.scansTooltip')">{{ t('mining.soloRecentBlock.scans') }}</span>
+                    <span class="font-mono text-text-secondary cursor-help" v-tooltip="`${block.total_scans} scans`">
+                      {{ block.total_scans.toLocaleString() }}
                     </span>
                   </div>
                 </div>

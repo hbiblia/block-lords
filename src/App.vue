@@ -2,7 +2,7 @@
 import { watch, onMounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
-import { useMiningStore } from '@/stores/mining';
+import { useGameTickStore } from '@/stores/game-tick';
 import { useI18n } from 'vue-i18n';
 import MainLayout from '@/layouts/MainLayout.vue';
 import UpdateModal from '@/components/UpdateModal.vue';
@@ -11,7 +11,7 @@ import { useTabLock } from '@/composables/useTabLock';
 const { t } = useI18n();
 const authStore = useAuthStore();
 const realtimeStore = useRealtimeStore();
-const miningStore = useMiningStore();
+const gameTickStore = useGameTickStore();
 const isRetrying = ref(false);
 const { isSuperseded } = useTabLock();
 
@@ -19,10 +19,10 @@ const { isSuperseded } = useTabLock();
 watch(isSuperseded, (locked) => {
   if (locked) {
     realtimeStore.disconnect();
-    miningStore.unsubscribeFromRealtime();
+    gameTickStore.stop();
   } else if (authStore.isAuthenticated) {
     realtimeStore.connect();
-    miningStore.subscribeToRealtime();
+    gameTickStore.start();
   }
 });
 
@@ -31,14 +31,16 @@ onMounted(async () => {
   await authStore.waitForInit();
 });
 
-// Conectar realtime cuando el usuario esté autenticado
+// Conectar realtime y game tick cuando el usuario esté autenticado
 watch(
   () => authStore.isAuthenticated,
   (isAuth) => {
     if (isAuth) {
       realtimeStore.connect();
+      gameTickStore.start();
     } else {
       realtimeStore.disconnect();
+      gameTickStore.stop();
     }
   },
   { immediate: true }

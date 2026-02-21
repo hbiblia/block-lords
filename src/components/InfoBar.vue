@@ -31,7 +31,6 @@ const dismissedIds = ref<Set<string>>(new Set());
 let rotateInterval: number | null = null;
 
 // Throttle announcement reloading (max once per minute)
-let lastAnnouncementCheck = 0;
 const ANNOUNCEMENT_CHECK_INTERVAL = 60000; // 1 minute
 
 const currentAnnouncement = computed(() => {
@@ -128,14 +127,8 @@ watch(
   { immediate: true }
 );
 
-// Event listener for player updates (indicates tick occurred)
-function handlePlayerUpdate() {
-  const now = Date.now();
-  if (now - lastAnnouncementCheck >= ANNOUNCEMENT_CHECK_INTERVAL) {
-    lastAnnouncementCheck = now;
-    loadAnnouncements();
-  }
-}
+// Periodic announcement check
+let announcementCheckInterval: number | null = null;
 
 onMounted(() => {
   // Check if all announcements were dismissed this session
@@ -154,13 +147,13 @@ onMounted(() => {
   loadAnnouncements();
   startRotation();
 
-  // Listen for player updates (tick events)
-  window.addEventListener('player-rigs-updated', handlePlayerUpdate as EventListener);
+  // Check for new announcements periodically
+  announcementCheckInterval = window.setInterval(loadAnnouncements, ANNOUNCEMENT_CHECK_INTERVAL);
 });
 
 onUnmounted(() => {
   stopRotation();
-  window.removeEventListener('player-rigs-updated', handlePlayerUpdate as EventListener);
+  if (announcementCheckInterval) { clearInterval(announcementCheckInterval); announcementCheckInterval = null; }
 });
 </script>
 

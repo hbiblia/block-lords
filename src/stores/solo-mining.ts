@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { supabase } from '@/utils/supabase';
 import { getSoloMiningStatus, activateSoloMining, deactivateSoloMining, toggleMiningMode } from '@/utils/api';
 import { useAuthStore } from './auth';
 import { useToastStore } from './toast';
@@ -111,11 +110,6 @@ export const useSoloMiningStore = defineStore('soloMining', () => {
   const activating = ref(false);
   const deactivating = ref(false);
 
-  // Subscriptions & intervals
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let soloChannel: any = null;
-  let pollInterval: number | null = null;
-  let countdownInterval: number | null = null;
 
   // Computed
   const isActive = computed(() => status.value.active && status.value.has_rental);
@@ -194,6 +188,55 @@ export const useSoloMiningStore = defineStore('soloMining', () => {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function applyTickData(raw: any) {
+    if (!raw) return;
+
+    const prevSeedsFound = (status.value.seeds ?? []).filter(s => s.found).length;
+    const hadBlock = status.value.current_block !== null;
+    const prevBlockNumber = status.value.current_block?.block_number;
+
+    const data: SoloMiningState = {
+      active: raw.active ?? false,
+      has_rental: raw.has_rental ?? false,
+      mining_mode: raw.mining_mode ?? 'pool',
+      rental: raw.rental ?? null,
+      current_block: raw.current_block ?? null,
+      seeds: raw.seeds ?? [],
+      session_stats: raw.session_stats ?? { blocks_completed: 0, blocks_failed: 0, total_earned: 0 },
+      recent_blocks: raw.recent_blocks ?? [],
+      config: raw.config ?? status.value.config ?? { ...DEFAULT_CONFIG },
+    };
+
+    status.value = data;
+    saveToCache(data);
+
+    // Detect seed found
+    const newSeedsFound = data.seeds?.filter((s: SoloSeed) => s.found).length ?? 0;
+    if (newSeedsFound > prevSeedsFound && prevSeedsFound > 0) {
+      const toastStore = useToastStore();
+      playSound('collect');
+      toastStore.info(`Seed encontrado! ${newSeedsFound}/${data.current_block?.total_seeds ?? '?'}`, '🔑');
+    }
+
+    // Detect block completed
+    if (hadBlock && data.current_block?.block_number !== prevBlockNumber) {
+      const lastCompleted = data.recent_blocks?.find((b: SoloRecentBlock) => b.status === 'completed');
+      if (lastCompleted) {
+        playSound('collect');
+        const toastStore = useToastStore();
+        toastStore.info(`Bloque ${lastCompleted.block_type.toUpperCase()} completado! +${lastCompleted.reward.toLocaleString()} crypto`, '💎');
+      }
+    }
+
+    // Detect block failed
+    const lastFailed = data.recent_blocks?.[0];
+    if (hadBlock && lastFailed?.status === 'failed' && data.current_block?.block_number !== prevBlockNumber) {
+      const toastStore = useToastStore();
+      toastStore.error(`Bloque fallido - no encontraste todos los seeds a tiempo`, '⏰');
+    }
+  }
+
   async function activate() {
     const authStore = useAuthStore();
     const toastStore = useToastStore();
@@ -267,63 +310,7 @@ export const useSoloMiningStore = defineStore('soloMining', () => {
     }
   }
 
-  // Realtime + Polling
-  function subscribe() {
-    const authStore = useAuthStore();
-    if (!authStore.player?.id) return;
-
-    // Suscripcion a cambios en bloques solo
-    soloChannel = supabase
-      .channel(`solo_mining:${authStore.player.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'solo_mining_blocks',
-        filter: `player_id=eq.${authStore.player.id}`,
-      }, () => { loadStatus(); })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'solo_mining_seeds',
-      }, () => { loadStatus(); })
-      .subscribe();
-
-    // Polling fallback cada 10 segundos
-    pollInterval = window.setInterval(() => {
-      if (!isTabLocked.value && status.value.active) loadStatus();
-    }, 10000);
-
-    // Countdown cada segundo
-    startCountdown();
-  }
-
-  function startCountdown() {
-    if (countdownInterval) return;
-    countdownInterval = window.setInterval(() => {
-      // Countdown del bloque activo
-      if (status.value.current_block?.time_remaining_seconds) {
-        status.value.current_block.time_remaining_seconds = Math.max(0,
-          status.value.current_block.time_remaining_seconds - 1);
-        if (status.value.current_block.time_remaining_seconds <= 0) {
-          loadStatus(); // Refrescar para obtener resultado (completado/fallido)
-        }
-      }
-      // Countdown del alquiler
-      if (status.value.rental?.time_remaining_seconds) {
-        status.value.rental.time_remaining_seconds = Math.max(0,
-          status.value.rental.time_remaining_seconds - 1);
-      }
-    }, 1000);
-  }
-
-  function unsubscribe() {
-    if (soloChannel) { supabase.removeChannel(soloChannel); soloChannel = null; }
-    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
-    if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
-  }
-
   function clearState() {
-    unsubscribe();
     status.value = { ...DEFAULT_STATE };
     localStorage.removeItem(STORAGE_KEY);
   }
@@ -337,7 +324,7 @@ export const useSoloMiningStore = defineStore('soloMining', () => {
     blockType, blockReward, blockTimeRemaining, rentalTimeRemaining,
     sessionStats, recentBlocks, totalScans, config,
     // Actions
-    loadStatus, activate, deactivate, toggleMode,
-    subscribe, unsubscribe, clearState,
+    loadStatus, applyTickData, activate, deactivate, toggleMode,
+    clearState,
   };
 });

@@ -2092,13 +2092,16 @@ BEGIN
       WHERE rc_upd.player_rig_id = v_rig.id AND rc_upd.durability > 0;
 
       -- Eliminar refrigeración agotada
-      -- Primero destruir player_cooling_items asociados (modded) para que no reaparezcan en inventario
+      -- Usar CTE para eliminar rig_cooling PRIMERO (evita violación de unique constraint
+      -- por ON DELETE SET NULL en el FK de player_cooling_item_id)
+      -- y luego destruir player_cooling_items asociados (modded)
+      WITH expired_cooling AS (
+        DELETE FROM rig_cooling
+        WHERE player_rig_id = v_rig.id AND durability <= 0
+        RETURNING player_cooling_item_id
+      )
       DELETE FROM player_cooling_items
-      WHERE id IN (
-        SELECT player_cooling_item_id FROM rig_cooling
-        WHERE player_rig_id = v_rig.id AND durability <= 0 AND player_cooling_item_id IS NOT NULL
-      );
-      DELETE FROM rig_cooling WHERE player_rig_id = v_rig.id AND durability <= 0;
+      WHERE id IN (SELECT player_cooling_item_id FROM expired_cooling WHERE player_cooling_item_id IS NOT NULL);
 
       -- Decrementar tiempo restante de boosts activos de este rig
       -- El boost solo cuenta tiempo cuando el rig está minando (is_active = true)

@@ -81,14 +81,6 @@ interface Block {
   };
 }
 
-// Calculate block reward based on height (mirrors database calculate_block_reward function)
-function calculateBlockReward(blockHeight: number): number {
-  const BASE_REWARD = 100;
-  const HALVING_INTERVAL = 10000;
-  const halvings = Math.floor(blockHeight / HALVING_INTERVAL);
-  return BASE_REWARD / Math.pow(2, halvings);
-}
-
 interface CoolingItem {
   id: string;
   durability: number;
@@ -245,13 +237,6 @@ export const useMiningStore = defineStore('mining', () => {
   const refreshing = ref(false);
   const togglingRig = ref<string | null>(null);
 
-  // Realtime channels
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let rigsChannel: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let coolingBoostsChannel: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let miningBlocksChannel: any = null;
 
   // Computed
   const activeRigsCount = computed(() => rigs.value.filter(r => r.is_active).length);
@@ -511,6 +496,45 @@ export const useMiningStore = defineStore('mining', () => {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function applyTickData(data: {
+    rigs: any[];
+    networkStats: any;
+    rigCooling: Record<string, CoolingItem[]>;
+    rigBoosts: Record<string, RigBoost[]>;
+    recentBlocks: Block[];
+    currentMiningBlock: MiningBlockInfo | null;
+    playerShares: PlayerSharesInfo | null;
+  }) {
+    rigs.value = data.rigs ?? [];
+    networkStats.value = data.networkStats;
+    rigCooling.value = data.rigCooling;
+    rigBoosts.value = data.rigBoosts;
+    recentBlocks.value = data.recentBlocks ?? [];
+    currentMiningBlock.value = data.currentMiningBlock;
+    playerShares.value = data.playerShares;
+
+    // Save to localStorage cache
+    saveToCache({
+      rigs: rigs.value,
+      networkStats: networkStats.value,
+      slotInfo: slotInfo.value,
+    });
+
+    // Manage warmup tick
+    const hasWarmingRig = rigs.value.some(r => {
+      if (!r.is_active || !r.activated_at) return false;
+      return (Date.now() - new Date(r.activated_at).getTime()) / 1000 < WARMUP_DURATION_SEC;
+    });
+    if (hasWarmingRig) startWarmupTick(); else stopWarmupTick();
+
+    // Manage boost countdown
+    const hasBoosts = Object.values(data.rigBoosts).some(b => b.length > 0);
+    if (hasBoosts) startBoostCountdown(); else stopBoostCountdown();
+
+    if (!dataLoaded.value) dataLoaded.value = true;
+  }
+
   async function loadRigsCooling() {
     const coolingPromises = rigs.value.map(async (rig) => {
       try {
@@ -581,179 +605,6 @@ export const useMiningStore = defineStore('mining', () => {
     }
   }
 
-  // Realtime handlers
-  // Debounce for network stats refresh (when rigs toggle)
-  let networkStatsDebounceTimer: number | null = null;
-
-  function handleRigUpdate(payload: { eventType: string; new: any; old: any }) {
-    const { eventType, new: newData, old: oldData } = payload;
-
-    if (eventType === 'INSERT' || eventType === 'DELETE') {
-      loadData();
-      return;
-    }
-
-    if (eventType === 'UPDATE' && newData) {
-      const rigIndex = rigs.value.findIndex(r => r.id === newData.id);
-      if (rigIndex !== -1) {
-        const currentRig = rigs.value[rigIndex];
-        // Use splice to ensure Vue reactivity triggers
-        rigs.value.splice(rigIndex, 1, {
-          ...currentRig,
-          is_active: newData.is_active ?? currentRig.is_active,
-          condition: newData.condition ?? currentRig.condition,
-          temperature: newData.temperature ?? currentRig.temperature,
-          activated_at: newData.activated_at ?? currentRig.activated_at,
-          max_condition: newData.max_condition ?? currentRig.max_condition,
-          times_repaired: newData.times_repaired ?? currentRig.times_repaired,
-        });
-
-        // If is_active changed, refresh network stats (activeMiners count)
-        if (oldData && newData.is_active !== oldData.is_active) {
-          refreshNetworkStats();
-        }
-      }
-    }
-  }
-
-  // Debounced refresh of network stats
-  function refreshNetworkStats() {
-    if (networkStatsDebounceTimer) {
-      clearTimeout(networkStatsDebounceTimer);
-    }
-    networkStatsDebounceTimer = window.setTimeout(async () => {
-      try {
-        const freshStats = await getNetworkStats();
-        networkStats.value = freshStats;
-      } catch (e) {
-        console.warn('Error refreshing network stats:', e);
-      }
-      networkStatsDebounceTimer = null;
-    }, 1000);
-  }
-
-  // Debounce for cooling updates
-  let coolingDebounceTimer: number | null = null;
-
-  function handleCoolingUpdate() {
-    if (coolingDebounceTimer) {
-      clearTimeout(coolingDebounceTimer);
-    }
-    coolingDebounceTimer = window.setTimeout(async () => {
-      const toastStore = useToastStore();
-      // Save old cooling to detect expired ones
-      const oldCooling = { ...rigCooling.value };
-
-      await loadRigsCooling();
-
-      // Detect expired cooling (was present before, not present now or durability = 0)
-      for (const rigId of Object.keys(oldCooling)) {
-        const oldItems = oldCooling[rigId] || [];
-        const newItems = rigCooling.value[rigId] || [];
-        const rig = rigs.value.find(r => r.id === rigId);
-        const rigName = rig?.rig?.name || 'Rig';
-
-        for (const oldItem of oldItems) {
-          const stillExists = newItems.find(n => n.id === oldItem.id);
-          if (!stillExists && oldItem.durability <= 1) {
-            toastStore.boostExpired(oldItem.name, rigName);
-          }
-        }
-      }
-
-      coolingDebounceTimer = null;
-    }, 500);
-  }
-
-  // Debounce for boosts updates
-  let boostsDebounceTimer: number | null = null;
-
-  function handleBoostsUpdate() {
-    if (boostsDebounceTimer) {
-      clearTimeout(boostsDebounceTimer);
-    }
-    boostsDebounceTimer = window.setTimeout(async () => {
-      const toastStore = useToastStore();
-      // Save old boosts to detect expired ones
-      const oldBoosts = { ...rigBoosts.value };
-
-      await loadRigsBoosts();
-      // Also reload rigs to update stats when boosts change/expire
-      await reloadRigs();
-
-      // Detect expired boosts (was present before, not present now)
-      for (const rigId of Object.keys(oldBoosts)) {
-        const oldItems = oldBoosts[rigId] || [];
-        const newItems = rigBoosts.value[rigId] || [];
-        const rig = rigs.value.find(r => r.id === rigId);
-        const rigName = rig?.rig?.name || 'Rig';
-
-        for (const oldItem of oldItems) {
-          const stillExists = newItems.find(n => n.id === oldItem.id);
-          if (!stillExists && oldItem.remaining_seconds <= 60) {
-            toastStore.boostExpired(oldItem.name, rigName);
-          }
-        }
-      }
-
-      boostsDebounceTimer = null;
-    }, 500);
-  }
-
-  async function handleBlockMined(block: any, winner: any) {
-    const authStore = useAuthStore();
-    const toastStore = useToastStore();
-
-    // Calculate reward with premium bonus if applicable (only for current user)
-    const baseReward = calculateBlockReward(block.height);
-    const isOwnBlock = winner?.id === authStore.player?.id;
-    const isPremiumBlock = isOwnBlock && authStore.isPremium;
-    const reward = isPremiumBlock ? baseReward * 1.5 : baseReward;
-
-    // Add block to recent list (with deduplication)
-    // Note: For other users' blocks, is_premium will be undefined until data is refreshed from server
-    const alreadyExists = recentBlocks.value.some(
-      b => b.id === block.id || b.height === block.height
-    );
-
-    if (!alreadyExists) {
-      recentBlocks.value.unshift({
-        ...block,
-        miner: winner,
-        reward: isOwnBlock ? reward : undefined, // Only set reward for own blocks where we know premium status
-        is_premium: isOwnBlock ? isPremiumBlock : undefined,
-      });
-      recentBlocks.value = recentBlocks.value.slice(0, 5);
-    }
-
-    // Update latestBlock in networkStats
-    networkStats.value = {
-      ...networkStats.value,
-      latestBlock: {
-        height: block.height,
-        hash: block.hash,
-        created_at: block.created_at,
-        miner: winner,
-      },
-    };
-
-    // Refresh full network stats to get updated activeMiners count
-    try {
-      const freshStats = await getNetworkStats();
-      networkStats.value = freshStats;
-    } catch (e) {
-      console.warn('Error refreshing network stats:', e);
-    }
-
-    if (winner?.id === authStore.player?.id) {
-      playSound('block_mined');
-      authStore.fetchPlayer();
-      // Show toast with actual reward from database (already includes premium bonus)
-      // Fall back to calculated reward only if block.reward is not available
-      const reward = block.reward ?? calculateBlockReward(block.height) * (authStore.isPremium ? 1.5 : 1);
-      toastStore.blockMined(reward, true);
-    }
-  }
 
   // Toggle rig
   async function toggleRig(rigId: string, miningMode: string = 'pool') {
@@ -835,110 +686,8 @@ export const useMiningStore = defineStore('mining', () => {
     }
   }
 
-  // Subscribe to realtime
-  function subscribeToRealtime() {
-    const authStore = useAuthStore();
-    if (!authStore.player?.id) return;
-
-    const playerId = authStore.player.id;
-
-    // Subscribe to player_rigs changes
-    rigsChannel = supabase
-      .channel(`mining_rigs:${playerId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'player_rigs',
-          filter: `player_id=eq.${playerId}`,
-        },
-        (payload) => {
-          handleRigUpdate(payload as any);
-        }
-      )
-      .subscribe();
-
-    // Subscribe to rig_cooling + rig_boosts on a single channel (with player filter)
-    coolingBoostsChannel = supabase
-      .channel(`mining_cooling_boosts:${playerId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'rig_cooling',
-          filter: `player_id=eq.${playerId}`,
-        },
-        () => {
-          handleCoolingUpdate();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'rig_boosts',
-          filter: `player_id=eq.${playerId}`,
-        },
-        () => {
-          handleBoostsUpdate();
-        }
-      )
-      .subscribe();
-
-    // Listen to network_stats from global channel event (avoids duplicate subscription)
-    window.addEventListener('network-stats-updated', handleNetworkStatsEvent as EventListener);
-  }
-
-  function handlePlayerSharesEvent() {
-    loadPlayerShares();
-  }
-
-  function handleNetworkStatsEvent(e: CustomEvent) {
-    const newStats = e.detail;
-    if (newStats) {
-      networkStats.value = {
-        ...networkStats.value,
-        difficulty: newStats.difficulty ?? networkStats.value.difficulty,
-        hashrate: newStats.hashrate ?? networkStats.value.hashrate,
-        activeMiners: newStats.active_miners ?? networkStats.value.activeMiners,
-      };
-    }
-  }
-
-  function unsubscribeFromRealtime() {
-    if (rigsChannel) {
-      supabase.removeChannel(rigsChannel);
-      rigsChannel = null;
-    }
-    if (coolingBoostsChannel) {
-      supabase.removeChannel(coolingBoostsChannel);
-      coolingBoostsChannel = null;
-    }
-    window.removeEventListener('network-stats-updated', handleNetworkStatsEvent as EventListener);
-    window.removeEventListener('player-shares-updated', handlePlayerSharesEvent);
-    if (miningBlocksChannel) {
-      supabase.removeChannel(miningBlocksChannel);
-      miningBlocksChannel = null;
-    }
-    if (coolingDebounceTimer) {
-      clearTimeout(coolingDebounceTimer);
-      coolingDebounceTimer = null;
-    }
-    if (boostsDebounceTimer) {
-      clearTimeout(boostsDebounceTimer);
-      boostsDebounceTimer = null;
-    }
-    if (networkStatsDebounceTimer) {
-      clearTimeout(networkStatsDebounceTimer);
-      networkStatsDebounceTimer = null;
-    }
-  }
 
   function clearState() {
-    unsubscribeFromRealtime();
     rigs.value = [];
     networkStats.value = DEFAULT_NETWORK_STATS;
     recentBlocks.value = [];
@@ -1137,25 +886,6 @@ export const useMiningStore = defineStore('mining', () => {
     }
   });
 
-  // Suscripción a cambios en realtime
-  function subscribeToMiningBlocks() {
-    const authStore = useAuthStore();
-    if (!authStore.player?.id) return;
-
-    miningBlocksChannel = supabase
-      .channel('mining_blocks_realtime')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'mining_blocks',
-      }, () => {
-        loadMiningBlockInfo();
-      })
-      .subscribe();
-
-    // Listen to player_shares from private channel event
-    window.addEventListener('player-shares-updated', handlePlayerSharesEvent);
-  }
 
   return {
     // State
@@ -1196,16 +926,12 @@ export const useMiningStore = defineStore('mining', () => {
 
     // Actions
     loadData,
+    applyTickData,
     loadRigsCooling,
     loadRigsBoosts,
     loadActiveBoosts,
     reloadRigs,
     toggleRig,
-    handleBlockMined,
-
-    // Realtime
-    subscribeToRealtime,
-    unsubscribeFromRealtime,
     clearState,
 
     // Nuevo sistema de shares
@@ -1222,6 +948,5 @@ export const useMiningStore = defineStore('mining', () => {
     loadMiningBlockInfo,
     loadPlayerShares,
     loadRecentBlocks,
-    subscribeToMiningBlocks,
   };
 });

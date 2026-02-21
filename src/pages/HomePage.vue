@@ -3,7 +3,6 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getHomeStats } from '@/utils/api';
-import { supabase } from '@/utils/supabase';
 
 const { t } = useI18n();
 
@@ -53,55 +52,13 @@ function formatCryptoStat(num: number | undefined | null): string {
   return num.toFixed(2) + ' ₿';
 }
 
-// Listen to global channel events (avoids duplicate realtime subscriptions)
-function handleNetworkStats(e: Event) {
-  const detail = (e as CustomEvent).detail;
-  if (stats.value && detail) {
-    stats.value.difficulty = detail.difficulty ?? stats.value.difficulty;
-  }
-}
-
-function handleBlockMined() {
-  if (stats.value) {
-    stats.value.totalBlocks++;
-  }
-}
-
-// Realtime subscription para players (nuevos jugadores) — no global equivalent
-const playersChannel = supabase
-  .channel('home_players')
-  .on(
-    'postgres_changes',
-    {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'players',
-    },
-    () => {
-      if (stats.value) {
-        stats.value.totalPlayers++;
-      }
-    }
-  )
-  .on(
-    'postgres_changes',
-    {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'players',
-      filter: 'is_online=eq.true',
-    },
-    () => {
-      // Recargar stats cuando cambia el estado online
-      loadStats();
-    }
-  );
+// Polling interval for stats refresh
+let statsInterval: number | null = null;
 
 onMounted(() => {
   loadStats();
-  window.addEventListener('network-stats-updated', handleNetworkStats);
-  window.addEventListener('block-mined', handleBlockMined);
-  playersChannel.subscribe();
+  // Refresh stats every 30s (matches game tick)
+  statsInterval = window.setInterval(loadStats, 30000);
 
   // Initialize AdSense
   setTimeout(() => {
@@ -117,9 +74,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  window.removeEventListener('network-stats-updated', handleNetworkStats);
-  window.removeEventListener('block-mined', handleBlockMined);
-  supabase.removeChannel(playersChannel);
+  if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
 });
 </script>
 

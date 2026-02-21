@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { watch } from 'vue';
+import { watch, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRealtimeStore } from '@/stores/realtime';
+import { useGameTickStore } from '@/stores/game-tick';
 import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
-const realtimeStore = useRealtimeStore();
+const gameTickStore = useGameTickStore();
 
-watch(() => realtimeStore.showDisconnectedModal, (show) => {
+const showDisconnected = computed(() =>
+  gameTickStore.tickCount > 0 && !gameTickStore.isHealthy
+);
+
+watch(showDisconnected, (show) => {
   if (show) playSound('warning');
 });
 
 function handleReconnect() {
-  realtimeStore.manualReconnect();
+  gameTickStore.start();
 }
 
 function handleRefresh() {
@@ -24,7 +28,7 @@ function handleRefresh() {
   <Teleport to="body">
     <Transition name="toast">
       <div
-        v-if="realtimeStore.showDisconnectedModal"
+        v-if="showDisconnected"
         class="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] w-[calc(100%-2rem)] max-w-sm"
       >
         <div class="relative overflow-hidden rounded-xl bg-slate-900/95 border border-red-500/30 shadow-lg shadow-red-500/10 backdrop-blur-sm">

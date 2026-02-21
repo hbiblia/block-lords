@@ -2,7 +2,7 @@
 import { onMounted, onUnmounted, watch, ref, provide, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
-import { useRealtimeStore } from '@/stores/realtime';
+import { useGameTickStore } from '@/stores/game-tick';
 import { useStreakStore } from '@/stores/streak';
 import { useMissionsStore } from '@/stores/missions';
 import { usePendingBlocksStore } from '@/stores/pendingBlocks';
@@ -74,7 +74,7 @@ import MiningGuide from '@/components/MiningGuide.vue';
 import RewardCelebration from '@/components/RewardCelebration.vue';
 
 const authStore = useAuthStore();
-const realtimeStore = useRealtimeStore();
+const gameTickStore = useGameTickStore();
 const streakStore = useStreakStore();
 const missionsStore = useMissionsStore();
 const pendingBlocksStore = usePendingBlocksStore();
@@ -111,15 +111,6 @@ provide('infoBarVisible', infoBarVisible);
 // Desktop action buttons visibility (persisted in localStorage)
 const desktopButtonsVisible = ref(localStorage.getItem('desktopButtonsVisible') !== 'false');
 
-// Escuchar evento de bloque minado para actualizar pending blocks
-function handleBlockMined(event: CustomEvent) {
-  const { winner } = event.detail;
-  // Si el jugador actual minó el bloque, actualizar pending blocks
-  if (winner?.id === authStore.player?.id) {
-    pendingBlocksStore.fetchPendingBlocks();
-  }
-}
-
 // Escuchar evento de bloque pendiente creado (incluye pity blocks)
 // El feedback visual y sonido lo maneja RewardCelebration.vue
 function handlePendingBlockCreated() {
@@ -148,7 +139,6 @@ function handleOpenMailEvent() {
 
 // Escuchar eventos
 onMounted(() => {
-  window.addEventListener('block-mined', handleBlockMined as EventListener);
   window.addEventListener('pending-block-created', handlePendingBlockCreated as EventListener);
   window.addEventListener('open-market', handleOpenMarketEvent);
   window.addEventListener('close-market', handleCloseMarketEvent);
@@ -200,7 +190,6 @@ onUnmounted(() => {
   giftsStore.stopPolling();
   mailStore.stopPolling();
   defenseStore.unsubscribeLobbyCount();
-  window.removeEventListener('block-mined', handleBlockMined as EventListener);
   window.removeEventListener('pending-block-created', handlePendingBlockCreated as EventListener);
   window.removeEventListener('open-market', handleOpenMarketEvent);
   window.removeEventListener('close-market', handleCloseMarketEvent);
@@ -211,9 +200,9 @@ onUnmounted(() => {
 });
 
 // Connection status computed properties
-const isFullyConnected = computed(() => realtimeStore.isConnected && authStore.isServerOnline && !authStore.sessionLost);
+const isFullyConnected = computed(() => gameTickStore.isHealthy && authStore.isServerOnline && !authStore.sessionLost);
 const hasApiIssue = computed(() => !authStore.isServerOnline && !authStore.sessionLost);
-const hasRealtimeIssue = computed(() => !realtimeStore.isConnected);
+const hasRealtimeIssue = computed(() => !gameTickStore.isHealthy);
 const hasSessionLost = computed(() => authStore.sessionLost);
 
 const connectionDotClass = computed(() => {
@@ -261,7 +250,7 @@ async function handleConnectionClick() {
         await authStore.retryConnection();
       }
       if (hasRealtimeIssue.value) {
-        realtimeStore.connect();
+        gameTickStore.start();
       }
     } finally {
       isRetryingConnection.value = false;

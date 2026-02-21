@@ -86,13 +86,11 @@ watch(() => props.show, (open) => {
   if (open) {
     predictionStore.loadData();
     predictionStore.startPricePolling();
-    predictionStore.subscribeToRealtime();
     betAmount.value = '';
     showConfirmPlace.value = false;
     showConfirmCancel.value = null;
   } else {
     predictionStore.stopPricePolling();
-    predictionStore.unsubscribeFromRealtime();
   }
 });
 
