@@ -30,7 +30,9 @@
       "Bash(git -C /d/software/block-lords ls-files)",
       "Bash(ls:*)",
       "Bash(npm install:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "WebFetch(domain:support.google.com)",
+      "Bash(git -C /d/software/block-lords log --oneline)"
     ]
   }
 }

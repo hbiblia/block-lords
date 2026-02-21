@@ -6,6 +6,25 @@ import { useAuthStore } from '@/stores/auth';
 import { playSound } from '@/utils/sounds';
 import { formatCrypto, formatNumber } from '@/utils/format';
 
+// AdSense initialization for claim modal
+const adInitialized = ref(false);
+function initClaimAd() {
+  if (adInitialized.value) return;
+  nextTick(() => {
+    setTimeout(() => {
+      try {
+        const adEl = document.querySelector('.adsbygoogle[data-ad-slot="6463255272"]');
+        if (adEl && adEl.clientWidth > 0 && !adEl.hasAttribute('data-adsbygoogle-status')) {
+          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+          adInitialized.value = true;
+        }
+      } catch (e) {
+        // AdSense not available
+      }
+    }, 500);
+  });
+}
+
 const { t } = useI18n();
 const pendingStore = usePendingBlocksStore();
 const authStore = useAuthStore();
@@ -56,6 +75,8 @@ watch(() => props.show, (isOpen) => {
     // Reset captcha state
     selectedBlockId.value = null;
     captchaVerified.value = false;
+    // Initialize ad
+    initClaimAd();
   } else {
     resetCaptcha();
   }
@@ -309,6 +330,15 @@ function onScroll() {
                 <div v-else v-tooltip="formatNumber(pendingStore.totalReward, 2)" class="text-3xl font-bold text-white cursor-help">
                   {{ formatCrypto(pendingStore.totalReward) }} ₿
                 </div>
+              </div>
+            </div>
+
+            <!-- AdSense Banner -->
+            <div class="rounded-xl p-2 text-center mb-4 bg-bg-secondary/50">
+              <div class="text-[10px] text-text-muted mb-1">{{ t('blocks.sponsoredBy') }}</div>
+              <div class="flex justify-center">
+                <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7500429866047477"
+                  data-ad-slot="6463255272" data-ad-format="auto" data-full-width-responsive="true"></ins>
               </div>
             </div>
 

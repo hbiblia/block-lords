@@ -731,17 +731,6 @@ onMounted(() => {
   window.addEventListener('block-mined', handleBlockMined as EventListener);
   window.addEventListener('start-mining-tour', startTour);
 
-  // Initialize AdSense (delay to ensure container has width)
-  setTimeout(() => {
-    try {
-      const adEl = document.querySelector('.adsbygoogle[data-ad-slot="6463255272"]');
-      if (adEl && adEl.clientWidth > 0) {
-        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-      }
-    } catch (e) {
-      // AdSense not available
-    }
-  }, 1500);
 });
 
 // Auto-start tour for first-time users
@@ -1576,14 +1565,6 @@ onUnmounted(() => {
           <!-- Exchange Rate Chart -->
           <ExchangeRateChart ref="exchangeRateChartRef" />
 
-          <!-- AdSense Banner -->
-          <div class="card p-3 text-center">
-            <div class="text-xs text-text-muted mb-2">{{ t('blocks.sponsoredBy') }}</div>
-            <div class="flex justify-center">
-              <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7500429866047477"
-                data-ad-slot="6463255272" data-ad-format="auto" data-full-width-responsive="true"></ins>
-            </div>
-          </div>
         </div>
       </div>
     </div>

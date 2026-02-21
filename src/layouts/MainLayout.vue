@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, ref, provide, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useRealtimeStore } from '@/stores/realtime';
 import { useStreakStore } from '@/stores/streak';
@@ -11,24 +10,22 @@ import { useMiningStore } from '@/stores/mining';
 import { useGiftsStore } from '@/stores/gifts';
 import { useMailStore } from '@/stores/mail';
 import { useDefenseStore } from '@/stores/defense';
+import { useToastStore } from '@/stores/toast';
 import { formatCompact } from '@/utils/format';
 
 const { t } = useI18n();
-const route = useRoute();
 
-// Ad blocker detection
-const showAdBlockAlert = ref(false);
-
+// Ad blocker detection (non-blocking toast)
 function detectAdBlocker() {
   const script = document.createElement('script');
   script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
   script.onload = () => { script.remove(); };
-  script.onerror = () => { showAdBlockAlert.value = true; script.remove(); };
+  script.onerror = () => {
+    script.remove();
+    const toastStore = useToastStore();
+    toastStore.warning(t('adblock.toastMessage'), '🛡️');
+  };
   document.head.appendChild(script);
-}
-
-function dismissAdBlockAlert() {
-  showAdBlockAlert.value = false;
 }
 
 // Global modals state
@@ -183,18 +180,6 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
     authStore.startSessionCheck();
     // Subscribe to lobby count for badge
     defenseStore.subscribeLobbyCount();
-    // Inicializar AdSense cuando el usuario se autentica
-    setTimeout(() => {
-      try {
-        document.querySelectorAll('ins.adsbygoogle').forEach((el) => {
-          if (el.clientWidth > 0 && !el.hasAttribute('data-adsbygoogle-status')) {
-            ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-          }
-        });
-      } catch (e) {
-        // AdSense not available
-      }
-    }, 1500);
   } else {
     missionsStore.stopHeartbeat();
     authStore.stopSessionCheck();
@@ -307,77 +292,6 @@ async function handleConnectionClick() {
     <!-- Reward Celebration Animation -->
     <RewardCelebration />
 
-    <!-- Ad Blocker Alert -->
-    <Teleport to="body">
-      <transition
-        enter-active-class="transition-opacity duration-300"
-        leave-active-class="transition-opacity duration-200"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div v-if="showAdBlockAlert && route.path === '/mining'" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-          <div class="bg-bg-secondary border border-border/40 rounded-2xl p-6 max-w-md w-full shadow-2xl my-auto">
-            <div class="text-center">
-              <div class="text-4xl mb-3">🛡️</div>
-              <h3 class="text-lg font-bold text-text-primary mb-2">{{ t('adblock.title') }}</h3>
-              <p class="text-sm text-text-muted mb-4 leading-relaxed">{{ t('adblock.message') }}</p>
-            </div>
-
-            <!-- Instructions -->
-            <div class="bg-bg-primary/50 rounded-xl p-4 mb-4 text-left space-y-3">
-              <h4 class="text-xs font-bold text-text-primary uppercase tracking-wide">{{ t('adblock.howToFix') }}</h4>
-
-              <!-- Extensions -->
-              <div class="flex gap-2.5">
-                <span class="text-base mt-0.5 shrink-0">🧩</span>
-                <div>
-                  <p class="text-xs font-semibold text-text-primary">{{ t('adblock.extensions.title') }}</p>
-                  <p class="text-[11px] text-text-muted leading-relaxed">{{ t('adblock.extensions.description') }}</p>
-                </div>
-              </div>
-
-              <!-- Edge -->
-              <div class="flex gap-2.5">
-                <span class="text-base mt-0.5 shrink-0">🌐</span>
-                <div>
-                  <p class="text-xs font-semibold text-text-primary">{{ t('adblock.edge.title') }}</p>
-                  <p class="text-[11px] text-text-muted leading-relaxed">{{ t('adblock.edge.description') }}</p>
-                </div>
-              </div>
-
-              <!-- Firefox -->
-              <div class="flex gap-2.5">
-                <span class="text-base mt-0.5 shrink-0">🦊</span>
-                <div>
-                  <p class="text-xs font-semibold text-text-primary">{{ t('adblock.firefox.title') }}</p>
-                  <p class="text-[11px] text-text-muted leading-relaxed">{{ t('adblock.firefox.description') }}</p>
-                </div>
-              </div>
-
-              <!-- Brave -->
-              <div class="flex gap-2.5">
-                <span class="text-base mt-0.5 shrink-0">🦁</span>
-                <div>
-                  <p class="text-xs font-semibold text-text-primary">{{ t('adblock.brave.title') }}</p>
-                  <p class="text-[11px] text-text-muted leading-relaxed">{{ t('adblock.brave.description') }}</p>
-                </div>
-              </div>
-            </div>
-
-            <p class="text-[11px] text-text-muted text-center mb-4">{{ t('adblock.reloadHint') }}</p>
-
-            <button
-              @click="dismissAdBlockAlert"
-              class="w-full px-4 py-2.5 bg-accent-primary hover:bg-accent-primary/80 text-white font-semibold rounded-xl transition-colors"
-            >
-              {{ t('adblock.button') }}
-            </button>
-          </div>
-        </div>
-      </transition>
-    </Teleport>
 
     <!-- Missions & Streak Panel -->
     <MissionsPanel
@@ -747,6 +661,10 @@ async function handleConnectionClick() {
         <span class="text-border">|</span>
         <RouterLink to="/rules" class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">
           {{ $t('footer.rules') }}
+        </RouterLink>
+        <span class="text-border">|</span>
+        <RouterLink to="/terms" class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">
+          {{ $t('footer.terms') }}
         </RouterLink>
       </div>
       <p class="text-text-muted text-xs italic">{{ $t('footer.disclaimer') }}</p>

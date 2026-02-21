@@ -125,10 +125,36 @@ const { t } = useI18n();
       </ul>
     </section>
 
+    <!-- Wagering & Responsible Play -->
+    <section class="card p-5 mb-4 border-amber-500/20">
+      <h2 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+        <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-sm">5</span>
+        {{ t('rules.gambling.title') }}
+      </h2>
+      <ul class="space-y-2 text-sm text-text-secondary">
+        <li class="flex items-start gap-2">
+          <span class="text-amber-400 mt-0.5">&#8226;</span>
+          {{ t('rules.gambling.ageRequirement') }}
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="text-amber-400 mt-0.5">&#8226;</span>
+          {{ t('rules.gambling.responsible') }}
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="text-amber-400 mt-0.5">&#8226;</span>
+          {{ t('rules.gambling.cryptoRisk') }}
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="text-amber-400 mt-0.5">&#8226;</span>
+          {{ t('rules.gambling.noGuarantee') }}
+        </li>
+      </ul>
+    </section>
+
     <!-- Community -->
     <section class="card p-5 mb-4">
       <h2 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-        <span class="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center text-sm">5</span>
+        <span class="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center text-sm">6</span>
         {{ t('rules.community.title') }}
       </h2>
       <ul class="space-y-2 text-sm text-text-secondary">

@@ -67,6 +67,11 @@ const router = createRouter({
       component: () => import('@/pages/RulesPage.vue'),
     },
     {
+      path: '/terms',
+      name: 'terms',
+      component: () => import('@/pages/TermsPage.vue'),
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/pages/NotFoundPage.vue'),

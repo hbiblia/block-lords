@@ -23,6 +23,14 @@ watch(direction, (dir) => {
 const showConfirmPlace = ref(false);
 const showConfirmCancel = ref<string | null>(null);
 
+// Age verification (18+) gate for betting
+const ageVerified = ref(localStorage.getItem('lootmine_age_verified') === 'true');
+
+function confirmAge() {
+  ageVerified.value = true;
+  localStorage.setItem('lootmine_age_verified', 'true');
+}
+
 const TARGET_OPTIONS = [5, 10, 20, 40, 60, 100];
 const availableTargets = computed(() =>
   direction.value === 'down'
@@ -222,6 +230,21 @@ function timeAgo(dateStr: string): string {
 
             <!-- TAB: PLACE BET -->
             <div v-if="activeTab === 'place'" class="p-3 space-y-2.5">
+
+              <!-- Age Verification Gate -->
+              <div v-if="!ageVerified" class="text-center space-y-3 py-6">
+                <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <span class="text-2xl block mb-2">&#9888;</span>
+                  <h3 class="text-sm font-bold text-amber-400 mb-1">{{ t('ageVerification.title') }}</h3>
+                  <p class="text-xs text-slate-400 mb-3">{{ t('ageVerification.messagePrediction') }}</p>
+                  <button @click="confirmAge" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg text-sm transition-colors">
+                    {{ t('ageVerification.confirm') }}
+                  </button>
+                </div>
+                <p class="text-[10px] text-slate-500">{{ t('ageVerification.disclaimer') }}</p>
+              </div>
+
+              <template v-else>
               <!-- Direction -->
               <div>
                 <label class="text-[10px] text-text-muted mb-1 block">{{ t('prediction.direction.label') }}</label>
@@ -334,6 +357,12 @@ function timeAgo(dateStr: string): string {
                 class="btn-primary w-full py-2 text-sm">
                 {{ predictionStore.placing ? t('prediction.actions.placing') : t('prediction.actions.placeBet') }}
               </button>
+
+              <!-- Responsible gambling notice -->
+              <p class="text-[9px] text-slate-500 text-center mt-1 leading-relaxed">
+                {{ t('gambling.disclaimer') }}
+              </p>
+              </template>
             </div>
 
             <!-- TAB: ACTIVE BETS -->

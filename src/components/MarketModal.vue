@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMarketStore } from '@/stores/market';
@@ -669,6 +669,23 @@ function cancelPurchase() {
   confirmAction.value = null;
 }
 
+// AdSense
+const marketAdInitialized = ref(false);
+function initMarketAd() {
+  if (marketAdInitialized.value) return;
+  nextTick(() => {
+    setTimeout(() => {
+      try {
+        const adEl = document.querySelector('.market-ad-slot .adsbygoogle');
+        if (adEl && adEl.clientWidth > 0 && !adEl.hasAttribute('data-adsbygoogle-status')) {
+          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+          marketAdInitialized.value = true;
+        }
+      } catch (e) { /* ad blocked */ }
+    }, 500);
+  });
+}
+
 onMounted(() => {
   if (props.show) {
     loadData();
@@ -678,6 +695,9 @@ onMounted(() => {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     loadData();
+    initMarketAd();
+  } else {
+    marketAdInitialized.value = false;
   }
 });
 </script>
@@ -718,6 +738,19 @@ watch(() => props.show, (newVal) => {
             <span class="font-bold text-status-warning">{{ formatGamecoin(balance) }} 🪙</span>
             <span class="font-bold text-accent-primary">{{ formatCrypto(cryptoBalance) }} 💎</span>
             <span class="font-bold text-amber-400">{{ formatRon(ronBalance) }} RON</span>
+          </div>
+        </div>
+
+        <!-- Ad Banner -->
+        <div class="market-ad-slot px-4 py-2 border-b border-border/30 bg-bg-secondary/30">
+          <div class="text-[10px] text-text-muted text-center mb-1">{{ t('blocks.sponsoredBy') }}</div>
+          <div class="flex justify-center">
+            <ins class="adsbygoogle"
+              style="display:block"
+              data-ad-client="ca-pub-7500429866047477"
+              data-ad-slot="6463255272"
+              data-ad-format="horizontal"
+              data-full-width-responsive="true"></ins>
           </div>
         </div>
 

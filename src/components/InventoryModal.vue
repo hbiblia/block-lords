@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useInventoryStore, type CoolingItem, type ModdedCoolingItem } from '@/stores/inventory';
@@ -122,12 +122,31 @@ const groupedModdedCooling = computed<GroupedModdedCooling[]>(() => {
   return Array.from(groups.values());
 });
 
+// AdSense
+const inventoryAdInitialized = ref(false);
+function initInventoryAd() {
+  if (inventoryAdInitialized.value) return;
+  nextTick(() => {
+    setTimeout(() => {
+      try {
+        const adEl = document.querySelector('.inventory-ad-slot .adsbygoogle');
+        if (adEl && adEl.clientWidth > 0 && !adEl.hasAttribute('data-adsbygoogle-status')) {
+          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+          inventoryAdInitialized.value = true;
+        }
+      } catch (e) { /* ad blocked */ }
+    }, 500);
+  });
+}
+
 // Fetch inventory when modal opens
 watch(() => props.show, async (isOpen) => {
   if (isOpen) {
     await inventoryStore.fetchInventory();
+    initInventoryAd();
   } else {
     selectedItem.value = null;
+    inventoryAdInitialized.value = false;
   }
 });
 
@@ -762,6 +781,19 @@ async function applyPatchToRig(rigId: string) {
           <span class="text-xs font-mono" :class="capacityPercentage > 90 ? 'text-status-danger' : 'text-text-muted'">
             {{ inventoryStore.slotsUsed }}/{{ inventoryStore.maxSlots }}
           </span>
+        </div>
+
+        <!-- Ad Banner -->
+        <div class="inventory-ad-slot px-3 py-2 border-b border-border/30 bg-bg-primary/30">
+          <div class="text-[10px] text-text-muted text-center mb-1">{{ t('blocks.sponsoredBy') }}</div>
+          <div class="flex justify-center">
+            <ins class="adsbygoogle"
+              style="display:block"
+              data-ad-client="ca-pub-7500429866047477"
+              data-ad-slot="6463255272"
+              data-ad-format="horizontal"
+              data-full-width-responsive="true"></ins>
+          </div>
         </div>
 
         <!-- Active Boosts Bar -->

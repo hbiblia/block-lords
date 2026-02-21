@@ -3,6 +3,14 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { BET_OPTIONS } from '@/utils/battleCards';
 
+// Age verification (18+) gate for betting
+const ageVerified = ref(localStorage.getItem('lootmine_age_verified') === 'true');
+
+function confirmAge() {
+  ageVerified.value = true;
+  localStorage.setItem('lootmine_age_verified', 'true');
+}
+
 const props = defineProps<{
   readyRoom: {
     id: string;
@@ -207,8 +215,21 @@ watch(() => props.loading, (isLoading) => {
       </div>
     </div>
 
+    <!-- Age Verification Gate -->
+    <div v-if="!ageVerified" class="w-full max-w-sm text-center space-y-3 mb-4">
+      <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+        <span class="text-2xl block mb-2">&#9888;</span>
+        <h3 class="text-sm font-bold text-amber-400 mb-1">{{ t('ageVerification.title') }}</h3>
+        <p class="text-xs text-slate-400 mb-3">{{ t('ageVerification.message') }}</p>
+        <button @click="confirmAge" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg text-sm transition-colors">
+          {{ t('ageVerification.confirm') }}
+        </button>
+      </div>
+      <p class="text-[10px] text-slate-500">{{ t('ageVerification.disclaimer') }}</p>
+    </div>
+
     <!-- Action Area -->
-    <div class="w-full max-w-sm">
+    <div v-else class="w-full max-w-sm">
       <!-- STATE 1: Both ready, bets matched → Starting battle -->
       <div v-if="bothReady" class="text-center space-y-3">
         <div class="px-5 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center">
@@ -366,6 +387,11 @@ watch(() => props.loading, (isLoading) => {
           </button>
         </div>
       </div>
+
+      <!-- Responsible gambling notice -->
+      <p class="text-[9px] text-slate-500 text-center mt-3 leading-relaxed">
+        {{ t('gambling.disclaimer') }}
+      </p>
     </div>
 
     <!-- Action Buttons -->

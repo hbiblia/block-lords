@@ -213,6 +213,9 @@ async function toggleLeaderboard() {
           </div>
         </div>
 
+        <!-- Responsible gambling notice -->
+        <p class="text-[9px] text-slate-500 text-center">{{ t('gambling.lobbyNotice') }}</p>
+
         <!-- Quick Match / Cancel button -->
         <button
           v-if="!quickMatchSearching"

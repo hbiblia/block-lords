@@ -2109,6 +2109,7 @@ export default {
     },
     reloadHint: 'After making changes, reload the page for them to take effect.',
     button: 'I understand',
+    toastMessage: 'Ad blocker detected. Please consider disabling it to support LootMine.',
   },
 
   forge: {
@@ -2191,6 +2192,7 @@ export default {
     tagline: 'LootMine — Landwork Mining Idle Game',
     description: 'Free-to-play mining simulation. Compete against real players, upgrade your rigs, craft items, battle in PvP card duels, and earn Landwork exchangeable for RON.',
     disclaimer: 'LootMine is a simulation game. Landwork can be exchanged for RON on the Ronin blockchain. Play responsibly.',
+    terms: 'Terms of Service',
   },
   rules: {
     title: 'Rules & Guidelines',
@@ -2224,6 +2226,13 @@ export default {
       shield: 'Shields absorb all incoming damage before your HP is affected. Some cards can bypass shields partially. Shields persist across turns.',
       betting: 'Before each battle, both players agree on a bet (GameCoin, Landwork, or RON). The winner takes 2x the bet amount.',
       winCondition: 'The first player to reduce their opponent to 0 HP wins. Forfeiting or timing out counts as a loss.',
+    },
+    gambling: {
+      title: 'Wagering & Responsible Play',
+      ageRequirement: 'You must be at least 18 years old to participate in Card Battles wagering or Yield Predictions.',
+      responsible: 'Play responsibly. Only wager amounts you can afford to lose. In-game betting is for entertainment purposes.',
+      cryptoRisk: 'RON bets involve real cryptocurrency. Crypto values can fluctuate. LootMine is not responsible for losses due to market volatility.',
+      noGuarantee: 'Battle outcomes depend on strategy and card draws. No particular outcome is guaranteed.',
     },
     community: {
       title: 'Community Guidelines',
@@ -2506,5 +2515,47 @@ export default {
     accepted: 'Friend request accepted!',
     autoAccepted: 'You are now friends!',
     noFriends: 'No friends yet',
+  },
+
+  ageVerification: {
+    title: 'Age Verification Required',
+    message: 'Card battles involve wagering in-game currency and cryptocurrency. You must be at least 18 years old to participate.',
+    messagePrediction: 'Yield predictions involve wagering with real cryptocurrency (RON). You must be at least 18 years old to participate.',
+    confirm: 'I confirm I am 18 or older',
+    disclaimer: 'By confirming, you acknowledge that you are of legal age in your jurisdiction to participate in wagering activities.',
+  },
+
+  gambling: {
+    disclaimer: 'Play responsibly. Only wager what you can afford to lose. Crypto values can fluctuate.',
+    lobbyNotice: 'Battles involve wagering. Players must be 18+. Play responsibly.',
+  },
+
+  terms: {
+    title: 'Terms of Service',
+    subtitle: 'Last updated: February 2026',
+    acceptance: {
+      title: 'Acceptance of Terms',
+      content: 'By accessing and using LootMine, you agree to be bound by these Terms of Service. If you do not agree to these terms, do not use the service.',
+    },
+    eligibility: {
+      title: 'Eligibility',
+      content: 'You must be at least 18 years of age to use LootMine. By using this service, you represent and warrant that you meet this age requirement and that you are legally permitted to participate in wagering activities in your jurisdiction.',
+    },
+    gambling: {
+      title: 'Wagering & Betting',
+      content: 'LootMine features PvP card battles that involve wagering in-game currencies (GameCoin, Landwork) and cryptocurrency (RON). These features are intended for entertainment purposes. You should only wager amounts you can afford to lose. LootMine is not a licensed gambling platform. Play responsibly.',
+    },
+    crypto: {
+      title: 'Cryptocurrency Risks',
+      content: 'Landwork can be exchanged for RON on the Ronin blockchain. Cryptocurrency values are volatile and can fluctuate significantly. LootMine is not responsible for any losses incurred due to cryptocurrency price changes, network issues, or failed transactions.',
+    },
+    virtual: {
+      title: 'Virtual Assets',
+      content: 'GameCoin, rigs, and other in-game items are virtual assets with no real-world monetary value outside of the game. LootMine reserves the right to modify, reset, or remove virtual assets at any time.',
+    },
+    liability: {
+      title: 'Limitation of Liability',
+      content: 'LootMine is provided "as is" without warranties of any kind. We are not liable for any damages arising from your use of the service, including but not limited to financial losses from wagering or cryptocurrency transactions.',
+    },
   },
 };
