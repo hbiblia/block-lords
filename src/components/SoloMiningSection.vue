@@ -215,7 +215,7 @@ const timeProgressPercent = computed(() => {
                   <span v-else class="text-text-muted">Esperando bloque...</span>
                 </h2>
                 <p class="text-sm text-text-muted">
-                  {{ soloStore.currentBlock ? `Recompensa: ${formatNumber(soloStore.blockReward)} crypto` : 'El siguiente bloque se asignara pronto' }}
+                  {{ soloStore.currentBlock ? `Recompensa: ${formatNumber(soloStore.blockReward)} landwork` : 'El siguiente bloque se asignara pronto' }}
                 </p>
               </div>
             </div>
@@ -366,7 +366,7 @@ const timeProgressPercent = computed(() => {
                 <div class="text-lg sm:text-xl font-bold font-mono text-cyan-400">
                   {{ formatNumber(soloStore.blockReward) }}
                 </div>
-                <div class="text-[10px] text-text-muted">crypto</div>
+                <div class="text-[10px] text-text-muted">landwork</div>
               </div>
 
               <!-- Completados -->
@@ -390,7 +390,7 @@ const timeProgressPercent = computed(() => {
                 <div class="text-lg sm:text-xl font-bold font-mono text-purple-400">
                   {{ formatNumber(soloStore.sessionStats.total_earned) }}
                 </div>
-                <div class="text-[10px] text-text-muted">crypto</div>
+                <div class="text-[10px] text-text-muted">landwork</div>
               </div>
             </div>
           </template>
@@ -428,7 +428,7 @@ const timeProgressPercent = computed(() => {
                   ¡Bloque Completado!
                 </div>
                 <div class="complete-reward mt-1 text-sm sm:text-base font-mono font-bold text-white">
-                  +{{ formatNumber(completedBlockInfo?.reward ?? 0) }} crypto
+                  +{{ formatNumber(completedBlockInfo?.reward ?? 0) }} landwork
                 </div>
                 <div class="complete-sub mt-1 text-[10px] sm:text-xs text-text-muted">
                   🔑 {{ completedBlockInfo?.seedsTotal ?? 0 }}/{{ completedBlockInfo?.seedsTotal ?? 0 }} seeds encontrados

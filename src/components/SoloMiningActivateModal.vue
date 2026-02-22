@@ -46,7 +46,7 @@ async function handleActivate() {
               <div class="space-y-2 text-xs text-text-muted">
                 <div class="flex items-center gap-2">
                   <span class="text-accent-primary">💎</span>
-                  <span>Bloques tipo: Bronze, Silver, Gold y <span class="text-cyan-400 font-bold">Diamond</span> (50,000 crypto)</span>
+                  <span>Bloques tipo: Bronze, Silver, Gold y <span class="text-cyan-400 font-bold">Diamond</span> (50,000 landwork)</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <span class="text-accent-primary">🔑</span>

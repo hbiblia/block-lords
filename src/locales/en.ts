@@ -16,6 +16,7 @@ export default {
     unknown: 'Unknown',
     you: '(you)',
     noData: 'No data available',
+    selectSlot: 'Select Slot',
   },
 
   errors: {
@@ -96,7 +97,7 @@ export default {
     stats: {
       onlinePlayers: 'Online Players',
       blocksMined: 'Blocks Mined',
-      totalCryptoEmitted: 'Crypto Emitted',
+      totalCryptoEmitted: 'Landwork Emitted',
       difficulty: 'Difficulty',
     },
     topMiners: {
@@ -830,6 +831,9 @@ export default {
       selectRig: 'Select Rig',
       selectRigHint: 'Choose the rig to apply the patch to',
       noRigs: "You don't have any installed rigs",
+    },
+    expPack: {
+      selectSlotHint: 'Choose the slot to apply the EXP pack to',
     },
     delete: {
       button: 'Discard',
@@ -2041,7 +2045,7 @@ export default {
     },
     soloMining: {
       title: 'Solo Mining Mode (Alpha)',
-      description: 'New <strong class="text-amber-400">Solo Mining</strong> mode! <strong class="text-red-400">(Alpha version)</strong> Mine your own blocks independently. Blocks come in 4 types: <strong class="text-orange-400">Bronze (3 seeds)</strong>, <strong class="text-gray-300">Silver (4 seeds)</strong>, <strong class="text-yellow-400">Gold (5 seeds)</strong>, and <strong class="text-cyan-400">Diamond (6 seeds, 50,000 crypto)</strong>. Your rigs must find <strong class="text-emerald-400">all seeds</strong> within <strong class="text-red-400">30 minutes</strong> to claim the block reward. If time runs out, you lose the block. Higher risk, higher reward! Requires <strong class="text-amber-400">Premium</strong>.',
+      description: 'New <strong class="text-amber-400">Solo Mining</strong> mode! <strong class="text-red-400">(Alpha version)</strong> Mine your own blocks independently. Blocks come in 4 types: <strong class="text-orange-400">Bronze (3 seeds)</strong>, <strong class="text-gray-300">Silver (4 seeds)</strong>, <strong class="text-yellow-400">Gold (5 seeds)</strong>, and <strong class="text-cyan-400">Diamond (6 seeds, 50,000 landwork)</strong>. Your rigs must find <strong class="text-emerald-400">all seeds</strong> within <strong class="text-red-400">30 minutes</strong> to claim the block reward. If time runs out, you lose the block. Higher risk, higher reward! Requires <strong class="text-amber-400">Premium</strong>.',
     },
     forgeDescriptions: {
       title: 'Forge: Improved Descriptions',

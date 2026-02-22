@@ -13,6 +13,7 @@ import {
   getRecentMiningBlocks,
   getSoloMiningStatus,
   getPendingBlocksCount,
+  getPendingBlocks,
   getRigCooling,
   getRigBoosts,
   updatePlayerHeartbeat,
@@ -125,7 +126,28 @@ export const useGameTickStore = defineStore('gameTick', () => {
         // New pending block detected — trigger reward celebration
         const pendingStore = usePendingBlocksStore();
         pendingStore.fetchPendingBlocks();
-        window.dispatchEvent(new CustomEvent('pending-block-created', { detail: {} }));
+
+        // Fetch latest pending block to get reward data for the celebration
+        try {
+          const pending = await getPendingBlocks(playerId, 1, 0);
+          const latest = pending?.blocks?.[0];
+          if (latest) {
+            window.dispatchEvent(
+              new CustomEvent('pending-block-created', {
+                detail: {
+                  id: latest.id,
+                  block_id: latest.block_id,
+                  reward: latest.reward,
+                  is_premium: latest.is_premium,
+                  materials_dropped: latest.materials_dropped || [],
+                  created_at: latest.created_at,
+                },
+              })
+            );
+          }
+        } catch {
+          // Non-critical: celebration is nice-to-have
+        }
       }
       previousPendingCount.value = typeof newPendingCount === 'number' ? newPendingCount : 0;
 

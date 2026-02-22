@@ -5,6 +5,7 @@
 
 // Importar el audio como asset de Vite (debe estar al inicio)
 import computerFanLoop from '@/assets/ComputerFanLoop.mp3';
+import achievementSound from '@/assets/Achievement.mp3';
 import { isTabLocked } from '@/composables/useTabLock';
 
 export type SoundType =
@@ -13,6 +14,7 @@ export type SoundType =
   | 'error'
   | 'purchase'
   | 'reward'
+  | 'achievement'
   | 'block_mined'
   | 'mission_complete'
   | 'warning'
@@ -38,7 +40,8 @@ interface SoundConfig {
 }
 
 // Sonidos sintetizados (minimalistas, sin archivos externos)
-const SOUND_CONFIGS: Record<SoundType, SoundConfig[]> = {
+// MP3-based sounds (achievement, etc.) are handled separately via MP3_SOUNDS
+const SOUND_CONFIGS: Partial<Record<SoundType, SoundConfig[]>> = {
   click: [
     { frequency: 800, duration: 0.05, type: 'sine', volume: 0.15 }
   ],
@@ -141,6 +144,11 @@ const SOUND_CONFIGS: Record<SoundType, SoundConfig[]> = {
   ]
 };
 
+// MP3-based sounds (played via HTMLAudioElement)
+const MP3_SOUNDS: Partial<Record<SoundType, string>> = {
+  achievement: achievementSound,
+};
+
 class SoundManager {
   private audioContext: AudioContext | null = null;
   private enabled: boolean = true;
@@ -203,6 +211,15 @@ class SoundManager {
 
   public play(sound: SoundType): void {
     if (!this.enabled) return;
+
+    // MP3-based sound
+    const mp3Src = MP3_SOUNDS[sound];
+    if (mp3Src) {
+      const audio = new Audio(mp3Src);
+      audio.volume = this.volume;
+      audio.play().catch(() => {});
+      return;
+    }
 
     const ctx = this.getAudioContext();
     if (!ctx) return;
@@ -357,7 +374,7 @@ class RigSoundManager {
     if (!this.audioElement) {
       this.audioElement = new Audio(computerFanLoop);
       this.audioElement.loop = true;
-      this.audioElement.volume = 0;
+      this.audioElement.volume = 1;
       // Preload the audio
       this.audioElement.load();
     }

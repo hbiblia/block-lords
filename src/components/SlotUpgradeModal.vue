@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { getPlayerSlotInfo, getRigSlotUpgrades, buyRigSlot } from '@/utils/api';
+import { playSound } from '@/utils/sounds';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -96,6 +97,7 @@ async function handleBuySlot() {
     const result = await buyRigSlot(authStore.player.id);
 
     if (result?.success) {
+      playSound('success');
       success.value = true;
       await authStore.fetchPlayer();
       await loadData();

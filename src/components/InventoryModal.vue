@@ -697,7 +697,7 @@ function getSlotNextTierXp(tier: string): number {
 }
 
 function getExpPackName(id: string): string {
-  const key = `market.exp_packs.${id}.name`;
+  const key = `market.items.exp_packs.${id}.name`;
   const translated = t(key);
   return translated !== key ? translated : id;
 }

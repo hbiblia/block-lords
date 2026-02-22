@@ -293,7 +293,7 @@ const selectedBoostId = ref('');
 
 const rewardTypeOptions = [
   { value: 'gamecoin', label: '💰 GameCoin', unit: 'GC', color: 'text-yellow-400', step: '1', defaultTitle: 'Bonus GameCoin', defaultDesc: 'Disfruta de este bono de GameCoin para tu aventura', defaultIcon: '💰' },
-  { value: 'crypto', label: '💎 Landwork (Crypto)', unit: 'Landwork', color: 'text-amber-400', step: '0.0001', defaultTitle: 'Bonus Landwork', defaultDesc: 'Has recibido un bono de Landwork. ¡Úsalo sabiamente!', defaultIcon: '💎' },
+  { value: 'crypto', label: '💎 Landwork', unit: 'Landwork', color: 'text-amber-400', step: '0.0001', defaultTitle: 'Bonus Landwork', defaultDesc: 'Has recibido un bono de Landwork. ¡Úsalo sabiamente!', defaultIcon: '💎' },
   { value: 'energy', label: '⚡ Energía', unit: '', color: 'text-green-400', step: '1', defaultTitle: 'Recarga de Energía', defaultDesc: 'Recarga de energía para mantener tus rigs activos', defaultIcon: '⚡' },
   { value: 'internet', label: '🌐 Internet', unit: '', color: 'text-blue-400', step: '1', defaultTitle: 'Recarga de Internet', defaultDesc: 'Recarga de internet para tus operaciones de minería', defaultIcon: '🌐' },
   { value: 'premium', label: '👑 Premium', unit: 'días', color: 'text-amber-300', step: '1', defaultTitle: 'Premium Gratis', defaultDesc: '¡Disfruta de los beneficios Premium! +50% recompensas, menos fees y más', defaultIcon: '👑' },

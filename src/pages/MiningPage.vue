@@ -523,7 +523,7 @@ async function handleUpgradeSlotTier(slotId: string) {
   try {
     const result = await upgradeSlotTier(authStore.player.id, slotId);
     if (result?.success) {
-      playSound('purchase');
+      playSound('achievement');
       await miningStore.loadData();
 
       // Show celebration
