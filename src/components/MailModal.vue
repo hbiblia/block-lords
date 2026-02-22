@@ -5,6 +5,7 @@ import { useMailStore, type Mail } from '@/stores/mail';
 import { useAuthStore } from '@/stores/auth';
 import { useToastStore } from '@/stores/toast';
 import { useFriendsStore } from '@/stores/friends';
+import { useGameConfigStore } from '@/stores/game-config';
 import { playSound } from '@/utils/sounds';
 import { formatNumber } from '@/utils/format';
 
@@ -13,6 +14,7 @@ const mailStore = useMailStore();
 const authStore = useAuthStore();
 const toastStore = useToastStore();
 const friendsStore = useFriendsStore();
+const gameConfigStore = useGameConfigStore();
 
 const props = defineProps<{
   show: boolean;
@@ -1039,7 +1041,7 @@ function getResourceSizeLabel(key: string): string {
                   >
                     {{ mailStore.sending ? t('mail.sending') : (isTicketMode ? t('mail.sendTicket') : isEveryoneMode ? t('mail.sendBroadcast') : isSpamMode ? t('mail.sendSpam') : t('mail.send')) }}
                   </button>
-                  <span v-if="!isEveryoneMode && !isSpamMode" class="text-[10px] text-white/25">{{ t('mail.sendCost', { cost: 5 }) }}</span>
+                  <span v-if="!isEveryoneMode && !isSpamMode" class="text-[10px] text-white/25">{{ t('mail.sendCost', { cost: gameConfigStore.getSetting('mail_send_cost_internet', 5) }) }}</span>
                   <span v-if="isTicketMode" class="text-[10px] text-fuchsia-400/50">{{ t('mail.ticketLimit') }}</span>
                   <span v-else class="text-[10px] text-white/20 ml-auto font-mono">{{ t('mail.estimatedSize', { size: estimatedSizeKb }) }}</span>
                 </div>

@@ -17,9 +17,11 @@ import {
   type AdminSendGiftParams
 } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
+import { useGameConfigStore } from '@/stores/game-config';
 
 const authStore = useAuthStore();
 const router = useRouter();
+const gameConfigStore = useGameConfigStore();
 
 interface Announcement {
   id: string;
@@ -74,8 +76,8 @@ const activeRigsCount = computed(() => {
 
 const blcValueInRon = computed(() => {
   const Landwork = Number(selectedUser.value?.crypto_balance || 0);
-  // Rate: 100,000 Landwork = 1 RON
-  return Landwork / 100000;
+  const rate = gameConfigStore.getSetting('landwork_to_ron_rate', 100000);
+  return Landwork / rate;
 });
 
 const typeOptions = [
@@ -1543,7 +1545,7 @@ onMounted(async () => {
             <div v-if="selectedUserDetail.pending_blocks && selectedUserDetail.pending_blocks.blocks && selectedUserDetail.pending_blocks.blocks.length > 0" class="card p-3">
               <h4 class="text-base font-semibold mb-3 text-accent-primary">
                 ⏳ Bloques Pendientes ({{ selectedUserDetail.pending_blocks.pending_count }})
-                <span class="text-xs text-text-muted ml-2">Total: {{ Number(selectedUserDetail.pending_blocks.total_reward || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} Landwork (~{{ (Number(selectedUserDetail.pending_blocks.total_reward || 0) / 100000).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} RON)</span>
+                <span class="text-xs text-text-muted ml-2">Total: {{ Number(selectedUserDetail.pending_blocks.total_reward || 0).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} Landwork (~{{ (Number(selectedUserDetail.pending_blocks.total_reward || 0) / gameConfigStore.getSetting('landwork_to_ron_rate', 100000)).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) }} RON)</span>
               </h4>
               <div
                 @scroll="handlePendingBlocksScroll"

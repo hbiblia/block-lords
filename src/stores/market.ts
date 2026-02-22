@@ -110,40 +110,6 @@ interface MarketCache {
   expPacks: ExpPack[];
 }
 
-// Default data for new accounts (shown while real data loads)
-const DEFAULT_RIGS: Rig[] = [
-  { id: 'default-1', name: 'Basic Miner', description: 'Entry-level mining rig', hashrate: 100, power_consumption: 50, internet_consumption: 10, repair_cost: 50, tier: 'common', base_price: 500, currency: 'gamecoin' },
-  { id: 'default-2', name: 'Advanced Miner', description: 'Mid-tier mining rig', hashrate: 250, power_consumption: 100, internet_consumption: 20, repair_cost: 100, tier: 'uncommon', base_price: 1500, currency: 'gamecoin' },
-  { id: 'default-3', name: 'Pro Miner', description: 'High-performance rig', hashrate: 500, power_consumption: 200, internet_consumption: 40, repair_cost: 200, tier: 'rare', base_price: 4000, currency: 'gamecoin' },
-];
-
-const DEFAULT_COOLING: CoolingItem[] = [
-  { id: 'cool-1', name: 'Basic Fan', description: 'Simple cooling fan', cooling_power: 10, energy_cost: 0.5, base_price: 100, tier: 'common' },
-  { id: 'cool-2', name: 'Advanced Cooler', description: 'Efficient cooling system', cooling_power: 25, energy_cost: 1.0, base_price: 300, tier: 'uncommon' },
-];
-
-const DEFAULT_CARDS: PrepaidCard[] = [
-  { id: 'card-1', name: 'Energy Pack S', description: '100 energy units', card_type: 'energy', amount: 100, base_price: 50, tier: 'common', currency: 'gamecoin' },
-  { id: 'card-2', name: 'Energy Pack M', description: '500 energy units', card_type: 'energy', amount: 500, base_price: 200, tier: 'uncommon', currency: 'gamecoin' },
-  { id: 'card-3', name: 'Internet Pack S', description: '50 internet units', card_type: 'internet', amount: 50, base_price: 50, tier: 'common', currency: 'gamecoin' },
-  { id: 'card-4', name: 'Internet Pack M', description: '200 internet units', card_type: 'internet', amount: 200, base_price: 150, tier: 'uncommon', currency: 'gamecoin' },
-];
-
-const DEFAULT_BOOSTS: BoostItem[] = [
-  { id: 'boost-1', name: 'Hashrate Boost', description: '+10% hashrate', boost_type: 'hashrate', effect_value: 10, secondary_value: 0, duration_minutes: 60, base_price: 100, currency: 'gamecoin', tier: 'common' },
-  { id: 'boost-2', name: 'Efficiency Boost', description: '-10% power usage', boost_type: 'efficiency', effect_value: 10, secondary_value: 0, duration_minutes: 60, base_price: 100, currency: 'gamecoin', tier: 'common' },
-];
-
-const DEFAULT_CRYPTO_PACKAGES: CryptoPackage[] = [
-  { id: 'crypto-1', name: 'Starter Pack', description: '100 crypto', crypto_amount: 100, ron_price: 1, bonus_percent: 0, tier: 'common', is_featured: false, total_crypto: 100 },
-  { id: 'crypto-2', name: 'Value Pack', description: '550 crypto', crypto_amount: 500, ron_price: 5, bonus_percent: 10, tier: 'uncommon', is_featured: true, total_crypto: 550 },
-];
-
-const DEFAULT_EXP_PACKS: ExpPack[] = [
-  { id: 'exp_small', name: 'Small EXP Pack', description: '+100 slot XP', xp_amount: 100, base_price: 500, tier: 'basic' },
-  { id: 'exp_medium', name: 'Medium EXP Pack', description: '+500 slot XP', xp_amount: 500, base_price: 2000, tier: 'standard' },
-  { id: 'exp_large', name: 'Large EXP Pack', description: '+2000 slot XP', xp_amount: 2000, base_price: 7000, tier: 'advanced' },
-];
 
 function loadFromCache(): MarketCache | null {
   try {
@@ -169,13 +135,13 @@ export const useMarketStore = defineStore('market', () => {
   // Load from cache on init
   const cached = loadFromCache();
 
-  // Catalogs - use cached data if available, otherwise use defaults
-  const rigs = ref<Rig[]>(cached?.rigs ?? DEFAULT_RIGS);
-  const coolingItems = ref<CoolingItem[]>(cached?.coolingItems ?? DEFAULT_COOLING);
-  const prepaidCards = ref<PrepaidCard[]>(cached?.prepaidCards ?? DEFAULT_CARDS);
-  const boostItems = ref<BoostItem[]>(cached?.boostItems ?? DEFAULT_BOOSTS);
-  const cryptoPackages = ref<CryptoPackage[]>(cached?.cryptoPackages ?? DEFAULT_CRYPTO_PACKAGES);
-  const expPacks = ref<ExpPack[]>(cached?.expPacks ?? DEFAULT_EXP_PACKS);
+  // Catalogs - use cached data if available
+  const rigs = ref<Rig[]>(cached?.rigs ?? []);
+  const coolingItems = ref<CoolingItem[]>(cached?.coolingItems ?? []);
+  const prepaidCards = ref<PrepaidCard[]>(cached?.prepaidCards ?? []);
+  const boostItems = ref<BoostItem[]>(cached?.boostItems ?? []);
+  const cryptoPackages = ref<CryptoPackage[]>(cached?.cryptoPackages ?? []);
+  const expPacks = ref<ExpPack[]>(cached?.expPacks ?? []);
 
   // Cooling components catalog
   const coolingComponents = ref<CoolingComponent[]>([]);
@@ -189,10 +155,10 @@ export const useMarketStore = defineStore('market', () => {
   const patchQuantity = ref(0);
   const expPackQuantities = ref<Record<string, number>>({});
 
-  // Loading states - always have data (cached or default), so never show initial loading
+  // Loading states
   const loadingCatalogs = ref(false);
   const loadingQuantities = ref(false);
-  const catalogsLoaded = ref(true); // Always true since we have defaults
+  const catalogsLoaded = ref(cached !== null);
   const buying = ref(false);
   const refreshing = ref(false); // True when reloading data (not first load)
 
@@ -285,6 +251,7 @@ export const useMarketStore = defineStore('market', () => {
       coolingComponents.value = componentsRes.data ?? [];
       expPacks.value = expPacksRes.data ?? [];
       catalogsFetched.value = true;
+      catalogsLoaded.value = true;
 
       // Save to localStorage cache
       saveToCache({

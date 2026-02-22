@@ -189,13 +189,7 @@ const DEFAULT_SLOT_INFO: SlotInfo = {
   available_slots: 1,
   max_slots: 10,
   slots: [],
-  next_upgrade: {
-    slot_number: 2,
-    price: 1000,
-    currency: 'gamecoin',
-    name: 'Slot 2',
-    description: 'Unlock your second rig slot',
-  },
+  next_upgrade: null,
 };
 
 function loadFromCache(): { rigs: PlayerRig[]; networkStats: NetworkStats; slotInfo: SlotInfo | null } | null {

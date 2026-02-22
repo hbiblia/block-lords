@@ -1361,7 +1361,14 @@ INSERT INTO game_settings (key, value, value_type, category, description) VALUES
   ('solo_xp_bronze',  '125',  'int', 'solo_mining', 'XP bloque bronce solo'),
   ('solo_xp_silver',  '190',  'int', 'solo_mining', 'XP bloque plata solo'),
   ('solo_xp_gold',    '320',  'int', 'solo_mining', 'XP bloque oro solo'),
-  ('solo_xp_diamond', '1600', 'int', 'solo_mining', 'XP bloque diamante solo')
+  ('solo_xp_diamond', '1600', 'int', 'solo_mining', 'XP bloque diamante solo'),
+  -- COSTOS VARIOS
+  ('mail_send_cost_internet',  '5',      'int', 'economy', 'Costo de internet para enviar mail'),
+  ('landwork_to_ron_rate',     '100000', 'int', 'economy', 'Tasa de conversión Landwork a RON'),
+  -- SLOT TIERS: XP requerido
+  ('tier_xp_standard', '500',  'int', 'slots', 'XP requerido para tier standard'),
+  ('tier_xp_advanced', '2000', 'int', 'slots', 'XP requerido para tier advanced'),
+  ('tier_xp_elite',    '8000', 'int', 'slots', 'XP requerido para tier elite')
 ON CONFLICT (key) DO NOTHING;
 
 -- =====================================================

@@ -10097,7 +10097,7 @@ DECLARE
   v_sender RECORD;
   v_mail_id UUID;
   v_today_count INTEGER;
-  v_send_cost_internet NUMERIC := 5;
+  v_send_cost_internet NUMERIC := COALESCE(gs_int('mail_send_cost_internet'), 5);
   v_has_attachment BOOLEAN;
   v_mail_size_kb INTEGER;
   v_recipient_used_kb INTEGER;
@@ -10539,7 +10539,7 @@ DECLARE
   v_sender RECORD;
   v_admin_id UUID;
   v_today_count INTEGER;
-  v_send_cost_internet NUMERIC := 5;
+  v_send_cost_internet NUMERIC := COALESCE(gs_int('mail_send_cost_internet'), 5);
   v_mail_size_kb INTEGER;
   v_mail_id UUID;
 BEGIN
@@ -14172,9 +14172,9 @@ BEGIN
   END IF;
 
   CASE COALESCE(v_slot.tier, 'basic')
-    WHEN 'basic' THEN v_new_tier := 'standard'; v_required_xp := 500;
-    WHEN 'standard' THEN v_new_tier := 'advanced'; v_required_xp := 2000;
-    WHEN 'advanced' THEN v_new_tier := 'elite'; v_required_xp := 8000;
+    WHEN 'basic' THEN v_new_tier := 'standard'; v_required_xp := COALESCE(gs_int('tier_xp_standard'), 500);
+    WHEN 'standard' THEN v_new_tier := 'advanced'; v_required_xp := COALESCE(gs_int('tier_xp_advanced'), 2000);
+    WHEN 'advanced' THEN v_new_tier := 'elite'; v_required_xp := COALESCE(gs_int('tier_xp_elite'), 8000);
     WHEN 'elite' THEN
       RETURN json_build_object('success', false, 'error', 'Slot is already at max tier');
     ELSE

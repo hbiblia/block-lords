@@ -17,6 +17,7 @@ import MiningTips from '@/components/MiningTips.vue';
 import MiningTour from '@/components/MiningTour.vue';
 import { useMiningTour } from '@/composables/useMiningTour';
 import { useSoloMiningStore } from '@/stores/solo-mining';
+import { useGameConfigStore } from '@/stores/game-config';
 import SoloMiningSection from '@/components/SoloMiningSection.vue';
 
 // Wake Lock to keep screen on while mining
@@ -29,6 +30,7 @@ const { t } = useI18n();
 const authStore = useAuthStore();
 const miningStore = useMiningStore();
 const soloMiningStore = useSoloMiningStore();
+const gameConfigStore = useGameConfigStore();
 
 // Tab visual state (no cambia el modo de minería real)
 const savedTab = localStorage.getItem('lootmine_mining_tab') as 'pool' | 'solo' | null;
@@ -441,8 +443,6 @@ function getRigName(id: string): string {
 }
 
 // Slot tier helpers
-const TIER_XP: Record<string, number> = { standard: 500, advanced: 2000, elite: 8000 };
-
 function getSlotTierColor(tier: string): string {
   switch (tier) {
     case 'elite': return 'text-amber-400';
@@ -463,9 +463,9 @@ function getSlotTierBg(tier: string): string {
 
 function getSlotNextTierXp(tier: string): number {
   switch (tier) {
-    case 'basic': return TIER_XP.standard;
-    case 'standard': return TIER_XP.advanced;
-    case 'advanced': return TIER_XP.elite;
+    case 'basic': return gameConfigStore.getSetting('tier_xp_standard', 500);
+    case 'standard': return gameConfigStore.getSetting('tier_xp_advanced', 2000);
+    case 'advanced': return gameConfigStore.getSetting('tier_xp_elite', 8000);
     default: return 0;
   }
 }
