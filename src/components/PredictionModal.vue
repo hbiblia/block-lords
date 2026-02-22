@@ -471,7 +471,7 @@ function timeAgo(dateStr: string): string {
                 <div class="text-right">
                   <p v-if="bet.status === 'won'" class="text-xs font-bold text-status-success">+{{ formatRon(bet.yield_earned_lw) }} RON</p>
                   <p v-else class="text-xs text-text-muted">{{ t('prediction.history.cancelled') }}</p>
-                  <p v-if="bet.fee_amount_lw > 0" class="text-[10px] text-text-muted">fee: {{ formatRon(bet.fee_amount_lw) }}</p>
+                  <p v-if="bet.fee_amount_lw > 0" class="text-[10px] text-text-muted">{{ t('prediction.summary.fee') }}: {{ formatRon(bet.fee_amount_lw) }}</p>
                 </div>
               </div>
             </div>
@@ -494,7 +494,7 @@ function timeAgo(dateStr: string): string {
                   <span class="text-white font-bold">{{ formatRon(numericAmount) }} RON</span>
                 </div>
                 <div class="flex justify-between">
-                  <span class="text-text-muted">{{ direction === 'up' ? 'WETH Target' : t('prediction.summary.targetPrice') }}</span>
+                  <span class="text-text-muted">{{ direction === 'up' ? 'WETH ' + t('prediction.summary.targetPrice') : t('prediction.summary.targetPrice') }}</span>
                   <span class="text-accent-primary font-mono">{{ direction === 'up' ? (predictionStore.currentWethPrice ? formatWethPrice(predictionStore.currentWethPrice * (1 + targetPercent / 100)) : '—') : formatPrice(targetPrice) }}</span>
                 </div>
                 <div class="flex justify-between border-t border-border pt-1.5">

@@ -12,9 +12,12 @@ import {
   adminGetPlayerDetail,
   adminSendGift,
   adminGetTickets,
+  adminGetGameSettingsFull,
+  adminUpdateGameSetting,
   getBoostItems,
   type CreateAnnouncementParams,
-  type AdminSendGiftParams
+  type AdminSendGiftParams,
+  type GameSettingFull
 } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { useGameConfigStore } from '@/stores/game-config';
@@ -556,7 +559,6 @@ function formatDate(dateString: string) {
 // Tickets
 const tickets = ref<Array<{ id: string; sender_id: string; sender_username: string; subject: string; body: string | null; is_read: boolean; created_at: string }>>([]);
 const loadingTickets = ref(false);
-const showTickets = ref(false);
 const expandedTicketId = ref<string | null>(null);
 
 async function loadTickets() {
@@ -573,6 +575,153 @@ async function loadTickets() {
 
 function toggleTicket(id: string) {
   expandedTicketId.value = expandedTicketId.value === id ? null : id;
+}
+
+// Tab system
+type AdminTab = 'announcements' | 'users' | 'tickets' | 'gifts' | 'settings';
+const activeTab = ref<AdminTab>('announcements');
+
+const adminTabs = [
+  { key: 'announcements' as AdminTab, icon: '📢', label: 'Anuncios' },
+  { key: 'users' as AdminTab, icon: '👥', label: 'Usuarios' },
+  { key: 'tickets' as AdminTab, icon: '🎫', label: 'Tickets' },
+  { key: 'gifts' as AdminTab, icon: '🎁', label: 'Regalos' },
+  { key: 'settings' as AdminTab, icon: '⚙️', label: 'Settings' },
+];
+
+function onTabChange(tab: AdminTab) {
+  activeTab.value = tab;
+  playSound('click');
+  if (tab === 'tickets' && tickets.value.length === 0) loadTickets();
+  if (tab === 'settings' && gameSettingsFull.value.length === 0) loadGameSettings();
+}
+
+// Game Settings editor
+const gameSettingsFull = ref<GameSettingFull[]>([]);
+const loadingSettings = ref(false);
+const savingSettingKey = ref<string | null>(null);
+const settingsError = ref('');
+const settingsSuccess = ref('');
+const editedValues = ref<Record<string, string>>({});
+const collapsedCategories = ref<Set<string>>(new Set());
+const settingsFilter = ref('');
+
+const categoryLabels: Record<string, { icon: string; label: string }> = {
+  economy: { icon: '💰', label: 'Economy' },
+  exchange_rate: { icon: '📊', label: 'Exchange Rate' },
+  pool_mining: { icon: '⛏️', label: 'Pool Mining' },
+  rig_mechanics: { icon: '🔧', label: 'Rig Mechanics' },
+  resource_regen: { icon: '🔋', label: 'Resource Regen' },
+  reputation: { icon: '⭐', label: 'Reputation' },
+  progression: { icon: '📈', label: 'Progression' },
+  solo_mining: { icon: '🎯', label: 'Solo Mining' },
+  slots: { icon: '🎰', label: 'Slot Tiers' },
+};
+
+const settingsByCategory = computed(() => {
+  const query = settingsFilter.value.toLowerCase();
+  const filtered = query
+    ? gameSettingsFull.value.filter(s =>
+        s.key.includes(query) ||
+        (s.description || '').toLowerCase().includes(query)
+      )
+    : gameSettingsFull.value;
+
+  const groups: Record<string, GameSettingFull[]> = {};
+  for (const setting of filtered) {
+    if (!groups[setting.category]) groups[setting.category] = [];
+    groups[setting.category].push(setting);
+  }
+  return groups;
+});
+
+const modifiedSettingsCount = computed(() => {
+  return gameSettingsFull.value.filter(s => isSettingModified(s.key)).length;
+});
+
+function isSettingModified(key: string): boolean {
+  const original = gameSettingsFull.value.find(s => s.key === key);
+  return original ? editedValues.value[key] !== original.value : false;
+}
+
+function toggleCategory(category: string) {
+  if (collapsedCategories.value.has(category)) {
+    collapsedCategories.value.delete(category);
+  } else {
+    collapsedCategories.value.add(category);
+  }
+}
+
+async function loadGameSettings() {
+  loadingSettings.value = true;
+  settingsError.value = '';
+  try {
+    gameSettingsFull.value = await adminGetGameSettingsFull();
+    editedValues.value = {};
+    for (const s of gameSettingsFull.value) {
+      editedValues.value[s.key] = s.value;
+    }
+  } catch (e: any) {
+    settingsError.value = e.message || 'Error loading settings';
+    playSound('error');
+  } finally {
+    loadingSettings.value = false;
+  }
+}
+
+async function saveSetting(key: string) {
+  savingSettingKey.value = key;
+  settingsError.value = '';
+  settingsSuccess.value = '';
+  try {
+    await adminUpdateGameSetting(key, editedValues.value[key]);
+    const setting = gameSettingsFull.value.find(s => s.key === key);
+    if (setting) setting.value = editedValues.value[key];
+    settingsSuccess.value = `Updated: ${key}`;
+    playSound('success');
+    gameConfigStore.reset();
+    setTimeout(() => { settingsSuccess.value = ''; }, 3000);
+  } catch (e: any) {
+    settingsError.value = e.message || `Error saving ${key}`;
+    playSound('error');
+  } finally {
+    savingSettingKey.value = null;
+  }
+}
+
+async function saveAllModified() {
+  const modified = gameSettingsFull.value.filter(s => isSettingModified(s.key));
+  if (modified.length === 0) return;
+
+  settingsError.value = '';
+  settingsSuccess.value = '';
+  let saved = 0;
+
+  for (const s of modified) {
+    savingSettingKey.value = s.key;
+    try {
+      await adminUpdateGameSetting(s.key, editedValues.value[s.key]);
+      s.value = editedValues.value[s.key];
+      saved++;
+    } catch (e: any) {
+      settingsError.value = `Error saving ${s.key}: ${e.message}`;
+      playSound('error');
+      break;
+    }
+  }
+
+  savingSettingKey.value = null;
+  if (saved > 0) {
+    settingsSuccess.value = `Saved ${saved} setting(s)`;
+    playSound('success');
+    gameConfigStore.reset();
+    setTimeout(() => { settingsSuccess.value = ''; }, 3000);
+  }
+}
+
+function resetSetting(key: string) {
+  const original = gameSettingsFull.value.find(s => s.key === key);
+  if (original) editedValues.value[key] = original.value;
 }
 
 onMounted(async () => {
@@ -594,7 +743,7 @@ onMounted(async () => {
       <div class="flex items-center justify-between mb-2">
         <div>
           <h1 class="text-3xl font-bold gradient-text mb-1">Panel de Administrador</h1>
-          <p class="text-text-muted">Gestión de anuncios del sistema</p>
+          <p class="text-text-muted">Gestión del sistema</p>
         </div>
         <button
           @click="router.push('/profile')"
@@ -605,6 +754,22 @@ onMounted(async () => {
       </div>
     </div>
 
+    <!-- Tab Navigation -->
+    <div class="flex border-b border-border mb-6 overflow-x-auto">
+      <button
+        v-for="tab in adminTabs"
+        :key="tab.key"
+        @click="onTabChange(tab.key)"
+        class="flex-1 py-3 flex flex-col items-center gap-1 transition-colors min-w-[80px]"
+        :class="activeTab === tab.key
+          ? 'bg-accent-primary/10 text-accent-primary border-b-2 border-accent-primary'
+          : 'text-text-muted hover:bg-bg-tertiary'"
+      >
+        <span class="text-2xl">{{ tab.icon }}</span>
+        <span class="text-xs font-medium">{{ tab.label }}</span>
+      </button>
+    </div>
+
     <!-- Error Global -->
     <div
       v-if="error"
@@ -613,46 +778,8 @@ onMounted(async () => {
       {{ error }}
     </div>
 
-    <!-- Action Buttons -->
-    <div class="mb-6 flex flex-wrap gap-3">
-      <button
-        @click="openCreateModal"
-        class="px-6 py-3 rounded-xl font-medium bg-gradient-primary hover:opacity-90 transition-opacity flex items-center gap-2"
-      >
-        <span class="text-xl">➕</span>
-        Crear Nuevo Anuncio
-      </button>
-
-      <button
-        @click="openUpdateModal"
-        class="px-6 py-3 rounded-xl font-medium bg-blue-600 hover:bg-blue-700 transition-colors flex items-center gap-2 border border-blue-400"
-      >
-        <span class="text-xl">🔄</span>
-        Activar Actualización
-      </button>
-
-      <button
-        @click="openGiftModal"
-        class="px-6 py-3 rounded-xl font-medium bg-yellow-600 hover:bg-yellow-700 transition-colors flex items-center gap-2 border border-yellow-400"
-      >
-        <span class="text-xl">🎁</span>
-        Enviar Regalo
-      </button>
-
-      <button
-        @click="showTickets = !showTickets; if (showTickets && tickets.length === 0) loadTickets()"
-        class="px-6 py-3 rounded-xl font-medium bg-fuchsia-600 hover:bg-fuchsia-700 transition-colors flex items-center gap-2 border border-fuchsia-400"
-      >
-        <span class="text-xl">🎫</span>
-        Tickets
-        <span v-if="tickets.filter(t => !t.is_read).length > 0" class="px-1.5 py-0.5 text-[10px] bg-white/20 rounded-full">
-          {{ tickets.filter(t => !t.is_read).length }}
-        </span>
-      </button>
-    </div>
-
-    <!-- Tickets Section -->
-    <div v-if="showTickets" class="mb-6">
+    <!-- TAB: Tickets -->
+    <div v-if="activeTab === 'tickets'" class="mb-6">
       <div class="flex items-center justify-between mb-4">
         <div>
           <h2 class="text-2xl font-bold text-fuchsia-400">🎫 Support Tickets</h2>
@@ -692,8 +819,8 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Users Management Section -->
-    <div class="mb-6">
+    <!-- TAB: Users -->
+    <div v-if="activeTab === 'users'" class="mb-6">
       <div class="flex items-center justify-between mb-4">
         <div>
           <h2 class="text-2xl font-bold gradient-text">👥 Gestión de Usuarios</h2>
@@ -801,9 +928,46 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Announcements Section -->
-    <div class="mb-6">
-      <h2 class="text-2xl font-bold gradient-text mb-4">📢 Gestión de Anuncios</h2>
+    <!-- TAB: Gifts -->
+    <div v-if="activeTab === 'gifts'" class="mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-2xl font-bold gradient-text">🎁 Enviar Regalos</h2>
+          <p class="text-text-muted text-sm">Envía recompensas a jugadores</p>
+        </div>
+      </div>
+      <div class="card p-6 text-center">
+        <div class="text-6xl mb-4">🎁</div>
+        <p class="text-lg mb-4">Envía GameCoin, Landwork, energía, premium y más a jugadores</p>
+        <button
+          @click="openGiftModal"
+          class="px-6 py-3 rounded-xl font-medium bg-yellow-600 hover:bg-yellow-700 transition-colors inline-flex items-center gap-2 border border-yellow-400"
+        >
+          <span class="text-xl">🎁</span>
+          Crear Regalo
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB: Announcements -->
+    <div v-if="activeTab === 'announcements'" class="mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-2xl font-bold gradient-text">📢 Gestión de Anuncios</h2>
+        <div class="flex gap-2">
+          <button
+            @click="openCreateModal"
+            class="px-4 py-2 rounded-lg font-medium bg-gradient-primary hover:opacity-90 transition-opacity flex items-center gap-2 text-sm"
+          >
+            ➕ Nuevo Anuncio
+          </button>
+          <button
+            @click="openUpdateModal"
+            class="px-4 py-2 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm border border-blue-400"
+          >
+            🔄 Actualización
+          </button>
+        </div>
+      </div>
 
       <!-- Loading -->
       <div v-if="loading" class="flex justify-center py-12">
@@ -902,6 +1066,156 @@ onMounted(async () => {
         <p class="text-lg">No hay anuncios creados</p>
         <p class="text-sm">Crea tu primer anuncio usando el botón de arriba</p>
       </div>
+      </div>
+    </div>
+
+    <!-- TAB: Settings -->
+    <div v-if="activeTab === 'settings'">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-2xl font-bold gradient-text">⚙️ Game Settings</h2>
+          <p class="text-text-muted text-sm">{{ gameSettingsFull.length }} settings en {{ Object.keys(settingsByCategory).length }} categorías</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            v-if="modifiedSettingsCount > 0"
+            @click="saveAllModified"
+            :disabled="!!savingSettingKey"
+            class="px-4 py-2 rounded-lg text-sm font-medium bg-status-success hover:bg-status-success/80 transition-colors disabled:opacity-50"
+          >
+            {{ savingSettingKey ? '⏳ Saving...' : `💾 Save All (${modifiedSettingsCount})` }}
+          </button>
+          <button
+            @click="loadGameSettings"
+            :disabled="loadingSettings"
+            class="px-4 py-2 rounded-lg text-sm bg-bg-tertiary hover:bg-bg-tertiary/80 text-text-muted transition-colors disabled:opacity-50"
+          >
+            {{ loadingSettings ? '⏳' : '🔄' }} Reload
+          </button>
+        </div>
+      </div>
+
+      <!-- Search filter -->
+      <input
+        v-model="settingsFilter"
+        type="text"
+        placeholder="Filtrar por key o descripción..."
+        class="w-full px-4 py-2 mb-4 bg-bg-secondary border border-border rounded-lg focus:border-amber-400 focus:outline-none"
+      />
+
+      <!-- Success/Error feedback -->
+      <div v-if="settingsSuccess" class="mb-4 p-3 bg-status-success/10 border border-status-success/30 rounded-lg text-status-success text-sm">
+        ✅ {{ settingsSuccess }}
+      </div>
+      <div v-if="settingsError" class="mb-4 p-3 bg-status-danger/10 border border-status-danger/30 rounded-lg text-status-danger text-sm">
+        ❌ {{ settingsError }}
+      </div>
+
+      <!-- Loading -->
+      <div v-if="loadingSettings" class="flex justify-center py-12">
+        <div class="animate-spin w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full"></div>
+      </div>
+
+      <!-- Categories -->
+      <div v-else class="space-y-3">
+        <div
+          v-for="(settings, category) in settingsByCategory"
+          :key="category"
+          class="card overflow-hidden !p-0"
+        >
+          <!-- Category Header -->
+          <button
+            @click="toggleCategory(category as string)"
+            class="w-full flex items-center justify-between px-4 py-3 hover:bg-bg-tertiary/30 transition-colors"
+          >
+            <div class="flex items-center gap-2">
+              <span class="text-xl">{{ categoryLabels[category as string]?.icon || '📋' }}</span>
+              <span class="font-semibold">{{ categoryLabels[category as string]?.label || category }}</span>
+              <span class="text-xs text-text-muted">({{ settings.length }})</span>
+            </div>
+            <span class="text-text-muted text-sm">{{ collapsedCategories.has(category as string) ? '▶' : '▼' }}</span>
+          </button>
+
+          <!-- Settings rows -->
+          <div v-if="!collapsedCategories.has(category as string)" class="border-t border-border">
+            <div
+              v-for="setting in settings"
+              :key="setting.key"
+              class="flex items-center gap-3 px-4 py-2.5 border-b border-border/30 last:border-0 hover:bg-bg-tertiary/20 transition-colors"
+              :class="isSettingModified(setting.key) ? 'bg-status-warning/5' : ''"
+            >
+              <!-- Key & description -->
+              <div class="flex-1 min-w-0">
+                <p class="font-mono text-sm font-medium truncate">{{ setting.key }}</p>
+                <p v-if="setting.description" class="text-xs text-text-muted truncate">{{ setting.description }}</p>
+              </div>
+
+              <!-- Value type badge -->
+              <span class="px-2 py-0.5 rounded text-[10px] font-medium shrink-0"
+                :class="{
+                  'bg-blue-500/20 text-blue-400': setting.value_type === 'numeric',
+                  'bg-green-500/20 text-green-400': setting.value_type === 'int',
+                  'bg-purple-500/20 text-purple-400': setting.value_type === 'text',
+                  'bg-amber-500/20 text-amber-400': setting.value_type === 'bool',
+                }">
+                {{ setting.value_type }}
+              </span>
+
+              <!-- Editable input -->
+              <div class="w-36 shrink-0">
+                <select
+                  v-if="setting.value_type === 'bool'"
+                  v-model="editedValues[setting.key]"
+                  class="w-full px-2 py-1.5 bg-bg-primary border border-border rounded text-sm focus:border-amber-400 focus:outline-none"
+                >
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+                <input
+                  v-else
+                  v-model="editedValues[setting.key]"
+                  :type="setting.value_type === 'int' ? 'number' : 'text'"
+                  :step="setting.value_type === 'numeric' ? 'any' : '1'"
+                  class="w-full px-2 py-1.5 bg-bg-primary border rounded text-sm font-mono focus:outline-none"
+                  :class="isSettingModified(setting.key) ? 'border-status-warning focus:border-status-warning' : 'border-border focus:border-amber-400'"
+                />
+              </div>
+
+              <!-- Action buttons -->
+              <div class="flex items-center gap-1 shrink-0 w-16 justify-end">
+                <button
+                  v-if="isSettingModified(setting.key)"
+                  @click="resetSetting(setting.key)"
+                  class="p-1.5 rounded text-text-muted hover:text-white hover:bg-bg-tertiary transition-colors"
+                  title="Reset"
+                >
+                  ↩️
+                </button>
+                <button
+                  v-if="isSettingModified(setting.key)"
+                  @click="saveSetting(setting.key)"
+                  :disabled="!!savingSettingKey"
+                  class="p-1.5 rounded bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors disabled:opacity-50"
+                  title="Save"
+                >
+                  {{ savingSettingKey === setting.key ? '⏳' : '✓' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div v-if="gameSettingsFull.length > 0 && Object.keys(settingsByCategory).length === 0" class="text-center py-8 text-text-muted">
+          No se encontraron settings con ese filtro
+        </div>
+        <div v-if="gameSettingsFull.length === 0 && !loadingSettings" class="text-center py-12 text-text-muted card">
+          <div class="text-6xl mb-4">⚙️</div>
+          <p class="text-lg">No se pudieron cargar los settings</p>
+          <button @click="loadGameSettings" class="mt-4 px-4 py-2 rounded-lg bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30 transition-colors">
+            Reintentar
+          </button>
+        </div>
       </div>
     </div>
 

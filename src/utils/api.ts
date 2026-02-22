@@ -1948,6 +1948,27 @@ export async function adminGetTickets(): Promise<any> {
   return rpcWithRetry('admin_get_tickets', {});
 }
 
+// Admin: Game Settings management
+export interface GameSettingFull {
+  key: string;
+  value: string;
+  value_type: 'numeric' | 'int' | 'text' | 'bool';
+  category: string;
+  description: string | null;
+  updated_at: string;
+}
+
+export async function adminGetGameSettingsFull(): Promise<GameSettingFull[]> {
+  return rpcWithRetry('admin_get_game_settings_full', {});
+}
+
+export async function adminUpdateGameSetting(key: string, value: string): Promise<any> {
+  return rpcWithRetry('admin_update_game_setting', {
+    p_key: key,
+    p_value: value,
+  });
+}
+
 // === FRIENDS ===
 
 export async function sendFriendRequest(senderId: string, receiverUsername: string): Promise<any> {

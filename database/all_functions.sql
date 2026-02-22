@@ -15393,3 +15393,78 @@ $$;
 
 GRANT EXECUTE ON FUNCTION buy_exp_pack TO authenticated;
 GRANT EXECUTE ON FUNCTION use_exp_pack TO authenticated;
+
+-- =====================================================
+-- ADMIN: Game Settings Management
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION admin_get_game_settings_full()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+BEGIN
+  SELECT role INTO v_player_role
+  FROM players
+  WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.category, t.key), '[]'::JSON)
+    FROM (
+      SELECT key, value, value_type, category, description, updated_at
+      FROM game_settings
+      ORDER BY category, key
+    ) t
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION admin_update_game_setting(
+  p_key TEXT,
+  p_value TEXT
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+  v_old_value TEXT;
+BEGIN
+  SELECT role INTO v_player_role
+  FROM players
+  WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  SELECT value INTO v_old_value
+  FROM game_settings
+  WHERE key = p_key;
+
+  IF v_old_value IS NULL THEN
+    RAISE EXCEPTION 'Setting not found: %', p_key;
+  END IF;
+
+  UPDATE game_settings
+  SET value = p_value, updated_at = NOW()
+  WHERE key = p_key;
+
+  RETURN json_build_object(
+    'success', true,
+    'key', p_key,
+    'old_value', v_old_value,
+    'new_value', p_value
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_get_game_settings_full TO authenticated;
+GRANT EXECUTE ON FUNCTION admin_update_game_setting TO authenticated;

@@ -2284,9 +2284,6 @@ export default {
 
   prediction: {
     title: 'Yield Prediction',
-    short: 'Predict',
-    subtitle: 'Predict RON price movement',
-    predictButton: 'Predict RON',
     tabs: {
       place: 'Place Bet',
       active: 'Active',
@@ -2296,8 +2293,6 @@ export default {
       label: 'Direction',
       up: 'UP',
       down: 'DOWN',
-      upDesc: 'WETH price will rise',
-      downDesc: 'RON price will drop',
     },
     target: {
       label: 'Target',
@@ -2305,19 +2300,14 @@ export default {
     bet: {
       label: 'Bet Amount (RON)',
       min: 'Minimum: 0.5 RON',
-      insufficientBalance: 'Insufficient RON balance',
-      maxActiveBets: 'Maximum 3 active predictions',
-      priceUnavailable: 'Price data unavailable',
-      invalidTarget: 'Invalid target',
     },
     summary: {
       direction: 'Direction',
       potentialYield: 'Potential Yield',
-      fee: 'Fee (5% on yield)',
+      fee: 'Fee',
       totalReturn: 'Total Return',
       entryPrice: 'Entry',
       targetPrice: 'Target',
-      currentPrice: 'Current Price',
       estimated: 'estimated',
     },
     info: {
@@ -2336,17 +2326,11 @@ export default {
     active: {
       noBets: 'No active predictions',
       progress: 'Progress',
-      yield: 'Yield when target reached',
-      cancelFee: '2% cancellation fee',
       noCancelUntilComplete: 'Cannot cancel until completed',
-      of: 'of',
     },
     history: {
       noHistory: 'No prediction history',
-      won: 'Won',
       cancelled: 'Cancelled',
-      yield: 'Yield',
-      fee: 'Fee',
     },
     stats: {
       totalBets: 'Total Bets',
@@ -2358,8 +2342,6 @@ export default {
       ronUsdc: 'RON/USDC',
       wethUsd: 'WETH/USD',
       loading: 'Loading price...',
-      high24h: 'High 24h',
-      low24h: 'Low 24h',
     },
     errors: {
       max_active_bets: 'Maximum 3 active predictions',

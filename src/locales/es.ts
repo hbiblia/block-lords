@@ -2284,9 +2284,6 @@
 
   prediction: {
     title: 'Yield Prediction',
-    short: 'Predecir',
-    subtitle: 'Predice el movimiento del precio de RON',
-    predictButton: 'Predecir RON',
     tabs: {
       place: 'Apostar',
       active: 'Activas',
@@ -2296,8 +2293,6 @@
       label: 'Dirección',
       up: 'SUBE',
       down: 'BAJA',
-      upDesc: 'El precio de WETH subirá',
-      downDesc: 'El precio de RON bajará',
     },
     target: {
       label: 'Objetivo',
@@ -2305,19 +2300,14 @@
     bet: {
       label: 'Monto de apuesta (RON)',
       min: 'Mínimo: 0.5 RON',
-      insufficientBalance: 'Balance de RON insuficiente',
-      maxActiveBets: 'Máximo 3 predicciones activas',
-      priceUnavailable: 'Precio no disponible',
-      invalidTarget: 'Objetivo inválido',
     },
     summary: {
       direction: 'Dirección',
       potentialYield: 'Yield potencial',
-      fee: 'Fee (5% sobre yield)',
+      fee: 'Fee',
       totalReturn: 'Retorno total',
       entryPrice: 'Entrada',
       targetPrice: 'Objetivo',
-      currentPrice: 'Precio actual',
       estimated: 'estimado',
     },
     info: {
@@ -2336,17 +2326,11 @@
     active: {
       noBets: 'Sin predicciones activas',
       progress: 'Progreso',
-      yield: 'Yield al alcanzar objetivo',
-      cancelFee: '2% fee por cancelación',
       noCancelUntilComplete: 'No se puede cancelar hasta completar',
-      of: 'de',
     },
     history: {
       noHistory: 'Sin historial de predicciones',
-      won: 'Ganada',
       cancelled: 'Cancelada',
-      yield: 'Yield',
-      fee: 'Fee',
     },
     stats: {
       totalBets: 'Total Apuestas',
@@ -2358,8 +2342,6 @@
       ronUsdc: 'RON/USDC',
       wethUsd: 'WETH/USD',
       loading: 'Cargando precio...',
-      high24h: 'Máx 24h',
-      low24h: 'Mín 24h',
     },
     errors: {
       max_active_bets: 'Máximo 3 predicciones activas',

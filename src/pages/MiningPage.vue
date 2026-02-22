@@ -156,6 +156,7 @@ const activeRigsCount = computed(() => miningStore.activeRigsCount);
 
 // Nuevo sistema de shares
 const currentMiningBlock = computed(() => miningStore.currentMiningBlock);
+const blockTotalSeconds = computed(() => miningStore.blockTotalSeconds);
 const blockTimeRemaining = computed(() => miningStore.blockTimeRemaining);
 const sharesProgress = computed(() => miningStore.sharesProgress);
 const playerSharePercentage = computed(() => miningStore.playerSharePercentage);
@@ -908,7 +909,7 @@ onUnmounted(() => {
                     'bg-gradient-to-r from-status-warning to-amber-400': timeRemainingAlert === 'warning',
                     'bg-gradient-to-r from-accent-primary to-amber-500': timeRemainingAlert === 'normal'
                   }"
-                  :style="{ width: `${Math.max(0, 100 - (currentMiningBlock.time_remaining_seconds / 1800 * 100))}%` }"
+                  :style="{ width: `${Math.max(0, 100 - (currentMiningBlock.time_remaining_seconds / blockTotalSeconds * 100))}%` }"
                 ></div>
                 <div v-if="totalHashrate > 0"
                   class="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"

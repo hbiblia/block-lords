@@ -781,6 +781,14 @@ export const useMiningStore = defineStore('mining', () => {
   }
 
   // Computed properties
+  const blockTotalSeconds = computed(() => {
+    if (!currentMiningBlock.value?.active) return 1800;
+    const start = new Date(currentMiningBlock.value.started_at).getTime();
+    const end = new Date(currentMiningBlock.value.target_close_at).getTime();
+    const total = (end - start) / 1000;
+    return total > 0 ? total : 1800;
+  });
+
   const blockTimeRemaining = computed(() => {
     if (!currentMiningBlock.value?.active) return '0:00';
     const seconds = currentMiningBlock.value.time_remaining_seconds;
@@ -937,6 +945,7 @@ export const useMiningStore = defineStore('mining', () => {
     // Nuevo sistema de shares
     currentMiningBlock,
     playerShares,
+    blockTotalSeconds,
     blockTimeRemaining,
     sharesProgress,
     playerSharePercentage,
