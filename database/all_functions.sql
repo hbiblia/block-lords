@@ -14716,8 +14716,8 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'invalid_target');
   END IF;
 
-  IF p_bet_amount < 0.5 THEN
-    RETURN jsonb_build_object('success', false, 'error', 'min_bet_half_ron');
+  IF p_bet_amount < 50 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'min_bet_50_ron');
   END IF;
 
   SELECT COUNT(*) INTO v_active_count

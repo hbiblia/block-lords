@@ -58,7 +58,7 @@ const playerBalance = computed(() => authStore.player?.ron_balance ?? 0);
 
 const errorMessage = computed(() => {
   if (!predictionStore.canPlaceBet) return t('prediction.errors.max_active_bets');
-  if (numericAmount.value > 0 && numericAmount.value < 0.5) return t('prediction.bet.min');
+  if (numericAmount.value > 0 && numericAmount.value < 50) return t('prediction.bet.min');
   if (numericAmount.value > playerBalance.value) return t('prediction.errors.insufficient_balance');
   if (predictionStore.currentPrice === null) return t('prediction.errors.price_unavailable');
   if (direction.value === 'up' && predictionStore.currentWethPrice === null) return t('prediction.errors.weth_price_unavailable');
@@ -66,7 +66,7 @@ const errorMessage = computed(() => {
 });
 
 const canSubmit = computed(() =>
-  numericAmount.value >= 0.5 &&
+  numericAmount.value >= 50 &&
   numericAmount.value <= playerBalance.value &&
   predictionStore.canPlaceBet &&
   predictionStore.currentPrice !== null &&
@@ -289,7 +289,7 @@ function timeAgo(dateStr: string): string {
                   <input
                     v-model="betAmount"
                     type="number"
-                    min="0.5"
+                    min="50"
                     step="0.01"
                     :max="playerBalance"
                     class="input pr-16 font-mono text-sm"
@@ -315,7 +315,7 @@ function timeAgo(dateStr: string): string {
               </div>
 
               <!-- Summary -->
-              <div v-if="numericAmount >= 0.5" class="glass rounded-lg px-2.5 py-2 space-y-1 text-xs">
+              <div v-if="numericAmount >= 50" class="glass rounded-lg px-2.5 py-2 space-y-1 text-xs">
                 <div class="flex justify-between">
                   <span class="text-text-muted">{{ t('prediction.summary.direction') }}</span>
                   <span :class="direction === 'up' ? 'text-status-success' : 'text-status-danger'" class="font-bold">
@@ -419,15 +419,10 @@ function timeAgo(dateStr: string): string {
                   </div>
                 </div>
 
-                <!-- Yield + Cancel -->
+                <!-- Yield -->
                 <div class="flex items-center justify-between">
                   <span class="text-[10px] text-status-success font-bold">+{{ formatRon(bet.potential_yield) }} RON</span>
-                  <button
-                    @click="showConfirmCancel = bet.id"
-                    :disabled="predictionStore.cancelling === bet.id"
-                    class="text-[10px] text-status-danger/70 hover:text-status-danger transition-colors px-1.5 py-0.5 rounded hover:bg-status-danger/10">
-                    {{ predictionStore.cancelling === bet.id ? t('prediction.actions.cancelling') : t('prediction.actions.cancel') }}
-                  </button>
+                  <span class="text-[10px] text-text-muted/50 italic">{{ t('prediction.active.noCancelUntilComplete') }}</span>
                 </div>
               </div>
             </div>

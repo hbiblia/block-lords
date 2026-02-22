@@ -2338,6 +2338,7 @@
       progress: 'Progreso',
       yield: 'Yield al alcanzar objetivo',
       cancelFee: '2% fee por cancelación',
+      noCancelUntilComplete: 'No se puede cancelar hasta completar',
       of: 'de',
     },
     history: {

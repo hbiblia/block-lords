@@ -2338,6 +2338,7 @@ export default {
       progress: 'Progress',
       yield: 'Yield when target reached',
       cancelFee: '2% cancellation fee',
+      noCancelUntilComplete: 'Cannot cancel until completed',
       of: 'of',
     },
     history: {
