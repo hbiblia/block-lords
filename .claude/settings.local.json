@@ -32,7 +32,9 @@
       "Bash(npm install:*)",
       "Bash(wc:*)",
       "WebFetch(domain:support.google.com)",
-      "Bash(git -C /d/software/block-lords log --oneline)"
+      "Bash(git -C /d/software/block-lords log --oneline)",
+      "WebFetch(domain:supabase.com)",
+      "WebFetch(domain:status.supabase.com)"
     ]
   }
 }

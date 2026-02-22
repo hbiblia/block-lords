@@ -7726,8 +7726,8 @@ BEGIN
     v_reward := gs_numeric('pool_gold_reward');
   END IF;
 
-  -- Calcular tiempo objetivo (30 minutos)
-  v_target_close_at := NOW() + INTERVAL '30 minutes';
+  -- Calcular tiempo objetivo desde game_settings
+  v_target_close_at := NOW() + (gs_int('pool_block_time_minutes') || ' minutes')::INTERVAL;
 
   -- Crear nuevo bloque de minería
   INSERT INTO mining_blocks (

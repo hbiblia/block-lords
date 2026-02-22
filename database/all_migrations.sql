@@ -1302,6 +1302,7 @@ INSERT INTO game_settings (key, value, value_type, category, description) VALUES
   ('pool_silver_reward',         '6000',  'numeric', 'pool_mining', 'Recompensa bloque plata'),
   ('pool_gold_reward',           '10000', 'numeric', 'pool_mining', 'Recompensa bloque oro'),
   ('mining_tick_duration_minutes','0.5',  'numeric', 'pool_mining', 'Duración del tick de minería (0.5 = 30s)'),
+  ('pool_block_time_minutes',    '30',   'int',     'pool_mining', 'Tiempo de bloque pool (minutos)'),
   -- POOL MINING: Probabilidades de bloque
   ('bronze_prob_5',     '0.80', 'numeric', 'pool_mining', 'Prob bronce (≤5 mineros)'),
   ('silver_cutoff_5',   '0.97', 'numeric', 'pool_mining', 'Cutoff plata (≤5 mineros)'),

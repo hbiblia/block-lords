@@ -8,7 +8,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     params: {
       eventsPerSecond: 25,
     },
-    heartbeatIntervalMs: 15000,
+    heartbeatIntervalMs: 25000,
     reconnectAfterMs: (tries: number) => Math.min(1000 * Math.pow(1.5, tries), 30000),
   },
 });
