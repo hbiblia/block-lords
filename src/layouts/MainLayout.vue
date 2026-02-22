@@ -37,6 +37,8 @@ const showForge = ref(false);
 const showPrediction = ref(false);
 const showGuide = ref(false);
 const showMail = ref(false);
+// const showHacker = ref(false); // disabled - reworking
+const showScavenger = ref(false);
 
 function openMarket() {
   showMarket.value = true;
@@ -47,11 +49,12 @@ function openExchange() {
 function openInventory() {
   showInventory.value = true;
 }
-function openDefense() {
-  showDefense.value = true;
-}
 function openForge() {
   showForge.value = true;
+}
+// function openHacker() { showHacker.value = true; } // disabled - reworking
+function openScavenger() {
+  showScavenger.value = true;
 }
 
 import NavBar from '@/components/NavBar.vue';
@@ -67,8 +70,10 @@ import InventoryModal from '@/components/InventoryModal.vue';
 import ExchangeModal from '@/components/ExchangeModal.vue';
 import GiftModal from '@/components/GiftModal.vue';
 import DefenseModal from '@/components/DefenseModal.vue';
+// import HackerModal from '@/components/HackerModal.vue'; // disabled - reworking
 import ForgeModal from '@/components/ForgeModal.vue';
 import PredictionModal from '@/components/PredictionModal.vue';
+import ScavengerModal from '@/components/ScavengerModal.vue';
 import MailModal from '@/components/MailModal.vue';
 import MiningGuide from '@/components/MiningGuide.vue';
 import RewardCelebration from '@/components/RewardCelebration.vue';
@@ -136,6 +141,7 @@ function handleOpenPredictionEvent() {
 function handleOpenMailEvent() {
   showMail.value = true;
 }
+// function handleCloseHackerEvent() { showHacker.value = false; } // disabled - reworking
 
 // Escuchar eventos
 onMounted(() => {
@@ -146,6 +152,7 @@ onMounted(() => {
   window.addEventListener('open-inventory', handleOpenInventoryEvent);
   window.addEventListener('open-prediction', handleOpenPredictionEvent);
   window.addEventListener('open-mail', handleOpenMailEvent);
+  // window.addEventListener('close-hacker', handleCloseHackerEvent); // disabled - reworking
   // Ad blocker detection (only in production)
   if (window.location.hostname !== 'localhost' && !window.location.hostname.startsWith('127.')) {
     detectAdBlocker();
@@ -197,6 +204,7 @@ onUnmounted(() => {
   window.removeEventListener('open-inventory', handleOpenInventoryEvent);
   window.removeEventListener('open-prediction', handleOpenPredictionEvent);
   window.removeEventListener('open-mail', handleOpenMailEvent);
+  // window.removeEventListener('close-hacker', handleCloseHackerEvent); // disabled - reworking
 });
 
 // Connection status computed properties
@@ -337,6 +345,19 @@ async function handleConnectionClick() {
       @close="showDefense = false"
     />
 
+    <!-- Hacker Terminal (disabled - reworking)
+    <HackerModal
+      :show="showHacker"
+      @close="showHacker = false"
+    />
+    -->
+
+    <!-- Scavenger -->
+    <ScavengerModal
+      :show="showScavenger"
+      @close="showScavenger = false"
+    />
+
     <!-- Yield Prediction (admin only) -->
     <PredictionModal
       v-if="authStore.player?.role === 'admin'"
@@ -415,18 +436,20 @@ async function handleConnectionClick() {
             <span class="mobile-action-label">{{ t('mining.market', 'Market') }}</span>
           </button>
 
-          <!-- Battle (distinctive) -->
-          <button @click="openDefense" class="mobile-battle-btn relative">
-            <div class="relative">
-              <span class="text-xl leading-none">&#9876;</span>
-            </div>
-            <span class="mobile-action-label text-red-400/80">{{ t('defense.short', 'Battle') }}</span>
-            <!-- Bubble badge -->
-            <span
-              v-if="defenseStore.lobbyCount > 0"
-              class="lobby-bubble"
-            >{{ t('defense.lobbyBubble', 'Someone wants to battle!') }}</span>
+          <!-- Scavenger -->
+          <button @click="openScavenger" class="mobile-action-btn">
+            <span class="text-xl">🔍</span>
+            <span class="mobile-action-label">{{ t('scavenger.short', 'Salvage') }}</span>
           </button>
+
+          <!-- Hacker Terminal (disabled - reworking)
+          <button @click="openHacker" class="mobile-battle-btn relative">
+            <div class="relative">
+              <span class="text-xl font-mono text-green-400 leading-none">&gt;_</span>
+            </div>
+            <span class="mobile-action-label text-green-400/80">{{ t('hacker.short', 'Hack') }}</span>
+          </button>
+          -->
 
           <!-- Exchange -->
           <button @click="openExchange" class="mobile-action-btn">
@@ -459,24 +482,35 @@ async function handleConnectionClick() {
           leave-to-class="opacity-0 -translate-y-2"
         >
         <div v-show="desktopButtonsVisible" class="flex flex-col gap-2">
-        <!-- Defense Button -->
+        <!-- Hacker Terminal Button (disabled - reworking)
         <button
-          @click="openDefense"
+          @click="openHacker"
           class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
         >
-          <div class="absolute left-0 top-0 bottom-0 w-[3px] bg-red-500"></div>
+          <div class="absolute left-0 top-0 bottom-0 w-[3px] bg-green-500"></div>
           <div class="w-8 h-8 rounded-md flex items-center justify-center">
-            <span class="text-lg">&#9876;</span>
+            <span class="text-lg font-mono text-green-400">&gt;_</span>
           </div>
           <div class="text-left">
-            <div class="text-xs font-semibold text-slate-200">{{ t('defense.title', 'Block Defense') }}</div>
-            <div class="text-[10px] text-slate-400">{{ t('defense.subtitle', 'Tower Defense') }}</div>
+            <div class="text-xs font-semibold text-slate-200">{{ t('hacker.title', 'Terminal') }}</div>
+            <div class="text-[10px] text-slate-400">{{ t('hacker.subtitle', 'Hack & control') }}</div>
           </div>
-          <!-- Bubble badge -->
-          <span
-            v-if="defenseStore.lobbyCount > 0"
-            class="lobby-bubble lobby-bubble--desktop"
-          >{{ t('defense.lobbyBubble', 'Someone wants to battle!') }}</span>
+        </button>
+        -->
+
+        <!-- Scavenger Button -->
+        <button
+          @click="openScavenger"
+          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
+        >
+          <div class="absolute left-0 top-0 bottom-0 w-[3px] bg-amber-500"></div>
+          <div class="w-8 h-8 rounded-md flex items-center justify-center">
+            <span class="text-lg">🔍</span>
+          </div>
+          <div class="text-left">
+            <div class="text-xs font-semibold text-slate-200">{{ t('scavenger.title', 'Rig Salvage') }}</div>
+            <div class="text-[10px] text-slate-400">{{ t('scavenger.subtitle', 'Scavenge for loot') }}</div>
+          </div>
         </button>
 
         <!-- Market Button -->
@@ -607,10 +641,15 @@ async function handleConnectionClick() {
               @click="openRewards()"
             >🎯 {{ (missionsStore.claimableCount || 0) + (streakStore.canClaim ? 1 : 0) }}</span>
             <span
-              v-if="defenseStore.lobbyCount > 0"
-              class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-red-600/50 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer"
-              @click="openDefense"
-            >&#9876; {{ defenseStore.lobbyCount }}</span>
+              class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-amber-500/50 rounded-lg text-[10px] font-bold text-amber-400 cursor-pointer"
+              @click="openScavenger"
+            >🔍</span>
+            <!-- Terminal badge (disabled - reworking)
+            <span
+              class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-green-600/50 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer"
+              @click="openHacker"
+            ><span class="font-mono">&gt;_</span></span>
+            -->
           </template>
           <button
             @click="desktopButtonsVisible = !desktopButtonsVisible"

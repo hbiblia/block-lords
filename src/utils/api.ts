@@ -2010,3 +2010,42 @@ export async function getFriendRequests(playerId: string): Promise<any> {
     p_player_id: playerId,
   });
 }
+
+// === HACKER TERMINAL ===
+
+export async function getRandomHackTarget(playerId: string, mode: string): Promise<any> {
+  return rpcWithRetry('get_random_hack_target', {
+    p_player_id: playerId,
+    p_mode: mode,
+  });
+}
+
+export async function searchHackTarget(playerId: string, username: string): Promise<any> {
+  return rpcWithRetry('search_hack_target', {
+    p_player_id: playerId,
+    p_username: username,
+  });
+}
+
+export async function initiateHack(playerId: string, targetId: string, mode: string): Promise<any> {
+  return rpcWithRetry('initiate_hack', {
+    p_player_id: playerId,
+    p_target_id: targetId,
+    p_mode: mode,
+  }, { critical: true });
+}
+
+export async function completeHack(playerId: string, sessionId: string, puzzleScore: number, completionTimeMs: number): Promise<any> {
+  return rpcWithRetry('complete_hack', {
+    p_player_id: playerId,
+    p_session_id: sessionId,
+    p_puzzle_score: puzzleScore,
+    p_completion_time_ms: completionTimeMs,
+  }, { critical: true });
+}
+
+export async function getHackStatus(playerId: string): Promise<any> {
+  return rpcWithRetry('get_hack_status', {
+    p_player_id: playerId,
+  });
+}

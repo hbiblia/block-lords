@@ -28,7 +28,13 @@ export type SoundType =
   | 'battle_start'
   | 'battle_win'
   | 'battle_lose'
-  | 'turn_start';
+  | 'turn_start'
+  | 'hack_start'
+  | 'hack_success'
+  | 'hack_fail'
+  | 'hack_keypress'
+  | 'hack_stage_clear'
+  | 'hack_detected';
 
 // Configuración de sonidos
 interface SoundConfig {
@@ -141,6 +147,38 @@ const SOUND_CONFIGS: Partial<Record<SoundType, SoundConfig[]>> = {
     { frequency: 660, duration: 0.08, type: 'sine', volume: 0.18 },
     { frequency: 880, duration: 0.1, type: 'sine', volume: 0.22 },
     { frequency: 1100, duration: 0.12, type: 'sine', volume: 0.18, ramp: true }
+  ],
+  // Hacker terminal sounds
+  hack_start: [
+    { frequency: 150, duration: 0.1, type: 'sawtooth', volume: 0.15 },
+    { frequency: 200, duration: 0.08, type: 'square', volume: 0.12 },
+    { frequency: 300, duration: 0.12, type: 'sawtooth', volume: 0.18 },
+    { frequency: 500, duration: 0.2, type: 'sine', volume: 0.15, ramp: true }
+  ],
+  hack_success: [
+    { frequency: 400, duration: 0.08, type: 'square', volume: 0.15 },
+    { frequency: 600, duration: 0.08, type: 'square', volume: 0.18 },
+    { frequency: 800, duration: 0.1, type: 'sine', volume: 0.2 },
+    { frequency: 1200, duration: 0.15, type: 'sine', volume: 0.22, ramp: true }
+  ],
+  hack_fail: [
+    { frequency: 400, duration: 0.1, type: 'sawtooth', volume: 0.2 },
+    { frequency: 200, duration: 0.15, type: 'square', volume: 0.18 },
+    { frequency: 100, duration: 0.25, type: 'sawtooth', volume: 0.15, ramp: true }
+  ],
+  hack_keypress: [
+    { frequency: 1200, duration: 0.03, type: 'sine', volume: 0.08 }
+  ],
+  hack_stage_clear: [
+    { frequency: 500, duration: 0.06, type: 'sine', volume: 0.15 },
+    { frequency: 700, duration: 0.06, type: 'sine', volume: 0.18 },
+    { frequency: 900, duration: 0.1, type: 'sine', volume: 0.2, ramp: true }
+  ],
+  hack_detected: [
+    { frequency: 800, duration: 0.08, type: 'square', volume: 0.2 },
+    { frequency: 400, duration: 0.08, type: 'square', volume: 0.18 },
+    { frequency: 800, duration: 0.08, type: 'square', volume: 0.2 },
+    { frequency: 200, duration: 0.15, type: 'sawtooth', volume: 0.15, ramp: true }
   ]
 };
 

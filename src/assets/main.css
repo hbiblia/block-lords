@@ -520,3 +520,34 @@ body:has(.fixed.inset-0:not(.pointer-events-none)) {
 .v-popper--theme-tooltip .v-popper__arrow-inner {
   border-color: var(--v-popper-bg);
 }
+
+/* === HACKER TERMINAL === */
+.hacker-bg {
+  background: #0a0f0a;
+}
+
+.hacker-text {
+  color: #00ff41;
+  font-family: 'JetBrains Mono', monospace;
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.5);
+}
+
+.hacker-glow {
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+}
+
+.hacker-glow-strong {
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
+}
+
+@keyframes glitch {
+  0%, 100% { clip-path: inset(0 0 0 0); transform: translate(0); }
+  20% { clip-path: inset(20% 0 30% 0); transform: translate(-2px, 1px); }
+  40% { clip-path: inset(50% 0 10% 0); transform: translate(2px, -1px); }
+  60% { clip-path: inset(10% 0 60% 0); transform: translate(-1px, 2px); }
+  80% { clip-path: inset(40% 0 20% 0); transform: translate(1px, -2px); }
+}
+
+.animate-glitch {
+  animation: glitch 0.3s ease-in-out;
+}

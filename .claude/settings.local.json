@@ -34,7 +34,12 @@
       "WebFetch(domain:support.google.com)",
       "Bash(git -C /d/software/block-lords log --oneline)",
       "WebFetch(domain:supabase.com)",
-      "WebFetch(domain:status.supabase.com)"
+      "WebFetch(domain:status.supabase.com)",
+      "WebFetch(domain:docs.sunflower-land.com)",
+      "WebFetch(domain:gam3s.gg)",
+      "WebFetch(domain:danieldiggle.itch.io)",
+      "Bash(node -e:*)",
+      "Bash(node --version:*)"
     ]
   }
 }
