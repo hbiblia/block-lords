@@ -39,7 +39,8 @@
       "WebFetch(domain:gam3s.gg)",
       "WebFetch(domain:danieldiggle.itch.io)",
       "Bash(node -e:*)",
-      "Bash(node --version:*)"
+      "Bash(node --version:*)",
+      "Bash(xargs cat:*)"
     ]
   }
 }

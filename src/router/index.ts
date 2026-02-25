@@ -41,7 +41,7 @@ const router = createRouter({
       path: '/mining',
       name: 'mining',
       component: () => import('@/pages/MiningPage.vue'),
-      meta: { requiresAuth: true },
+      // meta: { requiresAuth: true }, // TODO: restaurar auth después de probar ads
     },
     {
       path: '/market',
