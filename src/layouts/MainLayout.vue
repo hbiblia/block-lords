@@ -38,7 +38,6 @@ const showPrediction = ref(false);
 const showGuide = ref(false);
 const showMail = ref(false);
 // const showHacker = ref(false); // disabled - reworking
-const showScavenger = ref(false);
 
 function openMarket() {
   showMarket.value = true;
@@ -53,9 +52,12 @@ function openForge() {
   showForge.value = true;
 }
 // function openHacker() { showHacker.value = true; } // disabled - reworking
-function openScavenger() {
-  showScavenger.value = true;
+function openDefense() {
+  showDefense.value = true;
 }
+// function openScavenger() {
+//   showScavenger.value = true;
+// }
 
 import NavBar from '@/components/NavBar.vue';
 import InfoBar from '@/components/InfoBar.vue';
@@ -73,7 +75,6 @@ import DefenseModal from '@/components/DefenseModal.vue';
 // import HackerModal from '@/components/HackerModal.vue'; // disabled - reworking
 import ForgeModal from '@/components/ForgeModal.vue';
 import PredictionModal from '@/components/PredictionModal.vue';
-import ScavengerModal from '@/components/ScavengerModal.vue';
 import MailModal from '@/components/MailModal.vue';
 import MiningGuide from '@/components/MiningGuide.vue';
 import RewardCelebration from '@/components/RewardCelebration.vue';
@@ -352,11 +353,6 @@ async function handleConnectionClick() {
     />
     -->
 
-    <!-- Scavenger -->
-    <ScavengerModal
-      :show="showScavenger"
-      @close="showScavenger = false"
-    />
 
     <!-- Yield Prediction (admin only) -->
     <PredictionModal
@@ -436,10 +432,10 @@ async function handleConnectionClick() {
             <span class="mobile-action-label">{{ t('mining.market', 'Market') }}</span>
           </button>
 
-          <!-- Scavenger -->
-          <button @click="openScavenger" class="mobile-action-btn">
-            <span class="text-xl">🔍</span>
-            <span class="mobile-action-label">{{ t('scavenger.short', 'Salvage') }}</span>
+          <!-- Card Battle -->
+          <button @click="openDefense" class="mobile-action-btn">
+            <span class="text-xl">🃏</span>
+            <span class="mobile-action-label">{{ t('defense.short', 'Battle') }}</span>
           </button>
 
           <!-- Hacker Terminal (disabled - reworking)
@@ -498,18 +494,18 @@ async function handleConnectionClick() {
         </button>
         -->
 
-        <!-- Scavenger Button -->
+        <!-- Card Battle Button -->
         <button
-          @click="openScavenger"
+          @click="openDefense"
           class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
         >
-          <div class="absolute left-0 top-0 bottom-0 w-[3px] bg-amber-500"></div>
+          <div class="absolute left-0 top-0 bottom-0 w-[3px] bg-purple-500"></div>
           <div class="w-8 h-8 rounded-md flex items-center justify-center">
-            <span class="text-lg">🔍</span>
+            <span class="text-lg">🃏</span>
           </div>
           <div class="text-left">
-            <div class="text-xs font-semibold text-slate-200">{{ t('scavenger.title', 'Rig Salvage') }}</div>
-            <div class="text-[10px] text-slate-400">{{ t('scavenger.subtitle', 'Scavenge for loot') }}</div>
+            <div class="text-xs font-semibold text-slate-200">{{ t('defense.title', 'Card Battle') }}</div>
+            <div class="text-[10px] text-slate-400">{{ t('defense.subtitle', 'PvP card duel') }}</div>
           </div>
         </button>
 
@@ -641,9 +637,9 @@ async function handleConnectionClick() {
               @click="openRewards()"
             >🎯 {{ (missionsStore.claimableCount || 0) + (streakStore.canClaim ? 1 : 0) }}</span>
             <span
-              class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-amber-500/50 rounded-lg text-[10px] font-bold text-amber-400 cursor-pointer"
-              @click="openScavenger"
-            >🔍</span>
+              class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-purple-500/50 rounded-lg text-[10px] font-bold text-purple-400 cursor-pointer"
+              @click="openDefense"
+            >🃏</span>
             <!-- Terminal badge (disabled - reworking)
             <span
               class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-green-600/50 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer"

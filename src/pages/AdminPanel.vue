@@ -556,6 +556,16 @@ function formatDate(dateString: string) {
   });
 }
 
+function formatSeconds(seconds: number): string {
+  if (seconds <= 0) return 'Expirado';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 // Tickets
 const tickets = ref<Array<{ id: string; sender_id: string; sender_username: string; subject: string; body: string | null; is_read: boolean; created_at: string }>>([]);
 const loadingTickets = ref(false);
@@ -1811,21 +1821,52 @@ onMounted(async () => {
                       <span class="text-text-muted">Thermal:</span> Lv{{ rig.thermal_level }}
                     </div>
                   </div>
+                  <!-- Cooling instalado -->
                   <div v-if="rig.cooling_installed && rig.cooling_installed.length > 0" class="mb-2">
-                    <p class="text-xs text-text-muted mb-1">Refrigeración:</p>
-                    <div class="flex flex-wrap gap-1">
-                      <span v-for="cool in rig.cooling_installed" :key="cool.id" class="bg-blue-500/20 text-blue-300 px-2 py-1 rounded text-sm">
-                        ❄️ {{ cool.cooling_name }} (-{{ cool.cooling_power }}°C)
-                      </span>
+                    <p class="text-xs text-text-muted mb-1">❄️ Refrigeración ({{ rig.cooling_installed.length }}):</p>
+                    <div class="space-y-1">
+                      <div v-for="cool in rig.cooling_installed" :key="cool.id" class="bg-blue-500/10 border border-blue-500/30 rounded p-2">
+                        <div class="flex justify-between items-center">
+                          <span class="text-blue-300 text-xs font-medium">{{ cool.cooling_name }}</span>
+                          <span class="text-blue-400 text-xs font-bold">-{{ cool.cooling_power }}°C</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-1">
+                          <span class="text-text-muted text-xs">Durabilidad:</span>
+                          <div class="flex-1 bg-bg-primary rounded-full h-1.5">
+                            <div
+                              class="h-1.5 rounded-full transition-all"
+                              :class="cool.durability >= 60 ? 'bg-green-500' : cool.durability >= 30 ? 'bg-yellow-500' : 'bg-red-500'"
+                              :style="{ width: `${Math.max(0, Math.min(100, cool.durability))}%` }"
+                            ></div>
+                          </div>
+                          <span class="text-xs" :class="cool.durability >= 60 ? 'text-green-400' : cool.durability >= 30 ? 'text-yellow-400' : 'text-red-400'">{{ Number(cool.durability).toFixed(0) }}%</span>
+                        </div>
+                        <p class="text-text-muted text-xs mt-0.5">Instalado: {{ formatDate(cool.installed_at) }}</p>
+                      </div>
                     </div>
                   </div>
+
+                  <!-- Boosts instalados -->
                   <div v-if="rig.boosts_installed && rig.boosts_installed.length > 0">
-                    <p class="text-xs text-text-muted mb-1">Boosts:</p>
-                    <div class="flex flex-wrap gap-1">
-                      <span v-for="boost in rig.boosts_installed" :key="boost.id" class="bg-amber-500/20 text-amber-300 px-2 py-1 rounded text-sm">
-                        ⚡ {{ boost.boost_name }}
-                      </span>
+                    <p class="text-xs text-text-muted mb-1">⚡ Boosts activos ({{ rig.boosts_installed.length }}):</p>
+                    <div class="space-y-1">
+                      <div v-for="boost in rig.boosts_installed" :key="boost.id" class="bg-amber-500/10 border border-amber-500/30 rounded p-2">
+                        <div class="flex justify-between items-center">
+                          <span class="text-amber-300 text-xs font-medium">{{ boost.boost_name }}</span>
+                          <span v-if="boost.stack_count > 1" class="bg-amber-500/30 text-amber-200 px-1.5 py-0.5 rounded text-xs font-bold">x{{ boost.stack_count }}</span>
+                        </div>
+                        <div class="flex gap-3 mt-0.5">
+                          <span class="text-text-muted text-xs">Tipo: <span class="text-amber-400">{{ boost.boost_type }}</span></span>
+                          <span class="text-text-muted text-xs">Restante: <span class="text-green-400 font-medium">{{ formatSeconds(boost.remaining_seconds) }}</span></span>
+                        </div>
+                        <p class="text-text-muted text-xs mt-0.5">Activado: {{ formatDate(boost.activated_at) }}</p>
+                      </div>
                     </div>
+                  </div>
+
+                  <!-- Sin instalaciones -->
+                  <div v-if="(!rig.cooling_installed || rig.cooling_installed.length === 0) && (!rig.boosts_installed || rig.boosts_installed.length === 0)">
+                    <p class="text-text-muted text-xs italic">Sin items instalados</p>
                   </div>
                 </div>
               </div>
