@@ -675,6 +675,7 @@ export default {
       pending: 'Pending withdrawal',
       processing: 'Processing...',
       success: 'Withdrawal request submitted',
+      min: 'Minimum',
     },
     reload: {
       button: 'Reload',

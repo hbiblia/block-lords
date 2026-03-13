@@ -1363,6 +1363,8 @@ INSERT INTO game_settings (key, value, value_type, category, description) VALUES
   ('solo_xp_silver',  '190',  'int', 'solo_mining', 'XP bloque plata solo'),
   ('solo_xp_gold',    '320',  'int', 'solo_mining', 'XP bloque oro solo'),
   ('solo_xp_diamond', '1600', 'int', 'solo_mining', 'XP bloque diamante solo'),
+  -- SOLO MINING: Desgaste
+  ('solo_wear_multiplier', '1.0', 'numeric', 'solo_mining', 'Multiplicador de desgaste en rigs y componentes durante solo mining (1.0 = normal, 2.0 = doble desgaste)'),
   -- COSTOS VARIOS
   ('mail_send_cost_internet',  '5',      'int', 'economy', 'Costo de internet para enviar mail'),
   ('landwork_to_ron_rate',     '100000', 'int', 'economy', 'Tasa de conversión Landwork a RON'),
@@ -1376,3 +1378,40 @@ ON CONFLICT (key) DO NOTHING;
 -- NOTA: Las funciones están en all_functions.sql
 -- NOTA: Las políticas RLS están en all_rls_policies.sql
 -- =====================================================
+
+-- =====================================================
+-- ADD currency COLUMN TO boost_items (if not exists)
+-- =====================================================
+ALTER TABLE boost_items ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'gamecoin';
+DO $$ BEGIN
+  ALTER TABLE boost_items ADD CONSTRAINT boost_items_currency_check CHECK (currency IN ('gamecoin', 'crypto', 'ron'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+
+-- =====================================================
+-- ADD currency COLUMN TO hardcoded market tables
+-- =====================================================
+ALTER TABLE cooling_items ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'gamecoin';
+DO $$ BEGIN
+  ALTER TABLE cooling_items ADD CONSTRAINT cooling_items_currency_check CHECK (currency IN ('gamecoin', 'crypto', 'ron'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE cooling_components ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'gamecoin';
+DO $$ BEGIN
+  ALTER TABLE cooling_components ADD CONSTRAINT cooling_components_currency_check CHECK (currency IN ('gamecoin', 'crypto', 'ron'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE exp_packs ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'gamecoin';
+DO $$ BEGIN
+  ALTER TABLE exp_packs ADD CONSTRAINT exp_packs_currency_check CHECK (currency IN ('gamecoin', 'crypto', 'ron'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE crypto_packages ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'ron';
+DO $$ BEGIN
+  ALTER TABLE crypto_packages ADD CONSTRAINT crypto_packages_currency_check CHECK (currency IN ('gamecoin', 'crypto', 'ron'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

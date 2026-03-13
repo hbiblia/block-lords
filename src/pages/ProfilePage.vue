@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useGameConfigStore } from '@/stores/game-config';
 import { updateRonWallet, resetPlayerAccount, getPlayerTransactions, requestRonWithdrawal, getWithdrawalHistory, getPremiumStatus, depositRon, getGameStatus, type PremiumStatus, type GameStatus } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { formatGamecoin, formatCrypto, formatNumber, formatRon } from '@/utils/format';
@@ -15,6 +16,7 @@ const roninWallet = useRoninWallet();
 const { t } = useI18n();
 const router = useRouter();
 const authStore = useAuthStore();
+const gameConfigStore = useGameConfigStore();
 
 const loading = ref(true);
 const hasLoaded = ref(false);
@@ -49,6 +51,7 @@ const withdrawValue = computed(() => {
 });
 const withdrawFee = computed(() => withdrawValue.value * withdrawalFeeRate.value);
 const withdrawNet = computed(() => withdrawValue.value - withdrawFee.value);
+const minWithdrawal = computed(() => gameConfigStore.getSetting('min_withdrawal_ron', 0.5));
 
 // RON Reload/Deposit
 const showReloadModal = ref(false);
@@ -108,6 +111,7 @@ async function loadData(force = false) {
         getPlayerTransactions(player.value.id, 20),
         getWithdrawalHistory(player.value.id, 5),
         getPremiumStatus(player.value.id),
+        gameConfigStore.fetchSettings(),
       ]);
       transactions.value = txData || [];
       withdrawalHistory.value = withdrawals || [];
@@ -341,7 +345,7 @@ async function confirmReload() {
 }
 
 async function confirmWithdraw() {
-  if (withdrawing.value || !player.value || !canWithdraw.value || withdrawValue.value <= 0) return;
+  if (withdrawing.value || !player.value || !canWithdraw.value || withdrawValue.value <= 0 || withdrawValue.value < minWithdrawal.value) return;
 
   withdrawing.value = true;
   withdrawError.value = null;
@@ -1004,6 +1008,10 @@ function getTransactionIcon(type: string): string {
                 <span class="text-sm text-text-muted">{{ t('profile.withdraw.available', 'Disponible') }}</span>
                 <span class="font-medium">{{ formatRon(ronBalance) }} RON</span>
               </div>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-text-muted">{{ t('profile.withdraw.min', 'Mínimo') }}</span>
+                <span class="text-sm font-medium text-text-muted">{{ formatRon(minWithdrawal) }} RON</span>
+              </div>
               <div v-if="withdrawValue > 0" class="flex justify-between items-center">
                 <span class="text-sm text-text-muted">{{ t('profile.withdraw.withdrawAmount', 'Monto a retirar') }}</span>
                 <span class="font-medium">{{ formatRon(withdrawValue) }} RON</span>
@@ -1043,7 +1051,7 @@ function getTransactionIcon(type: string): string {
                 class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors">
                 {{ t('common.cancel') }}
               </button>
-              <button @click="confirmWithdraw" :disabled="withdrawing || withdrawValue <= 0"
+              <button @click="confirmWithdraw" :disabled="withdrawing || withdrawValue <= 0 || withdrawValue < minWithdrawal"
                 class="flex-1 py-2.5 rounded-lg font-semibold bg-amber-500 text-white hover:bg-amber-500/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 <span v-if="withdrawing" class="flex items-center justify-center gap-2">
                   <span class="animate-spin">⏳</span>

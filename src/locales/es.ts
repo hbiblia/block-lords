@@ -675,6 +675,7 @@
       pending: 'Retiro pendiente',
       processing: 'Procesando...',
       success: 'Solicitud de retiro enviada',
+      min: 'Mínimo',
     },
     reload: {
       button: 'Recargar',

@@ -1969,6 +1969,35 @@ export async function adminUpdateGameSetting(key: string, value: string): Promis
   });
 }
 
+export async function adminGetMarketItems(): Promise<any> {
+  return rpcWithRetry('admin_get_market_items', {});
+}
+
+export async function adminUpdateMarketItemPrice(table: string, itemId: string, newPrice: number): Promise<any> {
+  return rpcWithRetry('admin_update_market_item_price', {
+    p_table: table,
+    p_item_id: itemId,
+    p_new_price: newPrice,
+  });
+}
+
+export async function adminUpdateMarketItemCurrency(table: string, itemId: string, newCurrency: string): Promise<any> {
+  return rpcWithRetry('admin_update_market_item_currency', {
+    p_table: table,
+    p_item_id: itemId,
+    p_new_currency: newCurrency,
+  });
+}
+
+export async function adminUpdateMarketItemValue(table: string, itemId: string, column: string, newValue: number): Promise<any> {
+  return rpcWithRetry('admin_update_market_item_value', {
+    p_table: table,
+    p_item_id: itemId,
+    p_column: column,
+    p_new_value: newValue,
+  });
+}
+
 // === FRIENDS ===
 
 export async function sendFriendRequest(senderId: string, receiverUsername: string): Promise<any> {

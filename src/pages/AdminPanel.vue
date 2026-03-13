@@ -14,6 +14,10 @@ import {
   adminGetTickets,
   adminGetGameSettingsFull,
   adminUpdateGameSetting,
+  adminGetMarketItems,
+  adminUpdateMarketItemPrice,
+  adminUpdateMarketItemCurrency,
+  adminUpdateMarketItemValue,
   getBoostItems,
   type CreateAnnouncementParams,
   type AdminSendGiftParams,
@@ -588,7 +592,7 @@ function toggleTicket(id: string) {
 }
 
 // Tab system
-type AdminTab = 'announcements' | 'users' | 'tickets' | 'gifts' | 'settings';
+type AdminTab = 'announcements' | 'users' | 'tickets' | 'gifts' | 'settings' | 'market';
 const activeTab = ref<AdminTab>('announcements');
 
 const adminTabs = [
@@ -596,6 +600,7 @@ const adminTabs = [
   { key: 'users' as AdminTab, icon: '👥', label: 'Usuarios' },
   { key: 'tickets' as AdminTab, icon: '🎫', label: 'Tickets' },
   { key: 'gifts' as AdminTab, icon: '🎁', label: 'Regalos' },
+  { key: 'market' as AdminTab, icon: '🛒', label: 'Market' },
   { key: 'settings' as AdminTab, icon: '⚙️', label: 'Settings' },
 ];
 
@@ -604,6 +609,159 @@ function onTabChange(tab: AdminTab) {
   playSound('click');
   if (tab === 'tickets' && tickets.value.length === 0) loadTickets();
   if (tab === 'settings' && gameSettingsFull.value.length === 0) loadGameSettings();
+  if (tab === 'market' && !marketItems.value) loadMarketItems();
+}
+
+// Market price editor
+interface MarketItem {
+  id: string;
+  name: string;
+  tier: string;
+  base_price: number;
+  currency: string;
+  [key: string]: any;
+}
+interface MarketCatalog {
+  rigs: MarketItem[];
+  cooling_items: MarketItem[];
+  prepaid_cards: MarketItem[];
+  boost_items: MarketItem[];
+  crypto_packages: MarketItem[];
+  cooling_components: MarketItem[];
+  exp_packs: MarketItem[];
+}
+
+interface MarketValueField {
+  key: string;
+  label: string;
+  step?: string;
+}
+
+const marketValueFields: Record<string, MarketValueField[]> = {
+  rigs:               [{ key: 'hashrate', label: 'Hashrate', step: '1' }, { key: 'power_consumption', label: 'Energía (⚡/t)', step: '0.01' }, { key: 'internet_consumption', label: 'Internet (📡/t)', step: '0.01' }],
+  cooling_items:      [{ key: 'cooling_power', label: 'Cooling', step: '0.01' }],
+  prepaid_cards:      [{ key: 'amount', label: 'Amount', step: '0.01' }],
+  boost_items:        [{ key: 'effect_value', label: 'Effect %', step: '0.1' }, { key: 'duration_minutes', label: 'Min', step: '1' }],
+  crypto_packages:    [{ key: 'crypto_amount', label: 'Crypto', step: '0.01' }, { key: 'bonus_percent', label: 'Bonus %', step: '1' }],
+  cooling_components: [{ key: 'cooling_power_min', label: 'Cool Min', step: '0.1' }, { key: 'cooling_power_max', label: 'Cool Max', step: '0.1' }],
+  exp_packs:          [{ key: 'xp_amount', label: 'XP', step: '1' }],
+};
+
+const marketItems = ref<MarketCatalog | null>(null);
+const loadingMarket = ref(false);
+const marketError = ref('');
+const marketSuccess = ref('');
+const marketEditedPrices = ref<Record<string, number>>({});
+const marketEditedCurrencies = ref<Record<string, string>>({});
+const marketEditedValues = ref<Record<string, number>>({});
+const savingMarketKey = ref<string | null>(null);
+
+const marketCategoryLabels: Record<string, { icon: string; label: string }> = {
+  rigs: { icon: '⛏️', label: 'Rigs' },
+  cooling_items: { icon: '❄️', label: 'Cooling' },
+  prepaid_cards: { icon: '💳', label: 'Prepaid Cards' },
+  boost_items: { icon: '🚀', label: 'Boosts' },
+  crypto_packages: { icon: '💎', label: 'Crypto Packages' },
+  cooling_components: { icon: '🔩', label: 'Cooling Components' },
+  exp_packs: { icon: '📖', label: 'Exp Packs' },
+};
+
+const marketCurrencyOptions: Record<string, string[]> = {
+  rigs: ['gamecoin', 'crypto', 'ron'],
+  prepaid_cards: ['gamecoin', 'crypto', 'ron'],
+  boost_items: ['gamecoin', 'crypto', 'ron'],
+  cooling_items: ['gamecoin', 'crypto', 'ron'],
+  cooling_components: ['gamecoin', 'crypto', 'ron'],
+  exp_packs: ['gamecoin', 'crypto', 'ron'],
+  crypto_packages: ['gamecoin', 'crypto', 'ron'],
+};
+
+function tableHasEditableCurrency(table: string): boolean {
+  return table in marketCurrencyOptions;
+}
+
+async function loadMarketItems() {
+  loadingMarket.value = true;
+  marketError.value = '';
+  try {
+    marketItems.value = await adminGetMarketItems();
+    marketEditedPrices.value = {};
+    marketEditedCurrencies.value = {};
+    marketEditedValues.value = {};
+    if (marketItems.value) {
+      for (const [table, items] of Object.entries(marketItems.value)) {
+        const fields = marketValueFields[table] ?? [];
+        for (const item of items as MarketItem[]) {
+          marketEditedPrices.value[`${table}:${item.id}`] = item.base_price;
+          marketEditedCurrencies.value[`${table}:${item.id}`] = item.currency;
+          for (const field of fields) {
+            marketEditedValues.value[`${table}:${item.id}:${field.key}`] = item[field.key] ?? 0;
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    marketError.value = e.message || 'Error loading market items';
+    playSound('error');
+  } finally {
+    loadingMarket.value = false;
+  }
+}
+
+function isMarketPriceModified(table: string, item: MarketItem): boolean {
+  const key = `${table}:${item.id}`;
+  if (marketEditedPrices.value[key] !== item.base_price) return true;
+  if (tableHasEditableCurrency(table) && marketEditedCurrencies.value[key] !== item.currency) return true;
+  for (const field of (marketValueFields[table] ?? [])) {
+    if (marketEditedValues.value[`${key}:${field.key}`] !== item[field.key]) return true;
+  }
+  return false;
+}
+
+async function saveMarketPrice(table: string, item: MarketItem) {
+  const key = `${table}:${item.id}`;
+  savingMarketKey.value = key;
+  marketError.value = '';
+  marketSuccess.value = '';
+  try {
+    const newPrice = Number(marketEditedPrices.value[key]);
+    const newCurrency = marketEditedCurrencies.value[key];
+    const priceChanged = newPrice !== item.base_price;
+    const currencyChanged = tableHasEditableCurrency(table) && newCurrency !== item.currency;
+    if (priceChanged) {
+      await adminUpdateMarketItemPrice(table, item.id, newPrice);
+      item.base_price = newPrice;
+    }
+    if (currencyChanged) {
+      await adminUpdateMarketItemCurrency(table, item.id, newCurrency);
+      item.currency = newCurrency;
+    }
+    for (const field of (marketValueFields[table] ?? [])) {
+      const vKey = `${key}:${field.key}`;
+      const newVal = Number(marketEditedValues.value[vKey]);
+      if (newVal !== item[field.key]) {
+        await adminUpdateMarketItemValue(table, item.id, field.key, newVal);
+        item[field.key] = newVal;
+      }
+    }
+    marketSuccess.value = `Actualizado: ${item.name}`;
+    playSound('success');
+    setTimeout(() => { marketSuccess.value = ''; }, 3000);
+  } catch (e: any) {
+    marketError.value = e.message || `Error saving ${item.name}`;
+    playSound('error');
+  } finally {
+    savingMarketKey.value = null;
+  }
+}
+
+function resetMarketPrice(table: string, item: MarketItem) {
+  const key = `${table}:${item.id}`;
+  marketEditedPrices.value[key] = item.base_price;
+  marketEditedCurrencies.value[key] = item.currency;
+  for (const field of (marketValueFields[table] ?? [])) {
+    marketEditedValues.value[`${key}:${field.key}`] = item[field.key] ?? 0;
+  }
 }
 
 // Game Settings editor
@@ -1226,6 +1384,137 @@ onMounted(async () => {
             Reintentar
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- TAB: Market -->
+    <div v-if="activeTab === 'market'">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-2xl font-bold gradient-text">🛒 Market Prices</h2>
+          <p v-if="marketItems" class="text-text-muted text-sm">
+            {{ Object.values(marketItems).flat().length }} items
+          </p>
+        </div>
+        <button
+          @click="loadMarketItems"
+          :disabled="loadingMarket"
+          class="px-4 py-2 rounded-lg text-sm bg-bg-tertiary hover:bg-bg-tertiary/80 text-text-muted transition-colors disabled:opacity-50"
+        >
+          {{ loadingMarket ? '⏳' : '🔄' }} Reload
+        </button>
+      </div>
+
+      <div v-if="marketSuccess" class="mb-4 p-3 bg-status-success/10 border border-status-success/30 rounded-lg text-status-success text-sm">
+        ✅ {{ marketSuccess }}
+      </div>
+      <div v-if="marketError" class="mb-4 p-3 bg-status-danger/10 border border-status-danger/30 rounded-lg text-status-danger text-sm">
+        ❌ {{ marketError }}
+      </div>
+
+      <div v-if="loadingMarket" class="flex justify-center py-12">
+        <div class="animate-spin w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full"></div>
+      </div>
+
+      <div v-else-if="marketItems" class="space-y-3">
+        <div
+          v-for="(items, table) in marketItems"
+          :key="table"
+          class="card overflow-hidden !p-0"
+        >
+          <div class="flex items-center gap-2 px-4 py-3 border-b border-border">
+            <span class="text-xl">{{ marketCategoryLabels[table as string]?.icon || '📦' }}</span>
+            <span class="font-semibold">{{ marketCategoryLabels[table as string]?.label || table }}</span>
+            <span class="text-xs text-text-muted">({{ (items as MarketItem[]).length }})</span>
+          </div>
+          <div>
+            <div
+              v-for="item in (items as MarketItem[])"
+              :key="item.id"
+              class="flex items-center gap-3 px-4 py-2.5 border-b border-border/30 last:border-0 hover:bg-bg-tertiary/20 transition-colors"
+              :class="isMarketPriceModified(table as string, item) ? 'bg-status-warning/5' : ''"
+            >
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium truncate">{{ item.name }}</p>
+                <p class="text-xs text-text-muted">{{ item.tier }}</p>
+              </div>
+              <div class="w-28 shrink-0" v-if="tableHasEditableCurrency(table as string)">
+                <label class="block text-[10px] text-text-muted mb-0.5">Moneda</label>
+                <select
+                  v-model="marketEditedCurrencies[`${table}:${item.id}`]"
+                  class="w-full px-2 py-1.5 bg-bg-primary border rounded text-sm focus:outline-none"
+                  :class="marketEditedCurrencies[`${table}:${item.id}`] !== item.currency ? 'border-status-warning focus:border-status-warning' : 'border-border focus:border-amber-400'"
+                >
+                  <option v-for="opt in marketCurrencyOptions[table as string]" :key="opt" :value="opt">{{ opt }}</option>
+                </select>
+              </div>
+              <div class="w-28 shrink-0" v-else>
+                <span class="px-2 py-1.5 rounded text-xs font-medium uppercase" :class="{
+                  'bg-yellow-500/20 text-yellow-400': item.currency === 'gamecoin',
+                  'bg-amber-500/20 text-amber-400': item.currency === 'crypto',
+                  'bg-blue-500/20 text-blue-400': item.currency === 'ron',
+                  'bg-bg-tertiary text-text-muted': !['gamecoin','crypto','ron'].includes(item.currency)
+                }">{{ item.currency === 'gamecoin' ? 'GC' : item.currency === 'crypto' ? 'Landwork' : item.currency === 'ron' ? 'RON' : item.currency }}</span>
+              </div>
+              <template v-if="marketValueFields[table as string]">
+                <div
+                  v-for="field in marketValueFields[table as string]"
+                  :key="field.key"
+                  class="shrink-0"
+                  style="width: 90px"
+                >
+                  <label class="block text-[10px] text-text-muted mb-0.5">{{ field.label }}</label>
+                  <input
+                    v-model.number="marketEditedValues[`${table}:${item.id}:${field.key}`]"
+                    type="number"
+                    min="0"
+                    :step="field.step || 'any'"
+                    class="w-full px-2 py-1.5 bg-bg-primary border rounded text-sm font-mono focus:outline-none"
+                    :class="marketEditedValues[`${table}:${item.id}:${field.key}`] !== item[field.key] ? 'border-status-warning focus:border-status-warning' : 'border-border focus:border-amber-400'"
+                  />
+                </div>
+              </template>
+              <div class="w-36 shrink-0">
+                <label class="block text-[10px] text-text-muted mb-0.5">Precio</label>
+                <input
+                  v-model.number="marketEditedPrices[`${table}:${item.id}`]"
+                  type="number"
+                  min="0"
+                  step="any"
+                  class="w-full px-2 py-1.5 bg-bg-primary border rounded text-sm font-mono focus:outline-none"
+                  :class="isMarketPriceModified(table as string, item) ? 'border-status-warning focus:border-status-warning' : 'border-border focus:border-amber-400'"
+                />
+              </div>
+              <div class="flex items-center gap-1 shrink-0 w-16 justify-end">
+                <button
+                  v-if="isMarketPriceModified(table as string, item)"
+                  @click="resetMarketPrice(table as string, item)"
+                  class="p-1.5 rounded text-text-muted hover:text-white hover:bg-bg-tertiary transition-colors"
+                  title="Reset"
+                >
+                  ↩️
+                </button>
+                <button
+                  v-if="isMarketPriceModified(table as string, item)"
+                  @click="saveMarketPrice(table as string, item)"
+                  :disabled="!!savingMarketKey"
+                  class="p-1.5 rounded bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors disabled:opacity-50"
+                  title="Save"
+                >
+                  {{ savingMarketKey === `${table}:${item.id}` ? '⏳' : '✓' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="text-center py-12 text-text-muted card">
+        <div class="text-6xl mb-4">🛒</div>
+        <p class="text-lg">No se pudieron cargar los items</p>
+        <button @click="loadMarketItems" class="mt-4 px-4 py-2 rounded-lg bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30 transition-colors">
+          Reintentar
+        </button>
       </div>
     </div>
 

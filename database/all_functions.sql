@@ -1975,9 +1975,9 @@ BEGIN
       -- Aplicar multiplicador de boost de durability_shield
       v_deterioration := v_deterioration * v_durability_mult;
 
-      -- Solo mining: condicion se degrada 3x mas rapido (overclock)
+      -- Solo mining: condicion se degrada según el multiplicador configurado (default 3x = overclock)
       IF v_player.mining_mode = 'solo' THEN
-        v_deterioration := v_deterioration * 3.0;
+        v_deterioration := v_deterioration * COALESCE(gs_numeric('solo_wear_multiplier'), 3.0);
       END IF;
 
       -- Premium: -25% desgaste (multiplicador 0.75)
@@ -2013,6 +2013,8 @@ BEGIN
                jsonb_array_elements(pci_dur.mods) m
           WHERE pci_dur.id = rc_upd.player_cooling_item_id
         ), 0) / 100.0)
+        -- Solo mining: los componentes también se desgastan según el multiplicador configurado
+        * CASE WHEN v_player.mining_mode = 'solo' THEN COALESCE(gs_numeric('solo_wear_multiplier'), 3.0) ELSE 1.0 END
       ))
       WHERE rc_upd.player_rig_id = v_rig.id AND rc_upd.durability > 0;
 
@@ -6272,6 +6274,7 @@ BEGIN
   IF COALESCE(v_player.ron_balance, 0) < v_min_withdrawal THEN RETURN json_build_object('success', false, 'error', 'Balance insuficiente'); END IF;
   v_withdraw_amount := COALESCE(p_amount, v_player.ron_balance);
   IF v_withdraw_amount <= 0 THEN RETURN json_build_object('success', false, 'error', 'Cantidad invalida'); END IF;
+  IF v_withdraw_amount < v_min_withdrawal THEN RETURN json_build_object('success', false, 'error', 'El monto mínimo de retiro es ' || v_min_withdrawal || ' RON'); END IF;
   IF v_withdraw_amount > v_player.ron_balance THEN RETURN json_build_object('success', false, 'error', 'Balance insuficiente'); END IF;
   v_is_premium := is_player_premium(p_player_id);
   v_fee_rate := get_withdrawal_fee_rate(p_player_id);
@@ -15468,3 +15471,303 @@ $$;
 
 GRANT EXECUTE ON FUNCTION admin_get_game_settings_full TO authenticated;
 GRANT EXECUTE ON FUNCTION admin_update_game_setting TO authenticated;
+
+-- ============================================================
+-- ADMIN: MARKET ITEM PRICE MANAGEMENT
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION admin_get_market_items()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+BEGIN
+  SELECT role INTO v_player_role
+  FROM players
+  WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  RETURN json_build_object(
+    'rigs', (
+      SELECT COALESCE(json_agg(json_build_object(
+        'id', id, 'name', name, 'tier', tier,
+        'base_price', base_price, 'currency', currency,
+        'hashrate', hashrate,
+        'power_consumption', power_consumption,
+        'internet_consumption', internet_consumption
+      ) ORDER BY tier, name), '[]')
+      FROM rigs
+    ),
+    'cooling_items', (
+      SELECT COALESCE(json_agg(json_build_object(
+        'id', id, 'name', name, 'tier', tier,
+        'base_price', base_price, 'currency', currency,
+        'cooling_power', cooling_power
+      ) ORDER BY tier, name), '[]')
+      FROM cooling_items
+    ),
+    'prepaid_cards', (
+      SELECT COALESCE(json_agg(json_build_object(
+        'id', id, 'name', name, 'tier', tier,
+        'base_price', base_price, 'currency', currency,
+        'amount', amount
+      ) ORDER BY tier, name), '[]')
+      FROM prepaid_cards
+    ),
+    'boost_items', (
+      SELECT COALESCE(json_agg(json_build_object(
+        'id', id, 'name', name, 'tier', tier,
+        'base_price', base_price, 'currency', currency,
+        'effect_value', effect_value, 'duration_minutes', duration_minutes
+      ) ORDER BY tier, name), '[]')
+      FROM boost_items
+    ),
+    'crypto_packages', (
+      SELECT COALESCE(json_agg(json_build_object(
+        'id', id, 'name', name, 'tier', tier,
+        'base_price', ron_price, 'currency', currency,
+        'crypto_amount', crypto_amount, 'bonus_percent', bonus_percent
+      ) ORDER BY tier, name), '[]')
+      FROM crypto_packages
+    ),
+    'cooling_components', (
+      SELECT COALESCE(json_agg(json_build_object(
+        'id', id, 'name', name, 'tier', tier,
+        'base_price', base_price, 'currency', currency,
+        'cooling_power_min', cooling_power_min, 'cooling_power_max', cooling_power_max
+      ) ORDER BY tier, name), '[]')
+      FROM cooling_components
+    ),
+    'exp_packs', (
+      SELECT COALESCE(json_agg(json_build_object(
+        'id', id, 'name', name, 'tier', tier,
+        'base_price', base_price, 'currency', currency,
+        'xp_amount', xp_amount
+      ) ORDER BY tier, name), '[]')
+      FROM exp_packs
+    )
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION admin_update_market_item_price(
+  p_table TEXT,
+  p_item_id TEXT,
+  p_new_price NUMERIC
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+  v_rows_updated INT;
+BEGIN
+  SELECT role INTO v_player_role
+  FROM players
+  WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  IF p_new_price < 0 THEN
+    RAISE EXCEPTION 'Price cannot be negative';
+  END IF;
+
+  IF p_table = 'rigs' THEN
+    UPDATE rigs SET base_price = p_new_price WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'cooling_items' THEN
+    UPDATE cooling_items SET base_price = p_new_price WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'prepaid_cards' THEN
+    UPDATE prepaid_cards SET base_price = p_new_price WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'boost_items' THEN
+    UPDATE boost_items SET base_price = p_new_price WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'crypto_packages' THEN
+    UPDATE crypto_packages SET ron_price = p_new_price WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'cooling_components' THEN
+    UPDATE cooling_components SET base_price = p_new_price WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'exp_packs' THEN
+    UPDATE exp_packs SET base_price = p_new_price WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSE
+    RAISE EXCEPTION 'Invalid table: %', p_table;
+  END IF;
+
+  IF v_rows_updated = 0 THEN
+    RAISE EXCEPTION 'Item not found in %: %', p_table, p_item_id;
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'table', p_table,
+    'item_id', p_item_id,
+    'new_price', p_new_price
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_get_market_items TO authenticated;
+GRANT EXECUTE ON FUNCTION admin_update_market_item_price TO authenticated;
+
+CREATE OR REPLACE FUNCTION admin_update_market_item_currency(
+  p_table TEXT,
+  p_item_id TEXT,
+  p_new_currency TEXT
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+  v_rows_updated INT;
+BEGIN
+  SELECT role INTO v_player_role
+  FROM players
+  WHERE id = auth.uid();
+
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  IF p_table = 'rigs' THEN
+    IF p_new_currency NOT IN ('gamecoin', 'crypto', 'ron') THEN
+      RAISE EXCEPTION 'Invalid currency for rigs: %', p_new_currency;
+    END IF;
+    UPDATE rigs SET currency = p_new_currency WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'prepaid_cards' THEN
+    IF p_new_currency NOT IN ('gamecoin', 'crypto') THEN
+      RAISE EXCEPTION 'Invalid currency for prepaid_cards: %', p_new_currency;
+    END IF;
+    UPDATE prepaid_cards SET currency = p_new_currency WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'boost_items' THEN
+    IF p_new_currency NOT IN ('gamecoin', 'crypto', 'ron') THEN
+      RAISE EXCEPTION 'Invalid currency for boost_items: %', p_new_currency;
+    END IF;
+    UPDATE boost_items SET currency = p_new_currency WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'cooling_items' THEN
+    IF p_new_currency NOT IN ('gamecoin', 'crypto', 'ron') THEN
+      RAISE EXCEPTION 'Invalid currency for cooling_items: %', p_new_currency;
+    END IF;
+    UPDATE cooling_items SET currency = p_new_currency WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'cooling_components' THEN
+    IF p_new_currency NOT IN ('gamecoin', 'crypto', 'ron') THEN
+      RAISE EXCEPTION 'Invalid currency for cooling_components: %', p_new_currency;
+    END IF;
+    UPDATE cooling_components SET currency = p_new_currency WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'exp_packs' THEN
+    IF p_new_currency NOT IN ('gamecoin', 'crypto', 'ron') THEN
+      RAISE EXCEPTION 'Invalid currency for exp_packs: %', p_new_currency;
+    END IF;
+    UPDATE exp_packs SET currency = p_new_currency WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSIF p_table = 'crypto_packages' THEN
+    IF p_new_currency NOT IN ('gamecoin', 'crypto', 'ron') THEN
+      RAISE EXCEPTION 'Invalid currency for crypto_packages: %', p_new_currency;
+    END IF;
+    UPDATE crypto_packages SET currency = p_new_currency WHERE id = p_item_id;
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  ELSE
+    RAISE EXCEPTION 'Currency not editable for table: %', p_table;
+  END IF;
+
+  IF v_rows_updated = 0 THEN
+    RAISE EXCEPTION 'Item not found in %: %', p_table, p_item_id;
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'table', p_table,
+    'item_id', p_item_id,
+    'new_currency', p_new_currency
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_update_market_item_currency TO authenticated;
+
+CREATE OR REPLACE FUNCTION admin_update_market_item_value(
+  p_table TEXT,
+  p_item_id TEXT,
+  p_column TEXT,
+  p_new_value NUMERIC
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_player_role TEXT;
+  v_rows_updated INT;
+  v_allowed_columns TEXT[];
+BEGIN
+  SELECT role INTO v_player_role FROM players WHERE id = auth.uid();
+  IF v_player_role IS NULL OR v_player_role != 'admin' THEN
+    RAISE EXCEPTION 'Unauthorized: Admin access required';
+  END IF;
+
+  -- Define allowed columns per table (security whitelist)
+  IF p_table = 'rigs' THEN
+    v_allowed_columns := ARRAY['hashrate', 'power_consumption', 'internet_consumption'];
+    IF NOT (p_column = ANY(v_allowed_columns)) THEN RAISE EXCEPTION 'Invalid column: %', p_column; END IF;
+    IF p_column = 'hashrate' THEN UPDATE rigs SET hashrate = p_new_value::INTEGER WHERE id = p_item_id; END IF;
+    IF p_column = 'power_consumption' THEN UPDATE rigs SET power_consumption = p_new_value WHERE id = p_item_id; END IF;
+    IF p_column = 'internet_consumption' THEN UPDATE rigs SET internet_consumption = p_new_value WHERE id = p_item_id; END IF;
+  ELSIF p_table = 'cooling_items' THEN
+    v_allowed_columns := ARRAY['cooling_power'];
+    IF NOT (p_column = ANY(v_allowed_columns)) THEN RAISE EXCEPTION 'Invalid column: %', p_column; END IF;
+    IF p_column = 'cooling_power' THEN UPDATE cooling_items SET cooling_power = p_new_value WHERE id = p_item_id; END IF;
+  ELSIF p_table = 'prepaid_cards' THEN
+    v_allowed_columns := ARRAY['amount'];
+    IF NOT (p_column = ANY(v_allowed_columns)) THEN RAISE EXCEPTION 'Invalid column: %', p_column; END IF;
+    IF p_column = 'amount' THEN UPDATE prepaid_cards SET amount = p_new_value WHERE id = p_item_id; END IF;
+  ELSIF p_table = 'boost_items' THEN
+    v_allowed_columns := ARRAY['effect_value', 'duration_minutes'];
+    IF NOT (p_column = ANY(v_allowed_columns)) THEN RAISE EXCEPTION 'Invalid column: %', p_column; END IF;
+    IF p_column = 'effect_value' THEN UPDATE boost_items SET effect_value = p_new_value WHERE id = p_item_id; END IF;
+    IF p_column = 'duration_minutes' THEN UPDATE boost_items SET duration_minutes = p_new_value::INTEGER WHERE id = p_item_id; END IF;
+  ELSIF p_table = 'crypto_packages' THEN
+    v_allowed_columns := ARRAY['crypto_amount', 'bonus_percent'];
+    IF NOT (p_column = ANY(v_allowed_columns)) THEN RAISE EXCEPTION 'Invalid column: %', p_column; END IF;
+    IF p_column = 'crypto_amount' THEN UPDATE crypto_packages SET crypto_amount = p_new_value WHERE id = p_item_id; END IF;
+    IF p_column = 'bonus_percent' THEN UPDATE crypto_packages SET bonus_percent = p_new_value::INTEGER WHERE id = p_item_id; END IF;
+  ELSIF p_table = 'cooling_components' THEN
+    v_allowed_columns := ARRAY['cooling_power_min', 'cooling_power_max'];
+    IF NOT (p_column = ANY(v_allowed_columns)) THEN RAISE EXCEPTION 'Invalid column: %', p_column; END IF;
+    IF p_column = 'cooling_power_min' THEN UPDATE cooling_components SET cooling_power_min = p_new_value WHERE id = p_item_id; END IF;
+    IF p_column = 'cooling_power_max' THEN UPDATE cooling_components SET cooling_power_max = p_new_value WHERE id = p_item_id; END IF;
+  ELSIF p_table = 'exp_packs' THEN
+    v_allowed_columns := ARRAY['xp_amount'];
+    IF NOT (p_column = ANY(v_allowed_columns)) THEN RAISE EXCEPTION 'Invalid column: %', p_column; END IF;
+    IF p_column = 'xp_amount' THEN UPDATE exp_packs SET xp_amount = p_new_value::INTEGER WHERE id = p_item_id; END IF;
+  ELSE
+    RAISE EXCEPTION 'Invalid table: %', p_table;
+  END IF;
+
+  GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  IF v_rows_updated = 0 THEN
+    RAISE EXCEPTION 'Item not found in %: %', p_table, p_item_id;
+  END IF;
+
+  RETURN json_build_object('success', true, 'table', p_table, 'item_id', p_item_id, 'column', p_column, 'new_value', p_new_value);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_update_market_item_value TO authenticated;

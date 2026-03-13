@@ -33,8 +33,8 @@ const soloMiningStore = useSoloMiningStore();
 const gameConfigStore = useGameConfigStore();
 
 // Tab visual state (no cambia el modo de minería real)
-const savedTab = localStorage.getItem('lootmine_mining_tab') as 'pool' | 'solo' | null;
-const activeTab = ref<'pool' | 'solo'>(savedTab ?? (soloMiningStore.isSoloMode ? 'solo' : 'pool'));
+const savedTab = localStorage.getItem('lootmine_mining_tab') as 'pool' | 'solo' | 'staking' | null;
+const activeTab = ref<'pool' | 'solo' | 'staking'>(savedTab ?? (soloMiningStore.isSoloMode ? 'solo' : 'pool'));
 
 watch(activeTab, (tab) => {
   localStorage.setItem('lootmine_mining_tab', tab);
@@ -766,10 +766,24 @@ onUnmounted(() => {
         Solo Mining
         <span v-if="rigs.some(r => r.is_active && r.mining_mode === 'solo')" class="w-1.5 h-1.5 rounded-full bg-status-success animate-pulse"></span>
       </button>
+      <button @click="activeTab = 'staking'"
+        class="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1.5"
+        :class="activeTab === 'staking'
+          ? 'bg-gradient-to-r from-yellow-600 to-amber-500 text-white shadow-lg'
+          : 'text-text-muted hover:text-text-primary'">
+        Staking
+      </button>
     </div>
 
     <!-- Solo Mining Card (when solo tab active) -->
     <SoloMiningSection v-if="activeTab === 'solo'" :attached-to-tabs="true" />
+
+    <!-- Staking (when staking tab active) -->
+    <div v-if="activeTab === 'staking'" class="card p-6 rounded-t-none border-t-0 text-center space-y-4 mb-5">
+      <div class="text-4xl">🔒</div>
+      <h2 class="text-lg font-bold text-text-primary">Staking</h2>
+      <p class="text-text-muted text-sm">El modo de staking estará disponible próximamente.</p>
+    </div>
 
     <!-- Primera carga - solo si no hay datos en cache -->
     <div v-if="loading && !dataLoaded" class="text-center py-20 text-text-muted">
