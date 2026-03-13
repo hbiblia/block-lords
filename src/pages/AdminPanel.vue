@@ -25,10 +25,12 @@ import {
 } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { useGameConfigStore } from '@/stores/game-config';
+import { useMarketStore } from '@/stores/market';
 
 const authStore = useAuthStore();
 const router = useRouter();
 const gameConfigStore = useGameConfigStore();
+const marketStore = useMarketStore();
 
 interface Announcement {
   id: string;
@@ -639,7 +641,7 @@ interface MarketValueField {
 
 const marketValueFields: Record<string, MarketValueField[]> = {
   rigs:               [{ key: 'hashrate', label: 'Hashrate', step: '1' }, { key: 'power_consumption', label: 'Energía (⚡/t)', step: '0.01' }, { key: 'internet_consumption', label: 'Internet (📡/t)', step: '0.01' }],
-  cooling_items:      [{ key: 'cooling_power', label: 'Cooling', step: '0.01' }],
+  cooling_items:      [{ key: 'cooling_power', label: 'Cooling', step: '0.01' }, { key: 'energy_cost', label: 'Energy ⚡', step: '0.01' }, { key: 'durability_rate', label: 'Dur/tick', step: '0.01' }],
   prepaid_cards:      [{ key: 'amount', label: 'Amount', step: '0.01' }],
   boost_items:        [{ key: 'effect_value', label: 'Effect %', step: '0.1' }, { key: 'duration_minutes', label: 'Min', step: '1' }],
   crypto_packages:    [{ key: 'crypto_amount', label: 'Crypto', step: '0.01' }, { key: 'bonus_percent', label: 'Bonus %', step: '1' }],
@@ -747,6 +749,7 @@ async function saveMarketPrice(table: string, item: MarketItem) {
     marketSuccess.value = `Actualizado: ${item.name}`;
     playSound('success');
     setTimeout(() => { marketSuccess.value = ''; }, 3000);
+    marketStore.loadCatalogs(true);
   } catch (e: any) {
     marketError.value = e.message || `Error saving ${item.name}`;
     playSound('error');
@@ -1456,6 +1459,17 @@ onMounted(async () => {
                   'bg-bg-tertiary text-text-muted': !['gamecoin','crypto','ron'].includes(item.currency)
                 }">{{ item.currency === 'gamecoin' ? 'GC' : item.currency === 'crypto' ? 'Landwork' : item.currency === 'ron' ? 'RON' : item.currency }}</span>
               </div>
+              <div class="w-36 shrink-0">
+                <label class="block text-[10px] text-text-muted mb-0.5">Precio</label>
+                <input
+                  v-model.number="marketEditedPrices[`${table}:${item.id}`]"
+                  type="number"
+                  min="0"
+                  step="any"
+                  class="w-full px-2 py-1.5 bg-bg-primary border rounded text-sm font-mono focus:outline-none"
+                  :class="isMarketPriceModified(table as string, item) ? 'border-status-warning focus:border-status-warning' : 'border-border focus:border-amber-400'"
+                />
+              </div>
               <template v-if="marketValueFields[table as string]">
                 <div
                   v-for="field in marketValueFields[table as string]"
@@ -1474,17 +1488,6 @@ onMounted(async () => {
                   />
                 </div>
               </template>
-              <div class="w-36 shrink-0">
-                <label class="block text-[10px] text-text-muted mb-0.5">Precio</label>
-                <input
-                  v-model.number="marketEditedPrices[`${table}:${item.id}`]"
-                  type="number"
-                  min="0"
-                  step="any"
-                  class="w-full px-2 py-1.5 bg-bg-primary border rounded text-sm font-mono focus:outline-none"
-                  :class="isMarketPriceModified(table as string, item) ? 'border-status-warning focus:border-status-warning' : 'border-border focus:border-amber-400'"
-                />
-              </div>
               <div class="flex items-center gap-1 shrink-0 w-16 justify-end">
                 <button
                   v-if="isMarketPriceModified(table as string, item)"

@@ -68,6 +68,9 @@ WHERE rc.player_rig_id = pr.id
 -- Agregar columna de consumo de energía extra a cooling_items si no existe
 ALTER TABLE cooling_items ADD COLUMN IF NOT EXISTS energy_cost NUMERIC DEFAULT 0.5;
 
+-- Agregar tasa de desgaste configurable por item de cooling
+ALTER TABLE cooling_items ADD COLUMN IF NOT EXISTS durability_rate NUMERIC DEFAULT 0.5;
+
 -- Agregar columna para rastrear cuando se encendió el rig
 ALTER TABLE player_rigs ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
 
@@ -2004,7 +2007,7 @@ BEGIN
       -- Con mods: durability_mod reduce/aumenta la velocidad de desgaste
       UPDATE rig_cooling rc_upd
       SET durability = GREATEST(0, rc_upd.durability - (
-        (0.5 +  -- Base
+        (COALESCE((SELECT ci2.durability_rate FROM cooling_items ci2 WHERE ci2.id = rc_upd.cooling_item_id), 0.5) +  -- Base (por item)
         (GREATEST(0, v_new_temp - 40) * 0.02) +  -- Por temperatura alta
         (GREATEST(0, (v_rig.power_consumption * 0.3) - v_rig_cooling_power) * 0.15))  -- Por exceso de calor
         * (1 - COALESCE((
@@ -15310,16 +15313,28 @@ BEGIN
     END IF;
   END IF;
 
-  -- Verificar balance
-  IF v_player.gamecoin_balance < v_pack.base_price THEN
-    RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+  -- Verificar balance y descontar según moneda
+  IF v_pack.currency = 'gamecoin' THEN
+    IF v_player.gamecoin_balance < v_pack.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'GameCoin insuficiente');
+    END IF;
+    UPDATE players SET gamecoin_balance = gamecoin_balance - v_pack.base_price WHERE id = p_player_id;
+  ELSIF v_pack.currency = 'crypto' THEN
+    IF v_player.crypto_balance < v_pack.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'Crypto insuficiente');
+    END IF;
+    UPDATE players SET crypto_balance = crypto_balance - v_pack.base_price WHERE id = p_player_id;
+  ELSIF v_pack.currency = 'ron' THEN
+    IF COALESCE(v_player.ron_balance, 0) < v_pack.base_price THEN
+      RETURN json_build_object('success', false, 'error', 'RON insuficiente');
+    END IF;
+    UPDATE players SET ron_balance = ron_balance - v_pack.base_price WHERE id = p_player_id;
+  ELSE
+    RETURN json_build_object('success', false, 'error', 'Moneda inválida');
   END IF;
 
-  -- Descontar GameCoin
-  UPDATE players SET gamecoin_balance = gamecoin_balance - v_pack.base_price WHERE id = p_player_id;
-
   INSERT INTO transactions (player_id, type, amount, currency, description)
-  VALUES (p_player_id, 'exp_pack_purchase', -v_pack.base_price, 'gamecoin', 'Compra de ' || v_pack.name);
+  VALUES (p_player_id, 'exp_pack_purchase', -v_pack.base_price, v_pack.currency, 'Compra de ' || v_pack.name);
 
   -- Agregar al inventario
   INSERT INTO player_inventory (player_id, item_type, item_id)
@@ -15507,7 +15522,9 @@ BEGIN
       SELECT COALESCE(json_agg(json_build_object(
         'id', id, 'name', name, 'tier', tier,
         'base_price', base_price, 'currency', currency,
-        'cooling_power', cooling_power
+        'cooling_power', cooling_power,
+        'energy_cost', energy_cost,
+        'durability_rate', durability_rate
       ) ORDER BY tier, name), '[]')
       FROM cooling_items
     ),
@@ -15731,9 +15748,11 @@ BEGIN
     IF p_column = 'power_consumption' THEN UPDATE rigs SET power_consumption = p_new_value WHERE id = p_item_id; END IF;
     IF p_column = 'internet_consumption' THEN UPDATE rigs SET internet_consumption = p_new_value WHERE id = p_item_id; END IF;
   ELSIF p_table = 'cooling_items' THEN
-    v_allowed_columns := ARRAY['cooling_power'];
+    v_allowed_columns := ARRAY['cooling_power', 'energy_cost', 'durability_rate'];
     IF NOT (p_column = ANY(v_allowed_columns)) THEN RAISE EXCEPTION 'Invalid column: %', p_column; END IF;
     IF p_column = 'cooling_power' THEN UPDATE cooling_items SET cooling_power = p_new_value WHERE id = p_item_id; END IF;
+    IF p_column = 'energy_cost' THEN UPDATE cooling_items SET energy_cost = p_new_value WHERE id = p_item_id; END IF;
+    IF p_column = 'durability_rate' THEN UPDATE cooling_items SET durability_rate = p_new_value WHERE id = p_item_id; END IF;
   ELSIF p_table = 'prepaid_cards' THEN
     v_allowed_columns := ARRAY['amount'];
     IF NOT (p_column = ANY(v_allowed_columns)) THEN RAISE EXCEPTION 'Invalid column: %', p_column; END IF;
