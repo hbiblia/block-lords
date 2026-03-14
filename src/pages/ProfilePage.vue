@@ -51,7 +51,7 @@ const withdrawValue = computed(() => {
 });
 const withdrawFee = computed(() => withdrawValue.value * withdrawalFeeRate.value);
 const withdrawNet = computed(() => withdrawValue.value - withdrawFee.value);
-const minWithdrawal = computed(() => gameConfigStore.getSetting('min_withdrawal_ron', 0.5));
+const minWithdrawal = computed(() => gameConfigStore.getSetting('min_withdrawal_ron', 0.01));
 
 // RON Reload/Deposit
 const showReloadModal = ref(false);
