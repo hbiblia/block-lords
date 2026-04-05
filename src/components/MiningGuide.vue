@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, type Component } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { Pickaxe, Server, Thermometer, Gem, Coins, Zap, BookOpen } from 'lucide-vue-next';
+import { Pickaxe, Server, Thermometer, Gem, Coins, Zap, BookOpen, X } from 'lucide-vue-next';
 
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits<{ close: [] }>();
@@ -28,7 +28,6 @@ function handleStartTour() {
   window.dispatchEvent(new CustomEvent('start-mining-tour'));
 }
 
-// Reset open topic when modal opens
 watch(() => props.show, (shown) => {
   if (shown) openTopic.value = null;
 });
@@ -37,30 +36,15 @@ watch(() => props.show, (shown) => {
 <template>
   <Teleport to="body">
     <Transition name="guide-modal">
-      <div
-        v-if="show"
-        class="gm-overlay"
-        @click.self="emit('close')"
-      >
-        <!-- Backdrop -->
+      <div v-if="show" class="gm-overlay" @click.self="emit('close')">
         <div class="gm-backdrop" @click="emit('close')"></div>
 
-        <!-- Modal -->
         <div class="gm-modal">
-          <!-- HUD Corners -->
-          <div class="gm-c gm-c-tl"></div>
-          <div class="gm-c gm-c-tr"></div>
-          <div class="gm-c gm-c-bl"></div>
-          <div class="gm-c gm-c-br"></div>
-          <div class="gm-scanline"></div>
-          <div class="gm-crt"></div>
-
           <!-- Header -->
           <div class="gm-header">
-            <BookOpen :size="16" color="#f59e0b" />
+            <BookOpen :size="16" color="#7b5ea7" />
             <h2 class="gm-header-title">{{ t('guide.title') }}</h2>
-            <span class="gm-header-tag">GUIDE</span>
-            <button @click="emit('close')" class="gm-close">ESC</button>
+            <button @click="emit('close')" class="gm-close"><X :size="14" /></button>
           </div>
 
           <!-- Content -->
@@ -68,7 +52,7 @@ watch(() => props.show, (shown) => {
             <div v-for="(topic, i) in topics" :key="topic.key" class="gm-topic">
               <button @click="toggleTopic(topic.key)" class="gm-topic-btn" :class="{ 'gm-topic-open': openTopic === topic.key }">
                 <span class="gm-topic-num">{{ String(i + 1).padStart(2, '0') }}</span>
-                <component :is="topic.icon" :size="16" color="#f59e0b" class="gm-topic-icon" />
+                <component :is="topic.icon" :size="16" color="#c4a0e8" />
                 <span class="gm-topic-name">{{ t(`guide.topics.${topic.key}.title`) }}</span>
                 <span class="gm-topic-arrow" :class="{ 'gm-arrow-open': openTopic === topic.key }">&#9662;</span>
               </button>
@@ -83,8 +67,7 @@ watch(() => props.show, (shown) => {
           <!-- Footer -->
           <div class="gm-footer">
             <button @click="handleStartTour" class="gm-tour-btn">
-              <span class="gm-tour-dot"></span>
-              <span class="gm-tour-text">{{ t('guide.startTour') }}</span>
+              {{ t('guide.startTour') }}
             </button>
           </div>
         </div>
@@ -94,6 +77,8 @@ watch(() => props.show, (shown) => {
 </template>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
 .gm-overlay {
   position: fixed; inset: 0; z-index: 50;
   display: flex; align-items: flex-start; justify-content: center;
@@ -101,139 +86,97 @@ watch(() => props.show, (shown) => {
 }
 .gm-backdrop {
   position: absolute; inset: 0;
-  background: rgba(0,0,0,0.7);
+  background: rgba(0,0,0,0.4);
   backdrop-filter: blur(4px);
 }
 
 .gm-modal {
   position: relative; width: 100%; max-width: 500px;
-  border: 1px solid #2f3052;
-  background: linear-gradient(135deg, rgba(16,17,35,0.99) 0%, rgba(26,27,46,0.98) 100%);
+  background: #fff;
+  border: 2px solid #c4a0e8;
+  border-radius: 16px;
+  box-shadow: 4px 4px 0 #e8d0f0;
   overflow: hidden;
+  font-family: 'Nunito', 'Trebuchet MS', sans-serif;
   animation: gm-enter 0.3s cubic-bezier(0.16,1,0.3,1);
 }
 @keyframes gm-enter { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }
 
-.gm-crt {
-  position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.005) 3px, rgba(255,255,255,0.005) 4px);
-}
-
-/* Corners */
-.gm-c { position: absolute; width: 10px; height: 10px; pointer-events: none; z-index: 3; }
-.gm-c-tl { top: 0; left: 0; border-top: 2px solid #f59e0b; border-left: 2px solid #f59e0b; }
-.gm-c-tr { top: 0; right: 0; border-top: 2px solid #f59e0b; border-right: 2px solid #f59e0b; }
-.gm-c-bl { bottom: 0; left: 0; border-bottom: 2px solid #f59e0b; border-left: 2px solid #f59e0b; }
-.gm-c-br { bottom: 0; right: 0; border-bottom: 2px solid #f59e0b; border-right: 2px solid #f59e0b; }
-
-.gm-scanline {
-  position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
-  pointer-events: none; z-index: 1;
-  background: linear-gradient(90deg, transparent 0%, rgba(245,158,11,0.02) 45%, rgba(245,158,11,0.05) 50%, rgba(245,158,11,0.02) 55%, transparent 100%);
-  animation: gm-scan 5s linear infinite;
-}
-@keyframes gm-scan { 0% { left: -100%; } 100% { left: 100%; } }
-
 /* Header */
 .gm-header {
   display: flex; align-items: center; gap: 8px;
-  padding: 0.6rem 0.8rem;
-  border-bottom: 1px solid #2f3052;
-  position: relative; z-index: 2;
-  background: linear-gradient(180deg, rgba(245,158,11,0.03) 0%, transparent 100%);
+  padding: 1rem 1.2rem;
+  border-bottom: 2px solid #e8d8f4;
+  background: linear-gradient(180deg, #f8f2ff, #fff);
 }
-@keyframes gm-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 .gm-header-title {
-  flex: 1; font-size: 0.95rem; font-weight: 900; color: #f59e0b;
-  letter-spacing: 2px; margin: 0;
-  text-shadow: 0 0 10px rgba(245,158,11,0.2);
-}
-.gm-header-tag {
-  font-size: 0.6rem; font-weight: 900; color: #4f4f6f; letter-spacing: 2px;
-  padding: 2px 6px; border: 1px solid #2f3052;
+  flex: 1; font-size: 1rem; font-weight: 900; color: #4a3a5c;
+  letter-spacing: 1px; margin: 0;
 }
 .gm-close {
-  font-size: 0.6rem; font-weight: 900; color: #4f4f6f; letter-spacing: 1px;
-  padding: 2px 6px; border: 1px solid #2f3052;
-  background: transparent; cursor: pointer;
-  transition: all 0.2s;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: #f8f2ff; border: 2px solid #d0b8e8; border-radius: 8px;
+  color: #9a80b8; cursor: pointer; transition: 0.2s;
 }
-.gm-close:hover { color: #ef4444; border-color: #ef444440; }
+.gm-close:hover { background: #fff0f0; border-color: #ff7b7b; color: #cc4444; }
 
 /* Content */
 .gm-content {
   max-height: 55vh; overflow-y: auto;
   padding: 0.5rem;
-  position: relative; z-index: 2;
 }
-.gm-content::-webkit-scrollbar { width: 2px; }
-.gm-content::-webkit-scrollbar-thumb { background: #3f3f5c; }
+.gm-content::-webkit-scrollbar { width: 6px; }
+.gm-content::-webkit-scrollbar-track { background: #f0e8f8; }
+.gm-content::-webkit-scrollbar-thumb { background: #c4a0e8; border-radius: 3px; }
 
-.gm-topic { border-bottom: 1px solid #1a1b2e; }
+.gm-topic { border-bottom: 1px solid #e8d8f4; }
 .gm-topic:last-child { border-bottom: none; }
 
 .gm-topic-btn {
   width: 100%; display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.6rem 0.4rem;
+  padding: 0.7rem 0.6rem;
   background: transparent; border: none; cursor: pointer;
-  transition: all 0.15s;
+  border-radius: 8px; transition: all 0.15s;
 }
-.gm-topic-btn:hover { background: rgba(245,158,11,0.03); }
-.gm-topic-open { background: rgba(245,158,11,0.05); }
+.gm-topic-btn:hover { background: #f8f2ff; }
+.gm-topic-open { background: #f0e4ff; }
 
 .gm-topic-num {
-  font-size: 0.75rem; font-weight: 900; color: #4f4f6f;
-  font-family: 'JetBrains Mono', monospace;
-  letter-spacing: 1px;
+  font-size: 0.75rem; font-weight: 900; color: #c4a0e8;
+  font-family: 'Nunito', sans-serif; letter-spacing: 1px;
 }
-.gm-topic-icon { flex-shrink: 0; opacity: 0.85; }
 .gm-topic-name {
   flex: 1; text-align: left;
-  font-size: 0.9rem; font-weight: 800; color: #a1a1aa;
-  letter-spacing: 0.5px;
+  font-size: 0.85rem; font-weight: 800; color: #7b5ea7;
 }
-.gm-topic-open .gm-topic-name { color: #e5e7eb; }
+.gm-topic-open .gm-topic-name { color: #4a3a5c; }
 .gm-topic-arrow {
-  font-size: 0.75rem; color: #4f4f6f;
-  transition: transform 0.2s;
+  font-size: 0.75rem; color: #c4a0e8; transition: transform 0.2s;
 }
-.gm-arrow-open { transform: rotate(180deg); color: #f59e0b; }
+.gm-arrow-open { transform: rotate(180deg); color: #7b5ea7; }
 
-.gm-topic-body {
-  padding: 0 0.4rem 0.6rem 2.2rem;
-}
+.gm-topic-body { padding: 0 0.6rem 0.8rem 2.4rem; }
 .gm-topic-text {
-  font-size: 0.85rem; font-weight: 600; color: #71717a;
+  font-size: 0.8rem; font-weight: 600; color: #9a80b8;
   line-height: 1.7; margin: 0;
 }
 
 /* Footer */
 .gm-footer {
-  padding: 0.6rem 0.8rem;
-  border-top: 1px solid #2f3052;
-  position: relative; z-index: 2;
+  padding: 0.8rem 1rem;
+  border-top: 2px solid #e8d8f4;
+  background: #f8f2ff;
 }
 .gm-tour-btn {
-  width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-  padding: 0.5rem;
-  border: 1px solid #f59e0b;
-  background: linear-gradient(135deg, rgba(245,158,11,0.1) 0%, rgba(245,158,11,0.05) 100%);
-  cursor: pointer;
-  transition: all 0.3s;
+  width: 100%; padding: 10px;
+  background: #ffe566; border: 2px outset #d4a017;
+  border-radius: 8px;
+  font-size: 0.8rem; font-weight: 900; color: #4a3a5c;
+  font-family: 'Nunito', sans-serif; letter-spacing: 1.5px;
+  cursor: pointer; transition: 0.2s;
 }
-.gm-tour-btn:hover {
-  background: linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(245,158,11,0.1) 100%);
-  box-shadow: 0 0 15px rgba(245,158,11,0.15);
-}
-.gm-tour-dot {
-  width: 5px; height: 5px; background: #f59e0b; border-radius: 50%;
-  box-shadow: 0 0 6px #f59e0b80;
-  animation: gm-pulse 1.5s infinite;
-}
-.gm-tour-text {
-  font-size: 0.85rem; font-weight: 900; color: #f59e0b;
-  letter-spacing: 2px;
-}
+.gm-tour-btn:hover { background: #ffd700; border-style: inset; }
 
 /* Transitions */
 .guide-modal-enter-active, .guide-modal-leave-active { transition: opacity 0.2s ease; }

@@ -27,42 +27,17 @@ function handleRefresh() {
 <template>
   <Teleport to="body">
     <Transition name="toast">
-      <div
-        v-if="showDisconnected"
-        class="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] w-[calc(100%-2rem)] max-w-sm"
-      >
-        <div class="relative overflow-hidden rounded-xl bg-slate-900/95 border border-red-500/30 shadow-lg shadow-red-500/10 backdrop-blur-sm">
-          <!-- Barra de acento superior -->
-          <div class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-red-500 via-amber-500 to-red-500 animate-shimmer"></div>
-
-          <div class="flex items-center gap-3 px-4 py-3">
-            <!-- Icono con pulso -->
-            <div class="relative flex-shrink-0">
-              <span class="text-lg">&#9888;</span>
-              <span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
+      <div v-if="showDisconnected" class="cl-wrap">
+        <div class="cl-card">
+          <div class="cl-accent"></div>
+          <div class="cl-content">
+            <div class="cl-icon">⚠️</div>
+            <div class="cl-text">
+              <span class="cl-label">{{ t('connection.label', 'Offline') }}</span>
+              <span class="cl-msg">{{ t('connection.title') }}</span>
             </div>
-
-            <!-- Mensaje -->
-            <div class="flex-1 min-w-0">
-              <p class="text-[11px] font-bold text-red-300/60 uppercase tracking-wider mb-0.5">{{ t('connection.label', 'Offline') }}</p>
-              <p class="text-xs font-semibold text-white/90 truncate">{{ t('connection.title') }}</p>
-            </div>
-
-            <!-- Botón reconectar -->
-            <button
-              @click="handleReconnect"
-              class="flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/20 hover:border-amber-500/40 transition-all"
-            >
-              {{ t('connection.reconnect', 'Reconnect') }}
-            </button>
-
-            <!-- Botón recargar -->
-            <button
-              @click="handleRefresh"
-              class="flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/20 hover:border-red-500/40 transition-all"
-            >
-              {{ t('connection.reloadPage') }}
-            </button>
+            <button @click="handleReconnect" class="cl-btn reconnect">{{ t('connection.reconnect', 'Reconnect') }}</button>
+            <button @click="handleRefresh" class="cl-btn reload">{{ t('connection.reloadPage') }}</button>
           </div>
         </div>
       </div>
@@ -71,31 +46,57 @@ function handleRefresh() {
 </template>
 
 <style scoped>
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
 
-.animate-shimmer {
+.cl-wrap {
+  position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+  z-index: 9999; width: calc(100% - 2rem); max-width: 420px;
+}
+.cl-card {
+  position: relative; overflow: hidden;
+  background: #fff; border: 2px solid #ff7b7b; border-radius: 12px;
+  box-shadow: 3px 3px 0 #ffc0c0;
+  font-family: 'Nunito', 'Trebuchet MS', sans-serif;
+}
+.cl-accent {
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, #ff7b7b, #d4a017, #ff7b7b);
   background-size: 200% 100%;
-  animation: shimmer 3s linear infinite;
+  animation: cl-shimmer 3s linear infinite;
 }
+@keyframes cl-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-.toast-enter-active {
-  transition: all 0.3s ease-out;
+.cl-content {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
 }
+.cl-icon { font-size: 1.2rem; flex-shrink: 0; }
+.cl-text { flex: 1; min-width: 0; }
+.cl-label {
+  display: block; font-size: 0.6rem; font-weight: 900; color: #cc4444;
+  letter-spacing: 2px; text-transform: uppercase;
+}
+.cl-msg {
+  display: block; font-size: 0.8rem; font-weight: 700; color: #4a3a5c;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cl-btn {
+  flex-shrink: 0; padding: 6px 12px; border-radius: 8px;
+  font-size: 0.7rem; font-weight: 900; cursor: pointer;
+  font-family: 'Nunito', sans-serif; transition: 0.2s; border: 2px solid;
+}
+.cl-btn.reconnect {
+  background: #fff8e0; border-color: #d4a017; color: #8a6a10;
+}
+.cl-btn.reconnect:hover { background: #ffe566; }
+.cl-btn.reload {
+  background: #fff0f0; border-color: #ff7b7b; color: #cc4444;
+}
+.cl-btn.reload:hover { background: #ffe0e0; }
 
-.toast-leave-active {
-  transition: all 0.2s ease-in;
-}
-
-.toast-enter-from {
-  opacity: 0;
-  transform: translate(-50%, 20px);
-}
-
-.toast-leave-to {
-  opacity: 0;
-  transform: translate(-50%, 20px);
-}
+/* Transitions */
+.toast-enter-active { transition: all 0.3s ease-out; }
+.toast-leave-active { transition: all 0.2s ease-in; }
+.toast-enter-from { opacity: 0; transform: translate(-50%, 20px); }
+.toast-leave-to { opacity: 0; transform: translate(-50%, 20px); }
 </style>

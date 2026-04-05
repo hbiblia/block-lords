@@ -241,401 +241,177 @@ function handleClose() {
     >
       <!-- Backdrop -->
       <div
-        class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        class="absolute inset-0 bg-black/40 backdrop-blur-sm"
         @click="handleClose"
       ></div>
 
       <!-- Modal -->
-      <div class="relative w-full max-w-lg h-[85vh] overflow-hidden card animate-fade-in p-0 flex flex-col">
+      <div class="relative w-full max-w-lg h-[85vh] overflow-hidden mp-modal flex flex-col">
         <!-- Header -->
-        <div class="flex items-center justify-between p-4 border-b border-border/50 shrink-0">
+        <div class="mp-header shrink-0">
           <div class="flex items-center gap-3">
             <div class="text-3xl">🎯</div>
             <div>
-              <h2 class="text-xl font-display font-bold">
-                <span class="gradient-text">{{ t('missions.title') }}</span>
-              </h2>
-              <p class="text-sm text-text-muted">
+              <h2 class="mp-title">{{ t('missions.title') }}</h2>
+              <p class="mp-sub">
                 {{ missionsStore.completedCount }}/{{ missionsStore.totalCount }} {{ t('missions.completed') }}
               </p>
             </div>
           </div>
-          <button
-            @click="handleClose"
-            class="w-8 h-8 rounded-lg bg-bg-tertiary hover:bg-bg-secondary flex items-center justify-center transition-colors"
-          >
-            <X :size="20" />
+          <button @click="handleClose" class="mp-close">
+            <X :size="18" />
           </button>
         </div>
 
         <!-- Tabs -->
-        <div class="flex border-b border-border/50 shrink-0">
+        <div class="mp-tabs shrink-0">
           <button
             @click="activeTab = 'daily'"
-            class="flex-1 py-2.5 text-sm font-medium transition-colors relative"
-            :class="activeTab === 'daily' ? 'text-white' : 'text-text-muted hover:text-white'"
+            class="mp-tab"
+            :class="{ active: activeTab === 'daily' }"
           >
             🎯 {{ t('missions.tabDaily') }}
-            <span v-if="dailyMissions.filter(m => m.isCompleted && !m.isClaimed).length" class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-accent-primary text-white">
+            <span v-if="dailyMissions.filter(m => m.isCompleted && !m.isClaimed).length" class="mp-tab-badge">
               {{ dailyMissions.filter(m => m.isCompleted && !m.isClaimed).length }}
             </span>
-            <div v-if="activeTab === 'daily'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-primary"></div>
           </button>
           <button
             @click="activeTab = 'achievements'"
-            class="flex-1 py-2.5 text-sm font-medium transition-colors relative"
-            :class="activeTab === 'achievements' ? 'text-white' : 'text-text-muted hover:text-white'"
+            class="mp-tab"
+            :class="{ active: activeTab === 'achievements' }"
           >
             🏆 {{ t('missions.tabAchievements') }}
-            <span v-if="achievementMissions.filter(m => m.isCompleted && !m.isClaimed).length" class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-yellow-500 text-black">
+            <span v-if="achievementMissions.filter(m => m.isCompleted && !m.isClaimed).length" class="mp-tab-badge amber">
               {{ achievementMissions.filter(m => m.isCompleted && !m.isClaimed).length }}
             </span>
-            <div v-if="activeTab === 'achievements'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-yellow-500"></div>
           </button>
         </div>
 
         <!-- Content -->
-        <div class="p-4 overflow-y-auto flex-1 min-h-0">
-          <div class="space-y-3">
+        <div class="mp-content">
+          <div class="mp-list">
 
             <!-- ========== DAILY TAB ========== -->
             <template v-if="activeTab === 'daily'">
 
-            <!-- ========== STREAK CARD ========== -->
             <!-- Streak claim result -->
-            <div
-              v-if="streakStore.lastClaimResult"
-              class="bg-gradient-to-r from-orange-500/10 to-yellow-500/10 rounded-xl p-4 border-l-4 border-status-warning"
-            >
-              <div class="text-center py-4">
-                <div class="text-5xl mb-3 animate-bounce">🎉</div>
-                <h3 class="text-lg font-bold mb-1">{{ t('streak.congratulations', { day: streakStore.lastClaimResult.newStreak }) }}</h3>
-                <div class="flex items-center justify-center gap-4 mt-3">
-                  <div v-if="streakStore.lastClaimResult.gamecoinEarned > 0" class="flex items-center gap-1">
-                    <span>🪙</span>
-                    <span class="font-bold text-status-warning">+{{ streakStore.lastClaimResult.gamecoinEarned }}</span>
-                  </div>
-                  <div v-if="streakStore.lastClaimResult.cryptoEarned > 0" class="flex items-center gap-1">
-                    <span>💎</span>
-                    <span class="font-bold text-accent-primary">+{{ streakStore.lastClaimResult.cryptoEarned }}</span>
-                  </div>
-                  <div v-if="streakStore.lastClaimResult.itemType" class="flex items-center gap-1">
-                    <span>{{ getItemEmoji(streakStore.lastClaimResult.itemType, streakStore.lastClaimResult.itemId) }}</span>
-                    <span class="font-medium text-accent-secondary text-sm">{{ t('streak.specialItemReceived') }}</span>
-                  </div>
+            <div v-if="streakStore.lastClaimResult" class="mp-streak-card">
+              <div style="text-align:center;padding:1rem 0">
+                <div style="font-size:3rem;margin-bottom:0.5rem">🎉</div>
+                <h3 class="mp-item-name">{{ t('streak.congratulations', { day: streakStore.lastClaimResult.newStreak }) }}</h3>
+                <div style="display:flex;align-items:center;justify-content:center;gap:1rem;margin-top:0.5rem">
+                  <span v-if="streakStore.lastClaimResult.gamecoinEarned > 0" class="mp-reward-val amber">🪙 +{{ streakStore.lastClaimResult.gamecoinEarned }}</span>
+                  <span v-if="streakStore.lastClaimResult.cryptoEarned > 0" class="mp-reward-val purple">💎 +{{ streakStore.lastClaimResult.cryptoEarned }}</span>
+                  <span v-if="streakStore.lastClaimResult.itemType" class="mp-reward-val">{{ getItemEmoji(streakStore.lastClaimResult.itemType, streakStore.lastClaimResult.itemId) }} {{ t('streak.specialItemReceived') }}</span>
                 </div>
-                <button
-                  @click="streakStore.lastClaimResult = null"
-                  class="mt-4 px-4 py-1.5 rounded-lg bg-status-warning/20 text-status-warning text-sm font-medium hover:bg-status-warning/30 transition-colors"
-                >
-                  {{ t('streak.continue') }}
-                </button>
+                <button @click="streakStore.lastClaimResult = null" class="mp-btn-secondary" style="margin-top:0.8rem">{{ t('streak.continue') }}</button>
               </div>
             </div>
 
             <!-- Streak normal card -->
-            <div
-              v-else
-              class="bg-gradient-to-r from-orange-500/10 to-yellow-500/10 rounded-xl p-4 border-l-4 transition-all"
-              :class="streakStore.canClaim ? 'border-status-warning' : 'border-orange-500/30'"
-            >
-              <!-- Top row -->
-              <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2">
-                  <span class="text-2xl">🔥</span>
+            <div v-else class="mp-streak-card" :class="{ canClaim: streakStore.canClaim }">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+                <div style="display:flex;align-items:center;gap:0.5rem">
+                  <span style="font-size:1.5rem">🔥</span>
                   <div>
-                    <h3 class="font-medium">{{ t('streak.title') }}</h3>
-                    <p class="text-xs text-text-muted">
-                      {{ currentDay }} {{ t('streak.consecutiveDays') }}
-                      <span class="text-text-muted/50 mx-1">&middot;</span>
-                      {{ t('streak.longestStreak') }}: {{ streakStore.longestStreak }}
-                    </p>
+                    <div class="mp-item-name">{{ t('streak.title') }}</div>
+                    <div class="mp-item-desc">{{ currentDay }} {{ t('streak.consecutiveDays') }} · {{ t('streak.longestStreak') }}: {{ streakStore.longestStreak }}</div>
                   </div>
                 </div>
-                <button
-                  @click="showStreakCalendar = !showStreakCalendar"
-                  class="text-[10px] text-text-muted hover:text-white transition-colors px-2 py-1 rounded bg-bg-tertiary/50"
-                >
-                  {{ showStreakCalendar ? '▲' : '▼' }}
-                </button>
+                <button @click="showStreakCalendar = !showStreakCalendar" class="mp-toggle">{{ showStreakCalendar ? '▲' : '▼' }}</button>
               </div>
-
-              <!-- Claim / Timer row -->
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <span class="text-lg">🎁</span>
-                  <span v-if="streakStore.canClaim" class="font-bold text-status-warning text-sm">
-                    {{ t('streak.claimDay', { day: nextDay }) }}
-                  </span>
-                  <span v-else-if="streakStore.status?.nextClaimAvailable" class="text-xs text-text-muted">
-                    {{ t('streak.nextRewardIn') }} <strong class="text-accent-primary">{{ formatTimeRemaining(streakStore.status.nextClaimAvailable) }}</strong>
-                  </span>
-                  <span v-else class="text-xs text-text-muted">
-                    {{ t('streak.claimDay', { day: nextDay }) }}
-                  </span>
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="display:flex;align-items:center;gap:0.5rem">
+                  <span>🎁</span>
+                  <span v-if="streakStore.canClaim" class="mp-reward-val amber" style="font-size:0.8rem">{{ t('streak.claimDay', { day: nextDay }) }}</span>
+                  <span v-else-if="streakStore.status?.nextClaimAvailable" class="mp-item-desc">{{ t('streak.nextRewardIn') }} <strong class="mp-reward-val purple">{{ formatTimeRemaining(streakStore.status.nextClaimAvailable) }}</strong></span>
+                  <span v-else class="mp-item-desc">{{ t('streak.claimDay', { day: nextDay }) }}</span>
                 </div>
-
-                <button
-                  v-if="streakStore.canClaim"
-                  @click="handleClaimStreak"
-                  :disabled="streakStore.claiming"
-                  class="px-4 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-yellow-500 text-white font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {{ streakStore.claiming ? '...' : t('missions.claim') }}
-                </button>
-                <span
-                  v-else-if="!streakStore.canClaim && currentDay > 0"
-                  class="text-xs text-status-success font-medium flex items-center gap-1"
-                >
-                  <Check :size="16" />
-                  D{{ currentDay }}
-                </span>
+                <button v-if="streakStore.canClaim" @click="handleClaimStreak" :disabled="streakStore.claiming" class="mp-claim-btn">{{ streakStore.claiming ? '...' : t('missions.claim') }}</button>
+                <span v-else-if="currentDay > 0" class="mp-done"><Check :size="14" /> D{{ currentDay }}</span>
               </div>
+              <div v-if="streakStore.status?.streakExpiresAt && !streakStore.canClaim" class="mp-warning">⚠️ {{ t('streak.streakExpires', { time: formatTimeRemaining(streakStore.status.streakExpiresAt) }) }}</div>
 
-              <!-- Streak expiration warning -->
-              <p v-if="streakStore.status?.streakExpiresAt && !streakStore.canClaim" class="text-[10px] text-status-warning mt-2">
-                ⚠️ {{ t('streak.streakExpires', { time: formatTimeRemaining(streakStore.status.streakExpiresAt) }) }}
-              </p>
-
-              <!-- Expandable calendar -->
-              <div v-if="showStreakCalendar" class="mt-3 pt-3 border-t border-border/30">
-                <div class="grid grid-cols-5 gap-1.5">
-                  <div
-                    v-for="reward in rewards"
-                    :key="reward.day"
-                    class="relative p-1.5 rounded-lg text-center transition-all"
-                    :class="{
-                      'bg-status-success/20 border border-status-success/50': isCompleted(reward.day),
-                      'bg-accent-primary/20 border-2 border-accent-primary animate-pulse': isCurrent(reward.day),
-                      'bg-bg-secondary/50 border border-border/30': !isCompleted(reward.day) && !isCurrent(reward.day),
-                      'opacity-40': reward.day > nextDay && !isCompleted(reward.day),
-                    }"
-                  >
-                    <div class="text-[9px] font-medium mb-0.5" :class="isCompleted(reward.day) ? 'text-status-success' : 'text-text-muted'">
-                      D{{ reward.day }}
+              <!-- Calendar -->
+              <div v-if="showStreakCalendar" class="mp-calendar">
+                <div class="mp-cal-grid">
+                  <div v-for="reward in rewards" :key="reward.day" class="mp-cal-day" :class="{ completed: isCompleted(reward.day), current: isCurrent(reward.day), future: reward.day > nextDay && !isCompleted(reward.day) }">
+                    <div class="mp-cal-label">D{{ reward.day }}</div>
+                    <div class="mp-cal-icon">
+                      <span v-if="reward.itemType">{{ getItemEmoji(reward.itemType, reward.itemId) }}</span>
+                      <span v-else-if="reward.crypto > 0" class="mp-reward-val purple">💎</span>
+                      <span v-else class="mp-reward-val amber">{{ reward.gamecoin }}</span>
                     </div>
-                    <div class="text-xs font-bold" :class="isCompleted(reward.day) ? 'text-status-success' : ''">
-                      <span v-if="reward.itemType" class="text-sm">{{ getItemEmoji(reward.itemType, reward.itemId) }}</span>
-                      <span v-else-if="reward.crypto > 0" class="text-accent-primary">💎</span>
-                      <span v-else class="text-status-warning">{{ reward.gamecoin }}</span>
-                    </div>
-                    <div
-                      v-if="isCompleted(reward.day)"
-                      class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-status-success rounded-full flex items-center justify-center"
-                    >
-                      <Check :size="10" class="text-white" :stroke-width="3" />
-                    </div>
+                    <div v-if="isCompleted(reward.day)" class="mp-cal-check"><Check :size="10" color="#fff" :stroke-width="3" /></div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- ========== MISSIONS LIST ========== -->
-            <!-- Inline Loading -->
-            <div v-if="missionsStore.loading && dailyMissions.length === 0" class="space-y-3">
-              <div v-for="i in 3" :key="i" class="bg-bg-secondary rounded-xl p-4 border-l-4 border-border/50 animate-pulse">
-                <div class="flex items-start gap-3 mb-2">
-                  <div class="w-8 h-8 bg-bg-tertiary rounded"></div>
-                  <div class="flex-1">
-                    <div class="h-4 bg-bg-tertiary rounded w-32 mb-2"></div>
-                    <div class="h-3 bg-bg-tertiary rounded w-48"></div>
-                  </div>
-                </div>
-                <div class="h-2 bg-bg-tertiary rounded-full"></div>
-              </div>
+            <!-- Loading skeleton -->
+            <div v-if="missionsStore.loading && dailyMissions.length === 0" class="mp-list">
+              <div v-for="i in 3" :key="i" class="mp-item mp-skel"><div class="mp-skel-line w60"></div><div class="mp-skel-bar"></div></div>
             </div>
-            <div
-              v-for="mission in dailyMissions"
-              :key="mission.id"
-              class="bg-bg-secondary rounded-xl p-4 border-l-4 transition-all"
-              :class="{
-                'border-status-success opacity-75': mission.isClaimed,
-                'border-accent-primary': mission.isCompleted && !mission.isClaimed,
-                'border-border/50': !mission.isCompleted,
-              }"
-            >
-              <!-- Header -->
-              <div class="flex items-start justify-between gap-3 mb-2">
-                <div class="flex items-center gap-2">
-                  <span class="text-2xl">{{ mission.icon }}</span>
+
+            <!-- Mission items -->
+            <div v-for="mission in dailyMissions" :key="mission.id" class="mp-item" :class="{ claimed: mission.isClaimed, ready: mission.isCompleted && !mission.isClaimed }">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem;margin-bottom:0.4rem">
+                <div style="display:flex;align-items:center;gap:0.5rem">
+                  <span style="font-size:1.4rem">{{ mission.icon }}</span>
                   <div>
-                    <h3 class="font-medium">{{ missionName(mission.missionId) }}</h3>
-                    <p class="text-xs text-text-muted">{{ missionDesc(mission.missionId) }}</p>
+                    <div class="mp-item-name">{{ missionName(mission.missionId) }}</div>
+                    <div class="mp-item-desc">{{ missionDesc(mission.missionId) }}</div>
                   </div>
                 </div>
-                <div class="flex items-center gap-1.5">
-                  <span
-                    class="text-xs px-2 py-0.5 rounded-full font-medium"
-                    :class="categoryColor(missionCategory(mission.missionId))"
-                  >
-                    {{ t(`missions.category.${missionCategory(mission.missionId)}`) }}
-                  </span>
-                  <span
-                    class="text-xs px-2 py-0.5 rounded-full font-medium"
-                    :class="missionsStore.getDifficultyBg(mission.difficulty) + ' ' + missionsStore.getDifficultyColor(mission.difficulty)"
-                  >
-                    {{ t(`missions.difficulty.${mission.difficulty}`) }}
-                  </span>
-                </div>
               </div>
-
-              <!-- Time remaining -->
-              <div v-if="!mission.isClaimed && missionTimeRemaining" class="flex items-center gap-1 text-[11px] text-text-muted mb-2">
-                <span>⏳</span>
-                <span>{{ t('missions.expiresIn', { time: missionTimeRemaining }) }}</span>
+              <div v-if="!mission.isClaimed && missionTimeRemaining" class="mp-item-desc" style="margin-bottom:0.3rem">⏳ {{ t('missions.expiresIn', { time: missionTimeRemaining }) }}</div>
+              <div class="mp-progress">
+                <div class="mp-progress-header">
+                  <span class="mp-item-desc">{{ t('missions.progress') }}</span>
+                  <span class="mp-progress-val" :class="{ done: mission.isCompleted }">{{ formatProgress(mission.progress, mission.targetValue) }}</span>
+                </div>
+                <div class="mp-bar"><div class="mp-bar-fill" :class="{ done: mission.isCompleted }" :style="{ width: mission.progressPercent + '%' }"></div></div>
               </div>
-
-              <!-- Progress Bar -->
-              <div class="mb-3">
-                <div class="flex items-center justify-between text-xs mb-1">
-                  <span class="text-text-muted">{{ t('missions.progress') }}</span>
-                  <span class="font-mono" :class="mission.isCompleted ? 'text-status-success' : ''">
-                    {{ formatProgress(mission.progress, mission.targetValue) }}
-                  </span>
-                </div>
-                <div class="h-2 bg-bg-tertiary rounded-full overflow-hidden">
-                  <div
-                    class="h-full rounded-full transition-all duration-300"
-                    :class="mission.isCompleted ? 'bg-status-success' : 'bg-gradient-primary'"
-                    :style="{ width: `${mission.progressPercent}%` }"
-                  ></div>
-                </div>
-              </div>
-
-              <!-- Reward & Action -->
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <span class="text-lg">{{ missionsStore.getRewardIcon(mission.rewardType) }}</span>
-                  <span class="font-bold" :class="mission.rewardType === 'crypto' ? 'text-accent-primary' : 'text-status-warning'">
-                    +{{ formatCompact(mission.rewardAmount) }}
-                  </span>
-                </div>
-
-                <button
-                  v-if="mission.isCompleted && !mission.isClaimed"
-                  @click="handleClaimMission(mission.id)"
-                  :disabled="missionsStore.claiming"
-                  class="px-4 py-1.5 rounded-lg bg-accent-primary text-white font-medium text-sm hover:bg-accent-primary/80 transition-colors disabled:opacity-50"
-                >
-                  {{ missionsStore.claiming ? '...' : t('missions.claim') }}
-                </button>
-                <span
-                  v-else-if="mission.isClaimed"
-                  class="text-xs text-status-success font-medium flex items-center gap-1"
-                >
-                  <Check :size="16" />
-                  {{ t('missions.claimed') }}
-                </span>
-                <span v-else class="text-xs text-text-muted">
-                  {{ mission.progressPercent }}%
-                </span>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.5rem">
+                <span class="mp-reward-val" :class="mission.rewardType === 'crypto' ? 'purple' : 'amber'">{{ missionsStore.getRewardIcon(mission.rewardType) }} +{{ formatCompact(mission.rewardAmount) }}</span>
+                <button v-if="mission.isCompleted && !mission.isClaimed" @click="handleClaimMission(mission.id)" :disabled="missionsStore.claiming" class="mp-claim-btn">{{ missionsStore.claiming ? '...' : t('missions.claim') }}</button>
+                <span v-else-if="mission.isClaimed" class="mp-done"><Check :size="14" /> {{ t('missions.claimed') }}</span>
+                <span v-else class="mp-item-desc">{{ mission.progressPercent }}%</span>
               </div>
             </div>
 
-            <!-- Empty State -->
-            <div v-if="!missionsStore.loading && dailyMissions.length === 0" class="text-center py-8 text-text-muted">
-              <div class="text-4xl mb-3">📋</div>
+            <div v-if="!missionsStore.loading && dailyMissions.length === 0" class="mp-empty">
+              <div style="font-size:2.5rem">📋</div>
               <p>{{ t('missions.noMissions') }}</p>
-              <p class="text-xs mt-1">{{ t('missions.comeBackTomorrow') }}</p>
+              <p class="mp-item-desc">{{ t('missions.comeBackTomorrow') }}</p>
             </div>
-
             </template>
 
             <!-- ========== ACHIEVEMENTS TAB ========== -->
             <template v-if="activeTab === 'achievements'">
-            <div v-if="missionsStore.loading && achievementMissions.length === 0" class="grid grid-cols-2 gap-3">
-              <div v-for="i in 4" :key="i" class="bg-bg-secondary rounded-xl p-3 border-l-4 border-border/50 animate-pulse">
-                <div class="flex items-start gap-2 mb-2">
-                  <div class="w-7 h-7 bg-bg-tertiary rounded"></div>
-                  <div class="flex-1">
-                    <div class="h-3 bg-bg-tertiary rounded w-20 mb-1.5"></div>
-                    <div class="h-2.5 bg-bg-tertiary rounded w-28"></div>
+            <div v-if="achievementMissions.length > 0" class="mp-ach-grid">
+              <div v-for="mission in achievementMissions" :key="mission.id" class="mp-item mp-ach" :class="{ claimed: mission.isClaimed, ready: mission.isCompleted && !mission.isClaimed }">
+                <div style="display:flex;align-items:flex-start;gap:0.4rem;margin-bottom:0.4rem">
+                  <span style="font-size:1.2rem">{{ mission.icon }}</span>
+                  <div style="flex:1;min-width:0">
+                    <div class="mp-item-name" style="font-size:0.75rem">{{ missionName(mission.missionId) }}</div>
+                    <div class="mp-item-desc">{{ missionDesc(mission.missionId) }}</div>
                   </div>
                 </div>
-                <div class="h-1.5 bg-bg-tertiary rounded-full"></div>
-              </div>
-            </div>
-            <div v-if="achievementMissions.length > 0" class="grid grid-cols-2 gap-3">
-              <div
-                v-for="mission in achievementMissions"
-                :key="mission.id"
-                class="bg-bg-secondary rounded-xl p-3 border-l-4 transition-all"
-                :class="{
-                  'border-status-success opacity-75': mission.isClaimed,
-                  'border-yellow-500': mission.isCompleted && !mission.isClaimed,
-                  'border-border/50': !mission.isCompleted,
-                }"
-              >
-                <!-- Header -->
-                <div class="flex items-start gap-2 mb-1.5">
-                  <span class="text-xl">{{ mission.icon }}</span>
-                  <div class="flex-1 min-w-0">
-                    <h3 class="font-medium text-sm leading-tight truncate">{{ missionName(mission.missionId) }}</h3>
-                    <p class="text-[10px] text-text-muted leading-tight truncate">{{ missionDesc(mission.missionId) }}</p>
-                  </div>
+                <div class="mp-progress" style="margin-bottom:0.4rem">
+                  <div class="mp-bar"><div class="mp-bar-fill" :class="{ done: mission.isCompleted }" :style="{ width: mission.progressPercent + '%' }"></div></div>
+                  <span class="mp-progress-val" :class="{ done: mission.isCompleted }" style="font-size:0.6rem">{{ formatProgress(mission.progress, mission.targetValue) }}</span>
                 </div>
-
-                <!-- Difficulty Badge -->
-                <div class="mb-1.5">
-                  <span
-                    class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-                    :class="missionsStore.getDifficultyBg(mission.difficulty) + ' ' + missionsStore.getDifficultyColor(mission.difficulty)"
-                  >
-                    {{ t(`missions.difficulty.${mission.difficulty}`) }}
-                  </span>
-                </div>
-
-                <!-- Progress Bar -->
-                <div class="mb-2">
-                  <div class="flex items-center justify-between text-[10px] mb-0.5">
-                    <span class="text-text-muted">{{ t('missions.progress') }}</span>
-                    <span class="font-mono" :class="mission.isCompleted ? 'text-status-success' : ''">
-                      {{ formatProgress(mission.progress, mission.targetValue) }}
-                    </span>
-                  </div>
-                  <div class="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
-                    <div
-                      class="h-full rounded-full transition-all duration-300"
-                      :class="mission.isCompleted ? 'bg-status-success' : 'bg-gradient-to-r from-yellow-500 to-amber-500'"
-                      :style="{ width: `${mission.progressPercent}%` }"
-                    ></div>
-                  </div>
-                </div>
-
-                <!-- Reward & Action -->
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-1">
-                    <span class="text-sm">{{ missionsStore.getRewardIcon(mission.rewardType) }}</span>
-                    <span class="font-bold text-sm" :class="mission.rewardType === 'crypto' ? 'text-accent-primary' : 'text-status-warning'">
-                      +{{ formatCompact(mission.rewardAmount) }}
-                    </span>
-                  </div>
-
-                  <button
-                    v-if="mission.isCompleted && !mission.isClaimed"
-                    @click="handleClaimMission(mission.id)"
-                    :disabled="missionsStore.claiming"
-                    class="px-2.5 py-1 rounded-lg bg-yellow-500 text-black font-medium text-xs hover:bg-yellow-400 transition-colors disabled:opacity-50"
-                  >
-                    {{ missionsStore.claiming ? '...' : t('missions.claim') }}
-                  </button>
-                  <span
-                    v-else-if="mission.isClaimed"
-                    class="text-[10px] text-status-success font-medium flex items-center gap-0.5"
-                  >
-                    <Check :size="14" />
-                    {{ t('missions.claimed') }}
-                  </span>
-                  <span v-else class="text-[10px] text-text-muted">
-                    {{ mission.progressPercent }}%
-                  </span>
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <span class="mp-reward-val" :class="mission.rewardType === 'crypto' ? 'purple' : 'amber'" style="font-size:0.7rem">{{ missionsStore.getRewardIcon(mission.rewardType) }} +{{ formatCompact(mission.rewardAmount) }}</span>
+                  <button v-if="mission.isCompleted && !mission.isClaimed" @click="handleClaimMission(mission.id)" :disabled="missionsStore.claiming" class="mp-claim-btn" style="font-size:0.65rem;padding:4px 10px">{{ missionsStore.claiming ? '...' : t('missions.claim') }}</button>
+                  <span v-else-if="mission.isClaimed" class="mp-done" style="font-size:0.6rem"><Check :size="12" /> {{ t('missions.claimed') }}</span>
+                  <span v-else class="mp-item-desc">{{ mission.progressPercent }}%</span>
                 </div>
               </div>
             </div>
-
-            <!-- Empty State -->
-            <div v-if="!missionsStore.loading && achievementMissions.length === 0" class="text-center py-8 text-text-muted">
-              <div class="text-4xl mb-3">🏆</div>
+            <div v-if="!missionsStore.loading && achievementMissions.length === 0" class="mp-empty">
+              <div style="font-size:2.5rem">🏆</div>
               <p>{{ t('missions.noAchievements') }}</p>
             </div>
             </template>
@@ -643,15 +419,10 @@ function handleClose() {
         </div>
 
         <!-- Footer -->
-        <div class="p-4 border-t border-border/50 bg-bg-secondary shrink-0">
-          <div class="flex items-center justify-between text-sm">
-            <div class="flex items-center gap-2 text-text-muted">
-              <span>⏱️</span>
-              <span>{{ t('missions.onlineTimeToday') }} <strong class="text-white">{{ missionsStore.onlineMinutes }} {{ t('missions.min') }}</strong></span>
-            </div>
-            <div v-if="missionsStore.claimableCount > 0" class="text-accent-primary font-medium">
-              {{ missionsStore.claimableCount }} {{ t('missions.toClaim') }}
-            </div>
+        <div class="mp-footer">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span class="mp-item-desc">⏱️ {{ t('missions.onlineTimeToday') }} <strong class="mp-item-name">{{ missionsStore.onlineMinutes }} {{ t('missions.min') }}</strong></span>
+            <span v-if="missionsStore.claimableCount > 0" class="mp-reward-val purple">{{ missionsStore.claimableCount }} {{ t('missions.toClaim') }}</span>
           </div>
         </div>
       </div>
@@ -660,6 +431,163 @@ function handleClose() {
 </template>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
+/* Kawaii Modal Override */
+.mp-modal {
+  background: #fff !important;
+  border: 2px solid #c4a0e8 !important;
+  border-radius: 16px !important;
+  box-shadow: 4px 4px 0 #e8d0f0 !important;
+  font-family: 'Nunito', 'Trebuchet MS', sans-serif;
+  animation: mp-enter 0.3s cubic-bezier(0.16,1,0.3,1);
+}
+@keyframes mp-enter { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }
+
+.mp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.2rem;
+  border-bottom: 2px solid #e8d8f4;
+  background: linear-gradient(180deg, #f8f2ff, #fff);
+}
+.mp-title { font-size: 1.1rem; font-weight: 900; color: #4a3a5c; margin: 0; }
+.mp-sub { font-size: 0.75rem; font-weight: 700; color: #9a80b8; margin: 0; }
+.mp-close {
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  background: #f8f2ff; border: 2px solid #d0b8e8; border-radius: 8px;
+  color: #9a80b8; cursor: pointer; transition: 0.2s;
+}
+.mp-close:hover { background: #fff0f0; border-color: #ff7b7b; color: #cc4444; }
+
+.mp-tabs {
+  display: flex; border-bottom: 2px solid #e8d8f4;
+}
+.mp-tab {
+  flex: 1; padding: 10px; text-align: center;
+  font-size: 0.8rem; font-weight: 800; color: #9a80b8;
+  background: none; border: none; cursor: pointer;
+  transition: 0.2s; position: relative;
+  font-family: 'Nunito', sans-serif;
+}
+.mp-tab:hover { color: #7b5ea7; background: #f8f2ff; }
+.mp-tab.active { color: #4a3a5c; }
+.mp-tab.active::after {
+  content: ''; position: absolute; bottom: -2px; left: 0; right: 0;
+  height: 3px; background: #c4a0e8; border-radius: 2px 2px 0 0;
+}
+.mp-tab-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  background: #c4a0e8; color: #fff; font-size: 0.6rem; font-weight: 900;
+  border-radius: 9px; margin-left: 4px;
+}
+.mp-tab-badge.amber { background: #d4a017; }
+
+/* Content */
+.mp-content {
+  padding: 0.8rem; overflow-y: auto; flex: 1; min-height: 0;
+}
+.mp-content::-webkit-scrollbar { width: 6px; }
+.mp-content::-webkit-scrollbar-track { background: #f0e8f8; }
+.mp-content::-webkit-scrollbar-thumb { background: #c4a0e8; border-radius: 3px; }
+
+.mp-list { display: flex; flex-direction: column; gap: 0.6rem; }
+
+/* Streak card */
+.mp-streak-card {
+  background: #fff8e0; border: 2px solid #ffe566; border-left: 4px solid #d4a017;
+  border-radius: 12px; padding: 0.8rem;
+}
+.mp-streak-card.canClaim { border-color: #d4a017; }
+
+/* Mission item */
+.mp-item {
+  background: #f8f2ff; border: 2px solid #e8d8f4; border-left: 4px solid #d0b8e8;
+  border-radius: 10px; padding: 0.8rem;
+}
+.mp-item.ready { border-left-color: #c4a0e8; background: #f0e4ff; }
+.mp-item.claimed { border-left-color: #7cc490; opacity: 0.7; }
+
+/* Text styles */
+.mp-item-name { font-size: 0.85rem; font-weight: 800; color: #4a3a5c; }
+.mp-item-desc { font-size: 0.7rem; font-weight: 600; color: #9a80b8; }
+.mp-reward-val { font-size: 0.8rem; font-weight: 900; color: #4a3a5c; }
+.mp-reward-val.amber { color: #d4a017; }
+.mp-reward-val.purple { color: #7b5ea7; }
+.mp-done { font-size: 0.7rem; font-weight: 800; color: #3a7a4a; display: flex; align-items: center; gap: 4px; }
+.mp-warning { font-size: 0.65rem; font-weight: 700; color: #d4a017; margin-top: 0.4rem; }
+
+/* Progress */
+.mp-progress { margin-bottom: 0.3rem; }
+.mp-progress-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.mp-progress-val { font-size: 0.7rem; font-weight: 800; color: #7b5ea7; }
+.mp-progress-val.done { color: #3a7a4a; }
+.mp-bar { height: 6px; background: #efe0f8; border-radius: 3px; overflow: hidden; border: 1px solid #d0b8e8; }
+.mp-bar-fill { height: 100%; background: linear-gradient(90deg, #d0b8e8, #c4a0e8); border-radius: 3px; transition: width 0.3s; }
+.mp-bar-fill.done { background: #7cc490; }
+
+/* Buttons */
+.mp-claim-btn {
+  background: #ffe566; border: 2px outset #d4a017; border-radius: 8px;
+  padding: 6px 14px; font-size: 0.75rem; font-weight: 900; color: #4a3a5c;
+  font-family: 'Nunito', sans-serif; cursor: pointer; transition: 0.2s;
+}
+.mp-claim-btn:hover { background: #ffd700; border-style: inset; }
+.mp-claim-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.mp-btn-secondary {
+  background: #f8f2ff; border: 2px solid #d0b8e8; border-radius: 8px;
+  padding: 6px 14px; font-size: 0.75rem; font-weight: 800; color: #7b5ea7;
+  font-family: 'Nunito', sans-serif; cursor: pointer; transition: 0.2s;
+}
+.mp-btn-secondary:hover { background: #ffe97a; border-color: #d4a017; color: #4a3a5c; }
+
+.mp-toggle {
+  font-size: 0.65rem; color: #9a80b8; background: #efe0f8; border: 1px solid #d0b8e8;
+  border-radius: 6px; padding: 2px 8px; cursor: pointer; transition: 0.2s;
+}
+.mp-toggle:hover { background: #e0d0f0; }
+
+/* Calendar */
+.mp-calendar { margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid #ffe566; }
+.mp-cal-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.mp-cal-day {
+  position: relative; text-align: center; padding: 6px 4px;
+  background: #fff; border: 2px solid #e8d8f4; border-radius: 8px;
+}
+.mp-cal-day.completed { background: #e8f8ec; border-color: #a8d0b8; }
+.mp-cal-day.current { background: #f0e4ff; border-color: #c4a0e8; animation: mp-pulse 2s infinite; }
+.mp-cal-day.future { opacity: 0.4; }
+@keyframes mp-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(196,160,232,0.3); } 50% { box-shadow: 0 0 0 4px rgba(196,160,232,0); } }
+.mp-cal-label { font-size: 0.55rem; font-weight: 800; color: #9a80b8; }
+.mp-cal-icon { font-size: 0.75rem; font-weight: 900; }
+.mp-cal-check {
+  position: absolute; top: -4px; right: -4px;
+  width: 14px; height: 14px; background: #7cc490; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Achievements grid */
+.mp-ach-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.mp-ach { padding: 0.6rem; }
+
+/* Empty state */
+.mp-empty { text-align: center; padding: 2rem 0; color: #9a80b8; font-size: 0.8rem; font-weight: 700; }
+
+/* Skeleton */
+.mp-skel { background: #f8f2ff; }
+.mp-skel-line { height: 10px; background: #efe0f8; border-radius: 5px; animation: mp-shimmer 1.5s ease infinite; }
+.mp-skel-line.w60 { width: 60%; margin-bottom: 8px; }
+.mp-skel-bar { height: 6px; background: #efe0f8; border-radius: 3px; animation: mp-shimmer 1.5s ease infinite; }
+@keyframes mp-shimmer { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+/* Footer */
+.mp-footer {
+  padding: 0.8rem 1rem; border-top: 2px solid #e8d8f4;
+  background: #f8f2ff; flex-shrink: 0;
+}
+
 .confetti-piece {
   position: absolute;
   top: -20px;

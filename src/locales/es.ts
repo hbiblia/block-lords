@@ -2234,7 +2234,7 @@
     howToPlay: 'Cómo Jugar',
     rules: 'Reglas y Normas',
     tagline: 'LootMine — Juego Idle de Minería Landwork',
-    description: 'Simulación de minería free-to-play. Compite contra jugadores reales, mejora tus rigs, craftea items, batalla en duelos PvP de cartas y gana Landwork intercambiable por RON.',
+    description: 'Simulación de minería free-to-play. Compite contra jugadores reales, mejora tus rigs, craftea items y gana Landwork intercambiable por RON.',
     disclaimer: 'LootMine es un juego de simulación. Landwork se puede intercambiar por RON en la blockchain Ronin. Juega responsablemente.',
     terms: 'Términos de Servicio',
   },

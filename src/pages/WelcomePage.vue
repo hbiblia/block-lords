@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { formatCompact, formatNumber } from '@/utils/format';
-import { Gem, Crown, Trophy, Medal } from 'lucide-vue-next';
+import { Gem, Crown, Trophy, Medal, Pickaxe, Coins, Zap, Globe } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -16,13 +16,10 @@ const showStats = ref(false);
 const showButton = ref(false);
 
 onMounted(async () => {
-  // Secuencia de animación
   await new Promise(resolve => setTimeout(resolve, 300));
   showContent.value = true;
-
   await new Promise(resolve => setTimeout(resolve, 600));
   showStats.value = true;
-
   await new Promise(resolve => setTimeout(resolve, 400));
   showButton.value = true;
 });
@@ -48,112 +45,224 @@ function getRankIcon(score: number): string {
 }
 
 const rankIcon = computed(() => getRankIcon(player.value?.reputation_score ?? 50));
-
 </script>
 
 <template>
-  <div class="min-h-[80vh] flex items-center justify-center py-12">
-    <div class="text-center max-w-lg mx-auto px-4">
-      <!-- Avatar animado -->
+  <div class="welcome-page">
+    <div class="welcome-card">
+      <!-- Avatar -->
       <div
-        class="transition-all duration-700 transform"
-        :class="showContent ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-8'"
+        class="welcome-anim"
+        :class="{ visible: showContent }"
       >
-        <div class="relative inline-block mb-6">
-          <div class="w-28 h-28 rounded-2xl bg-gradient-primary flex items-center justify-center text-5xl shadow-glow">
+        <div class="welcome-avatar-wrap">
+          <div class="welcome-avatar">
             {{ player?.username?.charAt(0).toUpperCase() ?? '?' }}
           </div>
-          <!-- Rango badge -->
-          <div class="absolute -bottom-2 -right-2 w-10 h-10 rounded-xl bg-bg-card border-2 border-accent-primary flex items-center justify-center">
-            <Gem v-if="rankIcon === 'diamond'" :size="20" class="text-cyan-400" />
-            <Crown v-else-if="rankIcon === 'platinum'" :size="20" class="text-purple-400" />
-            <Trophy v-else-if="rankIcon === 'gold'" :size="20" class="text-yellow-400" />
-            <Medal v-else-if="rankIcon === 'silver'" :size="20" class="text-gray-300" />
-            <Medal v-else :size="20" class="text-amber-600" />
+          <div class="welcome-rank-badge">
+            <Gem v-if="rankIcon === 'diamond'" :size="18" />
+            <Crown v-else-if="rankIcon === 'platinum'" :size="18" />
+            <Trophy v-else-if="rankIcon === 'gold'" :size="18" />
+            <Medal v-else :size="18" />
           </div>
         </div>
 
-        <!-- Saludo -->
-        <h1 class="text-3xl font-display font-bold mb-2">
-          {{ t('welcome.greeting') }}
-        </h1>
-        <h2 class="text-4xl font-display font-bold mb-4">
-          <span class="gradient-text">{{ player?.username ?? t('welcome.defaultName') }}</span>!
-        </h2>
-        <p class="text-text-secondary mb-8">
-          {{ t('welcome.stationReady') }}
-        </p>
+        <h1 class="welcome-greeting">{{ t('welcome.greeting') }}</h1>
+        <h2 class="welcome-username">{{ player?.username ?? t('welcome.defaultName') }}!</h2>
+        <p class="welcome-sub">{{ t('welcome.stationReady') }}</p>
       </div>
 
-      <!-- Stats rápidas -->
+      <!-- Stats -->
       <div
-        class="grid grid-cols-3 gap-4 mb-8 transition-all duration-700 delay-300"
-        :class="showStats ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'"
+        class="welcome-stats"
+        :class="{ visible: showStats }"
       >
-        <div class="card py-4">
-          <div v-tooltip="formatNumber(player?.gamecoin_balance ?? 0)" class="text-2xl font-bold text-status-warning cursor-help">
-            {{ formatCompact(player?.gamecoin_balance) }}
-          </div>
-          <div class="text-xs text-text-muted mt-1">🪙 GameCoin</div>
+        <div class="ws-card" v-tooltip="formatNumber(player?.gamecoin_balance ?? 0)">
+          <Coins :size="16" class="ws-icon amber" />
+          <span class="ws-val amber">{{ formatCompact(player?.gamecoin_balance) }}</span>
+          <span class="ws-label">COINS</span>
         </div>
-        <div class="card py-4">
-          <div v-tooltip="formatNumber(player?.crypto_balance ?? 0, 2)" class="text-2xl font-bold text-accent-tertiary cursor-help">
-            {{ formatCompact(player?.crypto_balance) }}
-          </div>
-          <div class="text-xs text-text-muted mt-1">💎 Landwork</div>
+        <div class="ws-card" v-tooltip="formatNumber(player?.crypto_balance ?? 0, 2)">
+          <Pickaxe :size="16" class="ws-icon" />
+          <span class="ws-val">{{ formatCompact(player?.crypto_balance) }}</span>
+          <span class="ws-label">LANDWORK</span>
         </div>
-        <div class="card py-4">
-          <div class="text-2xl font-bold text-accent-primary">
-            {{ getRankName(player?.reputation_score ?? 50) }}
-          </div>
-          <div class="text-xs text-text-muted mt-1">⭐ {{ t('welcome.rank') }}</div>
+        <div class="ws-card">
+          <span class="ws-val rank">{{ getRankName(player?.reputation_score ?? 50) }}</span>
+          <span class="ws-label">RANK</span>
         </div>
       </div>
 
-      <!-- Recursos -->
+      <!-- Resources -->
       <div
-        class="card mb-8 transition-all duration-700 delay-500"
-        :class="showStats ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'"
+        class="welcome-resources"
+        :class="{ visible: showStats }"
       >
-        <div class="grid grid-cols-2 gap-6">
-          <div>
-            <div class="flex justify-between text-sm mb-2">
-              <span class="text-text-muted">⚡ {{ t('welcome.energy') }}</span>
-              <span class="text-status-warning font-medium">{{ player?.energy?.toFixed(0) ?? 100 }}</span>
-            </div>
-            <div class="progress-bar progress-energy">
-              <div class="progress-bar-fill" :style="{ width: `${player?.energy ?? 100}%` }"></div>
-            </div>
+        <div class="wr-bar">
+          <Zap :size="14" class="wr-icon amber" />
+          <span class="wr-label">{{ t('welcome.energy') }}</span>
+          <div class="wr-track">
+            <div class="wr-fill amber" :style="{ width: `${player?.energy ?? 100}%` }"></div>
           </div>
-          <div>
-            <div class="flex justify-between text-sm mb-2">
-              <span class="text-text-muted">📡 {{ t('welcome.internet') }}</span>
-              <span class="text-accent-tertiary font-medium">{{ player?.internet?.toFixed(0) ?? 100 }}</span>
-            </div>
-            <div class="progress-bar progress-internet">
-              <div class="progress-bar-fill" :style="{ width: `${player?.internet ?? 100}%` }"></div>
-            </div>
+          <span class="wr-val">{{ player?.energy?.toFixed(0) ?? 100 }}%</span>
+        </div>
+        <div class="wr-bar">
+          <Globe :size="14" class="wr-icon" />
+          <span class="wr-label">{{ t('welcome.internet') }}</span>
+          <div class="wr-track">
+            <div class="wr-fill" :style="{ width: `${player?.internet ?? 100}%` }"></div>
           </div>
+          <span class="wr-val">{{ player?.internet?.toFixed(0) ?? 100 }}%</span>
         </div>
       </div>
 
-      <!-- Botón de entrada -->
+      <!-- Enter button -->
       <div
-        class="transition-all duration-700 delay-700"
-        :class="showButton ? 'opacity-100 scale-100' : 'opacity-0 scale-90'"
+        class="welcome-enter"
+        :class="{ visible: showButton }"
       >
-        <button
-          @click="enterGame"
-          class="btn-primary text-lg px-12 py-4 relative overflow-hidden group"
-        >
-          <span class="relative z-10">⛏️ {{ t('welcome.enterGame') }}</span>
-          <div class="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-500"></div>
+        <button class="welcome-btn" @click="enterGame">
+          <span>{{ t('welcome.enterGame') }}</span>
         </button>
-
-        <p class="text-text-muted text-xs mt-4">
-          {{ t('welcome.pressContinue') }}
-        </p>
+        <p class="welcome-hint">{{ t('welcome.pressContinue') }}</p>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
+.welcome-page {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  background: #f8e8f0;
+  background-image: radial-gradient(circle, #e8c8d8 1.5px, transparent 1.5px);
+  background-size: 20px 20px;
+  padding: 2rem;
+  font-family: 'Nunito', 'Trebuchet MS', sans-serif;
+}
+
+.welcome-card {
+  background: #fff;
+  border: 2px solid #c4a0e8;
+  border-radius: 16px;
+  box-shadow: 4px 4px 0 #e8d0f0;
+  padding: 2.5rem 2rem;
+  max-width: 440px;
+  width: 100%;
+  text-align: center;
+}
+
+/* Animations */
+.welcome-anim, .welcome-stats, .welcome-resources, .welcome-enter {
+  transition: all 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0; transform: translateY(12px);
+}
+.welcome-anim.visible, .welcome-stats.visible, .welcome-resources.visible, .welcome-enter.visible {
+  opacity: 1; transform: translateY(0);
+}
+
+/* Avatar */
+.welcome-avatar-wrap {
+  position: relative; display: inline-block; margin-bottom: 1.2rem;
+}
+.welcome-avatar {
+  width: 90px; height: 90px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #c4a0e8, #b088d0);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.5rem; font-weight: 900; color: #fff;
+  box-shadow: 3px 3px 0 #e8d0f0;
+  font-family: 'Nunito', sans-serif;
+}
+.welcome-rank-badge {
+  position: absolute; bottom: -6px; right: -6px;
+  width: 34px; height: 34px;
+  background: #fff; border: 2px solid #c4a0e8; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: #d4a017;
+}
+
+/* Text */
+.welcome-greeting {
+  font-size: 1.4rem; font-weight: 700; color: #7b5ea7;
+  margin: 0 0 4px;
+}
+.welcome-username {
+  font-size: 1.8rem; font-weight: 900; color: #4a3a5c;
+  margin: 0 0 8px;
+}
+.welcome-sub {
+  font-size: 0.85rem; color: #9a80b8; margin: 0 0 1.5rem;
+}
+
+/* Stats */
+.welcome-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  margin-bottom: 1.2rem;
+}
+.ws-card {
+  background: #f8f2ff; border: 2px solid #e8d8f4; border-radius: 10px;
+  padding: 12px 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.ws-icon { color: #7b5ea7; }
+.ws-icon.amber { color: #d4a017; }
+.ws-val {
+  font-size: 1.1rem; font-weight: 900; color: #4a3a5c;
+  font-family: 'Nunito', sans-serif;
+}
+.ws-val.amber { color: #d4a017; }
+.ws-val.rank { font-size: 0.8rem; color: #7b5ea7; }
+.ws-label {
+  font-size: 0.6rem; font-weight: 800; color: #9a80b8;
+  letter-spacing: 1.5px;
+}
+
+/* Resources */
+.welcome-resources {
+  background: #f8f2ff; border: 2px solid #e8d8f4; border-radius: 10px;
+  padding: 12px 16px; margin-bottom: 1.5rem;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.wr-bar {
+  display: flex; align-items: center; gap: 8px;
+}
+.wr-icon { color: #7b5ea7; flex-shrink: 0; }
+.wr-icon.amber { color: #d4a017; }
+.wr-label {
+  font-size: 0.7rem; font-weight: 800; color: #7b5ea7;
+  letter-spacing: 0.5px; min-width: 60px;
+}
+.wr-track {
+  flex: 1; height: 10px; background: #efe0f8;
+  border: 2px solid #d0b8e8; border-radius: 5px; overflow: hidden;
+}
+.wr-fill {
+  height: 100%; background: #c4a0e8; border-radius: 3px;
+  transition: width 0.5s ease;
+}
+.wr-fill.amber { background: #ffe566; }
+.wr-val {
+  font-size: 0.85rem; font-weight: 700; color: #4a3a5c;
+  font-family: 'Nunito', sans-serif; min-width: 36px; text-align: right;
+}
+
+/* Button */
+.welcome-enter { margin-top: 0.5rem; }
+.welcome-btn {
+  width: 100%; padding: 14px;
+  background: #ffe566; border: 2px outset #d4a017;
+  color: #4a3a5c; font-size: 1rem; font-weight: 900;
+  font-family: 'Nunito', sans-serif; letter-spacing: 2px;
+  cursor: pointer; transition: 0.2s; border-radius: 10px;
+}
+.welcome-btn:hover {
+  background: #ffd700; border-style: inset; transform: translateY(-1px);
+}
+.welcome-hint {
+  font-size: 0.65rem; color: #9a80b8; margin-top: 10px;
+  letter-spacing: 1px; font-weight: 700;
+}
+</style>

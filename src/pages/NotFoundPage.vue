@@ -5,12 +5,41 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <div class="text-center py-20">
-    <div class="text-8xl mb-6">💀</div>
-    <h1 class="font-arcade text-3xl text-arcade-danger mb-4">404</h1>
-    <p class="text-xl text-gray-400 mb-8">{{ t('notFound.message') }}</p>
-    <RouterLink to="/" class="arcade-button">
-      {{ t('notFound.backHome') }}
-    </RouterLink>
+  <div class="nf-page">
+    <div class="nf-card">
+      <div class="nf-icon">⬡</div>
+      <h1 class="nf-code">404</h1>
+      <p class="nf-msg">{{ t('notFound.message') }}</p>
+      <RouterLink to="/" class="nf-btn">{{ t('notFound.backHome') }}</RouterLink>
+    </div>
   </div>
 </template>
+
+<style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
+.nf-page {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: #f8e8f0;
+  background-image: radial-gradient(circle, #e8c8d8 1.5px, transparent 1.5px);
+  background-size: 20px 20px;
+  padding: 2rem;
+  font-family: 'Nunito', 'Trebuchet MS', sans-serif;
+}
+.nf-card {
+  background: #fff; border: 2px solid #c4a0e8; border-radius: 16px;
+  box-shadow: 4px 4px 0 #e8d0f0; padding: 3rem 2rem;
+  max-width: 400px; width: 100%; text-align: center;
+}
+.nf-icon { font-size: 3rem; color: #d0b8e8; margin-bottom: 0.5rem; }
+.nf-code { font-size: 3rem; font-weight: 900; color: #c4a0e8; margin: 0 0 0.5rem; letter-spacing: 4px; }
+.nf-msg { font-size: 0.9rem; color: #9a80b8; margin: 0 0 1.5rem; }
+.nf-btn {
+  display: inline-block; padding: 12px 30px;
+  background: #ffe566; border: 2px outset #d4a017;
+  color: #4a3a5c; font-size: 0.85rem; font-weight: 900;
+  font-family: 'Nunito', sans-serif; letter-spacing: 1px;
+  text-decoration: none; border-radius: 10px; transition: 0.2s;
+}
+.nf-btn:hover { background: #ffd700; border-style: inset; }
+</style>

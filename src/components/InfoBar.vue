@@ -57,11 +57,11 @@ const typeClasses = computed(() => {
   if (!currentAnnouncement.value) return {};
   const type = currentAnnouncement.value.type;
   return {
-    'bg-accent-primary/10 border-accent-primary/30 text-accent-primary': type === 'info',
-    'bg-status-warning/10 border-status-warning/30 text-status-warning': type === 'warning',
-    'bg-status-success/10 border-status-success/30 text-status-success': type === 'success',
-    'bg-status-danger/10 border-status-danger/30 text-status-danger': type === 'error',
-    'bg-amber-500/10 border-amber-500/30 text-amber-400': type === 'maintenance',
+    'infobar-info': type === 'info',
+    'infobar-warning': type === 'warning',
+    'infobar-success': type === 'success',
+    'infobar-error': type === 'error',
+    'infobar-maintenance': type === 'maintenance',
   };
 });
 
@@ -162,63 +162,55 @@ onUnmounted(() => {
   <Transition name="slide">
     <div
       v-if="!loading && !dismissed && currentAnnouncement"
-      class="fixed top-0 left-0 right-0 z-[60] border-b transition-all duration-300"
+      class="infobar-root"
       :class="typeClasses"
     >
-      <div class="container mx-auto px-4">
-        <div class="flex items-center justify-between h-10 gap-4">
+      <div class="infobar-inner">
+        <div class="infobar-content">
           <!-- Navigation (multiple announcements) -->
-          <div v-if="visibleCount > 1" class="flex items-center gap-1">
-            <button
-              @click="goToPrev"
-              class="p-1 rounded hover:bg-white/10 transition-colors"
-            >
-              <ChevronLeft :size="16" />
+          <div v-if="visibleCount > 1" class="infobar-nav">
+            <button @click="goToPrev" class="infobar-nav-btn">
+              <ChevronLeft :size="14" />
             </button>
-            <span class="text-xs opacity-70 min-w-[3ch] text-center">
+            <span class="infobar-counter">
               {{ (currentIndex % visibleCount) + 1 }}/{{ visibleCount }}
             </span>
-            <button
-              @click="goToNext"
-              class="p-1 rounded hover:bg-white/10 transition-colors"
-            >
-              <ChevronRight :size="16" />
+            <button @click="goToNext" class="infobar-nav-btn">
+              <ChevronRight :size="14" />
             </button>
           </div>
 
           <!-- Message -->
-          <div class="flex-1 flex items-center justify-center gap-2 text-sm font-medium truncate">
-            <span class="shrink-0">{{ currentAnnouncement.icon }}</span>
-            <span class="truncate">{{ displayMessage }}</span>
+          <div class="infobar-message">
+            <span class="infobar-icon">{{ currentAnnouncement.icon }}</span>
+            <span class="infobar-text">{{ displayMessage }}</span>
             <a
               v-if="currentAnnouncement.link_url"
               :href="currentAnnouncement.link_url"
               target="_blank"
               rel="noopener noreferrer"
-              class="shrink-0 underline hover:no-underline opacity-80 hover:opacity-100"
+              class="infobar-link"
             >
               {{ currentAnnouncement.link_text || 'Learn more' }}
             </a>
           </div>
 
           <!-- Close buttons -->
-          <div class="flex items-center gap-1">
-            <!-- Dismiss this announcement -->
+          <div class="infobar-actions">
             <button
               v-if="visibleCount > 1"
               @click="dismissCurrent"
-              class="p-1 rounded hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
+              class="infobar-close-btn"
               title="Dismiss this"
             >
-              <EyeOff :size="16" />
+              <EyeOff :size="14" />
             </button>
-            <!-- Close all -->
             <button
               @click="dismissAll"
-              class="p-1 rounded hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
+              class="infobar-close-btn"
               title="Close"
             >
-              <X :size="16" />
+              <X :size="14" />
             </button>
           </div>
         </div>
@@ -228,11 +220,72 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.infobar-root {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 60;
+  border-bottom: 2px solid #c4a0e8;
+  transition: all 0.3s;
+  font-family: 'Nunito', 'Trebuchet MS', sans-serif;
+}
+.infobar-inner {
+  max-width: 1280px; margin: 0 auto; padding: 0 1rem;
+}
+.infobar-content {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 36px; gap: 0.8rem;
+}
+.infobar-nav {
+  display: flex; align-items: center; gap: 4px;
+}
+.infobar-nav-btn {
+  padding: 2px; border-radius: 4px; background: none; border: none;
+  color: inherit; cursor: pointer; opacity: 0.7; transition: 0.2s;
+}
+.infobar-nav-btn:hover { opacity: 1; }
+.infobar-counter {
+  font-size: 0.6rem; font-weight: 800; opacity: 0.7; min-width: 3ch; text-align: center;
+}
+.infobar-message {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  gap: 6px; font-size: 0.75rem; font-weight: 700; overflow: hidden;
+  letter-spacing: 0.5px;
+}
+.infobar-icon { flex-shrink: 0; }
+.infobar-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.infobar-link {
+  flex-shrink: 0; text-decoration: underline; opacity: 0.8; transition: 0.2s;
+}
+.infobar-link:hover { opacity: 1; text-decoration: none; }
+.infobar-actions {
+  display: flex; align-items: center; gap: 4px;
+}
+.infobar-close-btn {
+  padding: 3px; border-radius: 4px; background: none; border: none;
+  color: inherit; cursor: pointer; opacity: 0.5; transition: 0.2s;
+}
+.infobar-close-btn:hover { opacity: 1; }
+
+/* Type variants */
+.infobar-info {
+  background: #f0e4ff; border-color: #c4a0e8; color: #7b5ea7;
+}
+.infobar-warning {
+  background: #fff8e0; border-color: #e8c840; color: #8a6a10;
+}
+.infobar-success {
+  background: #e8f8ec; border-color: #a8d0b8; color: #3a7a4a;
+}
+.infobar-error {
+  background: #fff0f0; border-color: #ff7b7b; color: #c04040;
+}
+.infobar-maintenance {
+  background: #fff8e0; border-color: #d4a017; color: #8a6a10;
+}
+
+/* Transitions */
 .slide-enter-active,
 .slide-leave-active {
   transition: transform 0.3s ease, opacity 0.3s ease;
 }
-
 .slide-enter-from,
 .slide-leave-to {
   transform: translateY(-100%);

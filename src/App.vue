@@ -65,56 +65,37 @@ async function handleRetry() {
 <template>
   <!-- Skeleton overlay mientras auth se inicializa -->
   <Transition name="slide-down">
-  <div v-if="!authStore.initialized && !authStore.connectionError" class="fixed inset-0 z-50 bg-bg-primary overflow-hidden">
-    <!-- Skeleton NavBar -->
-    <nav class="fixed left-0 right-0 top-0 z-50 glass border-b border-border/50">
-      <div class="container mx-auto px-4 h-16 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center"><Pickaxe :size="20" color="#f59e0b" /></div>
-          <div class="hidden sm:block h-5 w-28 bg-bg-tertiary rounded animate-pulse"></div>
-        </div>
-        <div class="flex items-center gap-4">
-          <div class="hidden md:flex items-center gap-3">
-            <div class="h-8 w-24 bg-bg-tertiary rounded-lg animate-pulse"></div>
-            <div class="h-8 w-24 bg-bg-tertiary rounded-lg animate-pulse"></div>
-          </div>
-          <div class="w-10 h-10 bg-bg-tertiary rounded-full animate-pulse"></div>
+  <div v-if="!authStore.initialized && !authStore.connectionError" class="app-skel">
+    <!-- Top bar skeleton -->
+    <div class="app-skel-topbar">
+      <div class="app-skel-brand">
+        <Pickaxe :size="18" color="#c4a0e8" />
+        <div class="app-skel-block" style="width:80px;height:14px"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <div class="app-skel-block" style="width:50px;height:28px;border-radius:8px"></div>
+        <div class="app-skel-block" style="width:60px;height:28px;border-radius:8px"></div>
+      </div>
+    </div>
+    <!-- Content skeleton -->
+    <div class="app-skel-body">
+      <div class="app-skel-card">
+        <div class="app-skel-block" style="width:40%;height:12px;margin-bottom:12px"></div>
+        <div class="app-skel-block" style="width:100%;height:8px;margin-bottom:16px"></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          <div class="app-skel-block" style="height:50px;border-radius:10px"></div>
+          <div class="app-skel-block" style="height:50px;border-radius:10px"></div>
+          <div class="app-skel-block" style="height:50px;border-radius:10px"></div>
         </div>
       </div>
-    </nav>
-
-    <!-- Skeleton Content -->
-    <main class="container mx-auto px-4 py-6 mt-16">
-      <div class="flex items-center justify-between mb-6">
-        <div class="h-8 w-32 bg-bg-tertiary rounded animate-pulse"></div>
-        <div class="flex items-center gap-3">
-          <div class="h-8 w-24 bg-bg-tertiary rounded-lg animate-pulse"></div>
-          <div class="h-8 w-32 bg-bg-tertiary rounded-lg animate-pulse"></div>
+      <div class="app-skel-card">
+        <div class="app-skel-block" style="width:30%;height:12px;margin-bottom:12px"></div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+          <div class="app-skel-block" style="height:70px;border-radius:10px"></div>
+          <div class="app-skel-block" style="height:70px;border-radius:10px"></div>
         </div>
       </div>
-      <div class="card p-6 mb-6">
-        <div class="flex items-center justify-between mb-6">
-          <div class="flex items-center gap-3">
-            <div class="w-14 h-14 rounded-xl bg-bg-tertiary animate-pulse"></div>
-            <div>
-              <div class="h-5 w-40 bg-bg-tertiary rounded animate-pulse mb-2"></div>
-              <div class="h-4 w-24 bg-bg-tertiary rounded animate-pulse"></div>
-            </div>
-          </div>
-          <div class="text-right">
-            <div class="h-8 w-20 bg-bg-tertiary rounded animate-pulse mb-1"></div>
-            <div class="h-3 w-24 bg-bg-tertiary rounded animate-pulse"></div>
-          </div>
-        </div>
-        <div class="h-4 bg-bg-tertiary rounded-full mb-4"></div>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div class="h-16 bg-bg-tertiary rounded-xl animate-pulse"></div>
-          <div class="h-16 bg-bg-tertiary rounded-xl animate-pulse"></div>
-          <div class="h-16 bg-bg-tertiary rounded-xl animate-pulse"></div>
-          <div class="h-16 bg-bg-tertiary rounded-xl animate-pulse"></div>
-        </div>
-      </div>
-    </main>
+    </div>
   </div>
   </Transition>
 
@@ -193,6 +174,42 @@ async function handleRetry() {
 .page-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+/* Kawaii Skeleton */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
+.app-skel {
+  position: fixed; inset: 0; z-index: 50;
+  background: #f8e8f0;
+  background-image: radial-gradient(circle, #e8c8d8 1.5px, transparent 1.5px);
+  background-size: 20px 20px;
+  font-family: 'Nunito', 'Trebuchet MS', sans-serif;
+  overflow: hidden;
+}
+.app-skel-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.8rem 1.5rem;
+  background: #fff; border-bottom: 2px solid #c4a0e8;
+}
+.app-skel-brand { display: flex; align-items: center; gap: 8px; }
+.app-skel-body {
+  max-width: 800px; margin: 2rem auto; padding: 0 1rem;
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.app-skel-card {
+  background: #fff; border: 2px solid #d0b8e8; border-radius: 14px;
+  padding: 1.2rem; box-shadow: 2px 2px 0 #e8d0f0;
+}
+.app-skel-block {
+  background: linear-gradient(90deg, #e8d8f4 25%, #f0e4fa 50%, #e8d8f4 75%);
+  background-size: 200% 100%;
+  animation: app-skel-shimmer 1.5s ease infinite;
+  border-radius: 6px; height: 12px;
+}
+@keyframes app-skel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* Skeleton slide down animation */

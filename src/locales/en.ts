@@ -2234,7 +2234,7 @@ export default {
     howToPlay: 'How to Play',
     rules: 'Rules & Guidelines',
     tagline: 'LootMine — Landwork Mining Idle Game',
-    description: 'Free-to-play mining simulation. Compete against real players, upgrade your rigs, craft items, battle in PvP card duels, and earn Landwork exchangeable for RON.',
+    description: 'Free-to-play mining simulation. Compete against real players, upgrade your rigs, craft items, and earn Landwork exchangeable for RON.',
     disclaimer: 'LootMine is a simulation game. Landwork can be exchanged for RON on the Ronin blockchain. Play responsibly.',
     terms: 'Terms of Service',
   },

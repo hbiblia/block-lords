@@ -6,6 +6,8 @@ import { useSoloMiningStore } from '@/stores/solo-mining';
 import { useInventoryStore } from '@/stores/inventory';
 import { useMarketStore } from '@/stores/market';
 import { usePendingBlocksStore } from '@/stores/pendingBlocks';
+import { useMissionsStore } from '@/stores/missions';
+import { useStreakStore } from '@/stores/streak';
 import type { PendingBlock } from '@/stores/pendingBlocks';
 import { useWakeLock } from '@/composables/useWakeLock';
 import {
@@ -40,11 +42,19 @@ const soloMiningStore = useSoloMiningStore();
 const inventoryStore = useInventoryStore();
 const marketStore = useMarketStore();
 const pendingBlocksStore = usePendingBlocksStore();
+const missionsStore = useMissionsStore();
+const streakStore = useStreakStore();
+const missionsClaimable = computed(() => (missionsStore.claimableCount || 0) + (streakStore.canClaim ? 1 : 0));
+
+function openMissions() {
+  playSound('click');
+  window.dispatchEvent(new CustomEvent('open-missions'));
+}
 
 // UI State
 const booted = ref(false);
 const activeTab = ref<'fleet' | 'staking' | 'history' | 'inventory' | 'market' | 'exchange'>('fleet');
-const fleetMode = ref<'rigs' | 'forge' | 'inbox' | 'inventory'>('rigs');
+const fleetMode = ref<'rigs' | 'forge' | 'inbox' | 'inventory' | 'market' | 'exchange'>('rigs');
 const menuOpen = ref(false);
 const selectedInboxBlock = ref<PendingBlock | null>(null);
 
@@ -53,7 +63,7 @@ const selectedInvItem = ref<{ type: string; id: string; data: any } | null>(null
 const invCategory = ref<'all' | 'rigs' | 'cooling' | 'cards' | 'boosts' | 'materials' | 'patches' | 'exp'>('all');
 const invActionLoading = ref(false);
 
-function setFleetMode(mode: 'rigs' | 'forge' | 'inbox' | 'inventory') {
+function setFleetMode(mode: 'rigs' | 'forge' | 'inbox' | 'inventory' | 'market' | 'exchange') {
   playSound('click');
   if (fleetMode.value === mode) {
     fleetMode.value = 'rigs';
@@ -72,6 +82,12 @@ function setFleetMode(mode: 'rigs' | 'forge' | 'inbox' | 'inventory') {
   }
   if (mode === 'inventory') {
     inventoryStore.fetchInventory();
+  }
+  if (mode === 'market') {
+    loadMarketData();
+  }
+  if (mode === 'exchange') {
+    loadExchangeRates();
   }
 }
 
@@ -177,6 +193,21 @@ const exchanging = ref(false);
 
 async function loadExchangeRates() {
   try { exchangeRates.value = await getExchangeRates(); } catch(e) { console.error(e); }
+}
+
+const exchQuickAmounts = computed(() => {
+  if (!exchangeRates.value) return [];
+  if (exchangeTarget.value === 'ron') {
+    return [1, 5, 10, 50, 100];
+  }
+  return [100, 500, 1000, 5000, 10000];
+});
+
+function setExchQuick(targetAmount: number) {
+  if (!exchangeRates.value) return;
+  const rate = exchangeTarget.value === 'ron' ? exchangeRates.value.crypto_to_ron : exchangeRates.value.crypto_to_gamecoin;
+  if (!rate) return;
+  exchangeAmount.value = Math.ceil(targetAmount / rate);
 }
 
 async function handleExchange() {
@@ -1330,7 +1361,7 @@ async function loadStakeData() {
     } else {
       stakeData.value = null;
     }
-  } catch (e) { console.error('loadStakeData', e); }
+  } catch (e) { /* staking RPC may not exist yet */ }
   stakeLoading.value = false;
 }
 
@@ -1385,6 +1416,38 @@ onUnmounted(() => {
   if (blockInterval) clearInterval(blockInterval);
 });
 
+// Slot buy hold
+const slotHoldPct = ref(0);
+const slotHoldActive = ref(false);
+let slotHoldFrame: number | null = null;
+let slotHoldT0 = 0;
+const SLOT_HOLD_MS = 1500;
+
+function startSlotHold() {
+  slotHoldActive.value = true;
+  slotHoldT0 = Date.now();
+  slotHoldPct.value = 0;
+  const animate = () => {
+    const elapsed = Date.now() - slotHoldT0;
+    slotHoldPct.value = Math.min(100, (elapsed / SLOT_HOLD_MS) * 100);
+    if (elapsed >= SLOT_HOLD_MS) {
+      slotHoldActive.value = false;
+      slotHoldPct.value = 0;
+      handleConfirmSlotBuy();
+    } else if (slotHoldActive.value) {
+      slotHoldFrame = requestAnimationFrame(animate);
+    }
+  };
+  slotHoldFrame = requestAnimationFrame(animate);
+}
+
+function cancelSlotHold() {
+  if (!slotHoldActive.value) return;
+  slotHoldActive.value = false;
+  slotHoldPct.value = 0;
+  if (slotHoldFrame) { cancelAnimationFrame(slotHoldFrame); slotHoldFrame = null; }
+}
+
 async function handleConfirmSlotBuy() {
   try {
     await miningStore.buySlot();
@@ -1406,18 +1469,14 @@ async function handleConfirmSlotBuy() {
       <div class="v8-container body-inner">
         <!-- SUB-NAVIGATION -->
         <nav class="terminal-nav">
+          <span class="nav-brand">⛏️ LOOTMINE</span>
           <button v-for="t in ['fleet', 'staking', 'history']" :key="t" @click="activeTab = t as any" :class="{ active: activeTab === t }">
             [{{ t.toUpperCase() }}]
           </button>
-
-          <div class="h-menu" @click.stop>
-            <button class="menu-toggle" @click="menuOpen = !menuOpen" :class="{ active: ['inventory','market','exchange'].includes(activeTab) }">[MENU]</button>
-            <div v-if="menuOpen" class="menu-dropdown">
-              <button @click="selectMenuWithLoad('inventory')">INVENTORY</button>
-              <button @click="selectMenuWithLoad('market')">MARKET</button>
-              <button @click="selectMenuWithLoad('exchange')">EXCHANGE</button>
-            </div>
-          </div>
+          <button @click="openMissions" class="nav-missions-btn">
+            [MISSIONS]
+            <span v-if="missionsClaimable > 0" class="nav-missions-badge">{{ missionsClaimable }}</span>
+          </button>
         </nav>
 
 
@@ -1441,7 +1500,7 @@ async function handleConfirmSlotBuy() {
                     </div>
                     <div class="fc-bal" v-tooltip="'Landwork earned from staking and solo mining.'">
                        <Pickaxe :size="14" />
-                       <span class="fc-bal-val">{{ Math.floor(authStore.player?.landwork ?? 0).toLocaleString() }}</span>
+                       <span class="fc-bal-val">{{ Math.floor(authStore.player?.crypto_balance ?? 0).toLocaleString() }}</span>
                        <span class="fc-bal-label">LANDWORK</span>
                     </div>
                     <div class="fc-bal" v-tooltip="'RON balance for staking, boosts, and transactions.'">
@@ -1466,7 +1525,8 @@ async function handleConfirmSlotBuy() {
                        INVENTORY
                        <span v-if="inventoryStore.totalItems" class="fc-badge inv-badge">{{ inventoryStore.slotsUsed }}</span>
                     </button>
-                    <button class="fc-btn" @click="selectMenuWithLoad('market')" v-tooltip="'Buy rigs, cooling, boosts and more.'">MARKET</button>
+                    <button class="fc-btn" :class="{ active: fleetMode === 'market' }" @click="setFleetMode('market')" v-tooltip="'Buy rigs, cooling, boosts and more.'">MARKET</button>
+                    <button class="fc-btn" :class="{ active: fleetMode === 'exchange' }" @click="setFleetMode('exchange')" v-tooltip="'Convert currencies.'">EXCHANGE</button>
                     <button v-if="fleetMode === 'rigs'" class="fc-btn neon" @click="handleStartAllHealthy" v-tooltip="'Initialize all 90%+ integrity units.'">START ALL</button>
                  </div>
 
@@ -1479,6 +1539,16 @@ async function handleConfirmSlotBuy() {
                           :class="{ low: internetPct < 25, mid: internetPct >= 25 && internetPct < 60 }"></div>
                     </div>
                     <span class="fc-net-val">{{ Math.floor(authStore.player?.internet ?? 0) }}<small>%</small></span>
+                 </div>
+
+                 <!-- Level & XP bar -->
+                 <div class="fc-level-bar" v-tooltip="'Your mining rank and experience progress.'">
+                    <span class="fc-level-badge">LV.{{ playerLevel }}</span>
+                    <span class="fc-level-rank">{{ forgeRank }}</span>
+                    <div class="fc-xp-track">
+                       <div class="fc-xp-fill" :style="{ width: playerXpPct + '%' }"></div>
+                    </div>
+                    <span class="fc-xp-val">{{ playerXp }}/{{ playerXpNeeded }} <small>XP</small></span>
                  </div>
               </div>
 
@@ -1669,19 +1739,6 @@ async function handleConfirmSlotBuy() {
                      </nav>
                      <input v-model="forgeSearch" @input="resetForgeScroll()" placeholder="SEARCH_MODS..." class="f-search-input">
                   </div>
-                  <div class="forge-status-bar">
-                     <span class="fsb-rank">{{ forgeRank }}</span>
-                     <span class="fsb-level">LVL_{{ playerLevel }}</span>
-                     <div class="fsb-xp">
-                        <div class="fsb-xp-fill" :style="{ width: playerXpPct + '%' }"></div>
-                     </div>
-                     <span class="fsb-xp-text">{{ playerXp }}/{{ playerXpNeeded }} XP</span>
-                     <span class="fsb-energy-label">NET</span>
-                     <div class="fsb-energy">
-                        <div class="fsb-energy-fill" :style="{ width: internetPct + '%' }"></div>
-                     </div>
-                     <span class="fsb-energy-val">{{ Math.floor(authStore.player?.internet ?? 0) }}%</span>
-                  </div>
                 </div>
 
                 <!-- Blueprint Grid -->
@@ -1834,14 +1891,172 @@ async function handleConfirmSlotBuy() {
                         class="bp-card-v2 inv-card"
                         :class="{ selected: selectedInvItem?.id === item.id && selectedInvItem?.type === item.type }"
                         @click="selectInvItem(item)">
-                        <div class="bpc-tier-badge" :class="'inv-badge-' + item.badgeClass">{{ item.badge }}</div>
-                        <div class="bpc-icon-center"><component :is="item.icon" :size="20" style="opacity: 0.85" /></div>
+                        <div class="bpc-head">
+                           <div class="bpc-tier-badge" :class="'inv-badge-' + item.badgeClass">{{ item.badge }}</div>
+                           <div class="bpc-icon-center"><component :is="item.icon" :size="20" style="opacity: 0.85" /></div>
+                        </div>
                         <div class="bpc-name">{{ item.name }}</div>
                         <div class="bpc-stat" style="color: #71717a">{{ item.stat }}</div>
                         <div class="bpc-meta">
                            <span class="bpc-cost">x{{ item.qty }}</span>
                         </div>
                      </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- MARKET MODE -->
+              <template v-else-if="fleetMode === 'market'">
+                <div class="forge-header-group">
+                  <div class="forge-filter-bar">
+                    <nav class="forge-cats">
+                      <button v-for="cat in [
+                        { key: 'rigs', label: 'RIGS' },
+                        { key: 'cooling', label: 'COOLING' },
+                        { key: 'components', label: 'MODS' },
+                        { key: 'cards', label: 'CARDS' },
+                        { key: 'boosts', label: 'BOOSTS' },
+                        { key: 'exp_packs', label: 'EXP' },
+                        { key: 'crypto', label: 'LANDWORK' }
+                      ]" :key="cat.key"
+                        @click="marketCategory = cat.key as any"
+                        :class="{ active: marketCategory === cat.key }">
+                        {{ cat.label }}
+                      </button>
+                    </nav>
+                  </div>
+                  <div class="forge-status-bar">
+                    <span class="fsb-rank">MARKET_TERMINAL</span>
+                  </div>
+                </div>
+                <div class="forge-grid-scroll">
+                  <div v-if="marketLoading" class="inbox-loading">
+                    <RotateCw :size="18" class="spin" style="opacity: 0.85" />
+                    <span>LOADING_CATALOG...</span>
+                  </div>
+                  <template v-else>
+                    <div class="inv-grid">
+                      <!-- RIGS -->
+                      <template v-if="marketCategory === 'rigs'">
+                        <div v-for="item in marketStore.rigs" :key="item.id" class="inv-card mkt">
+                          <div class="ic-head"><span class="ic-tag" :class="tierColor(item.tier)">{{ item.tier.toUpperCase() }}</span><span class="ic-own">OWNED: {{ marketStore.getRigOwned(item.id).total }}</span></div>
+                          <div class="ic-name">{{ item.name }}</div>
+                          <div class="ic-desc">{{ item.description }}</div>
+                          <div class="ic-stats"><span>HASH: {{ item.hashrate }} H/s</span><span>PWR: {{ item.power_consumption }}W</span><span>NET: {{ item.internet_consumption }}</span></div>
+                          <div class="ic-buy"><span class="ic-price"><component :is="currencyIcon(item.currency)" :size="12" style="opacity: 0.85" /> {{ item.base_price.toLocaleString() }}</span><button class="buy-btn" :disabled="buyingItem" @click="requestBuy('rig', item.id, item.name, item.base_price, item.currency)">BUY</button></div>
+                        </div>
+                      </template>
+                      <!-- COOLING -->
+                      <template v-if="marketCategory === 'cooling'">
+                        <div v-for="item in marketStore.coolingItems" :key="item.id" class="inv-card mkt">
+                          <div class="ic-head"><span class="ic-tag" :class="tierColor(item.tier)">{{ item.tier.toUpperCase() }}</span><span class="ic-own">OWNED: {{ marketStore.getCoolingOwned(item.id).total }}</span></div>
+                          <div class="ic-name">{{ item.name }}</div>
+                          <div class="ic-desc">{{ item.description }}</div>
+                          <div class="ic-stats"><span>COOL: {{ item.cooling_power }}</span><span>NRG: {{ item.energy_cost }}</span></div>
+                          <div class="ic-buy"><span class="ic-price"><Coins :size="12" style="opacity: 0.85" /> {{ item.base_price.toLocaleString() }}</span><button class="buy-btn" :disabled="buyingItem" @click="requestBuy('cooling', item.id, item.name, item.base_price, 'gamecoin')">BUY</button></div>
+                        </div>
+                      </template>
+                      <!-- COMPONENTS -->
+                      <template v-if="marketCategory === 'components'">
+                        <div v-for="item in marketStore.coolingComponents" :key="item.id" class="inv-card mkt">
+                          <div class="ic-head"><span class="ic-tag" :class="tierColor(item.tier)">{{ item.tier.toUpperCase() }}</span><span class="ic-own">OWNED: {{ marketStore.getComponentOwned(item.id) }}</span></div>
+                          <div class="ic-name">{{ item.name }}</div>
+                          <div class="ic-desc">{{ item.description }}</div>
+                          <div class="ic-stats"><span>COOL: {{ item.cooling_power_min }}-{{ item.cooling_power_max }}</span><span>NRG: {{ item.energy_cost_min }}-{{ item.energy_cost_max }}</span></div>
+                          <div class="ic-buy"><span class="ic-price"><Coins :size="12" style="opacity: 0.85" /> {{ item.base_price.toLocaleString() }}</span><button class="buy-btn" :disabled="buyingItem" @click="requestBuy('component', item.id, item.name, item.base_price, 'gamecoin')">BUY</button></div>
+                        </div>
+                      </template>
+                      <!-- CARDS -->
+                      <template v-if="marketCategory === 'cards'">
+                        <div v-for="item in marketStore.prepaidCards" :key="item.id" class="inv-card mkt">
+                          <div class="ic-head"><span class="ic-tag cyan">{{ item.card_type.toUpperCase() }}</span><span class="ic-own">OWNED: {{ marketStore.getCardOwned(item.id) }}</span></div>
+                          <div class="ic-name">{{ item.name }}</div>
+                          <div class="ic-desc">{{ item.description }}</div>
+                          <div class="ic-stats"><span>+{{ item.amount }}</span></div>
+                          <div class="ic-buy"><span class="ic-price"><component :is="currencyIcon(item.currency)" :size="12" style="opacity: 0.85" /> {{ item.base_price.toLocaleString() }}</span><button class="buy-btn" :disabled="buyingItem" @click="requestBuy('card', item.id, item.name, item.base_price, item.currency)">BUY</button></div>
+                        </div>
+                      </template>
+                      <!-- BOOSTS -->
+                      <template v-if="marketCategory === 'boosts'">
+                        <div v-for="item in marketStore.boostItems" :key="item.id" class="inv-card mkt">
+                          <div class="ic-head"><span class="ic-tag amber">{{ item.boost_type.toUpperCase() }}</span><span class="ic-own">OWNED: {{ marketStore.getBoostOwned(item.id) }}</span></div>
+                          <div class="ic-name">{{ item.name }}</div>
+                          <div class="ic-desc">{{ item.description }}</div>
+                          <div class="ic-stats"><span>+{{ item.effect_value }}%</span><span>{{ item.duration_minutes }}min</span></div>
+                          <div class="ic-buy"><span class="ic-price"><component :is="currencyIcon(item.currency)" :size="12" style="opacity: 0.85" /> {{ item.base_price.toLocaleString() }}</span><button class="buy-btn" :disabled="buyingItem" @click="requestBuy('boost', item.id, item.name, item.base_price, item.currency)">BUY</button></div>
+                        </div>
+                      </template>
+                      <!-- EXP PACKS -->
+                      <template v-if="marketCategory === 'exp_packs'">
+                        <div v-for="item in marketStore.expPacks" :key="item.id" class="inv-card mkt">
+                          <div class="ic-head"><span class="ic-tag" :class="tierColor(item.tier)">{{ item.tier.toUpperCase() }}</span><span class="ic-own">OWNED: {{ marketStore.getExpPackOwned(item.id) }}</span></div>
+                          <div class="ic-name">{{ item.name }}</div>
+                          <div class="ic-desc">{{ item.description }}</div>
+                          <div class="ic-stats"><span>+{{ item.xp_amount }} XP</span></div>
+                          <div class="ic-buy"><span class="ic-price"><Coins :size="12" style="opacity: 0.85" /> {{ item.base_price.toLocaleString() }}</span><button class="buy-btn" :disabled="buyingItem" @click="requestBuy('exp_pack', item.id, item.name, item.base_price, 'gamecoin')">BUY</button></div>
+                        </div>
+                      </template>
+                      <!-- LANDWORK -->
+                      <template v-if="marketCategory === 'crypto'">
+                        <div v-for="item in marketStore.cryptoPackages" :key="item.id" class="inv-card mkt" :class="{ featured: item.is_featured }">
+                          <div class="ic-head"><span class="ic-tag" :class="tierColor(item.tier)">{{ item.tier.toUpperCase() }}</span><span v-if="item.bonus_percent > 0" class="ic-bonus">+{{ item.bonus_percent }}% BONUS</span></div>
+                          <div class="ic-name">{{ item.name }}</div>
+                          <div class="ic-desc">{{ item.description }}</div>
+                          <div class="ic-stats"><span><Pickaxe :size="12" style="opacity: 0.85" /> {{ item.total_crypto.toLocaleString() }} LW</span></div>
+                          <div class="ic-buy"><span class="ic-price"><Gem :size="12" style="opacity: 0.85" /> {{ item.ron_price }} RON</span><button class="buy-btn" :disabled="buyingItem" @click="requestBuy('crypto', item.id, item.name, item.ron_price, 'ron')">BUY</button></div>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </template>
+
+              <!-- EXCHANGE MODE -->
+              <template v-else-if="fleetMode === 'exchange'">
+                <div class="forge-grid-scroll">
+                  <div class="view-exchange">
+                    <div v-if="exchangeRates" class="exch-rates">
+                      <div class="exch-rate-title">CURRENT_RATES</div>
+                      <div class="exch-rate-row" v-if="exchangeRates.crypto_to_gamecoin">
+                        <span>1 LW</span>
+                        <span class="exch-arrow">=</span>
+                        <span class="amber">{{ exchangeRates.crypto_to_gamecoin }} GC</span>
+                      </div>
+                      <div class="exch-rate-row" v-if="exchangeRates.crypto_to_ron">
+                        <span>1 LW</span>
+                        <span class="exch-arrow">=</span>
+                        <span class="cyan">{{ exchangeRates.crypto_to_ron }} RON</span>
+                      </div>
+                    </div>
+
+                    <div class="exch-form">
+                      <div class="exch-form-title">CONVERT_LANDWORK</div>
+                      <div class="exch-input-row">
+                        <label class="exch-input-label">AMOUNT:</label>
+                        <input type="number" v-model.number="exchangeAmount" min="0" :max="authStore.player?.crypto_balance ?? 0" class="exch-input" placeholder="0" />
+                      </div>
+                      <div class="exch-target-row">
+                        <label class="exch-input-label">TARGET:</label>
+                        <div class="exch-target-btns">
+                          <button @click="exchangeTarget = 'gamecoin'; exchangeAmount = 0" :class="{ active: exchangeTarget === 'gamecoin' }"><Coins :size="12" style="opacity: 0.85" /> GAMECOIN</button>
+                          <button @click="exchangeTarget = 'ron'; exchangeAmount = 0" :class="{ active: exchangeTarget === 'ron' }"><Gem :size="12" style="opacity: 0.85" /> RON</button>
+                        </div>
+                      </div>
+                      <div class="exch-quick-row">
+                        <label class="exch-input-label">QUICK:</label>
+                        <div class="exch-quick-btns">
+                          <button v-for="amt in exchQuickAmounts" :key="amt" @click="setExchQuick(amt)">
+                            {{ amt }} {{ exchangeTarget === 'ron' ? 'RON' : 'GC' }}
+                          </button>
+                        </div>
+                      </div>
+                      <div v-if="exchangeTarget === 'ron' && exchangeRates?.min_crypto_for_ron" class="exch-min-note">
+                        MIN: {{ exchangeRates.min_crypto_for_ron.toLocaleString() }} LW
+                      </div>
+                      <button class="exch-submit" :disabled="exchanging || exchangeAmount <= 0 || (exchangeTarget === 'ron' && exchangeRates?.min_crypto_for_ron && exchangeAmount < exchangeRates.min_crypto_for_ron)" @click="handleExchange">
+                        {{ exchanging ? 'PROCESSING...' : 'EXECUTE_EXCHANGE' }}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </template>
@@ -2268,7 +2483,6 @@ async function handleConfirmSlotBuy() {
                         <div v-if="selectedRig.is_active" class="mode-tag" :class="selectedRig.mining_mode || 'pool'">{{ (selectedRig.mining_mode || 'pool').toUpperCase() }}</div>
                      </div>
                      <h1 style="font-size: 1rem; margin: 0;">{{ selectedRig.rig.name }}</h1>
-                     <div class="hud-header-line"></div>
                   </div>
 
                   <!-- CONFIG TABS -->
@@ -2282,6 +2496,32 @@ async function handleConfirmSlotBuy() {
                      </button>
                   </nav>
 
+
+                  <!-- SKELETON LOADING -->
+                  <div class="config-content" v-if="loadingConfig">
+                     <div class="skel-status">
+                        <div class="skel-title"><div class="skel-line skel-w40"></div></div>
+                        <div class="skel-card" v-for="n in 3" :key="n">
+                           <div class="skel-row">
+                              <div class="skel-dot"></div>
+                              <div class="skel-line skel-w30"></div>
+                              <div class="skel-line skel-w20" style="margin-left:auto"></div>
+                           </div>
+                           <div class="skel-bar"></div>
+                           <div class="skel-row">
+                              <div class="skel-line skel-w40"></div>
+                              <div class="skel-line skel-w25" style="margin-left:auto"></div>
+                           </div>
+                        </div>
+                        <div class="skel-title" style="margin-top:8px"><div class="skel-line skel-w50"></div></div>
+                        <div class="skel-modules">
+                           <div class="skel-mod" v-for="n in 3" :key="'m'+n">
+                              <div class="skel-line skel-w30"></div>
+                              <div class="skel-line skel-w20"></div>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
 
                   <div class="config-content" v-if="!loadingConfig">
                      <!-- TAB: STATUS & REPAIR -->
@@ -3168,7 +3408,7 @@ async function handleConfirmSlotBuy() {
              <div class="expansion-details" v-if="miningStore.slotInfo?.next_upgrade">
                 <div class="det-row">
                    <span class="l">UPGRADE_TARGET:</span>
-                   <span class="v white">NODE_0{{ miningStore.slotInfo.next_upgrade.slot_number }}</span>
+                   <span class="v">NODE_0{{ miningStore.slotInfo.next_upgrade.slot_number }}</span>
                 </div>
                 <div class="det-row">
                    <span class="l">REQUIRED_CREDITS:</span>
@@ -3184,7 +3424,14 @@ async function handleConfirmSlotBuy() {
 
           <div class="diag-footer">
              <button class="d-btn cancel" @click="showSlotConfirm = false">ABORT_COMMAND</button>
-             <button class="d-btn confirm" @click="handleConfirmSlotBuy">AUTHORIZE_FUNDS</button>
+             <button class="d-btn confirm hold-btn"
+                @mousedown="startSlotHold"
+                @mouseup="cancelSlotHold" @mouseleave="cancelSlotHold"
+                @touchstart.prevent="startSlotHold"
+                @touchend="cancelSlotHold" @touchcancel="cancelSlotHold">
+                <div class="hold-fill" :style="{ width: slotHoldPct + '%' }"></div>
+                <span class="hold-label">HOLD · AUTHORIZE</span>
+             </button>
           </div>
        </div>
     </div>
@@ -3225,8 +3472,11 @@ async function handleConfirmSlotBuy() {
   color: #4a3a5c;
   font-family: 'Nunito', 'Trebuchet MS', 'Segoe UI', sans-serif;
   display: flex; flex-direction: column;
-  z-index: 50; overflow: hidden;
+  z-index: 50; overflow-y: auto; overflow-x: hidden;
 }
+.deck-terminal-v8::-webkit-scrollbar { width: 8px; }
+.deck-terminal-v8::-webkit-scrollbar-track { background: #e8d0e0; }
+.deck-terminal-v8::-webkit-scrollbar-thumb { background: #c4a0e8; border: 1px solid #9a70c0; border-radius: 4px; }
 
 .scroll-v {
   overflow-y: auto;
@@ -3323,23 +3573,23 @@ async function handleConfirmSlotBuy() {
 .inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.8rem; }
 
 /* Item card */
-.inv-card { background: #fff; border: 2px solid #c4a0e8; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.3rem; box-shadow: 2px 2px 0 #e8d0f0; border-radius: 10px; }
-.inv-card.mkt { border-color: #c4a0e8; }
+.inv-card { background: #fff; border: 2px solid #c4a0e8; box-shadow: 2px 2px 0 #e8d0f0; border-radius: 14px; }
+.inv-card.mkt { border-color: #c4a0e8; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.3rem; border-radius: 10px; }
 .inv-card.featured { border-color: #ffe566; background: #fffde0; }
 .ic-head { display: flex; justify-content: space-between; align-items: center; }
-.ic-tag { font-size: 0.5rem; font-weight: 900; letter-spacing: 1px; padding: 2px 6px; background: #e8d0f0; color: #7b5ea7; }
+.ic-tag { font-size: 0.6rem; font-weight: 900; letter-spacing: 1px; padding: 3px 8px; background: #e8d0f0; color: #7b5ea7; border-radius: 6px; }
 .ic-tag.amber { color: #4a3a5c; background: #ffe566; }
 .ic-tag.cyan { color: #fff; background: #c4a0e8; }
 .ic-tag.white { color: #7b5ea7; }
-.ic-own { font-size: 0.5rem; font-weight: 800; color: #7b5ea7; letter-spacing: 1px; }
+.ic-own { font-size: 0.6rem; font-weight: 800; color: #7b5ea7; letter-spacing: 1px; }
 .ic-bonus { font-size: 0.5rem; font-weight: 900; color: #d4a017; letter-spacing: 1px; }
-.ic-name { font-size: 0.75rem; font-weight: 900; color: #4a3a5c; letter-spacing: 0.5px; }
-.ic-desc { font-size: 0.55rem; color: #7b5ea7; line-height: 1.3; }
-.ic-stats { display: flex; gap: 0.8rem; font-size: 0.55rem; font-weight: 800; color: #7b5ea7; letter-spacing: 0.5px; }
+.ic-name { font-size: 0.85rem; font-weight: 900; color: #4a3a5c; letter-spacing: 0.5px; }
+.ic-desc { font-size: 0.7rem; color: #7b5ea7; line-height: 1.3; }
+.ic-stats { display: flex; gap: 0.8rem; font-size: 0.7rem; font-weight: 800; color: #7b5ea7; letter-spacing: 0.5px; }
 .ic-qty { font-size: 0.6rem; font-weight: 900; color: #d4a017; text-align: right; }
-.ic-buy { display: flex; justify-content: space-between; align-items: center; margin-top: 0.3rem; padding-top: 0.4rem; border-top: 1px solid #e8d0f0; }
-.ic-price { font-size: 0.65rem; font-weight: 900; color: #4a3a5c; }
-.buy-btn { background: #ffe566; border: 2px outset #d4a017; color: #4a3a5c; font-size: 0.55rem; font-weight: 900; padding: 3px 12px; cursor: pointer; font-family: inherit; letter-spacing: 1px; transition: 0.2s; border-radius: 6px; }
+.ic-buy { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 0.4rem; border-top: 1px solid #e8d0f0; }
+.ic-price { font-size: 0.75rem; font-weight: 900; color: #4a3a5c; }
+.buy-btn { background: #ffe566; border: 2px outset #d4a017; color: #4a3a5c; font-size: 0.7rem; font-weight: 900; padding: 5px 14px; cursor: pointer; font-family: inherit; letter-spacing: 1px; transition: 0.2s; border-radius: 6px; }
 .buy-btn:hover { background: #ffd700; border-style: inset; }
 .buy-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
@@ -3352,25 +3602,30 @@ async function handleConfirmSlotBuy() {
 /* Exchange */
 .exch-balances { display: flex; gap: 2rem; margin-bottom: 1.5rem; padding: 1rem; background: #f8f0ff; border: 2px solid #c4a0e8; border-radius: 10px; }
 .exch-bal { display: flex; flex-direction: column; gap: 0.2rem; }
-.exch-label { font-size: 0.55rem; font-weight: 900; color: #7b5ea7; letter-spacing: 1px; }
+.exch-label { font-size: 0.65rem; font-weight: 900; color: #7b5ea7; letter-spacing: 1px; }
 .exch-val { font-size: 1rem; font-weight: 700; color: #4a3a5c; font-family: 'Roboto', 'Nunito', sans-serif; }
 .exch-val.amber { color: #d4a017; }
 .exch-val.cyan { color: #7b5ea7; }
 .exch-rates { margin-bottom: 1.5rem; padding: 1rem; background: #f8f0ff; border: 2px solid #c4a0e8; border-radius: 10px; }
-.exch-rate-title { font-size: 0.6rem; font-weight: 900; color: #7b5ea7; letter-spacing: 2px; margin-bottom: 0.6rem; }
-.exch-rate-row { display: flex; gap: 0.8rem; align-items: center; font-size: 0.75rem; font-weight: 800; color: #4a3a5c; padding: 0.3rem 0; }
+.exch-rate-title { font-size: 0.7rem; font-weight: 900; color: #7b5ea7; letter-spacing: 2px; margin-bottom: 0.6rem; }
+.exch-rate-row { display: flex; gap: 0.8rem; align-items: center; font-size: 0.85rem; font-weight: 800; color: #4a3a5c; padding: 0.3rem 0; }
 .exch-arrow { color: #7b5ea7; }
 .exch-form { padding: 1rem; background: #f8f0ff; border: 2px solid #c4a0e8; border-radius: 10px; }
-.exch-form-title { font-size: 0.6rem; font-weight: 900; color: #7b5ea7; letter-spacing: 2px; margin-bottom: 1rem; }
+.exch-form-title { font-size: 0.7rem; font-weight: 900; color: #7b5ea7; letter-spacing: 2px; margin-bottom: 1rem; }
 .exch-input-row, .exch-target-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-.exch-input-label { font-size: 0.6rem; font-weight: 900; color: #7b5ea7; letter-spacing: 1px; min-width: 60px; }
+.exch-input-label { font-size: 0.7rem; font-weight: 900; color: #7b5ea7; letter-spacing: 1px; min-width: 70px; }
 .exch-input { background: #fff; border: 2px inset #c4a0e8; color: #4a3a5c; font-size: 0.85rem; font-weight: 800; font-family: monospace; padding: 6px 10px; width: 150px; border-radius: 6px; }
 .exch-input:focus { border-color: #ffe566; outline: none; }
 .exch-target-btns { display: flex; gap: 0.5rem; }
-.exch-target-btns button { background: #fff; border: 2px outset #c4a0e8; color: #7b5ea7; font-size: 0.6rem; font-weight: 800; padding: 5px 12px; cursor: pointer; font-family: inherit; letter-spacing: 1px; transition: 0.2s; border-radius: 6px; }
+.exch-target-btns button { background: #fff; border: 2px outset #c4a0e8; color: #7b5ea7; font-size: 0.7rem; font-weight: 800; padding: 6px 14px; cursor: pointer; font-family: inherit; letter-spacing: 1px; transition: 0.2s; border-radius: 6px; }
 .exch-target-btns button.active { background: #c4a0e8; color: #fff; border-style: inset; }
 .exch-submit { background: #ffe566; border: 2px outset #d4a017; color: #4a3a5c; font-size: 0.7rem; font-weight: 900; padding: 8px 20px; cursor: pointer; font-family: inherit; letter-spacing: 1px; transition: 0.2s; width: 100%; margin-top: 0.5rem; border-radius: 8px; }
 .exch-submit:hover:not(:disabled) { background: #ffd700; border-style: inset; }
+.exch-quick-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.8rem; }
+.exch-quick-btns { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.exch-quick-btns button { background: #fff; border: 2px solid #e8d0f0; color: #7b5ea7; font-size: 0.65rem; font-weight: 800; padding: 4px 10px; cursor: pointer; font-family: inherit; letter-spacing: 0.5px; transition: 0.2s; border-radius: 6px; }
+.exch-quick-btns button:hover { background: #ffe97a; color: #4a3a5c; border-color: #d4a017; }
+.exch-min-note { font-size: 0.8rem; font-weight: 800; color: #d4a017; letter-spacing: 1px; padding: 4px 0; }
 .exch-submit:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* Menu Modal */
@@ -3493,25 +3748,42 @@ async function handleConfirmSlotBuy() {
 
 
 /* Body */
-.terminal-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.body-inner { flex: 1; display: flex; flex-direction: column; padding: 1.5rem; overflow: hidden; min-height: 0; }
+.terminal-body { flex: 1; display: flex; flex-direction: column; }
+.body-inner { flex: 1; display: flex; flex-direction: column; padding: 1.5rem; }
 
 
-.terminal-nav { display: flex; gap: 0.5rem; margin-bottom: 2rem; justify-content: center; }
+.terminal-nav { display: flex; gap: 0.5rem; margin-bottom: 2rem; justify-content: flex-start; align-items: center; }
+.nav-brand {
+  font-size: 1.3rem; font-weight: 900; color: #4a3a5c; letter-spacing: 3px;
+  font-family: 'Nunito', sans-serif; margin-right: 1rem;
+}
 
 .terminal-nav button {
   background: #fff; border: 2px outset #c4a0e8; color: #7b5ea7; font-weight: 800; font-size: 0.9rem; cursor: pointer; transition: 0.2s; font-family: inherit; padding: 6px 16px; border-radius: 8px;
 }
 .terminal-nav button.active { background: #c4a0e8; color: #fff; border-style: inset; }
 .terminal-nav button:hover:not(.active) { background: #ffe566; color: #4a3a5c; }
+.nav-missions-btn {
+  position: relative;
+  background: #fff; border: 2px outset #7cc490; color: #3a7a4a; font-weight: 800; font-size: 0.9rem;
+  cursor: pointer; transition: 0.2s; font-family: inherit; padding: 6px 16px; border-radius: 8px;
+}
+.nav-missions-btn:hover { background: #e8f8ec; }
+.nav-missions-badge {
+  position: absolute; top: -6px; right: -6px;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  display: flex; align-items: center; justify-content: center;
+  background: #7cc490; color: #fff; font-size: 0.6rem; font-weight: 900;
+  border-radius: 9px; border: 2px solid #fff;
+}
 
-.terminal-viewport { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.terminal-viewport { flex: 1; display: flex; flex-direction: column; }
 
 /* Fleet Layout */
-.view-fleet { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.fleet-layout { display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; flex: 1; min-height: 0; }
+.view-fleet { display: flex; flex-direction: column; }
+.fleet-layout { display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; }
 
-.grid-section { display: flex; flex-direction: column; gap: 1.5rem; overflow-y: auto; padding-right: 0.5rem; min-height: 0; }
+.grid-section { display: flex; flex-direction: column; gap: 1.5rem; }
 .block-radar { background: #fff; border: 2px solid #8a60b0; padding: 1rem; box-shadow: 3px 3px 0 #c4a0e8; border-radius: 12px; }
 
 .radar-label { font-size: 0.65rem; font-weight: 800; color: #4a3a5c; margin-bottom: 8px; }
@@ -3752,6 +4024,36 @@ async function handleConfirmSlotBuy() {
   font-family: 'Roboto', 'Nunito', sans-serif; min-width: 36px; text-align: right;
 }
 .fc-net-val small { font-size: 0.65rem; color: #9a80b8; }
+
+/* Level & XP bar */
+.fc-level-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 1rem;
+  background: #f8f2ff; border-top: 1px solid #e8d8f4;
+}
+.fc-level-badge {
+  font-size: 0.75rem; font-weight: 900; color: #fff; background: #c4a0e8;
+  padding: 2px 10px; border-radius: 6px; letter-spacing: 1px;
+  font-family: 'Nunito', sans-serif; white-space: nowrap;
+}
+.fc-level-rank {
+  font-size: 0.6rem; font-weight: 800; color: #9a80b8; letter-spacing: 1.5px;
+  white-space: nowrap; font-family: 'Nunito', sans-serif;
+}
+.fc-xp-track {
+  flex: 1; height: 10px; background: #efe0f8; overflow: hidden;
+  border: 2px solid #d0b8e8; border-radius: 5px;
+}
+.fc-xp-fill {
+  height: 100%; background: linear-gradient(90deg, #ffe566, #d4a017);
+  transition: width 0.3s ease; border-radius: 3px;
+}
+.fc-xp-val {
+  font-size: 1rem; font-weight: 700; color: #4a3a5c; white-space: nowrap;
+  font-family: 'Roboto', 'Nunito', sans-serif; min-width: 60px; text-align: right;
+}
+.fc-xp-val small { font-size: 0.75rem; color: #9a80b8; }
+
 .fc-btn {
   background: #fff; border: 2px solid #d0b8e8; color: #7b5ea7;
   padding: 0.45rem 0.7rem; font-size: 0.65rem; font-weight: 700; cursor: pointer;
@@ -3935,21 +4237,22 @@ async function handleConfirmSlotBuy() {
 @keyframes modal-zoom { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 .diag-header { padding: 1.5rem; border-bottom: 1px solid #e8d0f0; background: linear-gradient(180deg, #c9a0e8, #b088d0); }
-.diag-header h3 { font-size: 0.9rem; font-weight: 800; color: #fff; margin-top: 8px; letter-spacing: 1px; }
+.diag-header .diag-tag { color: rgba(255,255,255,0.7); font-size: 0.6rem; }
+.diag-header h3 { font-size: 1rem; font-weight: 800; color: #fff; margin-top: 8px; letter-spacing: 1px; }
 
 .diag-body { padding: 1.5rem; }
-.diag-body p { font-size: 0.75rem; color: #4a3a5c; line-height: 1.6; margin-bottom: 1.5rem; }
+.diag-body p { font-size: 0.85rem; color: #4a3a5c; line-height: 1.6; margin-bottom: 1.5rem; }
 
 .expansion-details { background: #f8f0ff; border: 2px solid #c4a0e8; padding: 1rem; margin-bottom: 1.5rem; border-radius: 10px; }
 .det-row { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: center; }
 .det-row:last-child { margin-bottom: 0; }
-.det-row .l { font-size: 0.55rem; font-weight: 800; color: #7b5ea7; }
-.det-row .v { font-size: 0.85rem; font-weight: 800; }
+.det-row .l { font-size: 0.7rem; font-weight: 800; color: #7b5ea7; letter-spacing: 1px; }
+.det-row .v { font-size: 0.9rem; font-weight: 800; color: #4a3a5c; }
 
-.diag-warning { text-align: center; color: #cc4444; font-size: 0.6rem; font-weight: 900; letter-spacing: 1px; }
+.diag-warning { text-align: center; color: #cc4444; font-size: 0.75rem; font-weight: 900; letter-spacing: 1px; }
 
 .diag-footer { padding: 1rem 1.5rem; background: #f8f0ff; display: flex; gap: 1rem; }
-.d-btn { flex: 1; height: 44px; font-family: inherit; font-size: 0.65rem; font-weight: 800; cursor: pointer; border: 2px outset #c4a0e8; transition: 0.2s; border-radius: 8px; }
+.d-btn { flex: 1; height: 44px; font-family: inherit; font-size: 0.8rem; font-weight: 800; cursor: pointer; border: 2px outset #c4a0e8; transition: 0.2s; border-radius: 8px; letter-spacing: 1px; }
 .d-btn.cancel { background: #e8d0f0; color: #7b5ea7; }
 .d-btn.cancel:hover { background: #fff; color: #4a3a5c; border-style: inset; }
 .d-btn.confirm { background: #ffe566; color: #4a3a5c; border-color: #d4a017; }
@@ -4071,6 +4374,48 @@ async function handleConfirmSlotBuy() {
   background: linear-gradient(90deg, #c4a0e8, #e0d0f0 60%, transparent);
 }
 .h-brand { color: #fff; font-weight: 800; font-size: 1.1rem; letter-spacing: 2px; font-family: 'Nunito', sans-serif; }
+
+/* Skeleton Loading */
+@keyframes skel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skel-status { display: flex; flex-direction: column; gap: 8px; }
+.skel-line {
+  height: 10px; border-radius: 5px;
+  background: linear-gradient(90deg, #e8d8f4 25%, #f0e4fa 50%, #e8d8f4 75%);
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.5s ease infinite;
+}
+.skel-w20 { width: 20%; }
+.skel-w25 { width: 25%; }
+.skel-w30 { width: 30%; }
+.skel-w40 { width: 40%; }
+.skel-w50 { width: 50%; }
+.skel-title { display: flex; align-items: center; justify-content: center; padding: 4px 0; }
+.skel-title .skel-line { height: 8px; }
+.skel-card {
+  background: #fff; border: 2px solid #e8d8f4; border-radius: 12px;
+  padding: 12px; display: flex; flex-direction: column; gap: 10px;
+}
+.skel-row { display: flex; align-items: center; gap: 8px; }
+.skel-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: linear-gradient(90deg, #e8d8f4 25%, #f0e4fa 50%, #e8d8f4 75%);
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.5s ease infinite;
+}
+.skel-bar {
+  height: 6px; border-radius: 3px; width: 100%;
+  background: linear-gradient(90deg, #e8d8f4 25%, #f0e4fa 50%, #e8d8f4 75%);
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.5s ease infinite;
+}
+.skel-modules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.skel-mod {
+  background: #fff; border: 2px solid #e8d8f4; border-left: 4px solid #f0e4fa;
+  border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px;
+}
 
 /* Config Tabs — Retro style */
 .config-tabs { display: flex; gap: 4px; margin-bottom: 0.75rem; border-bottom: none; }
@@ -4601,7 +4946,7 @@ async function handleConfirmSlotBuy() {
 .forge-filter-bar {
   display: flex; align-items: center; gap: 1rem;
   padding: 0.6rem 0.8rem; background: #fff;
-  border: 2px solid #d0b8e8; border-bottom: none; border-radius: 12px 12px 0 0;
+  border: 2px solid #d0b8e8; border-radius: 12px;
 }
 .forge-filter-bar .forge-cats {
   flex-direction: row; gap: 0; flex-shrink: 0;
@@ -4644,7 +4989,7 @@ async function handleConfirmSlotBuy() {
 
 /* Forge grid scroll container */
 .forge-grid-scroll {
-  flex: 1; overflow-y: auto; min-height: 0; scroll-behavior: smooth; padding: 4px;
+  padding: 4px;
 }
 .forge-grid-scroll::-webkit-scrollbar { width: 8px; }
 .forge-grid-scroll::-webkit-scrollbar-track { background: #f0e8f8; border-radius: 4px; }

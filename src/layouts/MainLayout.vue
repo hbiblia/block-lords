@@ -13,9 +13,11 @@ import { useMailStore } from '@/stores/mail';
 import { useDefenseStore } from '@/stores/defense';
 import { useToastStore } from '@/stores/toast';
 import { formatCompact } from '@/utils/format';
+import { toggleLocale, getLocale } from '@/plugins/i18n';
 import { Pickaxe, Target, ShoppingCart, Swords, ArrowLeftRight, Package, Flame } from 'lucide-vue-next';
 
 const { t } = useI18n();
+const currentLocale = computed(() => getLocale());
 
 
 // Global modals state
@@ -147,7 +149,7 @@ onMounted(() => {
   window.addEventListener('open-inventory', handleOpenInventoryEvent);
   window.addEventListener('open-prediction', handleOpenPredictionEvent);
   window.addEventListener('open-mail', handleOpenMailEvent);
-  // window.addEventListener('close-hacker', handleCloseHackerEvent); // disabled - reworking
+  window.addEventListener('open-missions', () => { showRewards.value = true; });
 });
 
 // Cargar datos cuando cambia el estado de autenticación
@@ -259,14 +261,24 @@ async function handleConnectionClick() {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col bg-bg-primary">
+  <div class="min-h-screen flex flex-col" style="background: #f8e8f0; background-image: radial-gradient(circle, #e8c8d8 1.5px, transparent 1.5px); background-size: 20px 20px;">
     <!-- InfoBar (announcements) -->
     <InfoBar />
 
     <!-- Update Notification Modal -->
     <UpdateNotificationModal />
 
-    <NavBar v-if="showNavBar" />
+    <!-- Simple Top Bar -->
+    <div class="simple-topbar">
+      <RouterLink to="/" class="stb-brand">⛏️ LOOTMINE</RouterLink>
+      <div class="stb-actions">
+        <button class="stb-lang" @click="toggleLocale()">
+          {{ currentLocale === 'en' ? '🇺🇸 EN' : '🇪🇸 ES' }}
+        </button>
+        <RouterLink v-if="authStore.isAuthenticated" to="/mining" class="stb-play">PLAY</RouterLink>
+        <RouterLink v-else to="/login" class="stb-play">PLAY</RouterLink>
+      </div>
+    </div>
 
     <!-- Connection Lost Modal -->
     <ConnectionLostModal />
@@ -358,15 +370,14 @@ async function handleConnectionClick() {
 
     <!-- Main Content -->
     <main
-      class="flex-1 container mx-auto px-4 py-6 pb-20 sm:pb-6 transition-[margin] duration-300"
-      :class="showNavBar ? (infoBarVisible ? 'mt-[6.5rem]' : 'mt-16') : 'mt-0'"
+      class="flex-1 container mx-auto px-4 py-6 pb-20 sm:pb-6"
     >
       <slot />
     </main>
 
-    <!-- Mobile Bottom Action Bar -->
+    <!-- Mobile Bottom Action Bar (disabled - integrated in MiningPageV2) -->
     <div
-      v-if="authStore.isAuthenticated"
+      v-if="false"
       class="fixed bottom-0 left-0 right-0 z-40 sm:left-auto sm:right-4 sm:w-auto"
     >
       <!-- Connection Status (mobile, above action bar) -->
@@ -416,17 +427,14 @@ async function handleConnectionClick() {
             <span class="mobile-action-label">{{ t('missions.short', 'Missions') }}</span>
           </button>
 
-          <!-- Market -->
-          <button @click="openMarket" class="mobile-action-btn">
-            <ShoppingCart :size="20" color="#a1a1aa" />
-            <span class="mobile-action-label">{{ t('mining.market', 'Market') }}</span>
-          </button>
+          <!-- Market (integrado en MiningPageV2) -->
 
-          <!-- Card Battle -->
+          <!-- Card Battle (disabled)
           <button @click="openDefense" class="mobile-action-btn">
             <Swords :size="20" color="#a78bfa" />
             <span class="mobile-action-label">{{ t('defense.short', 'Battle') }}</span>
           </button>
+          -->
 
           <!-- Hacker Terminal (disabled - reworking)
           <button @click="openHacker" class="mobile-battle-btn relative">
@@ -449,11 +457,7 @@ async function handleConnectionClick() {
             <span class="mobile-action-label">{{ t('forge.title', 'Forge') }}</span>
           </button>
 
-          <!-- Inventory -->
-          <button @click="openInventory" class="mobile-action-btn">
-            <span class="text-xl">🎒</span>
-            <span class="mobile-action-label">{{ t('mining.inventory', 'Inventory') }}</span>
-          </button>
+          <!-- Inventory (integrado en MiningPageV2) -->
         </div>
       </div>
 
@@ -484,34 +488,9 @@ async function handleConnectionClick() {
         </button>
         -->
 
-        <!-- Card Battle Button -->
-        <button
-          @click="openDefense"
-          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
-        >
-          <div class="absolute left-0 top-0 bottom-0 w-[3px] bg-purple-500"></div>
-          <div class="w-8 h-8 rounded-md flex items-center justify-center">
-            <span class="text-lg">🃏</span>
-          </div>
-          <div class="text-left">
-            <div class="text-xs font-semibold text-slate-200">{{ t('defense.title', 'Card Battle') }}</div>
-            <div class="text-[10px] text-slate-400">{{ t('defense.subtitle', 'PvP card duel') }}</div>
-          </div>
-        </button>
+        <!-- Card Battle Button (disabled) -->
 
-        <!-- Market Button -->
-        <button
-          @click="openMarket"
-          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
-        >
-          <div class="w-8 h-8 rounded-md flex items-center justify-center">
-            <span class="text-lg">🛒</span>
-          </div>
-          <div class="text-left">
-            <div class="text-xs font-semibold text-slate-200">{{ t('mining.market') }}</div>
-            <div class="text-[10px] text-slate-400">{{ t('market.buyRigs') }}</div>
-          </div>
-        </button>
+        <!-- Market Button (integrado en MiningPageV2) -->
 
         <!-- Exchange Button -->
         <button
@@ -541,19 +520,7 @@ async function handleConnectionClick() {
           </div>
         </button>
 
-        <!-- Inventory Button -->
-        <button
-          @click="openInventory"
-          class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
-        >
-          <div class="w-8 h-8 rounded-md flex items-center justify-center">
-            <Package :size="18" color="#a1a1aa" />
-          </div>
-          <div class="text-left">
-            <div class="text-xs font-semibold text-slate-200">{{ t('nav.inventory') }}</div>
-            <div class="text-[10px] text-slate-400">{{ t('inventory.manageItems') }}</div>
-          </div>
-        </button>
+        <!-- Inventory Button (integrado en MiningPageV2) -->
 
         <div class="w-full h-px bg-border/30 my-1"></div>
 
@@ -672,7 +639,6 @@ async function handleConnectionClick() {
           <RouterLink to="/rules" class="ft-link-btn">{{ $t('footer.rules') }}</RouterLink>
           <RouterLink to="/terms" class="ft-link-btn">{{ $t('footer.terms') }}</RouterLink>
         </div>
-        <p class="ft-disclaimer">{{ $t('footer.disclaimer') }}</p>
         <p class="ft-copy">LOOTMINE &copy; 2025</p>
       </div>
     </footer>
@@ -681,15 +647,44 @@ async function handleConnectionClick() {
 
 <style scoped>
 /* AdSense responsive sizing */
-/* ===== FOOTER HUD ===== */
+/* ===== SIMPLE TOP BAR ===== */
+.simple-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.8rem 1.5rem;
+  background: #fff;
+  border-bottom: 2px solid #c4a0e8;
+  font-family: 'Nunito', 'Trebuchet MS', sans-serif;
+}
+.stb-brand {
+  font-size: 1rem; font-weight: 900; color: #4a3a5c;
+  letter-spacing: 2px; text-decoration: none;
+}
+.stb-brand:hover { color: #7b5ea7; }
+.stb-actions { display: flex; align-items: center; gap: 0.5rem; }
+.stb-lang {
+  background: #f8f2ff; border: 2px solid #d0b8e8; border-radius: 8px;
+  padding: 6px 12px; cursor: pointer; font-size: 0.7rem; font-weight: 800;
+  color: #7b5ea7; font-family: 'Nunito', sans-serif; transition: 0.2s;
+}
+.stb-lang:hover { background: #ffe97a; border-color: #d4a017; color: #4a3a5c; }
+.stb-play {
+  background: #ffe566; border: 2px outset #d4a017; border-radius: 8px;
+  padding: 6px 16px; font-size: 0.7rem; font-weight: 900;
+  color: #4a3a5c; font-family: 'Nunito', sans-serif; letter-spacing: 1.5px;
+  text-decoration: none; transition: 0.2s;
+}
+.stb-play:hover { background: #ffd700; border-style: inset; }
+
+/* ===== FOOTER ===== */
 .ft-root {
   position: relative;
   padding: 0;
   text-align: center;
+  font-family: 'Nunito', 'Trebuchet MS', sans-serif;
 }
 .ft-line {
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, #2f3052 20%, #f59e0b40 50%, #2f3052 80%, transparent 100%);
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #e8d0f0 20%, #c4a0e8 50%, #e8d0f0 80%, transparent 100%);
 }
 .ft-inner {
   padding: 1.5rem 1rem;
@@ -697,40 +692,41 @@ async function handleConnectionClick() {
 }
 .ft-brand { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
 .ft-tag {
-  font-size: 0.5rem; font-weight: 900; color: #f59e0b; letter-spacing: 3px;
-  text-shadow: 0 0 8px rgba(245,158,11,0.2);
+  font-size: 0.6rem; font-weight: 900; color: #c4a0e8; letter-spacing: 3px;
 }
 .ft-tagline {
-  font-size: 0.7rem; font-weight: 800; color: #a1a1aa; letter-spacing: 0.5px; margin: 0;
+  font-size: 0.75rem; font-weight: 800; color: #7b5ea7; letter-spacing: 0.5px; margin: 0;
 }
 .ft-desc {
-  font-size: 0.55rem; font-weight: 600; color: #52525b; max-width: 350px; line-height: 1.5; margin: 0;
+  font-size: 0.65rem; font-weight: 600; color: #9a80b8; max-width: 350px; line-height: 1.5; margin: 0;
 }
 .ft-links {
   display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; justify-content: center;
 }
 .ft-link-btn {
   display: inline-flex; align-items: center; gap: 0.35rem;
-  padding: 0.3rem 0.7rem;
-  font-size: 0.55rem; font-weight: 900; color: #71717a;
-  letter-spacing: 1.5px;
-  text-decoration: none; background: rgba(26,27,46,0.6);
-  border: 1px solid #2f3052;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.65rem; font-weight: 800; color: #7b5ea7;
+  letter-spacing: 1px;
+  text-decoration: none; background: #fff;
+  border: 2px solid #d0b8e8;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
+  font-family: 'Nunito', sans-serif;
 }
 .ft-link-btn:hover {
-  color: #f59e0b; border-color: #f59e0b40;
-  background: rgba(245,158,11,0.05);
+  color: #4a3a5c; border-color: #d4a017;
+  background: #ffe97a;
 }
 .ft-link-svg { width: 0.75rem; height: 0.75rem; }
 .ft-disclaimer {
-  font-size: 0.45rem; font-weight: 600; color: #3f3f5c; font-style: italic;
+  font-size: 0.55rem; font-weight: 600; color: #9a80b8; font-style: italic;
   max-width: 400px; line-height: 1.4; margin: 0;
 }
 .ft-copy {
-  font-size: 0.5rem; font-weight: 900; color: #3f3f5c; letter-spacing: 2px;
-  font-family: 'JetBrains Mono', monospace; margin: 0;
+  font-size: 0.55rem; font-weight: 900; color: #9a80b8; letter-spacing: 2px;
+  font-family: 'Nunito', sans-serif; margin: 0;
 }
 
 
