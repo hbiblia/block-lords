@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, computed, watch, nextTick, type Component } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useInventoryStore, type CoolingItem, type ModdedCoolingItem } from '@/stores/inventory';
@@ -7,6 +7,11 @@ import { useMiningStore } from '@/stores/mining';
 import { redeemPrepaidCard, useExpPack } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import CoolingWorkshopModal from './CoolingWorkshopModal.vue';
+import {
+  Zap, BatteryCharging, Signal, Rocket, Snowflake, Shield, Pickaxe,
+  Wifi, Puzzle, HeartPulse, BookOpen, Package, Wrench, Trash2, X,
+  CreditCard, Heart, Square, Sparkles
+} from 'lucide-vue-next';
 
 const { t } = useI18n();
 
@@ -122,31 +127,12 @@ const groupedModdedCooling = computed<GroupedModdedCooling[]>(() => {
   return Array.from(groups.values());
 });
 
-// AdSense
-const inventoryAdInitialized = ref(false);
-function initInventoryAd() {
-  if (inventoryAdInitialized.value) return;
-  nextTick(() => {
-    setTimeout(() => {
-      try {
-        const adEl = document.querySelector('.inventory-ad-slot .adsbygoogle');
-        if (adEl && adEl.clientWidth > 0 && !adEl.hasAttribute('data-adsbygoogle-status')) {
-          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-          inventoryAdInitialized.value = true;
-        }
-      } catch (e) { /* ad blocked */ }
-    }, 500);
-  });
-}
-
 // Fetch inventory when modal opens
 watch(() => props.show, async (isOpen) => {
   if (isOpen) {
     await inventoryStore.fetchInventory();
-    initInventoryAd();
   } else {
     selectedItem.value = null;
-    inventoryAdInitialized.value = false;
   }
 });
 
@@ -407,16 +393,16 @@ function formatNumber(num: number): string {
   return num.toString();
 }
 
-function getBoostIcon(boostType: string): string {
-  switch (boostType) {
-    case 'hashrate': return '⚡';
-    case 'energy_saver': return '🔋';
-    case 'bandwidth_optimizer': return '📶';
-    case 'overclock': return '🚀';
-    case 'coolant_injection': return '❄️';
-    case 'durability_shield': return '🛡️';
-    default: return '✨';
-  }
+function getBoostIcon(boostType: string): Component {
+  const map: Record<string, Component> = {
+    hashrate: Zap,
+    energy_saver: BatteryCharging,
+    bandwidth_optimizer: Signal,
+    overclock: Rocket,
+    coolant_injection: Snowflake,
+    durability_shield: Shield,
+  };
+  return map[boostType] || Sparkles;
 }
 
 function getBoostTypeDescription(boostType: string): string {
@@ -430,7 +416,7 @@ function formatBoostEffect(boost: { boost_type: string; effect_value: number; se
                boost.boost_type === 'coolant_injection' || boost.boost_type === 'durability_shield' ? '-' : '+';
   let effect = `${sign}${boost.effect_value}%`;
   if (boost.boost_type === 'overclock' && boost.secondary_value > 0) {
-    effect += ` / +${boost.secondary_value}% ⚡`;
+    effect += ` / +${boost.secondary_value}%`;
   }
   return effect;
 }
@@ -455,33 +441,33 @@ function formatTimeRemaining(seconds: number): string {
 
 // --- Unified inventory grid ---
 type ItemSlot =
-  | { type: 'rig'; id: string; icon: string; label: string; badge: string; tier: string }
-  | { type: 'card'; id: string; icon: string; label: string; badge: string; tier: string; cardType: string }
-  | { type: 'cooling'; id: string; icon: string; label: string; badge: string; tier: string }
-  | { type: 'modded_cooling'; id: string; icon: string; label: string; badge: string; tier: string }
-  | { type: 'material'; id: string; icon: string; label: string; badge: string; rarity: string }
-  | { type: 'component'; id: string; icon: string; label: string; badge: string; tier: string }
-  | { type: 'boost'; id: string; icon: string; label: string; badge: string; tier: string }
-  | { type: 'patch'; id: string; icon: string; label: string; badge: string; tier: string }
-  | { type: 'exp_pack'; id: string; icon: string; label: string; badge: string; tier: string };
+  | { type: 'rig'; id: string; icon: Component; label: string; badge: string; tier: string }
+  | { type: 'card'; id: string; icon: Component | Component[]; label: string; badge: string; tier: string; cardType: string }
+  | { type: 'cooling'; id: string; icon: Component; label: string; badge: string; tier: string }
+  | { type: 'modded_cooling'; id: string; icon: Component; label: string; badge: string; tier: string }
+  | { type: 'material'; id: string; icon: Component | string; label: string; badge: string; rarity: string }
+  | { type: 'component'; id: string; icon: Component; label: string; badge: string; tier: string }
+  | { type: 'boost'; id: string; icon: Component; label: string; badge: string; tier: string }
+  | { type: 'patch'; id: string; icon: Component; label: string; badge: string; tier: string }
+  | { type: 'exp_pack'; id: string; icon: Component; label: string; badge: string; tier: string };
 
 const allItems = computed<ItemSlot[]>(() => [
   ...inventoryStore.rigItems.map(r => ({
-    type: 'rig' as const, id: r.rig_id, icon: '⛏️',
+    type: 'rig' as const, id: r.rig_id, icon: Pickaxe,
     label: getRigName(r.rig_id, r.name), badge: `x${r.quantity}`, tier: r.tier,
   })),
   ...groupedCards.value.map(g => ({
     type: 'card' as const, id: g.card_id,
-    icon: g.card_type === 'combo' ? '⚡📡' : g.card_type === 'energy' ? '⚡' : '📡',
+    icon: g.card_type === 'combo' ? [Zap, Wifi] : g.card_type === 'energy' ? Zap : Wifi,
     label: getCardName(g.card_id), badge: `x${g.codes.length}`,
     tier: g.tier, cardType: g.card_type,
   })),
   ...inventoryStore.coolingItems.map(c => ({
-    type: 'cooling' as const, id: c.inventory_id, icon: '❄️',
+    type: 'cooling' as const, id: c.inventory_id, icon: Snowflake,
     label: getCoolingName(c.id, c.name), badge: `x${c.quantity}`, tier: c.tier,
   })),
   ...groupedModdedCooling.value.map(g => ({
-    type: 'modded_cooling' as const, id: g.groupKey, icon: '❄️',
+    type: 'modded_cooling' as const, id: g.groupKey, icon: Snowflake,
     label: getCoolingName(g.representative.cooling_item_id, g.representative.name),
     badge: g.count > 1 ? `x${g.count}` : `${g.representative.mod_slots_used}/${g.representative.max_mod_slots}`,
     tier: g.representative.tier,
@@ -491,7 +477,7 @@ const allItems = computed<ItemSlot[]>(() => [
     label: getMaterialName(m.name), badge: `x${m.quantity}`, rarity: m.rarity,
   })),
   ...inventoryStore.componentItems.map(c => ({
-    type: 'component' as const, id: c.id, icon: '🧩',
+    type: 'component' as const, id: c.id, icon: Puzzle,
     label: getComponentName(c.id, c.name), badge: `x${c.quantity}`, tier: c.tier,
   })),
   ...inventoryStore.boostItems.map(b => ({
@@ -499,11 +485,11 @@ const allItems = computed<ItemSlot[]>(() => [
     label: getBoostName(b.boost_id), badge: `x${b.quantity}`, tier: b.tier,
   })),
   ...inventoryStore.patchItems.map(p => ({
-    type: 'patch' as const, id: p.item_id, icon: '🩹',
+    type: 'patch' as const, id: p.item_id, icon: HeartPulse,
     label: t('market.patch.name', 'Rig Patch'), badge: `x${p.quantity}`, tier: 'standard',
   })),
   ...inventoryStore.expPackItems.map(e => ({
-    type: 'exp_pack' as const, id: e.item_id, icon: '📖',
+    type: 'exp_pack' as const, id: e.item_id, icon: BookOpen,
     label: e.name || getExpPackName(e.item_id), badge: `x${e.quantity}`, tier: e.tier,
   })),
 ]);
@@ -643,37 +629,20 @@ async function confirmApplyPatch() {
   await applyPatchToRig(patchSelectedRig.value.id);
 }
 
-// EXP Pack: slot selection + application
-const showSlotSelect = ref(false);
+// EXP Pack: apply directly to player
 const applyingExpPack = ref(false);
-const expPackSelectedSlot = ref<{ id: string; slot_number: number; tier: string; xp: number } | null>(null);
 
-function openSlotSelect() {
-  expPackSelectedSlot.value = null;
-  showSlotSelect.value = true;
-}
-
-function selectSlotForExpPack(slot: { id: string; slot_number: number; tier: string; xp: number }) {
-  expPackSelectedSlot.value = slot;
-}
-
-async function confirmApplyExpPack() {
-  if (!expPackSelectedSlot.value || !selectedExpPack.value) return;
-  await applyExpPackToSlot(selectedExpPack.value.item_id, expPackSelectedSlot.value.id);
-}
-
-async function applyExpPackToSlot(packId: string, slotId: string) {
+async function applyExpPackToPlayer(packId: string) {
   if (!authStore.player?.id) return;
   applyingExpPack.value = true;
   try {
-    const result = await useExpPack(authStore.player.id, packId, slotId);
+    const result = await useExpPack(authStore.player.id, packId);
     if (result?.success) {
       playSound('success');
-      showSlotSelect.value = false;
       selectedItem.value = null;
       await Promise.all([
         inventoryStore.refresh(),
-        miningStore.loadData(),
+        authStore.fetchPlayer(),
       ]);
     } else {
       playSound('error');
@@ -684,15 +653,6 @@ async function applyExpPackToSlot(packId: string, slotId: string) {
     playSound('error');
   } finally {
     applyingExpPack.value = false;
-  }
-}
-
-function getSlotNextTierXp(tier: string): number {
-  switch (tier) {
-    case 'basic': return 500;
-    case 'standard': return 2000;
-    case 'advanced': return 8000;
-    default: return 0;
   }
 }
 
@@ -744,25 +704,23 @@ async function applyPatchToRig(rigId: string) {
         <div class="p-2 border-b border-border">
           <div class="flex items-center justify-between">
             <h2 class="text-lg font-semibold flex items-center gap-2">
-              <span>🎒</span>
+              <Package :size="18" class="text-amber-400" />
               <span>{{ t('inventory.title') }}</span>
             </h2>
             <button
               @click="handleClose"
               class="p-2 hover:bg-bg-tertiary rounded-lg transition-colors text-text-muted hover:text-white"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X :size="20" />
             </button>
           </div>
           <div v-if="authStore.player" class="flex items-center gap-2 text-xs mt-2">
             <span class="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20">
-              <span>⚡</span>
+              <Zap :size="14" class="text-amber-400" />
               <span class="font-mono font-medium text-amber-400">{{ Math.floor(authStore.player.energy) }}/{{ authStore.player.max_energy }}</span>
             </span>
             <span class="flex items-center gap-1 px-2 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/20">
-              <span>📡</span>
+              <Wifi :size="14" class="text-cyan-400" />
               <span class="font-mono font-medium text-cyan-400">{{ Math.floor(authStore.player.internet) }}/{{ authStore.player.max_internet }}</span>
             </span>
           </div>
@@ -770,7 +728,7 @@ async function applyPatchToRig(rigId: string) {
 
         <!-- Capacity Bar -->
         <div class="px-3 py-1.5 border-b border-border/30 flex items-center gap-2">
-          <span class="text-xs text-text-muted">🎒</span>
+          <Package :size="14" class="text-text-muted" />
           <div class="flex-1 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
             <div
               class="h-full rounded-full transition-all duration-300"
@@ -781,19 +739,6 @@ async function applyPatchToRig(rigId: string) {
           <span class="text-xs font-mono" :class="capacityPercentage > 90 ? 'text-status-danger' : 'text-text-muted'">
             {{ inventoryStore.slotsUsed }}/{{ inventoryStore.maxSlots }}
           </span>
-        </div>
-
-        <!-- Ad Banner -->
-        <div class="inventory-ad-slot px-3 py-2 border-b border-border/30 bg-bg-primary/30">
-          <div class="text-[10px] text-text-muted text-center mb-1">{{ t('blocks.sponsoredBy') }}</div>
-          <div class="flex justify-center">
-            <ins class="adsbygoogle"
-              style="display:block"
-              data-ad-client="ca-pub-7500429866047477"
-              data-ad-slot="6463255272"
-              data-ad-format="horizontal"
-              data-full-width-responsive="true"></ins>
-          </div>
         </div>
 
         <!-- Active Boosts Bar -->
@@ -838,8 +783,14 @@ async function applyPatchToRig(rigId: string) {
                   ]"
                 >
                   <span class="absolute top-0 left-0.5 text-[8px] sm:text-[9px] uppercase font-bold" :class="getSlotTierColor(item)">{{ getSlotTierLetter(item) }}</span>
-                  <span v-if="item.type === 'modded_cooling'" class="absolute top-0 right-0 text-[8px] bg-fuchsia-500/40 text-fuchsia-300 rounded px-0.5">🔧</span>
-                  <span class="text-xl sm:text-2xl leading-none">{{ item.icon }}</span>
+                  <span v-if="item.type === 'modded_cooling'" class="absolute top-0 right-0 bg-fuchsia-500/40 text-fuchsia-300 rounded px-0.5 flex items-center"><Wrench :size="10" /></span>
+                  <span class="text-xl sm:text-2xl leading-none flex items-center justify-center gap-0.5">
+                    <template v-if="Array.isArray(item.icon)">
+                      <component v-for="(ic, idx) in item.icon" :key="idx" :is="ic" :size="18" />
+                    </template>
+                    <template v-else-if="typeof item.icon === 'string'">{{ item.icon }}</template>
+                    <component v-else :is="item.icon" :size="18" />
+                  </span>
                   <span class="text-[9px] sm:text-[10px] w-full text-center leading-tight line-clamp-2 break-words" :class="getSlotLabelColor(item)">{{ item.label }}</span>
                   <span class="absolute bottom-0 right-0.5 text-[9px] sm:text-[10px] font-mono font-bold text-white bg-black/50 px-0.5 rounded">{{ item.badge }}</span>
                 </button>
@@ -861,7 +812,7 @@ async function applyPatchToRig(rigId: string) {
               <!-- Rig Detail -->
               <template v-if="selectedRig">
                 <div class="flex items-start gap-3">
-                  <div class="text-3xl sm:text-4xl">⛏️</div>
+                  <div class="text-3xl sm:text-4xl flex items-center justify-center"><Pickaxe :size="36" class="text-amber-400" /></div>
                   <div class="flex-1 min-w-0">
                     <h4 class="font-bold text-sm sm:text-base" :class="getTierColor(selectedRig.tier)">{{ getRigName(selectedRig.rig_id, selectedRig.name) }}</h4>
                     <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ selectedRig.tier }} Rig</p>
@@ -874,11 +825,11 @@ async function applyPatchToRig(rigId: string) {
                     <div class="font-mono font-bold text-sm text-accent-primary">{{ formatNumber(selectedRig.hashrate) }} H/s</div>
                   </div>
                   <div class="text-center p-1.5 rounded bg-bg-secondary">
-                    <div class="text-[10px] text-text-muted">⚡ Power</div>
+                    <div class="text-[10px] text-text-muted flex items-center justify-center gap-0.5"><Zap :size="10" class="text-amber-400" /> Power</div>
                     <div class="font-mono font-bold text-sm text-amber-400">{{ selectedRig.power_consumption }}/t</div>
                   </div>
                   <div class="text-center p-1.5 rounded bg-bg-secondary">
-                    <div class="text-[10px] text-text-muted">📡 Internet</div>
+                    <div class="text-[10px] text-text-muted flex items-center justify-center gap-0.5"><Wifi :size="10" class="text-cyan-400" /> Internet</div>
                     <div class="font-mono font-bold text-sm text-cyan-400">{{ selectedRig.internet_consumption }}/t</div>
                   </div>
                 </div>
@@ -896,7 +847,7 @@ async function applyPatchToRig(rigId: string) {
                     class="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
                     :title="t('inventory.delete.button', 'Descartar')"
                   >
-                    🗑️
+                    <Trash2 :size="16" />
                   </button>
                 </div>
               </template>
@@ -904,7 +855,11 @@ async function applyPatchToRig(rigId: string) {
               <!-- Card Detail -->
               <template v-if="selectedCard">
                 <div class="flex items-start gap-3">
-                  <div class="text-3xl sm:text-4xl">{{ selectedCard.card_type === 'combo' ? '⚡📡' : selectedCard.card_type === 'energy' ? '⚡' : '📡' }}</div>
+                  <div class="text-3xl sm:text-4xl flex items-center gap-1">
+                    <template v-if="selectedCard.card_type === 'combo'"><Zap :size="32" class="text-amber-400" /><Wifi :size="32" class="text-cyan-400" /></template>
+                    <template v-else-if="selectedCard.card_type === 'energy'"><Zap :size="36" class="text-amber-400" /></template>
+                    <template v-else><Wifi :size="36" class="text-cyan-400" /></template>
+                  </div>
                   <div class="flex-1 min-w-0">
                     <h4 class="font-bold text-sm sm:text-base" :class="selectedCard.card_type === 'combo' ? 'text-white' : selectedCard.card_type === 'energy' ? 'text-amber-400' : 'text-cyan-400'">{{ getCardName(selectedCard.card_id) }}</h4>
                     <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ selectedCard.tier }}</p>
@@ -913,8 +868,8 @@ async function applyPatchToRig(rigId: string) {
                 </div>
                 <div class="mt-2 space-y-1">
                   <template v-if="selectedCard.card_type === 'combo'">
-                    <div class="flex justify-between text-xs"><span class="text-text-muted">⚡ {{ t('welcome.energy', 'Energía') }}</span><span class="font-mono font-bold text-amber-400">+{{ selectedCard.amount }}</span></div>
-                    <div class="flex justify-between text-xs"><span class="text-text-muted">📡 {{ t('welcome.internet', 'Internet') }}</span><span class="font-mono font-bold text-cyan-400">+{{ selectedCard.amount }}</span></div>
+                    <div class="flex justify-between text-xs"><span class="text-text-muted flex items-center gap-1"><Zap :size="12" class="text-amber-400" /> {{ t('welcome.energy', 'Energía') }}</span><span class="font-mono font-bold text-amber-400">+{{ selectedCard.amount }}</span></div>
+                    <div class="flex justify-between text-xs"><span class="text-text-muted flex items-center gap-1"><Wifi :size="12" class="text-cyan-400" /> {{ t('welcome.internet', 'Internet') }}</span><span class="font-mono font-bold text-cyan-400">+{{ selectedCard.amount }}</span></div>
                   </template>
                   <template v-else>
                     <div class="flex justify-between text-xs">
@@ -942,7 +897,7 @@ async function applyPatchToRig(rigId: string) {
                     class="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
                     :title="t('inventory.delete.button', 'Descartar')"
                   >
-                    🗑️
+                    <Trash2 :size="16" />
                   </button>
                 </div>
               </template>
@@ -950,7 +905,7 @@ async function applyPatchToRig(rigId: string) {
               <!-- Cooling Detail -->
               <template v-if="selectedCooling">
                 <div class="flex items-start gap-3">
-                  <div class="text-3xl sm:text-4xl">❄️</div>
+                  <div class="text-3xl sm:text-4xl flex items-center justify-center"><Snowflake :size="36" class="text-cyan-400" /></div>
                   <div class="flex-1 min-w-0">
                     <template v-if="!selectedCooling.modded">
                       <h4 class="font-bold text-sm sm:text-base" :class="getTierColor(selectedCooling.item.tier)">{{ getCoolingName(selectedCooling.item.id) }}</h4>
@@ -958,7 +913,7 @@ async function applyPatchToRig(rigId: string) {
                     </template>
                     <template v-else>
                       <h4 class="font-bold text-sm sm:text-base" :class="getTierColor(selectedCooling.item.tier)">{{ getCoolingName(selectedCooling.item.cooling_item_id, selectedCooling.item.name) }}</h4>
-                      <p class="text-[10px] sm:text-xs text-fuchsia-400 uppercase">{{ t('inventory.cooling.modded') }} · 🧩 {{ selectedCooling.item.mod_slots_used }}/{{ selectedCooling.item.max_mod_slots }}</p>
+                      <p class="text-[10px] sm:text-xs text-fuchsia-400 uppercase flex items-center gap-0.5">{{ t('inventory.cooling.modded') }} · <Puzzle :size="10" class="text-fuchsia-400" /> {{ selectedCooling.item.mod_slots_used }}/{{ selectedCooling.item.max_mod_slots }}</p>
                     </template>
                   </div>
                   <span class="text-xs font-mono text-text-muted">x{{ selectedCooling.count }}</span>
@@ -969,11 +924,11 @@ async function applyPatchToRig(rigId: string) {
                     <div class="font-mono font-bold text-sm text-cyan-400">-{{ selectedCooling.modded ? selectedCooling.item.effective_cooling_power.toFixed(1) : selectedCooling.item.cooling_power }}°</div>
                   </div>
                   <div class="text-center p-1.5 rounded bg-bg-secondary">
-                    <div class="text-[10px] text-text-muted">⚡ Cost</div>
+                    <div class="text-[10px] text-text-muted flex items-center justify-center gap-0.5"><Zap :size="10" class="text-amber-400" /> Cost</div>
                     <div class="font-mono font-bold text-sm text-amber-400">+{{ selectedCooling.modded ? selectedCooling.item.effective_energy_cost.toFixed(1) : selectedCooling.item.energy_cost }}/t</div>
                   </div>
                   <div v-if="selectedCooling.modded && selectedCooling.item.total_durability_mod !== 0" class="text-center p-1.5 rounded bg-bg-secondary">
-                    <div class="text-[10px] text-text-muted">🔧 Durability</div>
+                    <div class="text-[10px] text-text-muted flex items-center justify-center gap-0.5"><Wrench :size="10" class="text-fuchsia-400" /> Durability</div>
                     <div class="font-mono font-bold text-sm" :class="selectedCooling.item.total_durability_mod > 0 ? 'text-emerald-400' : 'text-rose-400'">{{ selectedCooling.item.total_durability_mod > 0 ? '+' : '' }}{{ selectedCooling.item.total_durability_mod.toFixed(1) }}%</div>
                   </div>
                 </div>
@@ -986,7 +941,7 @@ async function applyPatchToRig(rigId: string) {
                       ? 'bg-fuchsia-600 hover:bg-fuchsia-500 text-white'
                       : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                   >
-                    🔧 {{ (!selectedCooling.modded || selectedCooling.item.mod_slots_used < selectedCooling.item.max_mod_slots) ? t('inventory.cooling.modify') : t('workshop.slotsFull') }}
+                    <Wrench :size="14" class="inline" /> {{ (!selectedCooling.modded || selectedCooling.item.mod_slots_used < selectedCooling.item.max_mod_slots) ? t('inventory.cooling.modify') : t('workshop.slotsFull') }}
                   </button>
                   <button
                     @click="selectedCooling.modded
@@ -996,7 +951,7 @@ async function applyPatchToRig(rigId: string) {
                     class="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
                     :title="t('inventory.delete.button', 'Descartar')"
                   >
-                    🗑️
+                    <Trash2 :size="16" />
                   </button>
                 </div>
               </template>
@@ -1016,14 +971,14 @@ async function applyPatchToRig(rigId: string) {
                   <button
                     @click="requestDeleteItem('material', selectedMaterial.item.material_id, getMaterialName(selectedMaterial.item.name), selectedMaterial.item.quantity)"
                     :disabled="using"
-                    class="w-full mt-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
+                    class="w-full mt-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30 flex items-center justify-center gap-1"
                   >
-                    🗑️ {{ t('inventory.delete.button', 'Descartar') }}
+                    <Trash2 :size="14" /> {{ t('inventory.delete.button', 'Descartar') }}
                   </button>
                 </template>
                 <template v-else>
                   <div class="flex items-start gap-3">
-                    <div class="text-3xl sm:text-4xl">🧩</div>
+                    <div class="text-3xl sm:text-4xl flex items-center justify-center"><Puzzle :size="36" class="text-fuchsia-400" /></div>
                     <div class="flex-1 min-w-0">
                       <h4 class="font-bold text-sm sm:text-base" :class="getTierColor(selectedMaterial.item.tier)">{{ getComponentName(selectedMaterial.item.id, selectedMaterial.item.name) }}</h4>
                       <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ selectedMaterial.item.tier }}</p>
@@ -1034,9 +989,9 @@ async function applyPatchToRig(rigId: string) {
                   <button
                     @click="requestDeleteItem('component', selectedMaterial.item.id, getComponentName(selectedMaterial.item.id, selectedMaterial.item.name), selectedMaterial.item.quantity)"
                     :disabled="using"
-                    class="w-full mt-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
+                    class="w-full mt-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30 flex items-center justify-center gap-1"
                   >
-                    🗑️ {{ t('inventory.delete.button', 'Descartar') }}
+                    <Trash2 :size="14" /> {{ t('inventory.delete.button', 'Descartar') }}
                   </button>
                 </template>
               </template>
@@ -1044,7 +999,7 @@ async function applyPatchToRig(rigId: string) {
               <!-- Boost Detail -->
               <template v-if="selectedBoost">
                 <div class="flex items-start gap-3">
-                  <div class="text-3xl sm:text-4xl">{{ getBoostIcon(selectedBoost.boost_type) }}</div>
+                  <div class="text-3xl sm:text-4xl flex items-center justify-center"><component :is="getBoostIcon(selectedBoost.boost_type)" :size="36" class="text-amber-400" /></div>
                   <div class="flex-1 min-w-0">
                     <h4 class="font-bold text-sm sm:text-base text-amber-400">{{ getBoostName(selectedBoost.boost_id) }}</h4>
                     <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ selectedBoost.tier }}</p>
@@ -1066,16 +1021,16 @@ async function applyPatchToRig(rigId: string) {
                 <button
                   @click="requestDeleteItem('boost', selectedBoost.boost_id, getBoostName(selectedBoost.boost_id), selectedBoost.quantity)"
                   :disabled="using"
-                  class="w-full mt-2 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
+                  class="w-full mt-2 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30 flex items-center justify-center gap-1"
                 >
-                  🗑️ {{ t('inventory.delete.button', 'Descartar') }}
+                  <Trash2 :size="14" /> {{ t('inventory.delete.button', 'Descartar') }}
                 </button>
               </template>
 
               <!-- Patch Detail -->
               <template v-if="selectedPatch">
                 <div class="flex items-start gap-3">
-                  <div class="text-3xl sm:text-4xl">🩹</div>
+                  <div class="text-3xl sm:text-4xl flex items-center justify-center"><HeartPulse :size="36" class="text-fuchsia-400" /></div>
                   <div class="flex-1 min-w-0">
                     <h4 class="font-bold text-sm sm:text-base text-fuchsia-400">{{ t('market.patch.name', 'Rig Patch') }}</h4>
                     <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ t('market.patch.universal', 'Universal') }}</p>
@@ -1102,7 +1057,7 @@ async function applyPatchToRig(rigId: string) {
                     :disabled="using || applyingPatch"
                     class="flex-1 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-fuchsia-600 hover:bg-fuchsia-500 text-white"
                   >
-                    🔧 {{ t('inventory.patch.install', 'Instalar') }}
+                    <Wrench :size="14" class="inline" /> {{ t('inventory.patch.install', 'Instalar') }}
                   </button>
                   <button
                     @click="requestDeleteItem('patch', selectedPatch.item_id, t('market.patch.name', 'Rig Patch'), selectedPatch.quantity)"
@@ -1110,7 +1065,7 @@ async function applyPatchToRig(rigId: string) {
                     class="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
                     :title="t('inventory.delete.button', 'Descartar')"
                   >
-                    🗑️
+                    <Trash2 :size="16" />
                   </button>
                 </div>
               </template>
@@ -1118,7 +1073,7 @@ async function applyPatchToRig(rigId: string) {
               <!-- EXP Pack Detail -->
               <template v-if="selectedExpPack">
                 <div class="flex items-start gap-3">
-                  <div class="text-3xl sm:text-4xl">📖</div>
+                  <div class="text-3xl sm:text-4xl flex items-center justify-center"><BookOpen :size="36" class="text-emerald-400" /></div>
                   <div class="flex-1 min-w-0">
                     <h4 class="font-bold text-sm sm:text-base text-emerald-400">{{ getExpPackName(selectedExpPack.item_id) }}</h4>
                     <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ selectedExpPack.tier }}</p>
@@ -1127,17 +1082,17 @@ async function applyPatchToRig(rigId: string) {
                 </div>
                 <div class="grid grid-cols-1 gap-2 mt-2">
                   <div class="text-center p-1.5 rounded bg-bg-secondary">
-                    <div class="text-[10px] text-text-muted">Slot XP</div>
+                    <div class="text-[10px] text-text-muted">Player XP</div>
                     <div class="font-mono font-bold text-sm text-emerald-400">+{{ selectedExpPack.xp_amount }} XP</div>
                   </div>
                 </div>
                 <div class="flex gap-2 mt-3">
                   <button
-                    @click="openSlotSelect"
+                    @click="applyExpPackToPlayer(selectedExpPack.item_id)"
                     :disabled="using || applyingExpPack"
                     class="flex-1 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-emerald-600 hover:bg-emerald-500 text-white"
                   >
-                    📖 {{ t('market.exp.useTitle', 'Use EXP Pack') }}
+                    <BookOpen :size="14" class="inline" /> {{ t('market.exp.useTitle', 'Use EXP Pack') }}
                   </button>
                   <button
                     @click="requestDeleteItem('exp_pack', selectedExpPack.item_id, getExpPackName(selectedExpPack.item_id), selectedExpPack.quantity)"
@@ -1145,7 +1100,7 @@ async function applyPatchToRig(rigId: string) {
                     class="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-status-danger/20 text-status-danger hover:bg-status-danger/30 border border-status-danger/30"
                     :title="t('inventory.delete.button', 'Descartar')"
                   >
-                    🗑️
+                    <Trash2 :size="16" />
                   </button>
                 </div>
               </template>
@@ -1161,7 +1116,7 @@ async function applyPatchToRig(rigId: string) {
       >
         <div class="bg-bg-secondary rounded-xl p-5 max-w-sm w-full mx-4 border border-fuchsia-500/30 animate-fade-in">
           <div class="text-center mb-4">
-            <div class="text-3xl mb-2">🩹</div>
+            <div class="text-3xl mb-2 flex justify-center"><HeartPulse :size="32" class="text-fuchsia-400" /></div>
             <h3 class="text-lg font-bold">{{ t('inventory.patch.selectRig', 'Seleccionar Rig') }}</h3>
             <p class="text-text-muted text-xs mt-1">{{ t('inventory.patch.selectRigHint', 'Elige el rig donde instalar el parche') }}</p>
           </div>
@@ -1177,14 +1132,14 @@ async function applyPatchToRig(rigId: string) {
                 patchSelectedRig?.id === rig.id ? 'border-fuchsia-500 bg-fuchsia-500/15 ring-1 ring-fuchsia-500/50' : rig.condition < 30 ? 'border-status-danger/40 bg-status-danger/5' : 'border-border bg-bg-primary'
               ]"
             >
-              <span class="text-2xl">⛏️</span>
+              <span class="text-2xl flex items-center"><Pickaxe :size="24" class="text-amber-400" /></span>
               <div class="flex-1 text-left min-w-0">
                 <div class="font-medium text-sm truncate">{{ rig.rig.name }}</div>
                 <div class="flex items-center gap-2 text-[10px] text-text-muted">
-                  <span :class="rig.condition < 30 ? 'text-status-danger' : rig.condition < 60 ? 'text-status-warning' : 'text-emerald-400'">
-                    ❤️ {{ rig.condition.toFixed(0) }}%
+                  <span class="flex items-center gap-0.5" :class="rig.condition < 30 ? 'text-status-danger' : rig.condition < 60 ? 'text-status-warning' : 'text-emerald-400'">
+                    <Heart :size="10" /> {{ rig.condition.toFixed(0) }}%
                   </span>
-                  <span>⚡ {{ formatNumber(rig.rig.hashrate) }} H/s</span>
+                  <span class="flex items-center gap-0.5"><Zap :size="10" class="text-amber-400" /> {{ formatNumber(rig.rig.hashrate) }} H/s</span>
                 </div>
               </div>
               <div v-if="patchSelectedRig?.id === rig.id" class="text-fuchsia-400 text-lg">✓</div>
@@ -1218,71 +1173,6 @@ async function applyPatchToRig(rigId: string) {
         </div>
       </div>
 
-      <!-- Slot Selection Modal for EXP Pack -->
-      <div
-        v-if="showSlotSelect"
-        class="absolute inset-0 flex items-center justify-center bg-black/60 z-10"
-      >
-        <div class="bg-bg-secondary rounded-xl p-5 max-w-sm w-full mx-4 border border-emerald-500/30 animate-fade-in">
-          <div class="text-center mb-4">
-            <div class="text-3xl mb-2">📖</div>
-            <h3 class="text-lg font-bold">{{ t('common.selectSlot', 'Select Slot') }}</h3>
-            <p class="text-text-muted text-xs mt-1">{{ t('inventory.expPack.selectSlotHint', 'Choose the slot to apply the EXP pack to') }}</p>
-          </div>
-
-          <div class="space-y-2 max-h-60 overflow-y-auto">
-            <button
-              v-for="slot in (miningStore.slotInfo?.slots ?? []).filter(s => !s.is_destroyed)"
-              :key="slot.id"
-              @click="selectSlotForExpPack(slot)"
-              :disabled="applyingExpPack || slot.tier === 'elite'"
-              class="w-full flex items-center gap-3 p-3 rounded-lg border transition-colors hover:bg-emerald-500/10 hover:border-emerald-500/40 disabled:opacity-50"
-              :class="[
-                expPackSelectedSlot?.id === slot.id ? 'border-emerald-500 bg-emerald-500/15 ring-1 ring-emerald-500/50' : 'border-border bg-bg-primary'
-              ]"
-            >
-              <span class="text-2xl">{{ slot.has_rig ? '⛏️' : '🔲' }}</span>
-              <div class="flex-1 text-left min-w-0">
-                <div class="font-medium text-sm truncate">
-                  Slot #{{ slot.slot_number }}
-                  <span v-if="slot.rig_name" class="text-text-muted text-xs"> · {{ slot.rig_name }}</span>
-                </div>
-                <div class="flex items-center gap-2 text-[10px] text-text-muted">
-                  <span :class="getTierColor(slot.tier)">{{ slot.tier }}</span>
-                  <span>{{ slot.xp || 0 }}<template v-if="getSlotNextTierXp(slot.tier) > 0">/{{ getSlotNextTierXp(slot.tier) }}</template> XP</span>
-                </div>
-              </div>
-              <div v-if="expPackSelectedSlot?.id === slot.id" class="text-emerald-400 text-lg">✓</div>
-              <div v-else-if="slot.tier === 'elite'" class="text-[10px] text-text-muted">MAX</div>
-            </button>
-
-            <div v-if="!(miningStore.slotInfo?.slots ?? []).filter(s => !s.is_destroyed).length" class="text-center py-6 text-text-muted text-sm">
-              {{ t('inventory.expPack.noSlots', 'No slots available') }}
-            </div>
-          </div>
-
-          <div class="flex gap-2 mt-4">
-            <button
-              @click="showSlotSelect = false; expPackSelectedSlot = null"
-              :disabled="applyingExpPack"
-              class="flex-1 py-2.5 rounded-lg font-medium bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors disabled:opacity-50"
-            >
-              {{ t('common.cancel') }}
-            </button>
-            <button
-              @click="confirmApplyExpPack"
-              :disabled="!expPackSelectedSlot || applyingExpPack"
-              class="flex-1 py-2.5 rounded-lg font-medium bg-emerald-500 text-white hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span v-if="applyingExpPack" class="flex items-center justify-center gap-2">
-                <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-              </span>
-              <span v-else>{{ t('common.confirm', 'Confirmar') }}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- Confirmation Dialog -->
       <div
         v-if="showConfirm && confirmAction"
@@ -1292,7 +1182,7 @@ async function applyPatchToRig(rigId: string) {
           <!-- Card Redeem Confirmation -->
           <template v-if="confirmAction.type === 'redeem'">
             <div class="text-center mb-4">
-              <div class="text-4xl mb-3">💳</div>
+              <div class="text-4xl mb-3 flex justify-center"><CreditCard :size="40" class="text-accent-primary" /></div>
               <h3 class="text-lg font-bold mb-1">{{ t('inventory.confirm.redeemCard') }}</h3>
               <p class="text-text-muted text-sm">{{ t('inventory.confirm.areYouSure') }}</p>
             </div>
@@ -1339,7 +1229,7 @@ async function applyPatchToRig(rigId: string) {
           <!-- Rig Install Confirmation -->
           <template v-else-if="confirmAction.type === 'install_rig'">
             <div class="text-center mb-4">
-              <div class="text-4xl mb-3">⛏️</div>
+              <div class="text-4xl mb-3 flex justify-center"><Pickaxe :size="40" class="text-amber-400" /></div>
               <h3 class="text-lg font-bold mb-1">{{ t('inventory.confirm.installRig', 'Instalar Rig') }}</h3>
               <p class="text-text-muted text-sm">{{ t('inventory.confirm.areYouSure') }}</p>
             </div>
@@ -1358,7 +1248,7 @@ async function applyPatchToRig(rigId: string) {
           <!-- Delete Item Confirmation -->
           <template v-else-if="confirmAction.type === 'delete_item'">
             <div class="text-center mb-4">
-              <div class="text-4xl mb-3">🗑️</div>
+              <div class="text-4xl mb-3 flex justify-center"><Trash2 :size="40" class="text-status-danger" /></div>
               <h3 class="text-lg font-bold text-status-danger mb-1">{{ t('inventory.delete.title', 'Descartar Item') }}</h3>
               <p class="text-text-muted text-sm">{{ t('inventory.delete.warning', 'Esta acción no se puede deshacer') }}</p>
             </div>
@@ -1441,9 +1331,7 @@ async function applyPatchToRig(rigId: string) {
           <!-- Error State -->
           <div v-else-if="processingStatus === 'error'" class="text-center">
             <div class="w-16 h-16 mx-auto mb-4 bg-status-danger/20 rounded-full flex items-center justify-center">
-              <svg class="w-8 h-8 text-status-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X :size="32" class="text-status-danger" />
             </div>
             <h3 class="text-lg font-bold text-status-danger mb-2">{{ t('inventory.processing.error') }}</h3>
             <p class="text-text-muted text-sm mb-4">{{ processingError }}</p>

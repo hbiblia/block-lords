@@ -10,6 +10,7 @@ import { getPlayerInventory, installCoolingToRig, repairRig, deleteRig, getRigCo
 import { formatCrypto } from '@/utils/format';
 import { playSound } from '@/utils/sounds';
 import RepairMinigame from '@/components/RepairMinigame.vue';
+import { X, ChevronDown, Trash2 } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -1152,9 +1153,7 @@ function closeProcessingModal() {
             @click="emit('close')"
             class="p-2 hover:bg-bg-tertiary rounded-lg transition-colors text-text-muted hover:text-white"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X :size="20" />
           </button>
         </div>
 
@@ -1347,7 +1346,7 @@ function closeProcessingModal() {
                           <div class="font-medium text-cyan-400 text-sm flex items-center gap-1">
                             {{ getCoolingName(cooling.cooling_item_id, cooling.name) }}
                             <span v-if="cooling.mods && cooling.mods.length > 0" class="px-1 py-0.5 rounded text-[9px] bg-fuchsia-500/30 text-fuchsia-300 border border-fuchsia-500/40">🧩 {{ cooling.mod_slots_used }}/{{ cooling.max_mod_slots }}</span>
-                            <svg class="w-3 h-3 text-text-muted transition-transform" :class="expandedCoolingId === cooling.id ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                            <ChevronDown :size="12" class="text-text-muted transition-transform" :class="expandedCoolingId === cooling.id ? 'rotate-180' : ''" />
                           </div>
                           <div class="flex items-center gap-3 text-xs mt-0.5">
                             <span class="text-cyan-300 font-mono" v-tooltip="t('rigManage.coolingDetail.effectivePowerTip')">❄️ -{{ (getEffectiveCoolingPower(cooling) * cooling.durability / 100).toFixed(1) }}°</span>
@@ -1362,7 +1361,7 @@ function closeProcessingModal() {
                           <div class="font-mono text-sm" :class="cooling.durability < 30 ? 'text-status-danger' : cooling.durability < 60 ? 'text-status-warning' : 'text-cyan-400'">{{ cooling.durability.toFixed(0) }}%</div>
                         </div>
                         <button @click="requestDestroyCooling(cooling)" :disabled="rig.is_active || processing" class="p-1.5 rounded-lg text-status-danger/70 hover:text-status-danger hover:bg-status-danger/10 transition-colors disabled:opacity-50" :title="t('rigManage.destroyItem', 'Destruir')">
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          <Trash2 :size="16" />
                         </button>
                       </div>
                     </div>
@@ -1417,7 +1416,7 @@ function closeProcessingModal() {
                       </div>
                       <div class="flex items-center gap-2 shrink-0 ml-2">
                          <div class="text-right min-w-[60px]"><div class="font-mono text-sm font-bold" :class="boost.remaining_seconds < 300 ? 'text-status-danger' : getBoostTierClasses(boost.tier).text">{{ formatTime(boost.remaining_seconds) }}</div></div>
-                         <button @click="requestDestroyBoost(boost)" :disabled="rig.is_active || processing" class="p-1.5 rounded-lg text-status-danger/50 hover:text-status-danger hover:bg-status-danger/10"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                         <button @click="requestDestroyBoost(boost)" :disabled="rig.is_active || processing" class="p-1.5 rounded-lg text-status-danger/50 hover:text-status-danger hover:bg-status-danger/10"><Trash2 :size="14" /></button>
                       </div>
                     </div>
                     <div class="h-1 w-full bg-black/20"><div class="h-full transition-all duration-1000 rounded-r-full" :class="getTimeBarColor(getBoostTimePercent(boost))" :style="{ width: `${getBoostTimePercent(boost)}%` }"></div></div>
@@ -1779,9 +1778,7 @@ function closeProcessingModal() {
 
           <div v-else-if="processingStatus === 'error'" class="text-center">
             <div class="w-12 h-12 mx-auto mb-4 bg-status-danger/20 rounded-full flex items-center justify-center">
-              <svg class="w-6 h-6 text-status-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X :size="24" class="text-status-danger" />
             </div>
             <p class="text-status-danger font-medium mb-2">{{ t('common.error') }}</p>
             <p class="text-text-muted text-sm mb-4">{{ processingError }}</p>

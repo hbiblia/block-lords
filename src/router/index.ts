@@ -49,6 +49,11 @@ const router = createRouter({
       component: () => import('@/pages/MiningPageV2.vue'),
     },
     {
+      path: '/mining-v3',
+      name: 'mining-v3',
+      component: () => import('@/pages/MiningPageV3.vue'),
+    },
+    {
       path: '/market',
       name: 'market',
       component: () => import('@/pages/MarketPage.vue'),

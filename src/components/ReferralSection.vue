@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth';
 import { getReferralInfo, applyReferralCode, updateReferralCode, getReferralList, type ReferralInfo, type ReferralListResponse } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { formatCrypto } from '@/utils/format';
+import { ChevronRight, Pencil, Copy, Check, Link, Share2, X } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -307,9 +308,7 @@ async function confirmChangeCode() {
         class="px-3 py-1 rounded-full text-sm font-medium bg-accent-primary/20 text-accent-primary border border-accent-primary/30 hover:bg-accent-primary/30 transition-colors cursor-pointer flex items-center gap-1"
       >
         {{ referralInfo?.referralCount ?? 0 }} {{ t('referral.invited') }}
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-        </svg>
+        <ChevronRight :size="14" />
       </button>
     </div>
 
@@ -328,9 +327,7 @@ async function confirmChangeCode() {
             @click="startEditCode"
             class="text-xs text-accent-primary hover:text-accent-primary/80 transition-colors flex items-center gap-1"
           >
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
+            <Pencil :size="14" />
             {{ t('referral.edit.button') }}
           </button>
         </div>
@@ -345,12 +342,8 @@ async function confirmChangeCode() {
             class="p-3 rounded-lg bg-bg-secondary hover:bg-accent-primary/20 transition-colors"
             :title="t('common.copy')"
           >
-            <svg v-if="!copied" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-            <svg v-else class="w-5 h-5 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
+            <Copy v-if="!copied" :size="20" />
+            <Check v-else :size="20" class="text-status-success" />
           </button>
         </div>
 
@@ -414,18 +407,14 @@ async function confirmChangeCode() {
           @click="copyLink"
           class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-bg-tertiary hover:bg-bg-secondary transition-colors text-sm"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-          </svg>
+          <Link :size="16" />
           {{ t('referral.copyLink') }}
         </button>
         <button
           @click="shareLink"
           class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-accent-primary hover:bg-accent-primary/80 transition-colors text-sm text-white"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-          </svg>
+          <Share2 :size="16" />
           {{ t('referral.share') }}
         </button>
       </div>
@@ -444,9 +433,7 @@ async function confirmChangeCode() {
       <!-- Already Referred Info -->
       <div v-if="referralInfo.referredBy" class="bg-bg-tertiary rounded-xl p-3 mb-4">
         <div class="flex items-center gap-2 text-sm">
-          <svg class="w-4 h-4 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-          </svg>
+          <Check :size="16" class="text-status-success" />
           <span class="text-text-muted">{{ t('referral.referredBy') }}:</span>
           <span class="font-medium">{{ referralInfo.referredBy }}</span>
         </div>
@@ -595,9 +582,7 @@ async function confirmChangeCode() {
               @click="closeReferralList"
               class="p-2 rounded-lg hover:bg-bg-tertiary transition-colors"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X :size="20" />
             </button>
           </div>
 

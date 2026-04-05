@@ -6,96 +6,57 @@ const toastStore = useToastStore();
 function getTypeConfig(type: string) {
   switch (type) {
     case 'success':
-      return {
-        bg: 'from-emerald-500/20 to-emerald-600/10',
-        border: 'border-emerald-500/50',
-        iconBg: 'bg-emerald-500',
-        progressBg: 'bg-emerald-500',
-        glow: 'shadow-emerald-500/20',
-      };
+      return { color: '#22c55e', label: 'SYS_OK' };
     case 'error':
-      return {
-        bg: 'from-red-500/20 to-red-600/10',
-        border: 'border-red-500/50',
-        iconBg: 'bg-red-500',
-        progressBg: 'bg-red-500',
-        glow: 'shadow-red-500/20',
-      };
+      return { color: '#ef4444', label: 'SYS_ERR' };
     case 'warning':
-      return {
-        bg: 'from-amber-500/20 to-amber-600/10',
-        border: 'border-amber-500/50',
-        iconBg: 'bg-amber-500',
-        progressBg: 'bg-amber-500',
-        glow: 'shadow-amber-500/20',
-      };
+      return { color: '#f59e0b', label: 'SYS_WARN' };
     case 'info':
     default:
-      return {
-        bg: 'from-blue-500/20 to-blue-600/10',
-        border: 'border-blue-500/50',
-        iconBg: 'bg-blue-500',
-        progressBg: 'bg-blue-500',
-        glow: 'shadow-blue-500/20',
-      };
+      return { color: '#06b6d4', label: 'SYS_INFO' };
   }
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="fixed top-20 right-4 z-[200] flex flex-col gap-3 pointer-events-none">
+    <div class="toast-hud-container">
       <TransitionGroup name="toast">
         <div
           v-for="toast in toastStore.toasts"
           :key="toast.id"
-          class="toast-item pointer-events-auto relative overflow-hidden rounded-xl border backdrop-blur-xl shadow-2xl min-w-[280px] max-w-[360px] cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-3xl"
-          :class="[
-            `bg-gradient-to-r ${getTypeConfig(toast.type).bg}`,
-            getTypeConfig(toast.type).border,
-            getTypeConfig(toast.type).glow
-          ]"
+          class="toast-hud"
           @click="toastStore.remove(toast.id)"
         >
-          <!-- Glass effect overlay -->
-          <div class="absolute inset-0 bg-bg-primary/60 -z-10" />
+          <!-- HUD Corners -->
+          <div class="th-corner th-tl" :style="{ borderColor: getTypeConfig(toast.type).color }"></div>
+          <div class="th-corner th-tr" :style="{ borderColor: getTypeConfig(toast.type).color }"></div>
+          <div class="th-corner th-bl" :style="{ borderColor: getTypeConfig(toast.type).color }"></div>
+          <div class="th-corner th-br" :style="{ borderColor: getTypeConfig(toast.type).color }"></div>
 
-          <!-- Content -->
-          <div class="flex items-center gap-3 px-4 py-3">
-            <!-- Icon with colored background -->
-            <div
-              v-if="toast.icon"
-              class="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center shadow-lg"
-              :class="getTypeConfig(toast.type).iconBg"
-            >
-              <span class="text-lg text-white drop-shadow">{{ toast.icon }}</span>
-            </div>
+          <!-- Scanline -->
+          <div class="th-scanline"></div>
 
-            <!-- Message -->
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-semibold text-white leading-tight">
-                {{ toast.message }}
-              </p>
-            </div>
-
-            <!-- Close button -->
-            <button
-              class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-              @click.stop="toastStore.remove(toast.id)"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+          <!-- Top label -->
+          <div class="th-header">
+            <span class="th-indicator" :style="{ background: getTypeConfig(toast.type).color, boxShadow: `0 0 6px ${getTypeConfig(toast.type).color}80` }"></span>
+            <span class="th-label">{{ getTypeConfig(toast.type).label }}</span>
+            <span class="th-dismiss">ESC</span>
           </div>
 
-          <!-- Progress bar with CSS animation -->
-          <div class="absolute bottom-0 left-0 right-0 h-1 bg-black/20">
+          <!-- Content -->
+          <div class="th-body">
+            <span v-if="toast.icon" class="th-icon">{{ toast.icon }}</span>
+            <span class="th-message">{{ toast.message }}</span>
+          </div>
+
+          <!-- Progress bar -->
+          <div class="th-progress">
             <div
-              class="h-full progress-bar"
-              :class="getTypeConfig(toast.type).progressBg"
-              :style="{ animationDuration: `${toast.duration}ms` }"
-            />
+              class="th-progress-fill"
+              :style="{ animationDuration: `${toast.duration}ms`, background: `linear-gradient(90deg, ${getTypeConfig(toast.type).color}40, ${getTypeConfig(toast.type).color})` }"
+            ></div>
+            <div class="th-progress-segments"></div>
           </div>
         </div>
       </TransitionGroup>
@@ -104,6 +65,193 @@ function getTypeConfig(type: string) {
 </template>
 
 <style scoped>
+.toast-hud-container {
+  position: fixed;
+  top: 5rem;
+  right: 1rem;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.toast-hud {
+  pointer-events: auto;
+  position: relative;
+  overflow: hidden;
+  min-width: 280px;
+  max-width: 360px;
+  cursor: pointer;
+  border: 1px solid #2f3052;
+  background: linear-gradient(135deg, rgba(20,21,40,0.97) 0%, rgba(30,31,54,0.95) 100%);
+  padding: 0;
+  transition: all 0.2s;
+}
+
+/* CRT micro-lines */
+.toast-hud::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent, transparent 3px,
+    rgba(255,255,255,0.008) 3px, rgba(255,255,255,0.008) 4px
+  );
+  z-index: 1;
+}
+
+.toast-hud:hover {
+  border-color: #4f4f6f;
+  background: linear-gradient(135deg, rgba(25,26,45,0.98) 0%, rgba(35,36,60,0.97) 100%);
+}
+
+/* HUD Corners */
+.th-corner {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+  z-index: 3;
+}
+.th-tl { top: 0; left: 0; border-top: 2px solid; border-left: 2px solid; }
+.th-tr { top: 0; right: 0; border-top: 2px solid; border-right: 2px solid; }
+.th-bl { bottom: 0; left: 0; border-bottom: 2px solid; border-left: 2px solid; }
+.th-br { bottom: 0; right: 0; border-bottom: 2px solid; border-right: 2px solid; }
+
+/* Scanline sweep */
+.th-scanline {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(245,158,11,0.03) 45%,
+    rgba(245,158,11,0.06) 50%,
+    rgba(245,158,11,0.03) 55%,
+    transparent 100%
+  );
+  animation: toast-scan 4s linear infinite;
+}
+
+@keyframes toast-scan {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Header */
+.th-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 3px;
+  position: relative;
+  z-index: 2;
+}
+
+.th-indicator {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: th-pulse 1.5s infinite;
+}
+
+@keyframes th-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.th-label {
+  font-size: 0.4rem;
+  font-weight: 900;
+  color: #71717a;
+  letter-spacing: 2.5px;
+  flex: 1;
+}
+
+.th-dismiss {
+  font-size: 0.35rem;
+  font-weight: 900;
+  color: #4f4f6f;
+  letter-spacing: 1px;
+  padding: 1px 4px;
+  border: 1px solid #2f3052;
+}
+
+/* Body */
+.th-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 8px;
+  position: relative;
+  z-index: 2;
+}
+
+.th-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(245,158,11,0.3));
+}
+
+.th-message {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #e5e7eb;
+  line-height: 1.3;
+  letter-spacing: 0.3px;
+}
+
+/* Progress bar */
+.th-progress {
+  height: 3px;
+  background: #1a1b2e;
+  position: relative;
+  overflow: hidden;
+}
+
+.th-progress-fill {
+  height: 100%;
+  width: 100%;
+  animation: th-shrink linear forwards;
+  position: relative;
+}
+
+.th-progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: rgba(255,255,255,0.6);
+}
+
+.th-progress-segments {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0px, transparent 9%,
+    rgba(20,21,40,0.8) 9%, rgba(20,21,40,0.8) 10%
+  );
+}
+
+@keyframes th-shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* Transitions */
 .toast-enter-active {
   animation: toast-in 0.4s cubic-bezier(0.21, 1.02, 0.73, 1);
 }
@@ -119,7 +267,7 @@ function getTypeConfig(type: string) {
 @keyframes toast-in {
   0% {
     opacity: 0;
-    transform: translateX(100%) scale(0.9);
+    transform: translateX(100%) scale(0.95);
   }
   100% {
     opacity: 1;
@@ -134,33 +282,19 @@ function getTypeConfig(type: string) {
   }
   100% {
     opacity: 0;
-    transform: translateX(50%) scale(0.9);
+    transform: translateX(50%) scale(0.95);
   }
 }
 
-.progress-bar {
-  width: 100%;
-  animation: progress-shrink linear forwards;
-}
-
-@keyframes progress-shrink {
-  from {
-    width: 100%;
+/* Mobile */
+@media (max-width: 480px) {
+  .toast-hud-container {
+    right: 0.5rem;
+    left: 0.5rem;
   }
-  to {
-    width: 0%;
+  .toast-hud {
+    min-width: 0;
+    max-width: none;
   }
-}
-
-.toast-item {
-  box-shadow:
-    0 10px 40px -10px rgba(0, 0, 0, 0.5),
-    0 0 20px -5px var(--tw-shadow-color, rgba(0, 0, 0, 0.1));
-}
-
-.toast-item:hover {
-  box-shadow:
-    0 15px 50px -10px rgba(0, 0, 0, 0.6),
-    0 0 30px -5px var(--tw-shadow-color, rgba(0, 0, 0, 0.15));
 }
 </style>

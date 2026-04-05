@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { usePredictionStore } from '@/stores/prediction';
 import type { PredictionBet } from '@/stores/prediction';
+import { X } from 'lucide-vue-next';
 
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits<{ close: [] }>();
@@ -159,9 +160,7 @@ function timeAgo(dateStr: string): string {
                 <h2 class="text-sm font-bold text-white">{{ t('prediction.title') }}</h2>
               </div>
               <button @click="emit('close')" class="p-1 hover:bg-bg-tertiary rounded transition-colors text-text-muted hover:text-white">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X :size="16" />
               </button>
             </div>
             <!-- Price Ticker -->

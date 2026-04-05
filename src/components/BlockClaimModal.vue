@@ -5,25 +5,8 @@ import { usePendingBlocksStore } from '@/stores/pendingBlocks';
 import { useAuthStore } from '@/stores/auth';
 import { playSound } from '@/utils/sounds';
 import { formatCrypto, formatNumber } from '@/utils/format';
+import { Pickaxe, Sparkles, Lock, CheckCircle, Zap, Package, X } from 'lucide-vue-next';
 
-// AdSense initialization for claim modal
-const adInitialized = ref(false);
-function initClaimAd() {
-  if (adInitialized.value) return;
-  nextTick(() => {
-    setTimeout(() => {
-      try {
-        const adEl = document.querySelector('.adsbygoogle[data-ad-slot="6463255272"]');
-        if (adEl && adEl.clientWidth > 0 && !adEl.hasAttribute('data-adsbygoogle-status')) {
-          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-          adInitialized.value = true;
-        }
-      } catch (e) {
-        // AdSense not available
-      }
-    }, 500);
-  });
-}
 
 const { t } = useI18n();
 const pendingStore = usePendingBlocksStore();
@@ -75,8 +58,6 @@ watch(() => props.show, (isOpen) => {
     // Reset captcha state
     selectedBlockId.value = null;
     captchaVerified.value = false;
-    // Initialize ad
-    initClaimAd();
   } else {
     resetCaptcha();
   }
@@ -245,7 +226,7 @@ function onScroll() {
         <!-- Header -->
         <div class="flex items-center justify-between p-4 border-b border-border/50">
           <div class="flex items-center gap-3">
-            <div class="text-3xl">⛏️</div>
+            <div class="flex items-center"><Pickaxe :size="28" color="#f59e0b" /></div>
             <div>
               <h2 class="text-xl font-display font-bold text-white">
                 {{ t('blocks.claimTitle') }}
@@ -259,9 +240,7 @@ function onScroll() {
             @click="handleClose"
             class="w-8 h-8 rounded-lg bg-bg-tertiary hover:bg-bg-secondary flex items-center justify-center transition-colors"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X :size="20" />
           </button>
         </div>
 
@@ -269,7 +248,7 @@ function onScroll() {
         <div ref="scrollContainer" class="p-4 overflow-y-auto max-h-[60vh]" @scroll="onScroll">
           <!-- Empty State -->
           <div v-if="!pendingStore.loading && !pendingStore.hasPending" class="text-center py-12">
-            <div class="text-5xl mb-4">✨</div>
+            <div class="flex justify-center mb-4"><Sparkles :size="48" color="#f59e0b" /></div>
             <h3 class="text-lg font-medium mb-2">{{ t('blocks.noPending') }}</h3>
             <p class="text-text-muted text-sm">{{ t('blocks.noPendingDesc') }}</p>
           </div>
@@ -277,7 +256,7 @@ function onScroll() {
           <!-- Captcha Verification Screen -->
           <div v-else-if="selectedBlockId" class="text-center">
             <div class="mb-4">
-              <div class="text-5xl mb-2">🔐</div>
+              <div class="flex justify-center mb-2"><Lock :size="48" color="#f59e0b" /></div>
               <h3 class="text-lg font-bold mb-1">{{ t('blocks.verifyMiner') }}</h3>
               <p class="text-text-muted text-sm">{{ t('blocks.verifyCaptcha') }}</p>
             </div>
@@ -304,7 +283,7 @@ function onScroll() {
             >
               <span v-if="pendingStore.claiming">{{ t('blocks.claiming') }}</span>
               <span v-else class="flex items-center justify-center gap-2">
-                ✅ {{ t('blocks.claimVerified') }}
+                <CheckCircle :size="18" color="#10b981" /> {{ t('blocks.claimVerified') }}
               </span>
             </button>
 
@@ -333,15 +312,6 @@ function onScroll() {
               </div>
             </div>
 
-            <!-- AdSense Banner -->
-            <div class="rounded-xl p-2 text-center mb-4 bg-bg-secondary/50">
-              <div class="text-[10px] text-text-muted mb-1">{{ t('blocks.sponsoredBy') }}</div>
-              <div class="flex justify-center">
-                <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7500429866047477"
-                  data-ad-slot="6463255272" data-ad-format="auto" data-full-width-responsive="true"></ins>
-              </div>
-            </div>
-
             <!-- Claim All with RON Button -->
             <div v-if="pendingStore.hasPending" class="mb-4">
               <button
@@ -354,7 +324,7 @@ function onScroll() {
                   Reclamando...
                 </span>
                 <span v-else class="flex items-center gap-2">
-                  ⚡ Reclamar Todo ({{ pendingStore.totalRonCost.toFixed(4) }} RON)
+                  <Zap :size="18" color="#f59e0b" /> Reclamar Todo ({{ pendingStore.totalRonCost.toFixed(4) }} RON)
                 </span>
               </button>
               <div class="text-center mt-2 text-xs">
@@ -371,7 +341,7 @@ function onScroll() {
             <div v-if="showConfirmClaimAll" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
               <div class="absolute inset-0 bg-black/60" @click="cancelClaimAll"></div>
               <div class="relative bg-bg-primary border border-amber-500/50 rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
-                <div class="text-4xl mb-3">⚡</div>
+                <div class="flex justify-center mb-3"><Zap :size="40" color="#f59e0b" /></div>
                 <h3 class="text-lg font-bold mb-2">{{ t('blocks.confirmClaimAll') }}</h3>
                 <p class="text-sm text-text-muted mb-4">
                   {{ t('blocks.confirmClaimAllDesc', { cost: pendingStore.totalRonCost.toFixed(4), count: pendingStore.count }) }}
@@ -413,7 +383,7 @@ function onScroll() {
             <!-- Info about verification -->
             <div class="bg-status-warning/10 border border-status-warning/30 rounded-xl p-3 mb-4 text-sm">
               <p class="flex items-center gap-2 text-status-warning">
-                <span>🔐</span>
+                <Lock :size="16" color="#f59e0b" />
                 {{ t('blocks.captchaRequired') }}
               </p>
             </div>
@@ -451,7 +421,7 @@ function onScroll() {
               >
                 <div class="flex items-center gap-3">
                   <div class="w-10 h-10 rounded-lg bg-bg-tertiary flex items-center justify-center">
-                    <span class="text-lg">📦</span>
+                    <Package :size="20" color="#f59e0b" />
                   </div>
                   <div>
                     <div class="font-medium">Block #{{ block.block_height }}</div>

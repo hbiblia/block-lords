@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { formatCompact, formatNumber } from '@/utils/format';
+import { Gem, Crown, Trophy, Medal } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -39,12 +40,14 @@ function getRankName(score: number): string {
 }
 
 function getRankIcon(score: number): string {
-  if (score >= 85) return '💎';
-  if (score >= 70) return '⚜️';
-  if (score >= 50) return '🏆';
-  if (score >= 30) return '🥈';
-  return '🥉';
+  if (score >= 85) return 'diamond';
+  if (score >= 70) return 'platinum';
+  if (score >= 50) return 'gold';
+  if (score >= 30) return 'silver';
+  return 'bronze';
 }
+
+const rankIcon = computed(() => getRankIcon(player.value?.reputation_score ?? 50));
 
 </script>
 
@@ -61,8 +64,12 @@ function getRankIcon(score: number): string {
             {{ player?.username?.charAt(0).toUpperCase() ?? '?' }}
           </div>
           <!-- Rango badge -->
-          <div class="absolute -bottom-2 -right-2 w-10 h-10 rounded-xl bg-bg-card border-2 border-accent-primary flex items-center justify-center text-xl">
-            {{ getRankIcon(player?.reputation_score ?? 50) }}
+          <div class="absolute -bottom-2 -right-2 w-10 h-10 rounded-xl bg-bg-card border-2 border-accent-primary flex items-center justify-center">
+            <Gem v-if="rankIcon === 'diamond'" :size="20" class="text-cyan-400" />
+            <Crown v-else-if="rankIcon === 'platinum'" :size="20" class="text-purple-400" />
+            <Trophy v-else-if="rankIcon === 'gold'" :size="20" class="text-yellow-400" />
+            <Medal v-else-if="rankIcon === 'silver'" :size="20" class="text-gray-300" />
+            <Medal v-else :size="20" class="text-amber-600" />
           </div>
         </div>
 

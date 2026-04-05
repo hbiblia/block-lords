@@ -14,6 +14,7 @@ import {
 } from 'chart.js';
 import { getExchangeRateHistory, getExchangeRates } from '@/utils/api';
 import { useI18n } from 'vue-i18n';
+import { LineChart, Coins, TrendingUp, TrendingDown, RefreshCw } from 'lucide-vue-next';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -129,7 +130,7 @@ const chartOptions = computed(() => ({
       borderWidth: 1,
       displayColors: false,
       callbacks: {
-        label: (ctx: any) => `${formatRate(ctx.parsed.y)} 🪙`,
+        label: (ctx: any) => `${formatRate(ctx.parsed.y)} GC`,
       },
     },
   },
@@ -171,16 +172,16 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between mb-2">
       <h3 class="text-sm font-semibold flex items-center gap-1.5 text-text-muted">
-        <span>📈</span> {{ t('mining.rateChart.title') }}
-        <span v-if="currentRate !== null" class="font-mono text-status-warning">{{ formatRate(currentRate) }} 🪙</span>
+        <LineChart :size="14" color="#a78bfa" /> {{ t('mining.rateChart.title') }}
+        <span v-if="currentRate !== null" class="font-mono text-status-warning inline-flex items-center gap-1">{{ formatRate(currentRate) }} <Coins :size="12" color="#f59e0b" /></span>
         <span
           v-if="rateTrend !== 'neutral'"
-          class="text-[10px] font-bold px-1 py-0.5 rounded"
+          class="text-[10px] font-bold px-1 py-0.5 rounded inline-flex items-center gap-0.5"
           :class="rateTrend === 'up' ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'"
-        >{{ rateTrend === 'up' ? '▲' : '▼' }} {{ Math.abs(rateChangePercent).toFixed(1) }}%</span>
+        ><TrendingUp v-if="rateTrend === 'up'" :size="10" color="#4ade80" /><TrendingDown v-else :size="10" color="#f87171" /> {{ Math.abs(rateChangePercent).toFixed(1) }}%</span>
       </h3>
       <button @click="loadData" class="text-text-muted hover:text-white transition-colors p-0.5 rounded" :title="t('mining.rateChart.refresh')">
-        <span class="text-xs" :class="loading ? 'animate-spin inline-block' : ''">🔄</span>
+        <RefreshCw :size="14" :class="loading ? 'animate-spin' : ''" />
       </button>
     </div>
 

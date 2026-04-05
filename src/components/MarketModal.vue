@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, watch, nextTick, type Component } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMarketStore } from '@/stores/market';
@@ -7,6 +7,11 @@ import { useToastStore } from '@/stores/toast';
 import { useGameConfigStore } from '@/stores/game-config';
 import { formatGamecoin, formatCrypto, formatNumber, formatRon } from '@/utils/format';
 import { playSound } from '@/utils/sounds';
+import {
+  Store, Pickaxe, Snowflake, Zap, Wifi, Rocket, Gem, BookOpen,
+  BatteryCharging, X, Coins, Flame, Puzzle, Wrench, Signal,
+  Shield, Sparkles, CreditCard, Bandage
+} from 'lucide-vue-next';
 
 // Types for items
 interface RigItem {
@@ -90,17 +95,17 @@ function selectCategory(category: typeof activeFilter.value) {
   showMobileCategories.value = false;
 }
 
-function getCategoryIcon(category: typeof activeFilter.value): string {
+function getCategoryIcon(category: typeof activeFilter.value): Component {
   switch (category) {
-    case 'all': return '🏪';
-    case 'rigs': return '⛏️';
-    case 'cooling': return '❄️';
-    case 'energy': return '⚡';
-    case 'internet': return '📡';
-    case 'boosts': return '🚀';
-    case 'crypto': return '💎';
-    case 'exp': return '📖';
-    default: return '🏪';
+    case 'all': return Store;
+    case 'rigs': return Pickaxe;
+    case 'cooling': return Snowflake;
+    case 'energy': return Zap;
+    case 'internet': return Wifi;
+    case 'boosts': return Rocket;
+    case 'crypto': return Gem;
+    case 'exp': return BookOpen;
+    default: return Store;
   }
 }
 
@@ -232,15 +237,15 @@ function getBoostOwned(id: string): number {
   return marketStore.getBoostOwned(id);
 }
 
-function getBoostIcon(boostType: string): string {
+function getBoostIcon(boostType: string): Component {
   switch (boostType) {
-    case 'hashrate': return '⚡';
-    case 'energy_saver': return '🔋';
-    case 'bandwidth_optimizer': return '📶';
-    case 'overclock': return '🚀';
-    case 'coolant_injection': return '❄️';
-    case 'durability_shield': return '🛡️';
-    default: return '✨';
+    case 'hashrate': return Zap;
+    case 'energy_saver': return BatteryCharging;
+    case 'bandwidth_optimizer': return Signal;
+    case 'overclock': return Rocket;
+    case 'coolant_injection': return Snowflake;
+    case 'durability_shield': return Shield;
+    default: return Sparkles;
   }
 }
 
@@ -255,7 +260,7 @@ function formatBoostEffect(boost: BoostItemType): string {
                boost.boost_type === 'coolant_injection' || boost.boost_type === 'durability_shield' ? '-' : '+';
   let effect = `${sign}${boost.effect_value}%`;
   if (boost.boost_type === 'overclock' && boost.secondary_value > 0) {
-    effect += ` / +${boost.secondary_value}% ⚡`;
+    effect += ` / +${boost.secondary_value}%`;
   }
   return effect;
 }
@@ -294,12 +299,6 @@ function canAffordCard(card: CardItem): boolean {
     return ronBalance.value >= card.base_price;
   }
   return balance.value >= card.base_price;
-}
-
-function getRigCurrencyIcon(currency: string): string {
-  if (currency === 'crypto') return '💎';
-  if (currency === 'ron') return 'RON';
-  return '🪙';
 }
 
 function getCryptoPackageName(id: string): string {
@@ -515,7 +514,7 @@ function requestBuyCard(card: CardItem) {
     name: getCardName(card.id),
     price: card.base_price,
     description: card.card_type === 'combo'
-      ? `+${card.amount} ⚡ ${t('market.energy')} + 📡 ${t('market.internet')}`
+      ? `+${card.amount} ${t('market.energy')} + ${t('market.internet')}`
       : `+${card.amount} ${card.card_type === 'energy' ? t('market.energy') : t('market.internet')}`,
     currency: card.currency || 'gamecoin',
   };
@@ -607,7 +606,7 @@ function requestBuyCryptoPackage(pkg: CryptoPackageType) {
     id: pkg.id,
     name: getCryptoPackageName(pkg.id),
     price: pkg.ron_price,
-    description: `${pkg.total_crypto} 💎 Landwork${bonusText}`,
+    description: `${pkg.total_crypto} Landwork${bonusText}`,
     currency: 'ron',
   };
   showConfirm.value = true;
@@ -671,23 +670,6 @@ function cancelPurchase() {
   confirmAction.value = null;
 }
 
-// AdSense
-const marketAdInitialized = ref(false);
-function initMarketAd() {
-  if (marketAdInitialized.value) return;
-  nextTick(() => {
-    setTimeout(() => {
-      try {
-        const adEl = document.querySelector('.market-ad-slot .adsbygoogle');
-        if (adEl && adEl.clientWidth > 0 && !adEl.hasAttribute('data-adsbygoogle-status')) {
-          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-          marketAdInitialized.value = true;
-        }
-      } catch (e) { /* ad blocked */ }
-    }, 500);
-  });
-}
-
 onMounted(() => {
   if (props.show) {
     loadData();
@@ -697,9 +679,6 @@ onMounted(() => {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     loadData();
-    initMarketAd();
-  } else {
-    marketAdInitialized.value = false;
   }
 });
 </script>
@@ -729,30 +708,15 @@ watch(() => props.show, (newVal) => {
               @click="handleClose"
               class="w-8 h-8 rounded-lg bg-bg-tertiary hover:bg-bg-secondary flex items-center justify-center transition-colors shrink-0"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X :size="20" color="currentColor" />
             </button>
           </div>
           <!-- Balance row -->
           <div class="flex items-center gap-2 sm:gap-3 mt-2 text-xs sm:text-sm flex-wrap">
             <span class="text-text-muted hidden sm:inline">{{ t('market.balance') }}</span>
-            <span class="font-bold text-status-warning">{{ formatGamecoin(balance) }} 🪙</span>
-            <span class="font-bold text-accent-primary">{{ formatCrypto(cryptoBalance) }} 💎</span>
+            <span class="font-bold text-status-warning inline-flex items-center gap-0.5">{{ formatGamecoin(balance) }} <Coins :size="14" color="#f59e0b" /></span>
+            <span class="font-bold text-accent-primary inline-flex items-center gap-0.5">{{ formatCrypto(cryptoBalance) }} <Gem :size="14" color="#60a5fa" /></span>
             <span class="font-bold text-amber-400">{{ formatRon(ronBalance) }} RON</span>
-          </div>
-        </div>
-
-        <!-- Ad Banner -->
-        <div class="market-ad-slot px-4 py-2 border-b border-border/30 bg-bg-secondary/30">
-          <div class="text-[10px] text-text-muted text-center mb-1">{{ t('blocks.sponsoredBy') }}</div>
-          <div class="flex justify-center">
-            <ins class="adsbygoogle"
-              style="display:block"
-              data-ad-client="ca-pub-7500429866047477"
-              data-ad-slot="6463255272"
-              data-ad-format="horizontal"
-              data-full-width-responsive="true"></ins>
           </div>
         </div>
 
@@ -767,7 +731,7 @@ watch(() => props.show, (newVal) => {
                 ? 'bg-accent-primary/20 text-accent-primary'
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
-              <span>🏪</span>
+              <Store :size="16" />
               <span>{{ t('market.filters.all', 'Todos') }}</span>
             </button>
             <button
@@ -777,7 +741,7 @@ watch(() => props.show, (newVal) => {
                 ? 'bg-accent-primary/20 text-accent-primary'
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
-              <span>⛏️</span>
+              <Pickaxe :size="16" />
               <span>{{ t('market.tabs.rigs') }}</span>
             </button>
             <button
@@ -787,7 +751,7 @@ watch(() => props.show, (newVal) => {
                 ? 'bg-cyan-500/20 text-cyan-400'
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
-              <span>❄️</span>
+              <Snowflake :size="16" />
               <span>{{ t('market.tabs.cooling') }}</span>
             </button>
             <button
@@ -797,7 +761,7 @@ watch(() => props.show, (newVal) => {
                 ? 'bg-amber-500/20 text-amber-400'
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
-              <span>⚡</span>
+              <Zap :size="16" />
               <span>{{ t('market.energy') }}</span>
             </button>
             <button
@@ -807,7 +771,7 @@ watch(() => props.show, (newVal) => {
                 ? 'bg-cyan-500/20 text-cyan-400'
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
-              <span>📡</span>
+              <Wifi :size="16" />
               <span>{{ t('market.internet') }}</span>
             </button>
             <button
@@ -817,7 +781,7 @@ watch(() => props.show, (newVal) => {
                 ? 'bg-amber-500/20 text-amber-400'
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
-              <span>🚀</span>
+              <Rocket :size="16" />
               <span>{{ t('market.tabs.boosts') }}</span>
             </button>
             <button
@@ -827,7 +791,7 @@ watch(() => props.show, (newVal) => {
                 ? 'bg-gradient-to-r from-blue-500/20 to-amber-500/20 text-blue-400'
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
-              <span>💎</span>
+              <Gem :size="16" />
               <span>{{ t('market.tabs.crypto', 'Landwork') }}</span>
             </button>
             <button
@@ -837,7 +801,7 @@ watch(() => props.show, (newVal) => {
                 ? 'bg-gradient-to-r from-fuchsia-500/20 to-pink-500/20 text-fuchsia-400'
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
-              <span>🩹</span>
+              <Bandage :size="16" />
               <span>{{ t('market.tabs.patch', 'Supplies') }}</span>
             </button>
             <button
@@ -847,7 +811,7 @@ watch(() => props.show, (newVal) => {
                 ? 'bg-emerald-500/20 text-emerald-400'
                 : 'text-text-muted hover:bg-bg-tertiary hover:text-white'"
             >
-              <span>📖</span>
+              <BookOpen :size="16" />
               <span>{{ t('market.tabs.exp', 'EXP Packs') }}</span>
             </button>
           </div>
@@ -875,7 +839,7 @@ watch(() => props.show, (newVal) => {
                       <h4 class="font-medium text-xs sm:text-sm truncate">{{ getRigName(rig.id) }}</h4>
                       <span class="inline-block text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 rounded mt-0.5" :class="[getTierColor(rig.tier), getTierBg(rig.tier)]">{{ rig.tier }}</span>
                     </div>
-                    <span class="text-lg sm:text-2xl ml-1">⛏️</span>
+                    <span class="ml-1"><Pickaxe :size="24" color="#f59e0b" /></span>
                   </div>
 
                   <div class="flex items-center justify-between mb-1 sm:mb-2">
@@ -884,11 +848,11 @@ watch(() => props.show, (newVal) => {
                   </div>
 
                   <div class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2">
-                    <span>⚡{{ rig.power_consumption }}/t</span>
+                    <span class="inline-flex items-center gap-0.5"><Zap :size="12" color="#f59e0b" />{{ rig.power_consumption }}/t</span>
                     <span>•</span>
-                    <span>📡{{ rig.internet_consumption }}/t</span>
+                    <span class="inline-flex items-center gap-0.5"><Wifi :size="12" color="#06b6d4" />{{ rig.internet_consumption }}/t</span>
                     <span>•</span>
-                    <span class="text-orange-400">🔥{{ formatNumber(rig.power_consumption * 0.8, 1) }}°/t</span>
+                    <span class="text-orange-400 inline-flex items-center gap-0.5"><Flame :size="12" color="#f97316" />{{ formatNumber(rig.power_consumption * 0.8, 1) }}°/t</span>
                   </div>
 
                   <!-- Show owned quantity if any -->
@@ -914,7 +878,14 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="purchaseDisabled || !canAffordRig(rig)"
                     >
-                      {{ buying ? '...' : `${formatNumber(rig.base_price)} ${getRigCurrencyIcon(rig.currency || 'gamecoin')}` }}
+                      <template v-if="buying">...</template>
+                      <template v-else>
+                        <span class="inline-flex items-center gap-0.5">{{ formatNumber(rig.base_price) }}
+                          <Gem v-if="rig.currency === 'crypto'" :size="14" color="#60a5fa" />
+                          <Coins v-else-if="rig.currency !== 'ron'" :size="14" color="#f59e0b" />
+                          <span v-else>RON</span>
+                        </span>
+                      </template>
                     </button>
                   </div>
                 </div>
@@ -933,7 +904,7 @@ watch(() => props.show, (newVal) => {
                       <h4 class="font-medium text-xs sm:text-sm truncate">{{ getCoolingName(item.id) }}</h4>
                       <span class="inline-block text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 rounded mt-0.5" :class="[getTierColor(item.tier), getTierBg(item.tier)]">{{ item.tier }}</span>
                     </div>
-                    <span class="text-lg sm:text-2xl ml-1">❄️</span>
+                    <span class="ml-1"><Snowflake :size="24" color="#22d3ee" /></span>
                   </div>
 
                   <div class="flex items-center justify-between mb-1 sm:mb-2">
@@ -943,12 +914,12 @@ watch(() => props.show, (newVal) => {
 
                   <div class="flex items-center justify-between mb-1 sm:mb-2">
                     <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.cooling.handles', 'Maneja') }}</span>
-                    <span class="font-mono text-xs sm:text-sm text-orange-400">🔥≤{{ formatNumber(item.cooling_power / 0.8, 1) }}/t</span>
+                    <span class="font-mono text-xs sm:text-sm text-orange-400 inline-flex items-center gap-0.5"><Flame :size="12" color="#f97316" />≤{{ formatNumber(item.cooling_power / 0.8, 1) }}/t</span>
                   </div>
 
                   <div class="flex items-center justify-between mb-1 sm:mb-2">
                     <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.rigs.energyTick', 'Energía/tick') }}</span>
-                    <span class="font-mono text-xs sm:text-sm text-yellow-400">⚡{{ item.energy_cost }}/t</span>
+                    <span class="font-mono text-xs sm:text-sm text-yellow-400 inline-flex items-center gap-0.5"><Zap :size="12" color="#facc15" />{{ item.energy_cost }}/t</span>
                   </div>
 
                   <p class="text-[10px] sm:text-xs text-text-muted mb-1 sm:mb-2 line-clamp-2">{{ getCoolingDescription(item.id) }}</p>
@@ -972,7 +943,8 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="purchaseDisabled || balance < item.base_price"
                     >
-                      {{ buying ? '...' : `${formatNumber(item.base_price)} 🪙` }}
+                      <template v-if="buying">...</template>
+                      <span v-else class="inline-flex items-center gap-0.5">{{ formatNumber(item.base_price) }} <Coins :size="14" color="#f59e0b" /></span>
                     </button>
                   </div>
                 </div>
@@ -983,7 +955,7 @@ watch(() => props.show, (newVal) => {
                 <!-- Section header within grid -->
                 <div v-if="activeFilter === 'cooling'" class="col-span-full">
                   <div class="flex items-center gap-2 mb-1 mt-2">
-                    <span class="text-sm">🧩</span>
+                    <Puzzle :size="14" color="#a78bfa" />
                     <span class="text-sm font-medium text-text-muted">{{ t('market.components.title') }}</span>
                   </div>
                   <p class="text-[10px] sm:text-xs text-text-muted/70 mb-2">{{ t('market.components.description') }}</p>
@@ -999,25 +971,25 @@ watch(() => props.show, (newVal) => {
                       <h4 class="font-medium text-xs sm:text-sm truncate">{{ getComponentName(comp.id) }}</h4>
                       <span class="inline-block text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 rounded mt-0.5" :class="[getTierColor(comp.tier), getTierBg(comp.tier)]">{{ comp.tier }}</span>
                     </div>
-                    <span class="text-lg sm:text-2xl ml-1">🧩</span>
+                    <span class="ml-1"><Puzzle :size="24" color="#a78bfa" /></span>
                   </div>
 
                   <!-- Stat Ranges -->
                   <div class="space-y-1 mb-1 sm:mb-2 text-[10px] sm:text-xs">
                     <div v-if="comp.cooling_power_min !== 0 || comp.cooling_power_max !== 0" class="flex items-center justify-between">
-                      <span class="text-text-muted">❄️ {{ t('market.components.coolingPower') }}</span>
+                      <span class="text-text-muted inline-flex items-center gap-0.5"><Snowflake :size="12" color="#22d3ee" /> {{ t('market.components.coolingPower') }}</span>
                       <span :class="rangeColor(comp.cooling_power_min, comp.cooling_power_max)">
                         {{ formatRange(comp.cooling_power_min, comp.cooling_power_max) }}
                       </span>
                     </div>
                     <div v-if="comp.energy_cost_min !== 0 || comp.energy_cost_max !== 0" class="flex items-center justify-between">
-                      <span class="text-text-muted">⚡ {{ t('market.components.energyCost') }}</span>
+                      <span class="text-text-muted inline-flex items-center gap-0.5"><Zap :size="12" color="#f59e0b" /> {{ t('market.components.energyCost') }}</span>
                       <span :class="rangeColor(comp.energy_cost_min, comp.energy_cost_max, true)">
                         {{ formatRange(comp.energy_cost_min, comp.energy_cost_max) }}
                       </span>
                     </div>
                     <div v-if="comp.durability_min !== 0 || comp.durability_max !== 0" class="flex items-center justify-between">
-                      <span class="text-text-muted">🔧 {{ t('market.components.durability') }}</span>
+                      <span class="text-text-muted inline-flex items-center gap-0.5"><Wrench :size="12" color="#9ca3af" /> {{ t('market.components.durability') }}</span>
                       <span :class="rangeColor(comp.durability_min, comp.durability_max)">
                         {{ formatRange(comp.durability_min, comp.durability_max) }}
                       </span>
@@ -1042,7 +1014,8 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="purchaseDisabled || balance < comp.base_price"
                     >
-                      {{ buying ? '...' : `${formatNumber(comp.base_price)} 🪙` }}
+                      <template v-if="buying">...</template>
+                      <span v-else class="inline-flex items-center gap-0.5">{{ formatNumber(comp.base_price) }} <Coins :size="14" color="#f59e0b" /></span>
                     </button>
                   </div>
                 </div>
@@ -1060,7 +1033,7 @@ watch(() => props.show, (newVal) => {
                       <h4 class="font-medium text-xs sm:text-sm text-amber-400 truncate">{{ getCardName(card.id) }}</h4>
                       <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ card.tier }}</p>
                     </div>
-                    <span class="text-lg sm:text-2xl ml-1">⚡</span>
+                    <span class="ml-1"><Zap :size="24" color="#f59e0b" /></span>
                   </div>
 
                   <div class="flex items-center justify-between mb-1 sm:mb-2">
@@ -1086,7 +1059,8 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="purchaseDisabled || (card.currency === 'crypto' ? cryptoBalance : balance) < card.base_price"
                     >
-                      {{ buying ? '...' : `${formatNumber(card.base_price)} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
+                      <template v-if="buying">...</template>
+                      <span v-else class="inline-flex items-center gap-0.5">{{ formatNumber(card.base_price) }} <Gem v-if="card.currency === 'crypto'" :size="14" color="#60a5fa" /><Coins v-else :size="14" color="#f59e0b" /></span>
                     </button>
                   </div>
                 </div>
@@ -1104,7 +1078,7 @@ watch(() => props.show, (newVal) => {
                       <h4 class="font-medium text-xs sm:text-sm text-cyan-400 truncate">{{ getCardName(card.id) }}</h4>
                       <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ card.tier }}</p>
                     </div>
-                    <span class="text-lg sm:text-2xl ml-1">📡</span>
+                    <span class="ml-1"><Wifi :size="24" color="#06b6d4" /></span>
                   </div>
 
                   <div class="flex items-center justify-between mb-1 sm:mb-2">
@@ -1130,7 +1104,8 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="purchaseDisabled || (card.currency === 'crypto' ? cryptoBalance : balance) < card.base_price"
                     >
-                      {{ buying ? '...' : `${formatNumber(card.base_price)} ${card.currency === 'crypto' ? '💎' : '🪙'}` }}
+                      <template v-if="buying">...</template>
+                      <span v-else class="inline-flex items-center gap-0.5">{{ formatNumber(card.base_price) }} <Gem v-if="card.currency === 'crypto'" :size="14" color="#60a5fa" /><Coins v-else :size="14" color="#f59e0b" /></span>
                     </button>
                   </div>
                 </div>
@@ -1148,16 +1123,16 @@ watch(() => props.show, (newVal) => {
                       <h4 class="font-medium text-xs sm:text-sm text-white truncate">{{ getCardName(card.id) }}</h4>
                       <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ card.tier }}</p>
                     </div>
-                    <span class="text-lg sm:text-2xl ml-1">⚡📡</span>
+                    <span class="ml-1 inline-flex items-center gap-0.5"><Zap :size="20" color="#f59e0b" /><Wifi :size="20" color="#06b6d4" /></span>
                   </div>
 
                   <div class="space-y-1 mb-1 sm:mb-2">
                     <div class="flex items-center justify-between">
-                      <span class="text-[10px] sm:text-xs text-text-muted">⚡ {{ t('market.energy') }}</span>
+                      <span class="text-[10px] sm:text-xs text-text-muted inline-flex items-center gap-0.5"><Zap :size="12" color="#f59e0b" /> {{ t('market.energy') }}</span>
                       <span class="font-mono font-bold text-xs sm:text-sm text-amber-400">+{{ card.amount }}</span>
                     </div>
                     <div class="flex items-center justify-between">
-                      <span class="text-[10px] sm:text-xs text-text-muted">📡 {{ t('market.internet') }}</span>
+                      <span class="text-[10px] sm:text-xs text-text-muted inline-flex items-center gap-0.5"><Wifi :size="12" color="#06b6d4" /> {{ t('market.internet') }}</span>
                       <span class="font-mono font-bold text-xs sm:text-sm text-cyan-400">+{{ card.amount }}</span>
                     </div>
                   </div>
@@ -1198,7 +1173,7 @@ watch(() => props.show, (newVal) => {
                       <h4 class="font-medium text-xs sm:text-sm text-amber-400 truncate">{{ getBoostName(boost.id) }}</h4>
                       <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ boost.tier }}</p>
                     </div>
-                    <span class="text-lg sm:text-2xl ml-1">{{ getBoostIcon(boost.boost_type) }}</span>
+                    <span class="ml-1"><component :is="getBoostIcon(boost.boost_type)" :size="24" color="#f59e0b" /></span>
                   </div>
 
                   <!-- Boost type description -->
@@ -1232,7 +1207,9 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="purchaseDisabled || !canAffordBoost(boost)"
                     >
-                      {{ buying ? '...' : boost.currency === 'ron' ? `${formatNumber(boost.base_price, 2)} RON` : `${formatNumber(boost.base_price)} ${boost.currency === 'crypto' ? '💎' : '🪙'}` }}
+                      <template v-if="buying">...</template>
+                      <template v-else-if="boost.currency === 'ron'">{{ formatNumber(boost.base_price, 2) }} RON</template>
+                      <span v-else class="inline-flex items-center gap-0.5">{{ formatNumber(boost.base_price) }} <Gem v-if="boost.currency === 'crypto'" :size="14" color="#60a5fa" /><Coins v-else :size="14" color="#f59e0b" /></span>
                     </button>
                   </div>
                 </div>
@@ -1248,7 +1225,7 @@ watch(() => props.show, (newVal) => {
                       <h4 class="font-medium text-xs sm:text-sm text-fuchsia-400 truncate">{{ t('market.patch.name', 'Rig Patch') }}</h4>
                       <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ t('market.patch.type', 'Consumable') }}</p>
                     </div>
-                    <span class="text-lg sm:text-2xl ml-1">🩹</span>
+                    <span class="ml-1"><Bandage :size="24" color="#d946ef" /></span>
                   </div>
 
                   <div class="flex items-center justify-between mb-0.5 sm:mb-1">
@@ -1283,7 +1260,8 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="purchaseDisabled || balance < configStore.rigPatchCost"
                     >
-                      {{ buying ? '...' : configStore.rigPatchCost.toLocaleString() + ' 🪙' }}
+                      <template v-if="buying">...</template>
+                      <span v-else class="inline-flex items-center gap-0.5">{{ configStore.rigPatchCost.toLocaleString() }} <Coins :size="14" color="#f59e0b" /></span>
                     </button>
                   </div>
                 </div>
@@ -1301,7 +1279,7 @@ watch(() => props.show, (newVal) => {
                       <h4 class="font-medium text-xs sm:text-sm text-emerald-400 truncate">{{ getExpPackName(pack.id) }}</h4>
                       <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ pack.tier }}</p>
                     </div>
-                    <span class="text-lg sm:text-2xl ml-1">📖</span>
+                    <span class="ml-1"><BookOpen :size="24" color="#34d399" /></span>
                   </div>
 
                   <div class="flex items-center justify-between mb-1 sm:mb-2">
@@ -1327,7 +1305,8 @@ watch(() => props.show, (newVal) => {
                         : 'bg-bg-tertiary text-text-muted cursor-not-allowed'"
                       :disabled="purchaseDisabled || balance < pack.base_price"
                     >
-                      {{ buying ? '...' : `${formatNumber(pack.base_price)} 🪙` }}
+                      <template v-if="buying">...</template>
+                      <span v-else class="inline-flex items-center gap-0.5">{{ formatNumber(pack.base_price) }} <Coins :size="14" color="#f59e0b" /></span>
                     </button>
                   </div>
                 </div>
@@ -1358,14 +1337,14 @@ watch(() => props.show, (newVal) => {
                       <h4 class="font-medium text-xs sm:text-sm text-blue-400 truncate">{{ getCryptoPackageName(pkg.id) }}</h4>
                       <p class="text-[10px] sm:text-xs text-text-muted uppercase">{{ pkg.tier }}</p>
                     </div>
-                    <span class="text-xl sm:text-3xl ml-1">💎</span>
+                    <span class="ml-1"><Gem :size="28" color="#60a5fa" /></span>
                   </div>
 
                   <div class="flex items-center justify-between mb-1 sm:mb-2">
                     <span class="text-[10px] sm:text-xs text-text-muted">{{ t('market.crypto.amount', 'Cantidad') }}</span>
                     <div class="text-right">
                       <span class="font-mono font-bold text-sm sm:text-xl text-blue-400">{{ pkg.total_crypto }}</span>
-                      <span class="text-blue-400 ml-0.5 sm:ml-1 text-xs sm:text-base">💎</span>
+                      <span class="text-blue-400 ml-0.5 sm:ml-1"><Gem :size="14" color="#60a5fa" /></span>
                     </div>
                   </div>
 
@@ -1407,7 +1386,7 @@ watch(() => props.show, (newVal) => {
           @click="showMobileCategories = true"
           class="w-12 h-12 flex items-center justify-center bg-accent-primary rounded-full shadow-lg hover:bg-accent-primary/90 transition-all active:scale-95"
         >
-          <span class="text-xl">{{ getCategoryIcon(activeFilter) }}</span>
+          <component :is="getCategoryIcon(activeFilter)" :size="20" color="white" />
         </button>
       </div>
 
@@ -1418,8 +1397,14 @@ watch(() => props.show, (newVal) => {
       >
         <div class="bg-bg-secondary rounded-xl p-6 max-w-sm w-full mx-4 border border-border animate-fade-in">
           <div class="text-center mb-4">
-            <div class="text-4xl mb-3">
-              {{ confirmAction.type === 'rig' ? '⛏️' : confirmAction.type === 'cooling' ? '❄️' : confirmAction.type === 'boost' ? '🚀' : confirmAction.type === 'crypto_package' ? '💎' : confirmAction.type === 'patch' ? '🩹' : confirmAction.type === 'exp_pack' ? '📖' : '💳' }}
+            <div class="flex justify-center mb-3">
+              <Pickaxe v-if="confirmAction.type === 'rig'" :size="36" color="#f59e0b" />
+              <Snowflake v-else-if="confirmAction.type === 'cooling'" :size="36" color="#22d3ee" />
+              <Rocket v-else-if="confirmAction.type === 'boost'" :size="36" color="#f59e0b" />
+              <Gem v-else-if="confirmAction.type === 'crypto_package'" :size="36" color="#60a5fa" />
+              <Bandage v-else-if="confirmAction.type === 'patch'" :size="36" color="#d946ef" />
+              <BookOpen v-else-if="confirmAction.type === 'exp_pack'" :size="36" color="#34d399" />
+              <CreditCard v-else :size="36" color="#9ca3af" />
             </div>
             <h3 class="text-lg font-bold mb-1">{{ t('market.confirmPurchase.title') }}</h3>
             <p class="text-text-muted text-sm">{{ t('market.confirmPurchase.question') }}</p>
@@ -1431,7 +1416,7 @@ watch(() => props.show, (newVal) => {
             <div class="flex items-center justify-between">
               <span class="text-text-muted text-sm">{{ t('market.confirmPurchase.price') }}</span>
               <span class="font-bold" :class="confirmAction.currency === 'crypto' ? 'text-accent-primary' : confirmAction.currency === 'ron' ? 'text-blue-400' : 'text-status-warning'">
-                {{ confirmAction.currency === 'crypto' ? formatCrypto(confirmAction.price) : confirmAction.currency === 'ron' ? formatRon(confirmAction.price) : formatGamecoin(confirmAction.price) }} {{ confirmAction.currency === 'crypto' ? '💎' : confirmAction.currency === 'ron' ? 'RON' : '🪙' }}
+                <span class="inline-flex items-center gap-0.5">{{ confirmAction.currency === 'crypto' ? formatCrypto(confirmAction.price) : confirmAction.currency === 'ron' ? formatRon(confirmAction.price) : formatGamecoin(confirmAction.price) }} <Gem v-if="confirmAction.currency === 'crypto'" :size="14" color="#60a5fa" /><span v-else-if="confirmAction.currency === 'ron'">RON</span><Coins v-else :size="14" color="#f59e0b" /></span>
               </span>
             </div>
             <div class="flex items-center justify-between mt-1">
@@ -1440,7 +1425,7 @@ watch(() => props.show, (newVal) => {
                 class="font-mono"
                 :class="(confirmAction.currency === 'crypto' ? cryptoBalance : confirmAction.currency === 'ron' ? ronBalance : balance) >= confirmAction.price ? 'text-status-success' : 'text-status-danger'"
               >
-                {{ confirmAction.currency === 'crypto' ? formatCrypto(cryptoBalance) : confirmAction.currency === 'ron' ? formatRon(ronBalance) : formatGamecoin(balance) }} {{ confirmAction.currency === 'crypto' ? '💎' : confirmAction.currency === 'ron' ? 'RON' : '🪙' }}
+                <span class="inline-flex items-center gap-0.5">{{ confirmAction.currency === 'crypto' ? formatCrypto(cryptoBalance) : confirmAction.currency === 'ron' ? formatRon(ronBalance) : formatGamecoin(balance) }} <Gem v-if="confirmAction.currency === 'crypto'" :size="14" color="#60a5fa" /><span v-else-if="confirmAction.currency === 'ron'">RON</span><Coins v-else :size="14" color="#f59e0b" /></span>
               </span>
             </div>
             <div class="flex items-center justify-between mt-1 pt-2 border-t border-border/50">
@@ -1450,7 +1435,7 @@ watch(() => props.show, (newVal) => {
                   ? formatCrypto(cryptoBalance - confirmAction.price)
                   : confirmAction.currency === 'ron'
                     ? formatRon(ronBalance - confirmAction.price)
-                    : formatGamecoin(balance - confirmAction.price) }} {{ confirmAction.currency === 'crypto' ? '💎' : confirmAction.currency === 'ron' ? 'RON' : '🪙' }}
+                    : formatGamecoin(balance - confirmAction.price) }} <Gem v-if="confirmAction.currency === 'crypto'" :size="14" color="#60a5fa" /><span v-else-if="confirmAction.currency === 'ron'">RON</span><Coins v-else :size="14" color="#f59e0b" />
               </span>
             </div>
           </div>
@@ -1493,9 +1478,7 @@ watch(() => props.show, (newVal) => {
                 @click="showMobileCategories = false"
                 class="w-7 h-7 rounded-lg bg-bg-tertiary flex items-center justify-center"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X :size="16" color="currentColor" />
               </button>
             </div>
             <div class="grid grid-cols-4 gap-1.5">
@@ -1506,7 +1489,7 @@ watch(() => props.show, (newVal) => {
                   ? 'bg-accent-primary/20 text-accent-primary border border-accent-primary/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-lg">🏪</span>
+                <Store :size="18" />
                 <span class="text-[10px] font-medium">{{ t('market.filters.all', 'Todos') }}</span>
               </button>
               <button
@@ -1516,7 +1499,7 @@ watch(() => props.show, (newVal) => {
                   ? 'bg-accent-primary/20 text-accent-primary border border-accent-primary/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-lg">⛏️</span>
+                <Pickaxe :size="18" />
                 <span class="text-[10px] font-medium">Rigs</span>
               </button>
               <button
@@ -1526,7 +1509,7 @@ watch(() => props.show, (newVal) => {
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-lg">❄️</span>
+                <Snowflake :size="18" />
                 <span class="text-[10px] font-medium">Cooling</span>
               </button>
               <button
@@ -1536,7 +1519,7 @@ watch(() => props.show, (newVal) => {
                   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-lg">⚡</span>
+                <Zap :size="18" />
                 <span class="text-[10px] font-medium">Energy</span>
               </button>
               <button
@@ -1546,7 +1529,7 @@ watch(() => props.show, (newVal) => {
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-lg">📡</span>
+                <Wifi :size="18" />
                 <span class="text-[10px] font-medium">Internet</span>
               </button>
               <button
@@ -1556,7 +1539,7 @@ watch(() => props.show, (newVal) => {
                   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-lg">🚀</span>
+                <Rocket :size="18" />
                 <span class="text-[10px] font-medium">Boosts</span>
               </button>
               <button
@@ -1566,7 +1549,7 @@ watch(() => props.show, (newVal) => {
                   ? 'bg-gradient-to-r from-blue-500/20 to-amber-500/20 text-blue-400 border border-blue-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-lg">💎</span>
+                <Gem :size="18" />
                 <span class="text-[10px] font-medium">Landwork</span>
               </button>
               <button
@@ -1576,7 +1559,7 @@ watch(() => props.show, (newVal) => {
                   ? 'bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-lg">🩹</span>
+                <Bandage :size="18" />
                 <span class="text-[10px] font-medium">{{ t('market.tabs.patch', 'Supplies') }}</span>
               </button>
               <button
@@ -1586,7 +1569,7 @@ watch(() => props.show, (newVal) => {
                   ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                   : 'bg-bg-tertiary hover:bg-bg-tertiary/80'"
               >
-                <span class="text-lg">📖</span>
+                <BookOpen :size="18" />
                 <span class="text-[10px] font-medium">EXP</span>
               </button>
             </div>
@@ -1613,9 +1596,7 @@ watch(() => props.show, (newVal) => {
           <!-- Error State -->
           <div v-else-if="processingStatus === 'error'" class="text-center">
             <div class="w-16 h-16 mx-auto mb-4 bg-status-danger/20 rounded-full flex items-center justify-center">
-              <svg class="w-8 h-8 text-status-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X :size="32" class="text-status-danger" />
             </div>
             <h3 class="text-lg font-bold text-status-danger mb-2">{{ t('market.processing.error') }}</h3>
             <p class="text-text-muted text-sm mb-4">{{ processingError }}</p>

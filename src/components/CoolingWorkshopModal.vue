@@ -6,6 +6,7 @@ import { useInventoryStore, type CoolingItem, type ModdedCoolingItem, type Cooli
 import { installCoolingMod } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { formatNumber } from '@/utils/format';
+import { Wrench, Snowflake, Zap, Component, Dice6, Sparkles, Skull, Package, AlertTriangle, X } from 'lucide-vue-next';
 
 const { t } = useI18n();
 
@@ -341,7 +342,7 @@ watch(() => props.show, (val) => {
         <div class="flex items-center justify-between p-4 border-b border-border">
           <div>
             <h2 class="text-lg font-semibold flex items-center gap-2">
-              <span>🔧</span>
+              <Wrench :size="20" color="#a78bfa" />
               <span>{{ t('workshop.title') }}</span>
             </h2>
             <p class="text-sm text-text-muted">{{ t('workshop.subtitle') }}</p>
@@ -351,9 +352,7 @@ watch(() => props.show, (val) => {
             :disabled="rollPhase === 'rolling'"
             class="p-2 hover:bg-bg-tertiary rounded-lg transition-colors text-text-muted hover:text-white disabled:opacity-50"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X :size="20" />
           </button>
         </div>
 
@@ -364,8 +363,8 @@ watch(() => props.show, (val) => {
           <div class="rounded-lg border p-4" :class="[getTierBg(coolingItem.tier), getTierBorder(coolingItem.tier)]">
             <div class="flex items-center justify-between mb-3">
               <div>
-                <h3 class="font-semibold" :class="getTierColor(coolingItem.tier)">
-                  ❄️ {{ getCoolingName(coolingItem) }}
+                <h3 class="font-semibold flex items-center gap-1.5" :class="getTierColor(coolingItem.tier)">
+                  <Snowflake :size="16" color="#22d3ee" /> {{ getCoolingName(coolingItem) }}
                 </h3>
                 <span class="text-xs uppercase" :class="getTierColor(coolingItem.tier)">{{ coolingItem.tier }}</span>
               </div>
@@ -377,21 +376,21 @@ watch(() => props.show, (val) => {
             <!-- Current Stats -->
             <div class="grid grid-cols-3 gap-3 text-sm">
               <div>
-                <div class="text-text-muted text-xs">❄️ {{ t('workshop.coolingPower') }}</div>
+                <div class="text-text-muted text-xs flex items-center gap-1"><Snowflake :size="12" color="#22d3ee" /> {{ t('workshop.coolingPower') }}</div>
                 <div class="font-medium">{{ formatNumber(effectivePower, 1) }}°</div>
                 <div v-if="isModded && effectivePower !== basePower" class="text-xs" :class="effectivePower > basePower ? 'text-emerald-400' : 'text-rose-400'">
                   {{ effectivePower > basePower ? '+' : '' }}{{ formatNumber(((effectivePower - basePower) / basePower) * 100, 1) }}%
                 </div>
               </div>
               <div>
-                <div class="text-text-muted text-xs">⚡ {{ t('workshop.energyCost') }}</div>
+                <div class="text-text-muted text-xs flex items-center gap-1"><Zap :size="12" color="#facc15" /> {{ t('workshop.energyCost') }}</div>
                 <div class="font-medium">{{ formatNumber(effectiveEnergy, 1) }}/t</div>
                 <div v-if="isModded && effectiveEnergy !== baseEnergy" class="text-xs" :class="effectiveEnergy < baseEnergy ? 'text-emerald-400' : 'text-rose-400'">
                   {{ effectiveEnergy > baseEnergy ? '+' : '' }}{{ formatNumber(((effectiveEnergy - baseEnergy) / baseEnergy) * 100, 1) }}%
                 </div>
               </div>
               <div>
-                <div class="text-text-muted text-xs">🔧 {{ t('workshop.durability') }}</div>
+                <div class="text-text-muted text-xs flex items-center gap-1"><Wrench :size="12" color="#a78bfa" /> {{ t('workshop.durability') }}</div>
                 <div class="font-medium" :class="totalDurabilityMod !== 0 ? (totalDurabilityMod > 0 ? 'text-emerald-400' : 'text-rose-400') : ''">
                   {{ totalDurabilityMod === 0 ? '—' : (totalDurabilityMod > 0 ? '+' : '') + formatNumber(totalDurabilityMod, 1) + '%' }}
                 </div>
@@ -412,7 +411,7 @@ watch(() => props.show, (val) => {
                   : 'bg-bg-tertiary border-border text-text-muted'"
               >
                 <template v-if="slot <= currentMods.length">
-                  🧩 {{ getComponentName(currentMods[slot - 1].component_id) }}
+                  <span class="inline-flex items-center gap-1"><Component :size="12" color="#d946ef" /> {{ getComponentName(currentMods[slot - 1].component_id) }}</span>
                 </template>
                 <template v-else>
                   {{ t('workshop.empty') }}
@@ -425,22 +424,22 @@ watch(() => props.show, (val) => {
           <div v-if="rollPhase !== 'idle'" class="rounded-lg border border-border bg-bg-tertiary p-4">
             <!-- Rolling Animation -->
             <div v-if="rollPhase === 'rolling'" class="text-center space-y-4">
-              <div class="text-lg font-semibold animate-pulse">🎲 {{ t('workshop.roll.rolling') }}</div>
+              <div class="text-lg font-semibold animate-pulse flex items-center justify-center gap-2"><Dice6 :size="20" color="#a78bfa" /> {{ t('workshop.roll.rolling') }}</div>
               <div class="grid grid-cols-3 gap-3">
                 <div v-if="selectedComponent && (selectedComponent.cooling_power_min !== 0 || selectedComponent.cooling_power_max !== 0)">
-                  <div class="text-xs text-text-muted">❄️ {{ t('workshop.coolingPower') }}</div>
+                  <div class="text-xs text-text-muted flex items-center justify-center gap-1"><Snowflake :size="12" color="#22d3ee" /> {{ t('workshop.coolingPower') }}</div>
                   <div class="text-lg font-mono font-bold animate-pulse" :class="modColor(rollAnimValues.cooling)">
                     {{ formatMod(rollAnimValues.cooling) }}
                   </div>
                 </div>
                 <div v-if="selectedComponent && (selectedComponent.energy_cost_min !== 0 || selectedComponent.energy_cost_max !== 0)">
-                  <div class="text-xs text-text-muted">⚡ {{ t('workshop.energyCost') }}</div>
+                  <div class="text-xs text-text-muted flex items-center justify-center gap-1"><Zap :size="12" color="#facc15" /> {{ t('workshop.energyCost') }}</div>
                   <div class="text-lg font-mono font-bold animate-pulse" :class="modColor(rollAnimValues.energy, true)">
                     {{ formatMod(rollAnimValues.energy) }}
                   </div>
                 </div>
                 <div v-if="selectedComponent && (selectedComponent.durability_min !== 0 || selectedComponent.durability_max !== 0)">
-                  <div class="text-xs text-text-muted">🔧 {{ t('workshop.durability') }}</div>
+                  <div class="text-xs text-text-muted flex items-center justify-center gap-1"><Wrench :size="12" color="#a78bfa" /> {{ t('workshop.durability') }}</div>
                   <div class="text-lg font-mono font-bold animate-pulse" :class="modColor(rollAnimValues.durability)">
                     {{ formatMod(rollAnimValues.durability) }}
                   </div>
@@ -454,27 +453,27 @@ watch(() => props.show, (val) => {
                 <div class="text-sm text-text-muted mb-1">{{ t('workshop.roll.result') }}</div>
                 <div class="text-2xl font-bold" :class="getQualityColor(rollResult.quality)">
                   {{ t(`workshop.roll.${rollResult.quality}`) }}
-                  <span v-if="rollResult.quality === 'excellent'"> ✨</span>
-                  <span v-else-if="rollResult.quality === 'terrible'"> 💀</span>
+                  <Sparkles v-if="rollResult.quality === 'excellent'" :size="20" color="#10b981" class="inline-block ml-1" />
+                  <Skull v-else-if="rollResult.quality === 'terrible'" :size="20" color="#f43f5e" class="inline-block ml-1" />
                 </div>
               </div>
 
               <div class="rounded-lg border p-3" :class="getQualityBg(rollResult.quality)">
                 <div class="grid grid-cols-3 gap-3 text-center">
                   <div v-if="rollResult.cooling_power_mod !== 0">
-                    <div class="text-xs text-text-muted">❄️ {{ t('workshop.coolingPower') }}</div>
+                    <div class="text-xs text-text-muted flex items-center justify-center gap-1"><Snowflake :size="12" color="#22d3ee" /> {{ t('workshop.coolingPower') }}</div>
                     <div class="text-lg font-bold" :class="modColor(rollResult.cooling_power_mod)">
                       {{ formatMod(rollResult.cooling_power_mod) }}
                     </div>
                   </div>
                   <div v-if="rollResult.energy_cost_mod !== 0">
-                    <div class="text-xs text-text-muted">⚡ {{ t('workshop.energyCost') }}</div>
+                    <div class="text-xs text-text-muted flex items-center justify-center gap-1"><Zap :size="12" color="#facc15" /> {{ t('workshop.energyCost') }}</div>
                     <div class="text-lg font-bold" :class="modColor(rollResult.energy_cost_mod, true)">
                       {{ formatMod(rollResult.energy_cost_mod) }}
                     </div>
                   </div>
                   <div v-if="rollResult.durability_mod !== 0">
-                    <div class="text-xs text-text-muted">🔧 {{ t('workshop.durability') }}</div>
+                    <div class="text-xs text-text-muted flex items-center justify-center gap-1"><Wrench :size="12" color="#a78bfa" /> {{ t('workshop.durability') }}</div>
                     <div class="text-lg font-bold" :class="modColor(rollResult.durability_mod)">
                       {{ formatMod(rollResult.durability_mod) }}
                     </div>
@@ -493,7 +492,7 @@ watch(() => props.show, (val) => {
 
           <!-- Available Components -->
           <div v-if="rollPhase === 'idle'">
-            <h3 class="text-sm font-semibold text-text-muted mb-3">📦 {{ t('workshop.availableComponents') }}</h3>
+            <h3 class="text-sm font-semibold text-text-muted mb-3 flex items-center gap-1.5"><Package :size="14" color="#a78bfa" /> {{ t('workshop.availableComponents') }}</h3>
 
             <div v-if="availableComponents.length === 0" class="text-center py-6 text-text-muted text-sm">
               {{ t('workshop.noComponents') }}
@@ -508,8 +507,8 @@ watch(() => props.show, (val) => {
               >
                 <div class="flex items-center justify-between">
                   <div>
-                    <div class="font-medium text-sm" :class="getTierColor(comp.tier)">
-                      🧩 {{ getComponentName(comp.id, comp.name) }}
+                    <div class="font-medium text-sm flex items-center gap-1" :class="getTierColor(comp.tier)">
+                      <Component :size="14" color="#d946ef" /> {{ getComponentName(comp.id, comp.name) }}
                     </div>
                     <div class="text-xs text-text-muted">x{{ comp.quantity }} · {{ comp.tier }}</div>
                   </div>
@@ -518,19 +517,19 @@ watch(() => props.show, (val) => {
                 <!-- Stat Ranges -->
                 <div class="space-y-1 text-xs">
                   <div v-if="comp.cooling_power_min !== 0 || comp.cooling_power_max !== 0" class="flex justify-between">
-                    <span class="text-text-muted">❄️ {{ t('workshop.coolingPower') }}</span>
+                    <span class="text-text-muted flex items-center gap-1"><Snowflake :size="12" color="#22d3ee" /> {{ t('workshop.coolingPower') }}</span>
                     <span :class="rangeColor(comp.cooling_power_min, comp.cooling_power_max)">
                       {{ formatRange(comp.cooling_power_min, comp.cooling_power_max) }}
                     </span>
                   </div>
                   <div v-if="comp.energy_cost_min !== 0 || comp.energy_cost_max !== 0" class="flex justify-between">
-                    <span class="text-text-muted">⚡ {{ t('workshop.energyCost') }}</span>
+                    <span class="text-text-muted flex items-center gap-1"><Zap :size="12" color="#facc15" /> {{ t('workshop.energyCost') }}</span>
                     <span :class="rangeColor(comp.energy_cost_min, comp.energy_cost_max, true)">
                       {{ formatRange(comp.energy_cost_min, comp.energy_cost_max) }}
                     </span>
                   </div>
                   <div v-if="comp.durability_min !== 0 || comp.durability_max !== 0" class="flex justify-between">
-                    <span class="text-text-muted">🔧 {{ t('workshop.durability') }}</span>
+                    <span class="text-text-muted flex items-center gap-1"><Wrench :size="12" color="#a78bfa" /> {{ t('workshop.durability') }}</span>
                     <span :class="rangeColor(comp.durability_min, comp.durability_max)">
                       {{ formatRange(comp.durability_min, comp.durability_max) }}
                     </span>
@@ -569,19 +568,19 @@ watch(() => props.show, (val) => {
           <div class="bg-bg-tertiary rounded-lg p-3 space-y-2 text-sm">
             <div class="text-xs text-text-muted font-semibold">{{ t('workshop.confirm.ranges') }}</div>
             <div v-if="selectedComponent.cooling_power_min !== 0 || selectedComponent.cooling_power_max !== 0" class="flex justify-between">
-              <span>❄️ {{ t('workshop.coolingPower') }}</span>
+              <span class="flex items-center gap-1"><Snowflake :size="12" color="#22d3ee" /> {{ t('workshop.coolingPower') }}</span>
               <span :class="rangeColor(selectedComponent.cooling_power_min, selectedComponent.cooling_power_max)">
                 {{ formatRange(selectedComponent.cooling_power_min, selectedComponent.cooling_power_max) }}
               </span>
             </div>
             <div v-if="selectedComponent.energy_cost_min !== 0 || selectedComponent.energy_cost_max !== 0" class="flex justify-between">
-              <span>⚡ {{ t('workshop.energyCost') }}</span>
+              <span class="flex items-center gap-1"><Zap :size="12" color="#facc15" /> {{ t('workshop.energyCost') }}</span>
               <span :class="rangeColor(selectedComponent.energy_cost_min, selectedComponent.energy_cost_max, true)">
                 {{ formatRange(selectedComponent.energy_cost_min, selectedComponent.energy_cost_max) }}
               </span>
             </div>
             <div v-if="selectedComponent.durability_min !== 0 || selectedComponent.durability_max !== 0" class="flex justify-between">
-              <span>🔧 {{ t('workshop.durability') }}</span>
+              <span class="flex items-center gap-1"><Wrench :size="12" color="#a78bfa" /> {{ t('workshop.durability') }}</span>
               <span :class="rangeColor(selectedComponent.durability_min, selectedComponent.durability_max)">
                 {{ formatRange(selectedComponent.durability_min, selectedComponent.durability_max) }}
               </span>
@@ -590,7 +589,7 @@ watch(() => props.show, (val) => {
 
           <!-- Warning -->
           <div class="bg-rose-500/10 border border-rose-500/30 rounded-lg p-3 text-center">
-            <span class="text-rose-400 text-sm font-semibold">⚠️ {{ t('workshop.confirm.warning') }}</span>
+            <span class="text-rose-400 text-sm font-semibold inline-flex items-center gap-1"><AlertTriangle :size="14" color="#f43f5e" /> {{ t('workshop.confirm.warning') }}</span>
           </div>
 
           <!-- Buttons -->

@@ -656,6 +656,25 @@ export async function getRigCooling(rigId: string): Promise<any> {
   });
 }
 
+// ===================== RIG POWER =====================
+
+export async function getRigPower(rigId: string): Promise<any> {
+  return rpcWithRetry('get_rig_power', { p_rig_id: rigId });
+}
+
+export async function installPowerToRig(playerId: string, rigId: string, powerName: string, powerSupply: number): Promise<any> {
+  return rpcWithRetry('install_power_to_rig', {
+    p_player_id: playerId, p_rig_id: rigId,
+    p_power_name: powerName, p_power_supply: powerSupply,
+  });
+}
+
+export async function removePowerFromRig(playerId: string, rigId: string, powerId: string): Promise<any> {
+  return rpcWithRetry('remove_power_from_rig', {
+    p_player_id: playerId, p_rig_id: rigId, p_power_id: powerId,
+  });
+}
+
 // Comprar cooling (va al inventario)
 export async function buyCooling(playerId: string, coolingId: string) {
   const { data, error } = await supabase.rpc('buy_cooling', {
@@ -769,11 +788,10 @@ export async function upgradeSlotTier(playerId: string, slotId: string): Promise
 // === EXP PACKS ===
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function useExpPack(playerId: string, packId: string, slotId: string): Promise<any> {
+export async function useExpPack(playerId: string, packId: string): Promise<any> {
   const { data, error } = await supabase.rpc('use_exp_pack', {
     p_player_id: playerId,
     p_pack_id: packId,
-    p_slot_id: slotId,
   });
   if (error) throw error;
   return data;
@@ -2077,4 +2095,36 @@ export async function getHackStatus(playerId: string): Promise<any> {
   return rpcWithRetry('get_hack_status', {
     p_player_id: playerId,
   });
+}
+
+export async function grantPlayerXp(playerId: string, amount: number, source: string = 'forge'): Promise<any> {
+  return rpcWithRetry('grant_player_xp', {
+    p_player_id: playerId,
+    p_amount: amount,
+    p_source: source,
+  });
+}
+
+// ===================== STAKING =====================
+
+export async function createStake(playerId: string, plan: string): Promise<any> {
+  return rpcWithRetry('create_stake', { p_player_id: playerId, p_plan: plan });
+}
+
+export async function claimStakingRewards(playerId: string): Promise<any> {
+  return rpcWithRetry('claim_staking_rewards', { p_player_id: playerId });
+}
+
+export async function checkStakeStatus(playerId: string): Promise<any> {
+  return rpcWithRetry('check_stake_status', { p_player_id: playerId });
+}
+
+export async function getStakeHistory(playerId: string): Promise<any> {
+  return rpcWithRetry('get_stake_history', { p_player_id: playerId });
+}
+
+// ===================== LUCKY BOOST =====================
+
+export async function activateLuckyBoost(playerId: string): Promise<any> {
+  return rpcWithRetry('activate_lucky_boost', { p_player_id: playerId });
 }

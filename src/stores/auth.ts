@@ -24,6 +24,10 @@ interface Player {
   max_energy: number;
   max_internet: number;
   reputation_score: number;
+  level: number;
+  xp: number;
+  landwork: number;
+  lucky_boost_until: string | null;
   region: string;
   ron_wallet?: string | null;
   premium_until?: string | null;

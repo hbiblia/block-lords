@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n';
 import MainLayout from '@/layouts/MainLayout.vue';
 import UpdateModal from '@/components/UpdateModal.vue';
 import { useTabLock } from '@/composables/useTabLock';
+import { Pickaxe, AppWindow } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -69,7 +70,7 @@ async function handleRetry() {
     <nav class="fixed left-0 right-0 top-0 z-50 glass border-b border-border/50">
       <div class="container mx-auto px-4 h-16 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center text-xl">⛏️</div>
+          <div class="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center"><Pickaxe :size="20" color="#f59e0b" /></div>
           <div class="hidden sm:block h-5 w-28 bg-bg-tertiary rounded animate-pulse"></div>
         </div>
         <div class="flex items-center gap-4">
@@ -154,8 +155,8 @@ async function handleRetry() {
   <Transition name="fade">
   <div v-if="isSuperseded" class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="card p-8 max-w-sm w-full text-center border border-border/50 shadow-2xl">
-      <div class="w-16 h-16 mx-auto mb-5 rounded-full bg-amber-500/10 flex items-center justify-center text-3xl">
-        🪟
+      <div class="w-16 h-16 mx-auto mb-5 rounded-full bg-amber-500/10 flex items-center justify-center">
+        <AppWindow :size="28" color="#f59e0b" />
       </div>
       <h2 class="text-xl font-bold text-text-primary mb-2">{{ t('tabLock.title') }}</h2>
       <p class="text-text-secondary text-sm mb-2">{{ t('tabLock.message') }}</p>

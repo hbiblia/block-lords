@@ -2089,9 +2089,14 @@ onMounted(async () => {
                       <p class="font-bold text-sm">{{ rig.rig_name }} <span class="text-text-muted text-xs">Tier {{ rig.tier }}</span></p>
                       <p class="text-text-muted text-xs">{{ Number(rig.hashrate).toLocaleString('en-US') }} H/s</p>
                     </div>
-                    <span :class="rig.is_active ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'" class="px-2 py-1 rounded text-sm font-medium">
-                      {{ rig.is_active ? '✓ Activo' : '✗ Inactivo' }}
-                    </span>
+                    <div class="flex gap-1.5 items-center">
+                      <span :class="(rig.mining_mode || 'pool') === 'solo' ? 'bg-purple-500/20 text-purple-400' : 'bg-cyan-500/20 text-cyan-400'" class="px-2 py-1 rounded text-xs font-medium uppercase">
+                        {{ (rig.mining_mode || 'pool') === 'solo' ? 'Solo' : 'Pool' }}
+                      </span>
+                      <span :class="rig.is_active ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'" class="px-2 py-1 rounded text-sm font-medium">
+                        {{ rig.is_active ? '✓ Activo' : '✗ Inactivo' }}
+                      </span>
+                    </div>
                   </div>
                   <div class="grid grid-cols-3 gap-2 mb-2 text-sm">
                     <div>

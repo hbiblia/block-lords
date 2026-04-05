@@ -45,13 +45,12 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const { getSnapshots, getSummary, rigSnapshots } = useRigStats();
 
-// Force reactivity when rigSnapshots changes
 const updateKey = ref(0);
 watch(rigSnapshots, () => { updateKey.value++; }, { deep: true });
 
 const snapshots = computed<RigSnapshot[]>(() => {
   // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-  updateKey.value; // dependency for reactivity
+  updateKey.value;
   if (!props.rig) return [];
   return getSnapshots(props.rig.id);
 });
@@ -65,7 +64,6 @@ const summary = computed(() => {
 
 const hasData = computed(() => snapshots.value.length >= 2);
 
-// Time labels relative to first snapshot
 const timeLabels = computed(() => {
   const snaps = snapshots.value;
   if (snaps.length === 0) return [];
@@ -78,10 +76,8 @@ const timeLabels = computed(() => {
   });
 });
 
-// Chart theme defaults
-const gridColor = 'rgba(63, 63, 92, 0.3)';
-const tickColor = '#71717a';
-const tooltipBg = '#252640';
+const gridColor = 'rgba(47, 48, 82, 0.4)';
+const tooltipBg = '#1a1b2e';
 const tooltipBorder = '#3f3f5c';
 
 const baseOptions = {
@@ -91,48 +87,49 @@ const baseOptions = {
   interaction: { mode: 'index' as const, intersect: false },
   plugins: {
     legend: {
-      labels: { color: '#a1a1aa', boxWidth: 12, padding: 12 },
+      labels: { color: '#a1a1aa', boxWidth: 10, padding: 10, font: { size: 10, family: "'JetBrains Mono', monospace" } },
     },
     tooltip: {
       backgroundColor: tooltipBg,
-      titleColor: '#ffffff',
+      titleColor: '#f59e0b',
       bodyColor: '#a1a1aa',
       borderColor: tooltipBorder,
       borderWidth: 1,
+      titleFont: { family: "'JetBrains Mono', monospace" },
+      bodyFont: { family: "'JetBrains Mono', monospace" },
     },
   },
   scales: {
     x: {
       grid: { color: gridColor },
-      ticks: { color: tickColor, maxTicksLimit: 8 },
+      ticks: { color: '#4f4f6f', font: { size: 9, family: "'JetBrains Mono', monospace" }, maxTicksLimit: 8 },
     },
   },
 };
 
-// Chart 1: Temperature & Condition
 const tempConditionData = computed(() => ({
   labels: timeLabels.value,
   datasets: [
     {
-      label: '🌡️ Temperatura (°C)',
+      label: 'TEMP °C',
       data: snapshots.value.map(s => Number(s.temperature.toFixed(1))),
       borderColor: '#ef4444',
-      backgroundColor: 'rgba(239, 68, 68, 0.08)',
+      backgroundColor: 'rgba(239, 68, 68, 0.06)',
       fill: true,
       tension: 0.3,
-      pointRadius: 2,
-      borderWidth: 2,
+      pointRadius: 1,
+      borderWidth: 1.5,
       yAxisID: 'y',
     },
     {
-      label: '🔧 Condición (%)',
+      label: 'COND %',
       data: snapshots.value.map(s => Number(s.condition.toFixed(1))),
       borderColor: '#22c55e',
-      backgroundColor: 'rgba(34, 197, 94, 0.08)',
+      backgroundColor: 'rgba(34, 197, 94, 0.06)',
       fill: true,
       tension: 0.3,
-      pointRadius: 2,
-      borderWidth: 2,
+      pointRadius: 1,
+      borderWidth: 1.5,
       yAxisID: 'y1',
     },
   ],
@@ -144,68 +141,63 @@ const tempConditionOptions = computed(() => ({
     ...baseOptions.scales,
     y: {
       position: 'left' as const,
-      min: 0,
-      max: 100,
+      min: 0, max: 100,
       grid: { color: gridColor },
-      ticks: { color: '#ef4444' },
-      title: { display: true, text: '°C', color: '#ef4444' },
+      ticks: { color: '#ef4444', font: { size: 9, family: "'JetBrains Mono', monospace" } },
+      title: { display: true, text: '°C', color: '#ef444480', font: { size: 9 } },
     },
     y1: {
       position: 'right' as const,
-      min: 0,
-      max: 100,
+      min: 0, max: 100,
       grid: { drawOnChartArea: false },
-      ticks: { color: '#22c55e' },
-      title: { display: true, text: '%', color: '#22c55e' },
+      ticks: { color: '#22c55e', font: { size: 9, family: "'JetBrains Mono', monospace" } },
+      title: { display: true, text: '%', color: '#22c55e80', font: { size: 9 } },
     },
   },
 }));
 
-// Chart 2: Hashrate + Energy & Internet (combined)
 const hashrateResourceData = computed(() => ({
   labels: timeLabels.value,
   datasets: [
     {
-      label: '⚡ Hashrate Efectivo',
+      label: 'HASH EFF',
       data: snapshots.value.map(s => Math.round(s.effectiveHashrate)),
       borderColor: '#f59e0b',
-      backgroundColor: 'rgba(245, 158, 11, 0.08)',
+      backgroundColor: 'rgba(245, 158, 11, 0.06)',
       fill: true,
       tension: 0.3,
-      pointRadius: 2,
-      borderWidth: 2,
+      pointRadius: 1,
+      borderWidth: 1.5,
       yAxisID: 'y',
     },
     {
-      label: '📊 Hashrate Base',
+      label: 'HASH BASE',
       data: snapshots.value.map(s => s.baseHashrate),
-      borderColor: 'rgba(245, 158, 11, 0.3)',
-      borderDash: [5, 5],
+      borderColor: 'rgba(245, 158, 11, 0.25)',
+      borderDash: [4, 4],
       pointRadius: 0,
       borderWidth: 1,
       fill: false,
       yAxisID: 'y',
     },
     {
-      label: '🔋 Energía/tick',
+      label: 'ENERGY',
       data: snapshots.value.map(s => Number(s.energyConsumption.toFixed(1))),
       borderColor: '#22c55e',
-      backgroundColor: 'rgba(34, 197, 94, 0.08)',
       fill: false,
       tension: 0.3,
-      pointRadius: 2,
-      borderWidth: 2,
+      pointRadius: 1,
+      borderWidth: 1.5,
       yAxisID: 'y1',
     },
     {
-      label: '📡 Internet/tick',
+      label: 'NET',
       data: snapshots.value.map(s => Number(s.internetConsumption.toFixed(1))),
-      borderColor: '#3b82f6',
-      backgroundColor: 'rgba(59, 130, 246, 0.08)',
+      borderColor: '#06b6d4',
       fill: false,
       tension: 0.3,
-      pointRadius: 2,
-      borderWidth: 2,
+      pointRadius: 1,
+      borderWidth: 1.5,
       yAxisID: 'y1',
     },
   ],
@@ -219,162 +211,149 @@ const hashrateResourceOptions = computed(() => ({
       position: 'left' as const,
       min: 0,
       grid: { color: gridColor },
-      ticks: { color: '#f59e0b' },
-      title: { display: true, text: 'H/s', color: '#f59e0b' },
+      ticks: { color: '#f59e0b', font: { size: 9, family: "'JetBrains Mono', monospace" } },
+      title: { display: true, text: 'H/s', color: '#f59e0b80', font: { size: 9 } },
     },
     y1: {
       position: 'right' as const,
       min: 0,
       grid: { drawOnChartArea: false },
-      ticks: { color: '#3b82f6' },
-      title: { display: true, text: '/tick', color: '#3b82f6' },
+      ticks: { color: '#06b6d4', font: { size: 9, family: "'JetBrains Mono', monospace" } },
+      title: { display: true, text: '/tick', color: '#06b6d480', font: { size: 9 } },
     },
   },
 }));
 
-function getTempColor(temp: number): string {
-  if (temp >= 80) return 'text-status-danger';
-  if (temp >= 60) return 'text-status-warning';
-  if (temp >= 40) return 'text-yellow-400';
-  return 'text-status-success';
+function getTempStatus(temp: number) {
+  if (temp >= 80) return { color: '#ef4444', label: 'CRITICAL' };
+  if (temp >= 60) return { color: '#f59e0b', label: 'ELEVATED' };
+  return { color: '#22c55e', label: 'NOMINAL' };
 }
 
-function getConditionColor(cond: number): string {
-  if (cond < 30) return 'text-status-danger';
-  if (cond < 80) return 'text-status-warning';
-  return 'text-status-success';
+function getCondStatus(cond: number) {
+  if (cond < 30) return { color: '#ef4444', label: 'FAILING' };
+  if (cond < 80) return { color: '#f59e0b', label: 'DEGRADED' };
+  return { color: '#22c55e', label: 'SOLID' };
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="show && rig" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <!-- Overlay -->
-      <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="emit('close')"></div>
+    <div v-if="show && rig" class="rsm-overlay" @click.self="emit('close')">
+      <div class="rsm-modal">
+        <!-- HUD Corners -->
+        <div class="rsm-c rsm-tl"></div>
+        <div class="rsm-c rsm-tr"></div>
+        <div class="rsm-c rsm-bl"></div>
+        <div class="rsm-c rsm-br"></div>
+        <div class="rsm-scan"></div>
 
-      <!-- Modal -->
-      <div class="relative w-full max-w-2xl lg:max-w-3xl h-[85vh] flex flex-col bg-bg-secondary border border-border rounded-xl overflow-hidden">
         <!-- Header -->
-        <div class="flex items-center justify-between p-4 border-b border-border shrink-0">
-          <div>
-            <h2 class="text-lg font-semibold flex items-center gap-2">
-              <span>📊</span>
-              <span>{{ t('mining.stats') || 'Rig Stats' }}</span>
-            </h2>
-            <p class="text-sm text-text-muted">{{ rig.rig.name }}</p>
+        <div class="rsm-header">
+          <div class="rsm-header-left">
+            <span class="rsm-ind"></span>
+            <span class="rsm-tag">NODE_TELEMETRY</span>
           </div>
-          <button @click="emit('close')"
-            class="p-2 hover:bg-bg-tertiary rounded-lg transition-colors text-text-muted hover:text-white">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <span class="rsm-rig-name">{{ rig.rig.name }}</span>
+          <button class="rsm-close" @click="emit('close')">✕</button>
         </div>
 
-        <!-- Current Status Bar -->
-        <div class="grid grid-cols-4 gap-2 p-3 border-b border-border/50 bg-bg-primary/50 shrink-0">
-          <div class="text-center">
-            <div class="text-[10px] text-text-muted">Temp</div>
-            <div class="text-sm font-bold font-mono" :class="getTempColor(rig.temperature ?? 0)">
-              {{ (rig.temperature ?? 0).toFixed(0) }}°C
-            </div>
+        <!-- Status Bar -->
+        <div class="rsm-status-bar">
+          <div class="rsm-stat">
+            <span class="rsm-stat-label">THR.CORE</span>
+            <span class="rsm-stat-val" :style="{ color: getTempStatus(rig.temperature ?? 0).color }">{{ (rig.temperature ?? 0).toFixed(0) }}°C</span>
+            <span class="rsm-stat-tag" :style="{ color: getTempStatus(rig.temperature ?? 0).color }">{{ getTempStatus(rig.temperature ?? 0).label }}</span>
           </div>
-          <div class="text-center">
-            <div class="text-[10px] text-text-muted">Condición</div>
-            <div class="text-sm font-bold font-mono" :class="getConditionColor(rig.condition)">
-              {{ rig.condition.toFixed(0) }}%
-            </div>
+          <div class="rsm-stat">
+            <span class="rsm-stat-label">INT.INDEX</span>
+            <span class="rsm-stat-val" :style="{ color: getCondStatus(rig.condition).color }">{{ rig.condition.toFixed(0) }}%</span>
+            <span class="rsm-stat-tag" :style="{ color: getCondStatus(rig.condition).color }">{{ getCondStatus(rig.condition).label }}</span>
           </div>
-          <div class="text-center">
-            <div class="text-[10px] text-text-muted">Hashrate</div>
-            <div class="text-sm font-bold font-mono text-accent-primary">
-              {{ snapshots.length > 0 ? Math.round(snapshots[snapshots.length - 1].effectiveHashrate) : rig.rig.hashrate }} H/s
-            </div>
+          <div class="rsm-stat">
+            <span class="rsm-stat-label">HASH.EFF</span>
+            <span class="rsm-stat-val rsm-amber">{{ snapshots.length > 0 ? Math.round(snapshots[snapshots.length - 1].effectiveHashrate) : rig.rig.hashrate }} H/s</span>
           </div>
-          <div class="text-center">
-            <div class="text-[10px] text-text-muted">Estado</div>
-            <div class="text-sm font-bold" :class="rig.is_active && rig.condition > 0 ? 'text-status-success' : 'text-text-muted'">
-              {{ rig.condition <= 0 ? 'Roto' : rig.is_active ? 'Activo' : 'Apagado' }}
-            </div>
+          <div class="rsm-stat">
+            <span class="rsm-stat-label">SYS.STATE</span>
+            <span class="rsm-stat-val" :style="{ color: rig.is_active && rig.condition > 0 ? '#22c55e' : '#ef4444' }">
+              {{ rig.condition <= 0 ? 'DESTROYED' : rig.is_active ? 'ONLINE' : 'OFFLINE' }}
+            </span>
           </div>
         </div>
 
         <!-- Content -->
-        <div class="flex-1 overflow-y-auto p-4 space-y-5">
+        <div class="rsm-body">
           <!-- Empty state -->
-          <div v-if="!hasData" class="flex flex-col items-center justify-center h-full text-center px-4">
-            <div class="text-4xl mb-3">📈</div>
-            <h3 class="text-lg font-semibold mb-2">Recolectando datos...</h3>
-            <p class="text-sm text-text-muted max-w-sm">
-              Las estadísticas aparecerán después de algunos ticks de minería (cada 30s).
-              Mantené el rig encendido para ver las tendencias.
-            </p>
-            <div class="mt-4 flex items-center gap-2 text-xs text-text-muted">
-              <div class="w-2 h-2 rounded-full bg-status-success animate-pulse"></div>
-              {{ snapshots.length }} snapshot{{ snapshots.length !== 1 ? 's' : '' }} recolectado{{ snapshots.length !== 1 ? 's' : '' }}
+          <div v-if="!hasData" class="rsm-empty">
+            <span class="rsm-empty-icon">◇</span>
+            <span class="rsm-empty-title">COLLECTING_DATA</span>
+            <span class="rsm-empty-sub">Telemetry will appear after mining ticks (~30s). Keep node online.</span>
+            <div class="rsm-empty-count">
+              <span class="rsm-ind-sm"></span>
+              {{ snapshots.length }} SNAPSHOT{{ snapshots.length !== 1 ? 'S' : '' }}
             </div>
           </div>
 
           <template v-else>
-            <!-- Chart 1: Temperature & Condition -->
-            <div class="bg-bg-primary/50 rounded-xl p-3 border border-border/30">
-              <h3 class="text-sm font-semibold mb-2 text-text-secondary">🌡️ Temperatura & Condición</h3>
-              <div class="h-48">
+            <!-- Chart 1: Temp & Condition -->
+            <div class="rsm-chart-card">
+              <div class="rsm-chart-head">
+                <span class="rsm-chart-dot" style="background:#ef4444;"></span>
+                <span class="rsm-chart-title">THERMAL & INTEGRITY</span>
+              </div>
+              <div class="rsm-chart-wrap">
                 <Line :data="tempConditionData" :options="tempConditionOptions" />
               </div>
             </div>
 
-            <!-- Chart 2: Hashrate + Resources -->
-            <div class="bg-bg-primary/50 rounded-xl p-3 border border-border/30">
-              <h3 class="text-sm font-semibold mb-2 text-text-secondary">⚡ Hashrate & Consumo</h3>
-              <div class="h-48">
+            <!-- Chart 2: Hashrate & Resources -->
+            <div class="rsm-chart-card">
+              <div class="rsm-chart-head">
+                <span class="rsm-chart-dot" style="background:#f59e0b;"></span>
+                <span class="rsm-chart-title">HASHRATE & CONSUMPTION</span>
+              </div>
+              <div class="rsm-chart-wrap">
                 <Line :data="hashrateResourceData" :options="hashrateResourceOptions" />
               </div>
             </div>
 
-            <!-- Summary Stats -->
-            <div v-if="summary" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div class="bg-bg-primary/50 rounded-xl p-3 text-center border border-border/30">
-                <div class="text-[10px] text-text-muted mb-1">Temp Promedio</div>
-                <div class="text-lg font-bold font-mono" :class="getTempColor(summary.avgTemperature)">
-                  {{ summary.avgTemperature.toFixed(1) }}°C
+            <!-- Summary Grid -->
+            <div v-if="summary" class="rsm-summary">
+              <div class="rsm-sum-title">
+                <span class="rsm-sum-line"></span>
+                <span>SESSION_SUMMARY</span>
+                <span class="rsm-sum-line"></span>
+              </div>
+              <div class="rsm-sum-grid">
+                <div class="rsm-sum-card">
+                  <span class="rsm-sum-label">AVG_TEMP</span>
+                  <span class="rsm-sum-val" :style="{ color: getTempStatus(summary.avgTemperature).color }">{{ summary.avgTemperature.toFixed(1) }}°C</span>
+                </div>
+                <div class="rsm-sum-card">
+                  <span class="rsm-sum-label">PEAK_TEMP</span>
+                  <span class="rsm-sum-val" :style="{ color: getTempStatus(summary.maxTemperature).color }">{{ summary.maxTemperature.toFixed(1) }}°C</span>
+                </div>
+                <div class="rsm-sum-card">
+                  <span class="rsm-sum-label">DEGRADATION</span>
+                  <span class="rsm-sum-val" :style="{ color: summary.conditionDelta > 0 ? '#ef4444' : '#22c55e' }">{{ summary.conditionDelta > 0 ? '-' : '' }}{{ summary.conditionDelta.toFixed(1) }}%</span>
+                </div>
+                <div class="rsm-sum-card">
+                  <span class="rsm-sum-label">AVG_HASH</span>
+                  <span class="rsm-sum-val rsm-amber">{{ Math.round(summary.avgEffectiveHashrate).toLocaleString() }}</span>
+                </div>
+                <div class="rsm-sum-card">
+                  <span class="rsm-sum-label">PEAK_HASH</span>
+                  <span class="rsm-sum-val rsm-amber">{{ Math.round(summary.peakEffectiveHashrate).toLocaleString() }}</span>
+                </div>
+                <div class="rsm-sum-card">
+                  <span class="rsm-sum-label">UPTIME</span>
+                  <span class="rsm-sum-val" :style="{ color: summary.uptimePercent >= 80 ? '#22c55e' : '#f59e0b' }">{{ summary.uptimePercent.toFixed(0) }}%</span>
                 </div>
               </div>
-              <div class="bg-bg-primary/50 rounded-xl p-3 text-center border border-border/30">
-                <div class="text-[10px] text-text-muted mb-1">Temp Máxima</div>
-                <div class="text-lg font-bold font-mono" :class="getTempColor(summary.maxTemperature)">
-                  {{ summary.maxTemperature.toFixed(1) }}°C
-                </div>
+              <div class="rsm-sum-footer">
+                {{ summary.totalSnapshots }} SAMPLES // {{ summary.durationMinutes.toFixed(1) }} MIN
               </div>
-              <div class="bg-bg-primary/50 rounded-xl p-3 text-center border border-border/30">
-                <div class="text-[10px] text-text-muted mb-1">Degradación</div>
-                <div class="text-lg font-bold font-mono" :class="summary.conditionDelta > 0 ? 'text-status-danger' : 'text-status-success'">
-                  {{ summary.conditionDelta > 0 ? '-' : '' }}{{ summary.conditionDelta.toFixed(1) }}%
-                </div>
-              </div>
-              <div class="bg-bg-primary/50 rounded-xl p-3 text-center border border-border/30">
-                <div class="text-[10px] text-text-muted mb-1">Hashrate Prom.</div>
-                <div class="text-lg font-bold font-mono text-accent-primary">
-                  {{ Math.round(summary.avgEffectiveHashrate).toLocaleString() }}
-                </div>
-              </div>
-              <div class="bg-bg-primary/50 rounded-xl p-3 text-center border border-border/30">
-                <div class="text-[10px] text-text-muted mb-1">Hashrate Pico</div>
-                <div class="text-lg font-bold font-mono text-accent-primary">
-                  {{ Math.round(summary.peakEffectiveHashrate).toLocaleString() }}
-                </div>
-              </div>
-              <div class="bg-bg-primary/50 rounded-xl p-3 text-center border border-border/30">
-                <div class="text-[10px] text-text-muted mb-1">Uptime</div>
-                <div class="text-lg font-bold font-mono" :class="summary.uptimePercent >= 80 ? 'text-status-success' : 'text-status-warning'">
-                  {{ summary.uptimePercent.toFixed(0) }}%
-                </div>
-              </div>
-            </div>
-
-            <!-- Collection info -->
-            <div v-if="summary" class="text-center text-xs text-text-muted pb-2">
-              {{ summary.totalSnapshots }} muestras en {{ summary.durationMinutes.toFixed(1) }} min
             </div>
           </template>
         </div>
@@ -382,3 +361,123 @@ function getConditionColor(cond: number): string {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.rsm-overlay {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.75); backdrop-filter: blur(2px); padding: 1rem;
+}
+
+.rsm-modal {
+  position: relative; width: 100%; max-width: 720px; height: 85vh; display: flex; flex-direction: column;
+  background: linear-gradient(135deg, rgba(20,21,40,0.98) 0%, rgba(30,31,54,0.96) 100%);
+  border: 1px solid #2f3052; overflow: hidden;
+  animation: rsm-enter 0.3s cubic-bezier(0.16,1,0.3,1);
+}
+.rsm-modal::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.006) 3px, rgba(255,255,255,0.006) 4px);
+}
+@keyframes rsm-enter { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+/* HUD Corners */
+.rsm-c { position: absolute; width: 12px; height: 12px; pointer-events: none; z-index: 3; }
+.rsm-tl { top: 0; left: 0; border-top: 2px solid #f59e0b; border-left: 2px solid #f59e0b; }
+.rsm-tr { top: 0; right: 0; border-top: 2px solid #f59e0b; border-right: 2px solid #f59e0b; }
+.rsm-bl { bottom: 0; left: 0; border-bottom: 2px solid #f59e0b; border-left: 2px solid #f59e0b; }
+.rsm-br { bottom: 0; right: 0; border-bottom: 2px solid #f59e0b; border-right: 2px solid #f59e0b; }
+
+/* Scanline */
+.rsm-scan {
+  position: absolute; top: 0; left: -100%; width: 100%; height: 100%; pointer-events: none; z-index: 1;
+  background: linear-gradient(90deg, transparent 0%, rgba(245,158,11,0.02) 45%, rgba(245,158,11,0.05) 50%, rgba(245,158,11,0.02) 55%, transparent 100%);
+  animation: rsm-scanmove 5s linear infinite;
+}
+@keyframes rsm-scanmove { 0% { left: -100%; } 100% { left: 100%; } }
+
+/* Header */
+.rsm-header {
+  display: flex; align-items: center; gap: 8px; padding: 0.7rem 0.8rem;
+  border-bottom: 1px solid #2f3052; position: relative; z-index: 2; flex-shrink: 0;
+  background: linear-gradient(180deg, rgba(26,27,46,0.9) 0%, transparent 100%);
+}
+.rsm-header-left { display: flex; align-items: center; gap: 6px; }
+.rsm-ind { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.6); animation: rsm-pulse 2s infinite; }
+@keyframes rsm-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+.rsm-tag { font-size: 0.45rem; font-weight: 900; color: #71717a; letter-spacing: 2.5px; }
+.rsm-rig-name { flex: 1; font-size: 0.85rem; font-weight: 900; color: #e5e7eb; letter-spacing: 1px; }
+.rsm-close {
+  background: transparent; border: 1px solid #2f3052; color: #71717a; width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.7rem;
+  transition: all 0.2s; font-family: inherit;
+}
+.rsm-close:hover { border-color: #ef4444; color: #ef4444; }
+
+/* Status Bar */
+.rsm-status-bar {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; flex-shrink: 0;
+  border-bottom: 1px solid #2f3052; background: #2f3052; position: relative; z-index: 2;
+}
+.rsm-stat {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px;
+  background: rgba(26,27,46,0.95);
+}
+.rsm-stat-label { font-size: 0.4rem; font-weight: 900; color: #4f4f6f; letter-spacing: 2px; }
+.rsm-stat-val { font-size: 0.8rem; font-weight: 900; font-family: 'JetBrains Mono', monospace; }
+.rsm-stat-tag { font-size: 0.35rem; font-weight: 900; letter-spacing: 1.5px; }
+.rsm-amber { color: #f59e0b; text-shadow: 0 0 6px rgba(245,158,11,0.3); }
+
+/* Body */
+.rsm-body {
+  flex: 1; overflow-y: auto; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.7rem;
+  position: relative; z-index: 2;
+}
+.rsm-body::-webkit-scrollbar { width: 3px; }
+.rsm-body::-webkit-scrollbar-thumb { background: #3f3f5c; }
+
+/* Empty state */
+.rsm-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+}
+.rsm-empty-icon { font-size: 2rem; color: #4f4f6f; animation: rsm-pulse 3s infinite; }
+.rsm-empty-title { font-size: 0.7rem; font-weight: 900; color: #a1a1aa; letter-spacing: 3px; }
+.rsm-empty-sub { font-size: 0.5rem; color: #71717a; text-align: center; max-width: 280px; letter-spacing: 0.5px; }
+.rsm-empty-count { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.45rem; font-weight: 900; color: #4f4f6f; letter-spacing: 1.5px; }
+.rsm-ind-sm { width: 4px; height: 4px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 4px rgba(34,197,94,0.5); animation: rsm-pulse 2s infinite; }
+
+/* Chart cards */
+.rsm-chart-card {
+  background: rgba(26,27,46,0.6); border: 1px solid #2f3052; padding: 0.6rem;
+  border-left: 2px solid #f59e0b30; position: relative;
+}
+.rsm-chart-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.rsm-chart-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.rsm-chart-title { font-size: 0.45rem; font-weight: 900; color: #71717a; letter-spacing: 2px; }
+.rsm-chart-wrap { height: 160px; position: relative; }
+
+/* Summary */
+.rsm-summary { margin-top: 0.25rem; }
+.rsm-sum-title {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 0.5rem;
+  font-size: 0.4rem; font-weight: 900; color: #71717a; letter-spacing: 2.5px;
+}
+.rsm-sum-line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #3f3f5c, transparent); }
+.rsm-sum-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.rsm-sum-card {
+  background: rgba(26,27,46,0.8); border: 1px solid #2f3052; padding: 8px 6px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  border-left: 2px solid #f59e0b20;
+}
+.rsm-sum-label { font-size: 0.4rem; font-weight: 900; color: #4f4f6f; letter-spacing: 2px; }
+.rsm-sum-val { font-size: 0.85rem; font-weight: 900; font-family: 'JetBrains Mono', monospace; }
+.rsm-sum-footer { text-align: center; font-size: 0.4rem; font-weight: 900; color: #4f4f6f; letter-spacing: 2px; margin-top: 8px; }
+
+/* Mobile */
+@media (max-width: 600px) {
+  .rsm-modal { height: 95vh; max-width: none; }
+  .rsm-status-bar { grid-template-columns: repeat(2, 1fr); }
+  .rsm-sum-grid { grid-template-columns: repeat(2, 1fr); }
+  .rsm-chart-wrap { height: 130px; }
+  .rsm-rig-name { font-size: 0.7rem; }
+}
+</style>

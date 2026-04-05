@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { getActiveAnnouncements } from '@/utils/api';
+import { ChevronLeft, ChevronRight, EyeOff, X } from 'lucide-vue-next';
 
 const { locale } = useI18n();
 
@@ -172,9 +173,7 @@ onUnmounted(() => {
               @click="goToPrev"
               class="p-1 rounded hover:bg-white/10 transition-colors"
             >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
+              <ChevronLeft :size="16" />
             </button>
             <span class="text-xs opacity-70 min-w-[3ch] text-center">
               {{ (currentIndex % visibleCount) + 1 }}/{{ visibleCount }}
@@ -183,9 +182,7 @@ onUnmounted(() => {
               @click="goToNext"
               class="p-1 rounded hover:bg-white/10 transition-colors"
             >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRight :size="16" />
             </button>
           </div>
 
@@ -213,9 +210,7 @@ onUnmounted(() => {
               class="p-1 rounded hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
               title="Dismiss this"
             >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L6.758 6.758M9.878 9.878l4.242 4.242m4.242 4.242L21 21M9.878 9.878L3 3" />
-              </svg>
+              <EyeOff :size="16" />
             </button>
             <!-- Close all -->
             <button
@@ -223,9 +218,7 @@ onUnmounted(() => {
               class="p-1 rounded hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
               title="Close"
             >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X :size="16" />
             </button>
           </div>
         </div>

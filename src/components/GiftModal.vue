@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { watch, ref } from 'vue';
+import { watch, ref, type Component } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useGiftsStore } from '@/stores/gifts';
 import { useToastStore } from '@/stores/toast';
 import { playSound } from '@/utils/sounds';
+import { Coins, Zap, Wifi, Snowflake, Rocket, Monitor, CreditCard, Package, Gift } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const giftsStore = useGiftsStore();
@@ -76,7 +77,7 @@ function handleCollect() {
   // Build reward summary for the toast
   const lines = getRewardLines();
   if (lines.length > 0) {
-    const summary = lines.map(l => `${l.emoji} ${l.text}`).join('  ');
+    const summary = lines.map(l => `${l.emojiText} ${l.text}`).join('  ');
     toastStore.giftReceived(summary);
   }
 
@@ -88,35 +89,36 @@ function getRewardLines() {
   const result = giftsStore.claimResult;
   if (!result) return [];
 
-  const lines: { emoji: string; text: string }[] = [];
+  const lines: { icon: Component; iconColor: string; emojiText: string; text: string }[] = [];
 
   if (result.gamecoin > 0) {
-    lines.push({ emoji: '🪙', text: t('gifts.gamecoin', { amount: result.gamecoin }) });
+    lines.push({ icon: Coins, iconColor: '#f59e0b', emojiText: 'GC', text: t('gifts.gamecoin', { amount: result.gamecoin }) });
   }
   if (result.crypto > 0) {
-    lines.push({ emoji: '₿', text: t('gifts.crypto', { amount: result.crypto }) });
+    lines.push({ icon: Coins, iconColor: '#f97316', emojiText: '₿', text: t('gifts.crypto', { amount: result.crypto }) });
   }
   if (result.energy > 0) {
-    lines.push({ emoji: '⚡', text: t('gifts.energy', { amount: result.energy }) });
+    lines.push({ icon: Zap, iconColor: '#facc15', emojiText: 'Energy', text: t('gifts.energy', { amount: result.energy }) });
   }
   if (result.internet > 0) {
-    lines.push({ emoji: '📡', text: t('gifts.internet', { amount: result.internet }) });
+    lines.push({ icon: Wifi, iconColor: '#60a5fa', emojiText: 'Internet', text: t('gifts.internet', { amount: result.internet }) });
   }
   if (result.itemType && result.itemQuantity > 0) {
     const itemName = getItemName(result.itemType, result.itemId);
-    lines.push({ emoji: getItemEmoji(result.itemType), text: t('gifts.item', { name: itemName, quantity: result.itemQuantity }) });
+    const itemIcon = getItemIcon(result.itemType);
+    lines.push({ icon: itemIcon.component, iconColor: itemIcon.color, emojiText: itemIcon.label, text: t('gifts.item', { name: itemName, quantity: result.itemQuantity }) });
   }
 
   return lines;
 }
 
-function getItemEmoji(type: string | null): string {
+function getItemIcon(type: string | null): { component: Component; color: string; label: string } {
   switch (type) {
-    case 'cooling': return '❄️';
-    case 'boost': return '🚀';
-    case 'rig': return '🖥️';
-    case 'prepaid_card': return '💳';
-    default: return '📦';
+    case 'cooling': return { component: Snowflake, color: '#93c5fd', label: 'Cooling' };
+    case 'boost': return { component: Rocket, color: '#f87171', label: 'Boost' };
+    case 'rig': return { component: Monitor, color: '#a78bfa', label: 'Rig' };
+    case 'prepaid_card': return { component: CreditCard, color: '#34d399', label: 'Card' };
+    default: return { component: Package, color: '#9ca3af', label: 'Item' };
   }
 }
 
@@ -194,7 +196,8 @@ function getItemName(type: string | null, id: string | null): string {
         >
           <div class="gift-box">
             <span class="text-5xl gift-float gift-glow select-none">
-              {{ giftsStore.currentGift?.icon || '🎁' }}
+              <span v-if="giftsStore.currentGift?.icon">{{ giftsStore.currentGift.icon }}</span>
+              <Gift v-else :size="48" color="#fbbf24" />
             </span>
           </div>
         </button>
@@ -217,7 +220,8 @@ function getItemName(type: string | null, id: string | null): string {
         <!-- Shaking gift -->
         <div class="gift-shake">
           <span class="text-6xl select-none">
-            {{ giftsStore.currentGift?.icon || '🎁' }}
+            <span v-if="giftsStore.currentGift?.icon">{{ giftsStore.currentGift.icon }}</span>
+            <Gift v-else :size="56" color="#fbbf24" />
           </span>
         </div>
 
@@ -239,7 +243,8 @@ function getItemName(type: string | null, id: string | null): string {
           <!-- Title + Icon -->
           <div class="mb-4">
             <div class="text-5xl mb-3 gift-reveal-bounce">
-              {{ giftsStore.currentGift?.icon || '🎁' }}
+              <span v-if="giftsStore.currentGift?.icon">{{ giftsStore.currentGift.icon }}</span>
+              <Gift v-else :size="48" color="#fbbf24" />
             </div>
             <h2 class="text-xl font-display font-bold">
               <span class="gradient-text">{{ t('gifts.received') }}</span>
@@ -257,7 +262,7 @@ function getItemName(type: string | null, id: string | null): string {
               class="flex items-center justify-center gap-3 px-4 py-3 bg-bg-tertiary rounded-xl reward-line-appear"
               :style="{ animationDelay: `${idx * 0.15}s` }"
             >
-              <span class="text-2xl">{{ line.emoji }}</span>
+              <component :is="line.icon" :size="24" :color="line.iconColor" />
               <span class="text-base font-bold text-accent-primary">{{ line.text }}</span>
             </div>
           </div>

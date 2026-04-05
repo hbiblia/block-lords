@@ -1260,9 +1260,9 @@ CREATE TABLE IF NOT EXISTS exp_packs (
 );
 
 INSERT INTO exp_packs (id, name, description, xp_amount, base_price, tier) VALUES
-  ('exp_small',  'Small EXP Pack',  '+100 slot XP',  100,  500,  'basic'),
-  ('exp_medium', 'Medium EXP Pack', '+500 slot XP',  500,  2000, 'standard'),
-  ('exp_large',  'Large EXP Pack',  '+2000 slot XP', 2000, 7000, 'advanced')
+  ('exp_small',  'Small EXP Pack',  '+100 player XP',  100,  500,  'basic'),
+  ('exp_medium', 'Medium EXP Pack', '+500 player XP',  500,  2000, 'standard'),
+  ('exp_large',  'Large EXP Pack',  '+2000 player XP', 2000, 7000, 'advanced')
 ON CONFLICT (id) DO NOTHING;
 
 -- =====================================================

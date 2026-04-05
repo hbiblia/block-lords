@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, ref, provide, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useGameTickStore } from '@/stores/game-tick';
 import { useStreakStore } from '@/stores/streak';
@@ -12,21 +13,10 @@ import { useMailStore } from '@/stores/mail';
 import { useDefenseStore } from '@/stores/defense';
 import { useToastStore } from '@/stores/toast';
 import { formatCompact } from '@/utils/format';
+import { Pickaxe, Target, ShoppingCart, Swords, ArrowLeftRight, Package, Flame } from 'lucide-vue-next';
 
 const { t } = useI18n();
 
-// Ad blocker detection (non-blocking toast)
-function detectAdBlocker() {
-  const script = document.createElement('script');
-  script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
-  script.onload = () => { script.remove(); };
-  script.onerror = () => {
-    script.remove();
-    const toastStore = useToastStore();
-    toastStore.warning(t('adblock.toastMessage'), '🛡️');
-  };
-  document.head.appendChild(script);
-}
 
 // Global modals state
 const showMarket = ref(false);
@@ -79,8 +69,12 @@ import MailModal from '@/components/MailModal.vue';
 import MiningGuide from '@/components/MiningGuide.vue';
 import RewardCelebration from '@/components/RewardCelebration.vue';
 
+const route = useRoute();
 const authStore = useAuthStore();
 const gameTickStore = useGameTickStore();
+
+// Hide navbar on home page when not authenticated
+const showNavBar = computed(() => authStore.isAuthenticated || route.path !== '/');
 const streakStore = useStreakStore();
 const missionsStore = useMissionsStore();
 const pendingBlocksStore = usePendingBlocksStore();
@@ -154,10 +148,6 @@ onMounted(() => {
   window.addEventListener('open-prediction', handleOpenPredictionEvent);
   window.addEventListener('open-mail', handleOpenMailEvent);
   // window.addEventListener('close-hacker', handleCloseHackerEvent); // disabled - reworking
-  // Ad blocker detection (only in production)
-  if (window.location.hostname !== 'localhost' && !window.location.hostname.startsWith('127.')) {
-    detectAdBlocker();
-  }
 });
 
 // Cargar datos cuando cambia el estado de autenticación
@@ -276,7 +266,7 @@ async function handleConnectionClick() {
     <!-- Update Notification Modal -->
     <UpdateNotificationModal />
 
-    <NavBar />
+    <NavBar v-if="showNavBar" />
 
     <!-- Connection Lost Modal -->
     <ConnectionLostModal />
@@ -369,7 +359,7 @@ async function handleConnectionClick() {
     <!-- Main Content -->
     <main
       class="flex-1 container mx-auto px-4 py-6 pb-20 sm:pb-6 transition-[margin] duration-300"
-      :class="infoBarVisible ? 'mt-[6.5rem]' : 'mt-16'"
+      :class="showNavBar ? (infoBarVisible ? 'mt-[6.5rem]' : 'mt-16') : 'mt-0'"
     >
       <slot />
     </main>
@@ -404,7 +394,7 @@ async function handleConnectionClick() {
             class="mobile-action-btn mobile-action-btn-highlight"
           >
             <div class="relative">
-              <span class="text-xl">⛏️</span>
+              <Pickaxe :size="20" color="#f59e0b" />
               <span class="mobile-badge bg-accent-primary">{{ pendingBlocksStore.count }}</span>
             </div>
             <span class="mobile-action-label text-accent-primary">{{ t('blocks.claim', 'Claim') }}</span>
@@ -417,7 +407,7 @@ async function handleConnectionClick() {
             :class="{ 'mobile-action-btn-success': missionsStore.claimableCount > 0 || streakStore.canClaim }"
           >
             <div class="relative">
-              <span class="text-xl">🎯</span>
+              <Target :size="20" color="#22c55e" />
               <span
                 v-if="missionsStore.claimableCount > 0 || streakStore.canClaim"
                 class="mobile-badge bg-status-success"
@@ -428,13 +418,13 @@ async function handleConnectionClick() {
 
           <!-- Market -->
           <button @click="openMarket" class="mobile-action-btn">
-            <span class="text-xl">🛒</span>
+            <ShoppingCart :size="20" color="#a1a1aa" />
             <span class="mobile-action-label">{{ t('mining.market', 'Market') }}</span>
           </button>
 
           <!-- Card Battle -->
           <button @click="openDefense" class="mobile-action-btn">
-            <span class="text-xl">🃏</span>
+            <Swords :size="20" color="#a78bfa" />
             <span class="mobile-action-label">{{ t('defense.short', 'Battle') }}</span>
           </button>
 
@@ -449,7 +439,7 @@ async function handleConnectionClick() {
 
           <!-- Exchange -->
           <button @click="openExchange" class="mobile-action-btn">
-            <span class="text-xl">💱</span>
+            <ArrowLeftRight :size="20" color="#a1a1aa" />
             <span class="mobile-action-label">{{ t('mining.exchange', 'Exchange') }}</span>
           </button>
 
@@ -557,7 +547,7 @@ async function handleConnectionClick() {
           class="relative flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 transition-all rounded-lg group"
         >
           <div class="w-8 h-8 rounded-md flex items-center justify-center">
-            <span class="text-lg">🎒</span>
+            <Package :size="18" color="#a1a1aa" />
           </div>
           <div class="text-left">
             <div class="text-xs font-semibold text-slate-200">{{ t('nav.inventory') }}</div>
@@ -575,7 +565,7 @@ async function handleConnectionClick() {
         >
           <div class="absolute left-0 top-0 bottom-0 w-[3px] bg-green-500"></div>
           <div class="w-8 h-8 rounded-md flex items-center justify-center">
-            <span class="text-lg">⛏️</span>
+            <Pickaxe :size="18" color="#22c55e" />
           </div>
           <div class="text-left">
             <div class="text-xs font-semibold text-slate-200">{{ t('blocks.claimTitle') }}</div>
@@ -593,13 +583,13 @@ async function handleConnectionClick() {
           :class="{ 'border-green-500 animate-border-pulse-green': missionsStore.claimableCount > 0 || streakStore.canClaim }"
         >
           <div class="w-8 h-8 rounded-md flex items-center justify-center">
-            <span class="text-lg">🎯</span>
+            <Target :size="18" color="#22c55e" />
           </div>
           <div class="text-left">
             <div class="text-xs font-semibold text-slate-200">{{ t('missions.button') }}</div>
             <div class="text-[10px] text-slate-400">
               {{ missionsStore.completedCount }}/{{ missionsStore.totalCount }}
-              <span v-if="streakStore.currentStreak > 0" class="ml-1">· 🔥{{ streakStore.currentStreak }}</span>
+              <span v-if="streakStore.currentStreak > 0" class="ml-1 inline-flex items-center gap-0.5">· <Flame :size="12" color="#ef4444" class="inline" />{{ streakStore.currentStreak }}</span>
             </div>
           </div>
           <div
@@ -630,16 +620,16 @@ async function handleConnectionClick() {
               v-if="pendingBlocksStore.hasPending"
               class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-green-500 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer animate-border-pulse-green"
               @click="pendingBlocksStore.openModal"
-            >⛏️ {{ pendingBlocksStore.count }}</span>
+            ><Pickaxe :size="12" class="inline" /> {{ pendingBlocksStore.count }}</span>
             <span
               v-if="missionsStore.claimableCount > 0 || streakStore.canClaim"
               class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-green-500 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer animate-border-pulse-green"
               @click="openRewards()"
-            >🎯 {{ (missionsStore.claimableCount || 0) + (streakStore.canClaim ? 1 : 0) }}</span>
+            ><Target :size="12" class="inline" /> {{ (missionsStore.claimableCount || 0) + (streakStore.canClaim ? 1 : 0) }}</span>
             <span
               class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-purple-500/50 rounded-lg text-[10px] font-bold text-purple-400 cursor-pointer"
               @click="openDefense"
-            >🃏</span>
+            ><Swords :size="12" class="inline" /></span>
             <!-- Terminal badge (disabled - reworking)
             <span
               class="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-green-600/50 rounded-lg text-[10px] font-bold text-green-400 cursor-pointer"
@@ -660,50 +650,89 @@ async function handleConnectionClick() {
     </div>
 
     <!-- Footer -->
-    <footer class="border-t border-border/30 py-8 text-center space-y-3">
-      <div class="space-y-1.5">
-        <p class="text-sm font-semibold text-text-secondary">{{ $t('footer.tagline') }}</p>
-        <p class="text-xs text-text-muted max-w-sm mx-auto leading-relaxed">{{ $t('footer.description') }}</p>
+    <footer class="ft-root">
+      <div class="ft-line"></div>
+      <div class="ft-inner">
+        <div class="ft-brand">
+          <span class="ft-tag">// LOOTMINE</span>
+          <p class="ft-tagline">{{ $t('footer.tagline') }}</p>
+          <p class="ft-desc">{{ $t('footer.description') }}</p>
+        </div>
+        <div class="ft-links">
+          <a
+            href="https://discord.gg/vFK8mB58"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="ft-link-btn"
+          >
+            <svg class="ft-link-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+            {{ $t('footer.discord') }}
+          </a>
+          <button @click="showGuide = true" class="ft-link-btn">{{ $t('footer.howToPlay') }}</button>
+          <RouterLink to="/rules" class="ft-link-btn">{{ $t('footer.rules') }}</RouterLink>
+          <RouterLink to="/terms" class="ft-link-btn">{{ $t('footer.terms') }}</RouterLink>
+        </div>
+        <p class="ft-disclaimer">{{ $t('footer.disclaimer') }}</p>
+        <p class="ft-copy">LOOTMINE &copy; 2025</p>
       </div>
-      <div class="flex items-center justify-center gap-4">
-        <a
-          href="https://discord.gg/vFK8mB58"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
-        >
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
-          {{ $t('footer.discord') }}
-        </a>
-        <span class="text-border">|</span>
-        <button
-          @click="showGuide = true"
-          class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
-        >
-          {{ $t('footer.howToPlay') }}
-        </button>
-        <span class="text-border">|</span>
-        <RouterLink to="/rules" class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">
-          {{ $t('footer.rules') }}
-        </RouterLink>
-        <span class="text-border">|</span>
-        <RouterLink to="/terms" class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">
-          {{ $t('footer.terms') }}
-        </RouterLink>
-      </div>
-      <p class="text-text-muted text-xs italic">{{ $t('footer.disclaimer') }}</p>
-      <p class="text-text-muted text-sm">LootMine &copy; 2025</p>
     </footer>
   </div>
 </template>
 
 <style scoped>
 /* AdSense responsive sizing */
-@media (max-width: 640px) {
-  .adsbygoogle {
-    height: 50px !important;
-  }
+/* ===== FOOTER HUD ===== */
+.ft-root {
+  position: relative;
+  padding: 0;
+  text-align: center;
 }
+.ft-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, #2f3052 20%, #f59e0b40 50%, #2f3052 80%, transparent 100%);
+}
+.ft-inner {
+  padding: 1.5rem 1rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+}
+.ft-brand { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+.ft-tag {
+  font-size: 0.5rem; font-weight: 900; color: #f59e0b; letter-spacing: 3px;
+  text-shadow: 0 0 8px rgba(245,158,11,0.2);
+}
+.ft-tagline {
+  font-size: 0.7rem; font-weight: 800; color: #a1a1aa; letter-spacing: 0.5px; margin: 0;
+}
+.ft-desc {
+  font-size: 0.55rem; font-weight: 600; color: #52525b; max-width: 350px; line-height: 1.5; margin: 0;
+}
+.ft-links {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; justify-content: center;
+}
+.ft-link-btn {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.55rem; font-weight: 900; color: #71717a;
+  letter-spacing: 1.5px;
+  text-decoration: none; background: rgba(26,27,46,0.6);
+  border: 1px solid #2f3052;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ft-link-btn:hover {
+  color: #f59e0b; border-color: #f59e0b40;
+  background: rgba(245,158,11,0.05);
+}
+.ft-link-svg { width: 0.75rem; height: 0.75rem; }
+.ft-disclaimer {
+  font-size: 0.45rem; font-weight: 600; color: #3f3f5c; font-style: italic;
+  max-width: 400px; line-height: 1.4; margin: 0;
+}
+.ft-copy {
+  font-size: 0.5rem; font-weight: 900; color: #3f3f5c; letter-spacing: 2px;
+  font-family: 'JetBrains Mono', monospace; margin: 0;
+}
+
 
 /* Mobile Action Bar */
 .mobile-action-bar {

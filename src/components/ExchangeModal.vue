@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth';
 import { exchangeCryptoToGamecoin, exchangeCryptoToRon, getExchangeRates } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
 import { formatCrypto, formatRon, formatNumber } from '@/utils/format';
+import { ArrowLeftRight, X, Coins, Gem, TrendingUp, TrendingDown } from 'lucide-vue-next';
 
 const { t } = useI18n();
 
@@ -166,14 +167,14 @@ onMounted(() => {
         <!-- Header -->
         <div class="flex items-center justify-between p-4 border-b border-border">
           <h2 class="text-lg font-bold flex items-center gap-2">
-            <span class="text-2xl">💱</span>
+            <ArrowLeftRight :size="24" color="#8b5cf6" />
             {{ t('exchange.title') }}
           </h2>
           <button
             @click="emit('close')"
             class="p-2 hover:bg-bg-tertiary rounded-lg transition-colors"
           >
-            ✕
+            <X :size="20" />
           </button>
         </div>
 
@@ -204,7 +205,7 @@ onMounted(() => {
               ? 'bg-status-warning/10 text-status-warning border-b-2 border-status-warning'
               : 'text-text-muted hover:bg-bg-tertiary'"
           >
-            <span class="text-2xl">🪙</span>
+            <Coins :size="24" color="#f59e0b" />
             <span class="text-xs font-medium">{{ t('exchange.tabs.gamecoin') }}</span>
           </button>
           <button
@@ -214,7 +215,7 @@ onMounted(() => {
               ? 'bg-amber-500/10 text-amber-400 border-b-2 border-amber-400'
               : 'text-text-muted hover:bg-bg-tertiary'"
           >
-            <span class="text-2xl">💎</span>
+            <Gem :size="24" color="#fbbf24" />
             <span class="text-xs font-medium">{{ t('exchange.tabs.ron') }}</span>
           </button>
         </div>
@@ -228,13 +229,15 @@ onMounted(() => {
               <span class="animate-spin w-4 h-4 border-2 border-accent-primary border-t-transparent rounded-full"></span>
             </span>
             <span v-else-if="rates && activeTab === 'gamecoin'" class="font-medium">
-              <span class="text-status-warning">1 ₿ = {{ formatRate(rates.crypto_to_gamecoin) }} 🪙</span>
+              <span class="text-status-warning inline-flex items-center gap-1">1 ₿ = {{ formatRate(rates.crypto_to_gamecoin) }} <Coins :size="14" color="#f59e0b" /></span>
               <span
                 v-if="rateTrend !== 'neutral'"
-                class="ml-2 text-xs font-bold"
+                class="ml-2 text-xs font-bold inline-flex items-center gap-0.5"
                 :class="rateTrend === 'up' ? 'text-green-400' : 'text-red-400'"
               >
-                {{ rateTrend === 'up' ? '▲' : '▼' }} {{ Math.abs(rateChangePercent).toFixed(1) }}%
+                <TrendingUp v-if="rateTrend === 'up'" :size="12" color="#4ade80" />
+                <TrendingDown v-else :size="12" color="#f87171" />
+                {{ Math.abs(rateChangePercent).toFixed(1) }}%
               </span>
             </span>
             <span v-else-if="rates" class="text-amber-400 font-medium">
@@ -298,7 +301,10 @@ onMounted(() => {
             <div class="text-xs text-text-muted mb-2 text-center">{{ t('exchange.youWillReceive') }}</div>
             <div class="text-3xl font-bold text-center font-mono" :class="activeTab === 'gamecoin' ? 'text-status-warning' : 'text-amber-400'">
               {{ activeTab === 'gamecoin' ? formatRate(estimatedReceive) : formatRon(estimatedReceive) }}
-              <span class="text-lg">{{ activeTab === 'gamecoin' ? '🪙' : 'RON' }}</span>
+              <span class="text-lg inline-flex items-center">
+                <Coins v-if="activeTab === 'gamecoin'" :size="18" color="#f59e0b" />
+                <span v-else>RON</span>
+              </span>
             </div>
           </div>
 

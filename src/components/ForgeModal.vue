@@ -6,6 +6,7 @@ import { useInventoryStore } from '@/stores/inventory';
 import { useMiningStore } from '@/stores/mining';
 import { getForgeRecipes, forgeCraftItem } from '@/utils/api';
 import { playSound } from '@/utils/sounds';
+import { Hammer, X } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -101,7 +102,7 @@ function canCraft(recipe: ForgeRecipe): boolean {
 
 // Needs a target slot (tier kits, durability shield)
 function needsSlotTarget(recipe: ForgeRecipe): boolean {
-  return recipe.result_type === 'xp_grant' || (recipe.result_type === 'slot_buff' && recipe.id === 'durability_shield');
+  return recipe.result_type === 'slot_buff' && recipe.id === 'durability_shield';
 }
 
 // Needs a target rig (rig enhancements)
@@ -158,10 +159,12 @@ async function confirmCraft() {
     if (result?.success) {
       playSound('success');
       craftResult.value = { success: true, type: result.type, message: recipe.name };
-      await Promise.all([
+      const refreshes: Promise<any>[] = [
         inventoryStore.fetchInventory(true),
         miningStore.loadData(),
-      ]);
+      ];
+      if (result.type === 'xp_grant') refreshes.push(authStore.fetchPlayer());
+      await Promise.all(refreshes);
     } else {
       playSound('error');
       craftResult.value = { success: false, message: result?.error || 'Error' };
@@ -255,15 +258,15 @@ function getResultDescription(recipe: ForgeRecipe): string {
           <div class="p-4 border-b border-border/30 flex-shrink-0">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-xl">
-                  🔨
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
+                  <Hammer :size="22" color="#ffffff" />
                 </div>
                 <div>
                   <h2 class="text-lg font-bold text-text-primary">{{ t('forge.title') }}</h2>
                   <p class="text-xs text-text-muted">{{ t('forge.subtitle') }}</p>
                 </div>
               </div>
-              <button @click="emit('close')" class="text-text-muted hover:text-text-primary transition-colors text-xl leading-none p-1">✕</button>
+              <button @click="emit('close')" class="text-text-muted hover:text-text-primary transition-colors leading-none p-1"><X :size="20" /></button>
             </div>
 
             <!-- Materials bar -->
@@ -405,7 +408,7 @@ function getResultDescription(recipe: ForgeRecipe): string {
                 <select v-model="selectedTargetSlotId" class="w-full bg-bg-tertiary border border-border/30 rounded-lg px-3 py-2 text-sm text-text-primary">
                   <option value="">-- {{ t('forge.selectSlot') }} --</option>
                   <option v-for="slot in availableSlots" :key="slot.id" :value="slot.id">
-                    Slot #{{ slot.slot_number }} ({{ slot.tier || 'basic' }} · {{ slot.xp || 0 }} XP · {{ slot.uses_remaining }}/{{ slot.max_uses }}{{ slot.max_uses > 3 ? ' 🛡️' : '' }})
+                    Slot #{{ slot.slot_number }} ({{ slot.tier || 'basic' }} · {{ slot.xp || 0 }} XP · {{ slot.uses_remaining }}/{{ slot.max_uses }}{{ slot.max_uses > 3 ? ' [Shield]' : '' }})
                   </option>
                 </select>
               </div>

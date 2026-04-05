@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useMiningTips, type TipSeverity } from '@/composables/useMiningTips';
 import { useI18n } from 'vue-i18n';
+import { X } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const { activeTips, dismiss } = useMiningTips();
@@ -71,9 +72,7 @@ function handleAction(event: string) {
         class="shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors"
         :class="severityConfig[tip.severity].dismiss"
       >
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
+        <X :size="14" :stroke-width="2.5" />
       </button>
     </div>
   </TransitionGroup>

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useNotificationsStore } from '@/stores/notifications';
 import { formatCrypto } from '@/utils/format';
+import { Megaphone } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -91,7 +92,8 @@ function goToInventory() {
           class="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center text-4xl"
           :class="currentColors.bg"
         >
-          {{ notification.icon || '📢' }}
+          <template v-if="notification.icon">{{ notification.icon }}</template>
+          <Megaphone v-else :size="36" />
         </div>
 
         <!-- Title -->

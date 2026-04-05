@@ -15,6 +15,7 @@
     "@supabase/supabase-js": "^2.39.3",
     "chart.js": "^4.5.1",
     "floating-vue": "^5.2.2",
+    "lucide-vue-next": "^0.577.0",
     "pinia": "^2.1.7",
     "pixi.js": "^8.16.0",
     "vue": "^3.4.15",

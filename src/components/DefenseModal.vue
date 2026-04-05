@@ -5,6 +5,7 @@ import { useDefenseStore } from '@/stores/defense';
 import { useAuthStore } from '@/stores/auth';
 import { useCardBattle } from '@/composables/useCardBattle';
 import { useBattleSound } from '@/composables/useSound';
+import { Volume2, VolumeX, ChevronDown, X } from 'lucide-vue-next';
 import BattleLobby from './defense/BattleLobby.vue';
 import BattleReadyRoom from './defense/BattleReadyRoom.vue';
 import BattleIntro from './defense/BattleIntro.vue';
@@ -236,13 +237,8 @@ function getEnemyUsername(): string {
               :class="battleSoundEnabled ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 hover:text-slate-400 hover:bg-slate-700/50'"
               :title="battleSoundEnabled ? t('battle.soundOn', 'Sound ON') : t('battle.soundOff', 'Sound OFF')"
             >
-              <svg v-if="battleSoundEnabled" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072M17.95 6.05a8 8 0 010 11.9M11 5L6 9H2v6h4l5 4V5z" />
-              </svg>
-              <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-              </svg>
+              <Volume2 v-if="battleSoundEnabled" :size="16" />
+              <VolumeX v-else :size="16" />
             </button>
             <button
               @click="handleClose"
@@ -251,12 +247,8 @@ function getEnemyUsername(): string {
                 ? t('battle.minimize', 'Minimize (battle continues)')
                 : t('common.close', 'Close')"
             >
-              <svg v-if="session && session.status === 'active'" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-              <svg v-else class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <ChevronDown v-if="session && session.status === 'active'" :size="20" />
+              <X v-else :size="20" />
             </button>
           </div>
         </div>

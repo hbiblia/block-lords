@@ -10,6 +10,7 @@ import { formatGamecoin, formatCrypto, formatNumber, formatRon } from '@/utils/f
 import { useRoninWallet } from '@/composables/useRoninWallet';
 import PremiumCard from '@/components/PremiumCard.vue';
 import ReferralSection from '@/components/ReferralSection.vue';
+import { Copy, ChevronDown, Check, X } from 'lucide-vue-next';
 
 const roninWallet = useRoninWallet();
 
@@ -541,10 +542,7 @@ function getTransactionIcon(type: string): string {
             <button @click="copyWallet"
               class="p-2.5 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors"
               :title="t('common.copy', 'Copiar')">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+              <Copy :size="20" />
             </button>
           </div>
           <p v-else class="text-text-muted text-sm">
@@ -609,9 +607,7 @@ function getTransactionIcon(type: string): string {
               <!-- Toggle button -->
               <button class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center transition-transform"
                 :class="{ 'rotate-180': !adminPanelExpanded }">
-                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
+                <ChevronDown :size="16" class="text-amber-400" />
               </button>
             </div>
           </div>
@@ -1163,9 +1159,7 @@ function getTransactionIcon(type: string): string {
             <template v-else-if="reloadStep === 'success'">
               <div class="text-center py-4">
                 <div class="w-16 h-16 mx-auto mb-4 bg-status-success/20 rounded-full flex items-center justify-center">
-                  <svg class="w-8 h-8 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                  </svg>
+                  <Check :size="32" class="text-status-success" />
                 </div>
                 <h3 class="text-lg font-bold text-status-success mb-2">{{ t('profile.reload.success', 'Deposito exitoso!') }}</h3>
                 <p class="text-text-muted text-sm mb-4">
@@ -1186,9 +1180,7 @@ function getTransactionIcon(type: string): string {
             <template v-else-if="reloadStep === 'error'">
               <div class="text-center py-4">
                 <div class="w-16 h-16 mx-auto mb-4 bg-status-danger/20 rounded-full flex items-center justify-center">
-                  <svg class="w-8 h-8 text-status-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X :size="32" class="text-status-danger" />
                 </div>
                 <h3 class="text-lg font-bold text-status-danger mb-2">{{ t('profile.reload.errorTitle', 'Error') }}</h3>
                 <p class="text-text-muted text-sm mb-4">{{ reloadError }}</p>

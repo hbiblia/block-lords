@@ -8,6 +8,12 @@ import { useFriendsStore } from '@/stores/friends';
 import { useGameConfigStore } from '@/stores/game-config';
 import { playSound } from '@/utils/sounds';
 import { formatNumber } from '@/utils/format';
+import {
+  Plus, Search, Inbox, AlertTriangle, Send, Users, RefreshCw,
+  Paperclip, UserPlus, Trash2,
+  Download, X, Coins, Gem, Zap, Wifi, Lock, Ticket, Megaphone,
+  Package, Check, FolderOpen
+} from 'lucide-vue-next';
 
 const { t } = useI18n();
 const mailStore = useMailStore();
@@ -44,7 +50,7 @@ const filePickerAmount = ref('');
 
 interface ResourceFile {
   key: string;
-  icon: string;
+  iconComponent: typeof Coins;
   name: string;
   ext: string;
   type: string;
@@ -54,20 +60,20 @@ interface ResourceFile {
 }
 
 const resourceFiles: ResourceFile[] = [
-  { key: 'gamecoin', icon: '🪙', name: 'gamecoin', ext: '.gc', type: 'GameCoin', color: '#fbbc05', getBalance: () => authStore.player?.gamecoin_balance ?? 0, step: '1' },
-  { key: 'crypto', icon: '💎', name: 'crypto', ext: '.blc', type: 'BlockCoin', color: '#4fc3f7', getBalance: () => authStore.player?.crypto_balance ?? 0, step: '0.001' },
-  { key: 'energy', icon: '⚡', name: 'energy', ext: '.nrg', type: 'Energy', color: '#66bb6a', getBalance: () => authStore.player?.energy ?? 0, step: '1' },
-  { key: 'internet', icon: '📡', name: 'internet', ext: '.net', type: 'Internet', color: '#ab47bc', getBalance: () => authStore.player?.internet ?? 0, step: '1' },
+  { key: 'gamecoin', iconComponent: Coins, name: 'gamecoin', ext: '.gc', type: 'GameCoin', color: '#fbbc05', getBalance: () => authStore.player?.gamecoin_balance ?? 0, step: '1' },
+  { key: 'crypto', iconComponent: Gem, name: 'crypto', ext: '.blc', type: 'BlockCoin', color: '#4fc3f7', getBalance: () => authStore.player?.crypto_balance ?? 0, step: '0.001' },
+  { key: 'energy', iconComponent: Zap, name: 'energy', ext: '.nrg', type: 'Energy', color: '#66bb6a', getBalance: () => authStore.player?.energy ?? 0, step: '1' },
+  { key: 'internet', iconComponent: Wifi, name: 'internet', ext: '.net', type: 'Internet', color: '#ab47bc', getBalance: () => authStore.player?.internet ?? 0, step: '1' },
 ];
 
 const selectedFile = computed(() => resourceFiles.find(f => f.key === selectedFileKey.value) ?? null);
 
 const attachedResources = computed(() => {
-  const items: { key: string; icon: string; type: string; amount: number; color: string }[] = [];
-  if (composeGamecoin.value > 0) items.push({ key: 'gamecoin', icon: '🪙', type: 'GC', amount: composeGamecoin.value, color: '#fbbc05' });
-  if (composeCrypto.value > 0) items.push({ key: 'crypto', icon: '💎', type: 'BLC', amount: composeCrypto.value, color: '#4fc3f7' });
-  if (composeEnergy.value > 0) items.push({ key: 'energy', icon: '⚡', type: 'NRG', amount: composeEnergy.value, color: '#66bb6a' });
-  if (composeInternet.value > 0) items.push({ key: 'internet', icon: '📡', type: 'NET', amount: composeInternet.value, color: '#ab47bc' });
+  const items: { key: string; iconComponent: typeof Coins; type: string; amount: number; color: string }[] = [];
+  if (composeGamecoin.value > 0) items.push({ key: 'gamecoin', iconComponent: Coins, type: 'GC', amount: composeGamecoin.value, color: '#fbbc05' });
+  if (composeCrypto.value > 0) items.push({ key: 'crypto', iconComponent: Gem, type: 'BLC', amount: composeCrypto.value, color: '#4fc3f7' });
+  if (composeEnergy.value > 0) items.push({ key: 'energy', iconComponent: Zap, type: 'NRG', amount: composeEnergy.value, color: '#66bb6a' });
+  if (composeInternet.value > 0) items.push({ key: 'internet', iconComponent: Wifi, type: 'NET', amount: composeInternet.value, color: '#ab47bc' });
   return items;
 });
 
@@ -466,12 +472,12 @@ const showAtSuggestions = computed(() => {
 
 const atSuggestions = computed(() => {
   const val = composeTo.value.trim().toLowerCase();
-  const options: { value: string; label: string; desc: string; icon: string }[] = [
-    { value: '@ticket', label: '@ticket', desc: t('mail.ticketHint', 'Soporte'), icon: '🎫' },
+  const options: { value: string; label: string; desc: string; iconComponent: typeof Ticket }[] = [
+    { value: '@ticket', label: '@ticket', desc: t('mail.ticketHint', 'Soporte'), iconComponent: Ticket },
   ];
   if (isAdmin.value) {
-    options.push({ value: '@everyone', label: '@everyone', desc: t('mail.everyoneHint', 'Todos los jugadores'), icon: '📢' });
-    options.push({ value: '@spam', label: '@spam', desc: t('mail.spamHint', 'Enviar a spam'), icon: '⚠️' });
+    options.push({ value: '@everyone', label: '@everyone', desc: t('mail.everyoneHint', 'Todos los jugadores'), iconComponent: Megaphone });
+    options.push({ value: '@spam', label: '@spam', desc: t('mail.spamHint', 'Enviar a spam'), iconComponent: AlertTriangle });
   }
   if (!val || val === '@') return options;
   return options.filter(o => o.value.startsWith(val));
@@ -525,8 +531,8 @@ function getResourceSizeLabel(key: string): string {
               <span v-if="mailStore.hasUnread" class="text-[10px] text-white/70 font-normal ml-1">({{ mailStore.unreadCount }})</span>
             </div>
             <!-- Close -->
-            <button @click="handleClose" class="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white rounded transition-colors text-xs font-bold">
-              ✕
+            <button @click="handleClose" class="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white rounded transition-colors">
+              <X :size="14" />
             </button>
           </div>
         </div>
@@ -538,11 +544,11 @@ function getResourceSizeLabel(key: string): string {
               @click="mailStore.openCompose()"
               class="gmail-compose-btn shrink-0"
             >
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              <Plus :size="16" />
               <span class="hidden sm:inline">{{ t('mail.compose') }}</span>
             </button>
             <div class="flex-1 flex items-center gap-1.5 px-3 py-1 bg-white/5 border border-white/10 rounded text-xs text-white/40">
-              <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <Search :size="14" class="shrink-0" />
               <span>Search mail...</span>
             </div>
           </div>
@@ -558,7 +564,7 @@ function getResourceSizeLabel(key: string): string {
               class="gmail-nav-item"
               :class="{ 'gmail-nav-active': mailStore.currentView === 'inbox' || (mailStore.currentView === 'detail' && mailStore.previousView === 'inbox') }"
             >
-              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8l9-5 9 5v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8z"/><polyline points="3,8 12,14 21,8"/></svg>
+              <Inbox :size="16" class="shrink-0" />
               <span class="flex-1 text-left">{{ t('mail.inbox') }}</span>
               <span v-if="mailStore.hasUnread" class="gmail-badge">{{ mailStore.unreadCount }}</span>
             </button>
@@ -567,7 +573,7 @@ function getResourceSizeLabel(key: string): string {
               class="gmail-nav-item"
               :class="{ 'gmail-nav-active': mailStore.currentView === 'spam' || (mailStore.currentView === 'detail' && mailStore.previousView === 'spam') }"
             >
-              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7v10l10 5 10-5V7L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="16" r="0.5"/></svg>
+              <AlertTriangle :size="16" class="shrink-0" />
               <span class="flex-1 text-left">{{ t('mail.spam') }}</span>
               <span v-if="mailStore.hasSpam" class="gmail-badge gmail-badge-spam">{{ mailStore.spamCount }}</span>
             </button>
@@ -576,7 +582,7 @@ function getResourceSizeLabel(key: string): string {
               class="gmail-nav-item"
               :class="{ 'gmail-nav-active': mailStore.currentView === 'sent' || (mailStore.currentView === 'detail' && mailStore.previousView === 'sent') }"
             >
-              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+              <Send :size="16" class="shrink-0" />
               <span class="flex-1 text-left">{{ t('mail.sent') }}</span>
               <span v-if="mailStore.sent.length > 0" class="gmail-badge-muted">{{ mailStore.sent.length }}</span>
             </button>
@@ -587,7 +593,7 @@ function getResourceSizeLabel(key: string): string {
               class="gmail-nav-item"
               :class="{ 'gmail-nav-active': mailStore.currentView === 'friends' }"
             >
-              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+              <Users :size="16" class="shrink-0" />
               <span class="flex-1 text-left">{{ t('friends.title') }}</span>
               <span v-if="friendsStore.requests.length > 0" class="gmail-badge">{{ friendsStore.requests.length }}</span>
             </button>
@@ -620,7 +626,7 @@ function getResourceSizeLabel(key: string): string {
                   {{ mailStore.inbox.length }} {{ mailStore.inbox.length === 1 ? 'message' : 'messages' }}
                 </span>
                 <button @click="mailStore.fetchInbox()" class="gmail-toolbar-btn" title="Refresh">
-                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                  <RefreshCw :size="14" />
                 </button>
               </div>
 
@@ -630,7 +636,7 @@ function getResourceSizeLabel(key: string): string {
               </div>
               <!-- Empty -->
               <div v-else-if="mailStore.inbox.length === 0" class="flex flex-col items-center justify-center h-60 gap-3">
-                <svg class="w-16 h-16 text-white/10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.5"><path d="M3 8l9-5 9 5v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8z"/><polyline points="3,8 12,14 21,8"/></svg>
+                <Inbox :size="64" class="text-white/10" :stroke-width="0.5" />
                 <p class="text-white/30 text-sm">{{ t('mail.noMail') }}</p>
                 <p class="text-white/15 text-[11px]">{{ t('mail.noMailHint') }}</p>
               </div>
@@ -664,9 +670,9 @@ function getResourceSizeLabel(key: string): string {
                   <!-- Indicators -->
                   <div class="flex items-center gap-1 shrink-0 ml-1">
                     <span v-if="mail.has_attachment" class="gmail-attach-icon" title="Attachment">
-                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                      <Paperclip :size="14" />
                     </span>
-                    <span v-if="mail.has_password" class="text-[10px] text-amber-400/70">🔒</span>
+                    <span v-if="mail.has_password" class="text-amber-400/70"><Lock :size="10" /></span>
                     <span v-if="mail.has_attachment && !mail.is_claimed" class="gmail-new-badge">new</span>
                   </div>
                   <!-- Date + Size -->
@@ -696,7 +702,7 @@ function getResourceSizeLabel(key: string): string {
                 >
                   <span class="gmail-star shrink-0 opacity-0">☆</span>
                   <div class="gmail-sender shrink-0 text-white/40">
-                    <span v-if="mail.mail_type === 'ticket'" class="text-fuchsia-400">🎫 @ticket</span>
+                    <span v-if="mail.mail_type === 'ticket'" class="text-fuchsia-400 inline-flex items-center gap-0.5"><Ticket :size="12" /> @ticket</span>
                     <span v-else>To: {{ mail.recipient_username }}</span>
                   </div>
                   <div class="gmail-subject-area flex-1 min-w-0">
@@ -704,7 +710,7 @@ function getResourceSizeLabel(key: string): string {
                   </div>
                   <div class="flex items-center gap-1 shrink-0 ml-1">
                     <span v-if="mail.has_attachment" class="gmail-attach-icon">
-                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                      <Paperclip :size="14" />
                     </span>
                     <span v-if="mail.is_claimed" class="text-[9px] text-green-400/60">claimed</span>
                     <span v-if="mail.is_read" class="text-[9px] text-blue-400/60">{{ t('mail.seen') }}</span>
@@ -743,9 +749,9 @@ function getResourceSizeLabel(key: string): string {
                   <div class="flex items-center gap-1 shrink-0 ml-1">
                     <span v-if="!mail.is_read" class="gmail-new-badge">new</span>
                     <span v-if="mail.has_attachment" class="gmail-attach-icon">
-                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                      <Paperclip :size="14" />
                     </span>
-                    <span v-if="mail.has_password" class="text-[10px] text-amber-400/70">🔒</span>
+                    <span v-if="mail.has_password" class="text-amber-400/70"><Lock :size="10" /></span>
                   </div>
                   <span class="gmail-date shrink-0" :class="{ 'font-bold': !mail.is_read }">{{ formatDate(mail.created_at) }}</span>
                   <span class="gmail-size shrink-0">{{ mail.size_kb }} KB</span>
@@ -848,11 +854,11 @@ function getResourceSizeLabel(key: string): string {
                 </div>
                 <!-- Add friend (spam detail only) -->
                 <button v-if="mailStore.previousView === 'spam' && currentMail.sender_username" @click="handleAddFriendFromMail" class="gmail-toolbar-btn" :title="t('friends.add')">
-                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                  <UserPlus :size="16" />
                 </button>
                 <!-- Delete -->
                 <button @click="requestDelete(currentMail.id)" class="gmail-toolbar-btn" title="Delete">
-                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                  <Trash2 :size="16" />
                 </button>
               </div>
 
@@ -865,27 +871,27 @@ function getResourceSizeLabel(key: string): string {
               <!-- Attachments -->
               <div v-if="currentMail.has_attachment" class="gmail-detail-attachments">
                 <div class="gmail-attach-header">
-                  <svg class="w-4 h-4 text-white/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                  <Paperclip :size="16" class="text-white/40" />
                   <span>{{ t('mail.attachments') }}</span>
-                  <span v-if="currentMail.has_password && mailStore.previousView !== 'sent' && !currentMail.is_claimed" class="gmail-lock-badge">🔒 {{ t('mail.passwordRequired') }}</span>
+                  <span v-if="currentMail.has_password && mailStore.previousView !== 'sent' && !currentMail.is_claimed" class="gmail-lock-badge inline-flex items-center gap-0.5"><Lock :size="10" /> {{ t('mail.passwordRequired') }}</span>
                 </div>
 
                 <!-- Attachment chips -->
                 <div class="flex flex-wrap gap-2 my-3">
                   <div v-if="currentMail.attachment_gamecoin > 0" class="gmail-attach-chip gmail-chip-gc">
-                    <span>🪙</span> {{ formatNumber(currentMail.attachment_gamecoin) }} GC
+                    <Coins :size="14" color="#fbbc05" /> {{ formatNumber(currentMail.attachment_gamecoin) }} GC
                   </div>
                   <div v-if="currentMail.attachment_crypto > 0" class="gmail-attach-chip gmail-chip-crypto">
-                    <span>💎</span> {{ currentMail.attachment_crypto }} BLC
+                    <Gem :size="14" color="#4fc3f7" /> {{ currentMail.attachment_crypto }} BLC
                   </div>
                   <div v-if="currentMail.attachment_energy > 0" class="gmail-attach-chip gmail-chip-energy">
-                    <span>⚡</span> {{ formatNumber(currentMail.attachment_energy) }} Energy
+                    <Zap :size="14" color="#66bb6a" /> {{ formatNumber(currentMail.attachment_energy) }} Energy
                   </div>
                   <div v-if="currentMail.attachment_internet > 0" class="gmail-attach-chip gmail-chip-internet">
-                    <span>📡</span> {{ formatNumber(currentMail.attachment_internet) }} Internet
+                    <Wifi :size="14" color="#ab47bc" /> {{ formatNumber(currentMail.attachment_internet) }} Internet
                   </div>
                   <div v-if="currentMail.attachment_item_type && currentMail.attachment_item_quantity > 0" class="gmail-attach-chip gmail-chip-item">
-                    <span>📦</span> {{ currentMail.attachment_item_quantity }}x {{ currentMail.attachment_item_type }}
+                    <Package :size="14" color="#ff7043" /> {{ currentMail.attachment_item_quantity }}x {{ currentMail.attachment_item_type }}
                   </div>
                 </div>
 
@@ -897,12 +903,12 @@ function getResourceSizeLabel(key: string): string {
                       :disabled="mailStore.claiming"
                       class="gmail-btn-claim"
                     >
-                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      <Download :size="16" />
                       {{ t('mail.claimAttachment') }}
                     </button>
                   </div>
                   <div v-else class="flex items-center gap-2 py-2">
-                    <svg class="w-4 h-4 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg>
+                    <Check :size="16" class="text-green-400" />
                     <span class="text-xs text-green-400/80">{{ t('mail.claimed') }}</span>
                   </div>
                 </template>
@@ -922,23 +928,23 @@ function getResourceSizeLabel(key: string): string {
             <div v-if="mailStore.currentView === 'compose'" class="gmail-compose">
               <div class="gmail-compose-header">
                 <span class="text-xs font-bold text-white/70">{{ t('mail.compose') }}</span>
-                <button @click="mailStore.goToInbox()" class="text-white/30 hover:text-white/60 text-xs">✕</button>
+                <button @click="mailStore.goToInbox()" class="text-white/30 hover:text-white/60"><X :size="12" /></button>
               </div>
 
               <div class="gmail-compose-body">
                 <!-- Ticket mode banner -->
                 <div v-if="isTicketMode" class="flex items-center gap-2 px-3 py-2 rounded bg-fuchsia-500/10 border border-fuchsia-500/20 mb-2">
-                  <span class="text-sm">🎫</span>
+                  <Ticket :size="14" color="#d946ef" />
                   <span class="text-[11px] text-fuchsia-300">{{ t('mail.ticketHint') }}</span>
                 </div>
                 <!-- Everyone mode banner -->
                 <div v-if="isEveryoneMode" class="flex items-center gap-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/20 mb-2">
-                  <span class="text-sm">📢</span>
+                  <Megaphone :size="14" color="#fbbf24" />
                   <span class="text-[11px] text-amber-300">{{ t('mail.everyoneHint') }}</span>
                 </div>
                 <!-- Spam mode banner -->
                 <div v-if="isSpamMode" class="flex items-center gap-2 px-3 py-2 rounded bg-orange-500/10 border border-orange-500/20 mb-2">
-                  <span class="text-sm">⚠️</span>
+                  <AlertTriangle :size="14" color="#fb923c" />
                   <span class="text-[11px] text-orange-300">{{ t('mail.spamHint') }}</span>
                 </div>
 
@@ -953,10 +959,10 @@ function getResourceSizeLabel(key: string): string {
                         : isEveryoneMode
                           ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                           : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'">
-                      <span v-if="isTicketMode">🎫</span>
-                      <span v-else-if="isEveryoneMode">📢</span>
+                      <Ticket v-if="isTicketMode" :size="12" />
+                      <Megaphone v-else-if="isEveryoneMode" :size="12" />
                       <span class="truncate">{{ composeTo.trim() }}</span>
-                      <button @click="clearRecipient" class="ml-0.5 hover:text-white transition-colors text-[10px] shrink-0">✕</button>
+                      <button @click="clearRecipient" class="ml-0.5 hover:text-white transition-colors shrink-0"><X :size="10" /></button>
                     </span>
                   </div>
                   <!-- Input mode -->
@@ -974,7 +980,7 @@ function getResourceSizeLabel(key: string): string {
                       @mousedown.prevent="selectAtSuggestion(s.value)"
                       class="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-white/10 transition-colors"
                     >
-                      <span>{{ s.icon }}</span>
+                      <component :is="s.iconComponent" :size="14" />
                       <span class="text-fuchsia-300 font-medium">{{ s.label }}</span>
                       <span class="text-white/30 text-[10px] ml-auto">{{ s.desc }}</span>
                     </button>
@@ -1002,27 +1008,27 @@ function getResourceSizeLabel(key: string): string {
                     class="fp-chip"
                     :style="{ borderColor: res.color + '33', background: res.color + '0f' }"
                   >
-                    <span>{{ res.icon }}</span>
+                    <component :is="res.iconComponent" :size="14" :color="res.color" />
                     <span class="fp-chip-amount" :style="{ color: res.color }">{{ formatNumber(res.amount) }} {{ res.type }}</span>
-                    <button @click="removeAttachment(res.key)" class="fp-chip-remove" title="Remove">✕</button>
+                    <button @click="removeAttachment(res.key)" class="fp-chip-remove" title="Remove"><X :size="10" /></button>
                   </div>
                 </div>
 
                 <!-- Toolbar: attach + password (hidden in ticket mode) -->
                 <div v-if="!isTicketMode" class="gmail-compose-extras">
                   <button @click="openFilePicker" class="gmail-extra-btn">
-                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                    <Paperclip :size="16" />
                     {{ t('mail.addAttachment') }}
                   </button>
-                  <button v-if="attachedResources.length > 0" @click="showPasswordField = !showPasswordField" class="gmail-extra-btn" :class="{ 'gmail-extra-btn-active': showPasswordField }">
-                    🔒 {{ t('mail.password') }}
+                  <button v-if="attachedResources.length > 0" @click="showPasswordField = !showPasswordField" class="gmail-extra-btn inline-flex items-center gap-1" :class="{ 'gmail-extra-btn-active': showPasswordField }">
+                    <Lock :size="14" /> {{ t('mail.password') }}
                   </button>
                 </div>
 
                 <!-- Password field (hidden in ticket mode) -->
                 <div v-if="!isTicketMode && showPasswordField && attachedResources.length > 0" class="gmail-compose-attachments">
                   <div class="gmail-attach-field">
-                    <label>🔒 {{ t('mail.password') }}</label>
+                    <label class="inline-flex items-center gap-0.5"><Lock :size="12" /> {{ t('mail.password') }}</label>
                     <input v-model="composePassword" type="text" maxlength="50" :placeholder="t('mail.passwordPlaceholder')" class="gmail-input" />
                   </div>
                   <p class="text-[9px] text-white/20 mt-1 px-1">{{ t('mail.passwordHint') }}</p>
@@ -1060,10 +1066,7 @@ function getResourceSizeLabel(key: string): string {
         <!-- Send animation overlay -->
         <div v-if="showSendAnimation" class="send-anim-overlay">
           <div class="send-anim-envelope">
-            <svg class="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22,2 15,22 11,13 2,9" />
-            </svg>
+            <Send :size="48" :stroke-width="1.5" />
           </div>
           <div class="send-anim-trail"></div>
         </div>
@@ -1077,17 +1080,17 @@ function getResourceSizeLabel(key: string): string {
           <!-- Title bar -->
           <div class="fp-titlebar">
             <div class="flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5 text-white/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+              <Paperclip :size="14" class="text-white/60" />
               <span>{{ t('mail.addAttachment') }}</span>
             </div>
-            <button @click="showFilePicker = false" class="fp-close-btn">✕</button>
+            <button @click="showFilePicker = false" class="fp-close-btn"><X :size="12" /></button>
           </div>
 
           <!-- Location bar -->
           <div class="fp-location-bar">
             <span class="fp-location-label">Look in:</span>
             <div class="fp-location-path">
-              <span>📁</span> My Resources
+              <FolderOpen :size="14" color="#fbbf24" /> My Resources
             </div>
           </div>
 
@@ -1110,7 +1113,7 @@ function getResourceSizeLabel(key: string): string {
               class="fp-file-row"
               :class="{ 'fp-file-selected': selectedFileKey === file.key }"
             >
-              <span class="fp-col-icon">{{ file.icon }}</span>
+              <span class="fp-col-icon"><component :is="file.iconComponent" :size="14" :color="file.color" /></span>
               <span class="fp-col-name fp-filename">{{ file.name }}{{ file.ext }}</span>
               <span class="fp-col-size" :style="{ color: file.color }">{{ formatNumber(file.getBalance()) }}</span>
               <span class="fp-col-weight">{{ getResourceSizeLabel(file.key) }}</span>
@@ -1146,7 +1149,7 @@ function getResourceSizeLabel(key: string): string {
                 :disabled="!selectedFile || !filePickerAmount || parseFloat(filePickerAmount) <= 0"
                 class="fp-btn-attach"
               >
-                📎 Attach
+                <span class="inline-flex items-center gap-1"><Paperclip :size="12" /> Attach</span>
               </button>
               <button @click="showFilePicker = false" class="fp-btn-cancel">
                 Cancel
@@ -1164,19 +1167,19 @@ function getResourceSizeLabel(key: string): string {
           <p class="text-sm text-white/80 mb-3 text-center">{{ t('mail.confirmClaim') }}</p>
           <div class="flex flex-wrap gap-2 justify-center mb-3">
             <div v-if="confirmClaimMail.attachment_gamecoin > 0" class="gmail-attach-chip gmail-chip-gc text-xs">
-              <span>🪙</span> {{ formatNumber(confirmClaimMail.attachment_gamecoin) }} GC
+              <Coins :size="12" color="#fbbc05" /> {{ formatNumber(confirmClaimMail.attachment_gamecoin) }} GC
             </div>
             <div v-if="confirmClaimMail.attachment_crypto > 0" class="gmail-attach-chip gmail-chip-crypto text-xs">
-              <span>💎</span> {{ confirmClaimMail.attachment_crypto }} BLC
+              <Gem :size="12" color="#4fc3f7" /> {{ confirmClaimMail.attachment_crypto }} BLC
             </div>
             <div v-if="confirmClaimMail.attachment_energy > 0" class="gmail-attach-chip gmail-chip-energy text-xs">
-              <span>⚡</span> {{ formatNumber(confirmClaimMail.attachment_energy) }} Energy
+              <Zap :size="12" color="#66bb6a" /> {{ formatNumber(confirmClaimMail.attachment_energy) }} Energy
             </div>
             <div v-if="confirmClaimMail.attachment_internet > 0" class="gmail-attach-chip gmail-chip-internet text-xs">
-              <span>📡</span> {{ formatNumber(confirmClaimMail.attachment_internet) }} Internet
+              <Wifi :size="12" color="#ab47bc" /> {{ formatNumber(confirmClaimMail.attachment_internet) }} Internet
             </div>
             <div v-if="confirmClaimMail.attachment_item_type && confirmClaimMail.attachment_item_quantity > 0" class="gmail-attach-chip gmail-chip-item text-xs">
-              <span>📦</span> {{ confirmClaimMail.attachment_item_quantity }}x {{ confirmClaimMail.attachment_item_type }}
+              <Package :size="12" color="#ff7043" /> {{ confirmClaimMail.attachment_item_quantity }}x {{ confirmClaimMail.attachment_item_type }}
             </div>
           </div>
           <div v-if="confirmClaimMail.has_password" class="mb-3">

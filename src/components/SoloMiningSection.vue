@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useSoloMiningStore } from '@/stores/solo-mining';
 import { useAuthStore } from '@/stores/auth';
 import { useMiningStore } from '@/stores/mining';
+import { activateLuckyBoost } from '@/utils/api';
 import SoloMiningActivateModal from './SoloMiningActivateModal.vue';
 
 const props = defineProps<{ attachedToTabs?: boolean }>();
@@ -158,6 +159,56 @@ const timeProgressPercent = computed(() => {
   const remaining = soloStore.blockTimeRemaining;
   return Math.max(0, 100 - (remaining / total * 100));
 });
+
+// ===================== LUCKY BOOST =====================
+const LUCKY_BOOST_COST = 10; // RON
+const luckyBoostLoading = ref(false);
+
+const luckyBoostActive = computed(() => {
+  const until = authStore.player?.lucky_boost_until;
+  if (!until) return false;
+  return new Date(until) > new Date();
+});
+
+const luckyBoostRemaining = computed(() => {
+  const until = authStore.player?.lucky_boost_until;
+  if (!until) return 0;
+  const diff = new Date(until).getTime() - Date.now();
+  return Math.max(0, diff);
+});
+
+const luckyBoostCountdown = computed(() => {
+  const ms = luckyBoostRemaining.value;
+  if (ms <= 0) return '';
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return `${h}h ${m}m`;
+});
+
+// Update countdown every minute
+const luckyBoostTick = ref(0);
+let luckyBoostTimer: number | null = null;
+onMounted(() => {
+  luckyBoostTimer = window.setInterval(() => { luckyBoostTick.value++; }, 60000);
+});
+onUnmounted(() => { if (luckyBoostTimer) clearInterval(luckyBoostTimer); });
+
+async function handleActivateLuckyBoost() {
+  if (!authStore.player?.id) return;
+  if ((authStore.player.ron_balance ?? 0) < LUCKY_BOOST_COST) return;
+  luckyBoostLoading.value = true;
+  try {
+    const result = await activateLuckyBoost(authStore.player.id);
+    if (result.success) {
+      authStore.player.lucky_boost_until = result.lucky_boost_until;
+      authStore.player.ron_balance = result.ron_balance;
+    }
+  } catch (e) {
+    console.error('Error activating lucky boost:', e);
+  } finally {
+    luckyBoostLoading.value = false;
+  }
+}
 </script>
 
 <template>
@@ -202,9 +253,10 @@ const timeProgressPercent = computed(() => {
           <!-- Header (igual que pool) -->
           <div class="flex items-center justify-between mb-3 sm:mb-4">
             <div class="flex items-center gap-2 sm:gap-3">
-              <div class="w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-2xl sm:text-3xl"
+              <div class="relative w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-2xl sm:text-3xl"
                 :class="soloStore.currentBlock ? 'bg-gradient-to-br from-cyan-600 to-cyan-500 animate-pulse' : 'bg-bg-tertiary'">
                 {{ soloStore.currentBlock ? currentBlockConfig.icon : '⛏️' }}
+                <span v-if="luckyBoostActive" class="lucky-crown absolute -top-2 -right-2 text-base sm:text-lg" :key="luckyBoostTick">👑</span>
               </div>
               <div>
                 <h2 class="text-base sm:text-lg font-semibold">
@@ -394,6 +446,41 @@ const timeProgressPercent = computed(() => {
               </div>
             </div>
           </template>
+
+          <!-- Lucky Boost Section -->
+          <div class="lucky-boost-panel mb-3 sm:mb-4 p-3 rounded-xl border"
+            :class="luckyBoostActive ? 'lucky-boost-active' : 'lucky-boost-inactive'">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-lg">{{ luckyBoostActive ? '👑' : '🍀' }}</span>
+                <div>
+                  <div class="text-xs font-bold" :class="luckyBoostActive ? 'text-yellow-400' : 'text-text-secondary'">
+                    Lucky Boost
+                  </div>
+                  <div v-if="luckyBoostActive" class="text-[10px] text-yellow-400/80">
+                    Activo — {{ luckyBoostCountdown }} restantes
+                  </div>
+                  <div v-else class="text-[10px] text-text-muted">
+                    +Gold/Diamond probabilidad (24h)
+                  </div>
+                </div>
+              </div>
+              <button @click="handleActivateLuckyBoost"
+                :disabled="luckyBoostLoading || (authStore.player?.ron_balance ?? 0) < LUCKY_BOOST_COST"
+                class="lucky-boost-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                :class="luckyBoostActive ? 'lucky-boost-btn-extend' : 'lucky-boost-btn-activate'">
+                <span v-if="luckyBoostLoading">...</span>
+                <span v-else-if="luckyBoostActive">+24h — {{ LUCKY_BOOST_COST }} RON</span>
+                <span v-else>Activar — {{ LUCKY_BOOST_COST }} RON</span>
+              </button>
+            </div>
+            <div v-if="luckyBoostActive" class="mt-2 grid grid-cols-4 gap-1 text-center text-[9px]">
+              <div><span class="text-text-muted">Bronze</span><br><span class="text-amber-600 font-mono">15%</span></div>
+              <div><span class="text-text-muted">Silver</span><br><span class="text-gray-300 font-mono">25%</span></div>
+              <div><span class="text-text-muted">Gold</span><br><span class="text-yellow-400 font-mono">35%</span></div>
+              <div><span class="text-text-muted">Diamond</span><br><span class="text-cyan-400 font-mono">25%</span></div>
+            </div>
+          </div>
 
           <!-- All Seeds Found Celebration (outside currentBlock template so it persists after block closes) -->
           <Transition name="seeds-complete">
@@ -639,5 +726,71 @@ const timeProgressPercent = computed(() => {
     transform: translateY(-120px) scale(0);
     opacity: 0;
   }
+}
+
+/* ===================== LUCKY BOOST ===================== */
+
+.lucky-crown {
+  animation: crownBob 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
+}
+
+@keyframes crownBob {
+  0%, 100% { transform: translateY(0) rotate(-5deg); }
+  50% { transform: translateY(-3px) rotate(5deg); }
+}
+
+.lucky-boost-active {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.08), rgba(255, 215, 0, 0.03));
+  border-color: rgba(255, 215, 0, 0.3);
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.08);
+}
+
+.lucky-boost-inactive {
+  background: var(--bg-secondary, #111);
+  border-color: var(--border, #333);
+}
+
+.lucky-boost-btn {
+  white-space: nowrap;
+}
+
+.lucky-boost-btn-activate {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: white;
+}
+
+.lucky-boost-btn-activate:hover:not(:disabled) {
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+}
+
+.lucky-boost-btn-activate:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.lucky-boost-btn-extend {
+  background: linear-gradient(135deg, #eab308, #ca8a04);
+  color: #000;
+}
+
+.lucky-boost-btn-extend:hover:not(:disabled) {
+  box-shadow: 0 0 12px rgba(234, 179, 8, 0.4);
+}
+
+.lucky-boost-btn-extend:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Light mode */
+:global(.light) .lucky-boost-inactive {
+  background: #f8f8fc;
+  border-color: #ddd;
+}
+
+:global(.light) .lucky-boost-active {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.12), rgba(255, 215, 0, 0.05));
+  border-color: rgba(202, 138, 4, 0.4);
 }
 </style>

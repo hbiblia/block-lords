@@ -27,6 +27,35 @@ ALTER TABLE players ADD COLUMN IF NOT EXISTS blocks_mined INTEGER DEFAULT 0;
 -- Agregar columna role para admin (default 'user')
 ALTER TABLE players ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
 
+-- Player level/XP system
+ALTER TABLE players ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0;
+
+-- Landwork balance
+ALTER TABLE players ADD COLUMN IF NOT EXISTS landwork INTEGER DEFAULT 0;
+
+-- Lucky Boost for solo mining
+ALTER TABLE players ADD COLUMN IF NOT EXISTS lucky_boost_until TIMESTAMPTZ;
+
+-- Staking system
+CREATE TABLE IF NOT EXISTS stakes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  plan TEXT NOT NULL,
+  ron_amount DECIMAL(18,8) NOT NULL,
+  landwork_total INTEGER NOT NULL,
+  landwork_claimed INTEGER DEFAULT 0,
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  warmup_ends_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  cooldown_ends_at TIMESTAMPTZ NOT NULL,
+  ron_returned_at TIMESTAMPTZ,
+  status TEXT DEFAULT 'warmup',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_stakes_player ON stakes(player_id);
+CREATE INDEX IF NOT EXISTS idx_stakes_status ON stakes(status);
+
 -- Crear tabla de inventario si no existe
 CREATE TABLE IF NOT EXISTS player_inventory (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -65,6 +94,21 @@ FROM player_rigs pr
 WHERE rc.player_rig_id = pr.id
   AND rc.player_id IS NULL;
 
+-- =====================================================
+-- RIG POWER MODULE SYSTEM (similar to cooling)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS rig_power (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_rig_id UUID NOT NULL REFERENCES player_rigs(id) ON DELETE CASCADE,
+  power_name TEXT NOT NULL,
+  power_supply NUMERIC NOT NULL DEFAULT 80, -- watts supplied
+  durability NUMERIC DEFAULT 100,
+  player_id UUID REFERENCES players(id) ON DELETE CASCADE,
+  installed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_rig_power_rig ON rig_power(player_rig_id);
+CREATE INDEX IF NOT EXISTS idx_rig_power_player ON rig_power(player_id);
+
 -- Agregar columna de consumo de energía extra a cooling_items si no existe
 ALTER TABLE cooling_items ADD COLUMN IF NOT EXISTS energy_cost NUMERIC DEFAULT 0.5;
 
@@ -98,6 +142,262 @@ FROM players p WHERE p.id = pr.player_id AND pr.is_active = true AND pr.mining_m
 ALTER TABLE player_rigs DROP CONSTRAINT IF EXISTS player_rigs_player_id_rig_id_key;
 
 -- =====================================================
+-- =====================================================
+-- PLAYER LEVEL / XP SYSTEM
+-- =====================================================
+CREATE OR REPLACE FUNCTION grant_player_xp(p_player_id UUID, p_amount INTEGER, p_source TEXT DEFAULT 'forge')
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_level INTEGER;
+  v_xp INTEGER;
+  v_xp_needed INTEGER;
+  v_old_level INTEGER;
+BEGIN
+  SELECT level, xp INTO v_level, v_xp FROM players WHERE id = p_player_id;
+  IF v_level IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+
+  v_old_level := v_level;
+  v_xp := v_xp + p_amount;
+  v_xp_needed := v_level * 200;
+
+  -- Level up loop
+  WHILE v_xp >= v_xp_needed LOOP
+    v_xp := v_xp - v_xp_needed;
+    v_level := v_level + 1;
+    v_xp_needed := v_level * 200;
+  END LOOP;
+
+  UPDATE players SET level = v_level, xp = v_xp WHERE id = p_player_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'new_level', v_level,
+    'new_xp', v_xp,
+    'xp_needed', v_xp_needed,
+    'leveled_up', v_level > v_old_level,
+    'xp_gained', p_amount,
+    'source', p_source
+  );
+END;
+$$;
+
+-- =====================================================
+-- STAKING SYSTEM
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION create_stake(p_player_id UUID, p_plan TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_ron DECIMAL(18,8);
+  v_cost DECIMAL(18,8);
+  v_days INTEGER;
+  v_landwork INTEGER;
+  v_apy NUMERIC := 0.10;       -- 10% APY (Ronin validator average)
+  v_lw_per_ron NUMERIC := 35000; -- 35% of yield to player (100k LW = 1 RON)
+  v_stake_id UUID;
+  v_now TIMESTAMPTZ := NOW();
+BEGIN
+  -- Plan config (RON cost + duration only; landwork calculated from APY)
+  IF p_plan = 'bronze' THEN v_cost := 100; v_days := 14;
+  ELSIF p_plan = 'silver' THEN v_cost := 300; v_days := 30;
+  ELSIF p_plan = 'gold' THEN v_cost := 700; v_days := 60;
+  ELSIF p_plan = 'diamond' THEN v_cost := 2000; v_days := 90;
+  ELSE RETURN json_build_object('success', false, 'error', 'Invalid plan');
+  END IF;
+
+  -- Calculate landwork from staking yield: RON * APY * (days/365) * LW_PER_RON
+  v_landwork := FLOOR(v_cost * v_apy * (v_days::NUMERIC / 365.0) * v_lw_per_ron);
+
+  -- Check no active stake
+  IF EXISTS (SELECT 1 FROM stakes WHERE player_id = p_player_id AND status IN ('warmup','active','cooldown')) THEN
+    RETURN json_build_object('success', false, 'error', 'Already have an active stake');
+  END IF;
+
+  -- Check balance
+  SELECT ron_balance INTO v_ron FROM players WHERE id = p_player_id;
+  IF v_ron IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+  IF v_ron < v_cost THEN
+    RETURN json_build_object('success', false, 'error', 'Insufficient RON balance');
+  END IF;
+
+  -- Deduct RON
+  UPDATE players SET ron_balance = ron_balance - v_cost WHERE id = p_player_id;
+
+  -- Create stake
+  INSERT INTO stakes (player_id, plan, ron_amount, landwork_total, started_at, warmup_ends_at, ends_at, cooldown_ends_at, status)
+  VALUES (
+    p_player_id, p_plan, v_cost, v_landwork,
+    v_now,
+    v_now + INTERVAL '3 days',
+    v_now + INTERVAL '3 days' + (v_days || ' days')::INTERVAL,
+    v_now + INTERVAL '3 days' + (v_days || ' days')::INTERVAL + INTERVAL '3 days',
+    'warmup'
+  )
+  RETURNING id INTO v_stake_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'stake_id', v_stake_id,
+    'plan', p_plan,
+    'ron_amount', v_cost,
+    'landwork_total', v_landwork,
+    'warmup_ends_at', v_now + INTERVAL '3 days',
+    'ends_at', v_now + INTERVAL '3 days' + (v_days || ' days')::INTERVAL,
+    'cooldown_ends_at', v_now + INTERVAL '3 days' + (v_days || ' days')::INTERVAL + INTERVAL '3 days'
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION claim_staking_rewards(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_stake RECORD;
+  v_elapsed_secs NUMERIC;
+  v_total_secs NUMERIC;
+  v_accrued INTEGER;
+  v_claimable INTEGER;
+BEGIN
+  SELECT * INTO v_stake FROM stakes
+  WHERE player_id = p_player_id AND status = 'active'
+  LIMIT 1;
+
+  IF v_stake IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'No active stake generating rewards');
+  END IF;
+
+  -- Calculate accrued landwork
+  v_total_secs := EXTRACT(EPOCH FROM (v_stake.ends_at - v_stake.warmup_ends_at));
+  v_elapsed_secs := EXTRACT(EPOCH FROM (LEAST(NOW(), v_stake.ends_at) - v_stake.warmup_ends_at));
+  IF v_elapsed_secs < 0 THEN v_elapsed_secs := 0; END IF;
+
+  v_accrued := FLOOR((v_elapsed_secs / v_total_secs) * v_stake.landwork_total);
+  v_claimable := v_accrued - v_stake.landwork_claimed;
+
+  IF v_claimable <= 0 THEN
+    RETURN json_build_object('success', true, 'claimed', 0, 'total_claimed', v_stake.landwork_claimed);
+  END IF;
+
+  -- Credit landwork + update claimed
+  UPDATE players SET landwork = landwork + v_claimable WHERE id = p_player_id;
+  UPDATE stakes SET landwork_claimed = landwork_claimed + v_claimable WHERE id = v_stake.id;
+
+  RETURN json_build_object(
+    'success', true,
+    'claimed', v_claimable,
+    'total_claimed', v_stake.landwork_claimed + v_claimable,
+    'landwork_total', v_stake.landwork_total
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION check_stake_status(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_stake RECORD;
+  v_now TIMESTAMPTZ := NOW();
+  v_changed BOOLEAN := false;
+  v_elapsed_secs NUMERIC;
+  v_total_secs NUMERIC;
+  v_accrued INTEGER;
+  v_claimable INTEGER;
+BEGIN
+  SELECT * INTO v_stake FROM stakes
+  WHERE player_id = p_player_id AND status IN ('warmup','active','cooldown')
+  ORDER BY created_at DESC LIMIT 1;
+
+  IF v_stake IS NULL THEN
+    RETURN json_build_object('success', true, 'has_stake', false);
+  END IF;
+
+  -- Warmup → Active
+  IF v_stake.status = 'warmup' AND v_now >= v_stake.warmup_ends_at THEN
+    UPDATE stakes SET status = 'active' WHERE id = v_stake.id;
+    v_stake.status := 'active';
+    v_changed := true;
+  END IF;
+
+  -- Active → Cooldown (auto-claim remaining)
+  IF v_stake.status = 'active' AND v_now >= v_stake.ends_at THEN
+    v_claimable := v_stake.landwork_total - v_stake.landwork_claimed;
+    IF v_claimable > 0 THEN
+      UPDATE players SET landwork = landwork + v_claimable WHERE id = p_player_id;
+      UPDATE stakes SET landwork_claimed = v_stake.landwork_total WHERE id = v_stake.id;
+      v_stake.landwork_claimed := v_stake.landwork_total;
+    END IF;
+    UPDATE stakes SET status = 'cooldown' WHERE id = v_stake.id;
+    v_stake.status := 'cooldown';
+    v_changed := true;
+  END IF;
+
+  -- Cooldown → Returned
+  IF v_stake.status = 'cooldown' AND v_now >= v_stake.cooldown_ends_at THEN
+    UPDATE players SET ron_balance = ron_balance + v_stake.ron_amount WHERE id = p_player_id;
+    UPDATE stakes SET status = 'returned', ron_returned_at = v_now WHERE id = v_stake.id;
+    v_stake.status := 'returned';
+    v_changed := true;
+  END IF;
+
+  -- Calculate pending rewards for active stakes
+  v_accrued := 0;
+  IF v_stake.status = 'active' THEN
+    v_total_secs := EXTRACT(EPOCH FROM (v_stake.ends_at - v_stake.warmup_ends_at));
+    v_elapsed_secs := EXTRACT(EPOCH FROM (LEAST(v_now, v_stake.ends_at) - v_stake.warmup_ends_at));
+    IF v_elapsed_secs < 0 THEN v_elapsed_secs := 0; END IF;
+    v_accrued := FLOOR((v_elapsed_secs / v_total_secs) * v_stake.landwork_total);
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'has_stake', true,
+    'stake_id', v_stake.id,
+    'plan', v_stake.plan,
+    'status', v_stake.status,
+    'ron_amount', v_stake.ron_amount,
+    'landwork_total', v_stake.landwork_total,
+    'landwork_claimed', v_stake.landwork_claimed,
+    'landwork_pending', GREATEST(v_accrued - v_stake.landwork_claimed, 0),
+    'started_at', v_stake.started_at,
+    'warmup_ends_at', v_stake.warmup_ends_at,
+    'ends_at', v_stake.ends_at,
+    'cooldown_ends_at', v_stake.cooldown_ends_at,
+    'status_changed', v_changed
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_stake_history(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(s)), '[]'::json)
+    FROM (
+      SELECT id, plan, ron_amount, landwork_total, landwork_claimed, status, started_at, ends_at, ron_returned_at
+      FROM stakes WHERE player_id = p_player_id
+      ORDER BY created_at DESC LIMIT 10
+    ) s
+  );
+END;
+$$;
+
 -- GAME SETTINGS HELPERS (deben existir ANTES de las funciones que las usan)
 -- =====================================================
 
@@ -1805,10 +2105,11 @@ BEGIN
 
     -- Procesar cada rig activo individualmente
     FOR v_rig IN
-      SELECT pr.id, pr.temperature, pr.condition, r.power_consumption, r.internet_consumption, r.hashrate,
+      SELECT pr.id, pr.rig_id, pr.temperature, pr.condition, r.power_consumption, r.internet_consumption, r.hashrate,
              COALESCE(pr.efficiency_level, 1) as efficiency_level,
              COALESCE(pr.thermal_level, 1) as thermal_level,
-             COALESCE(pr.patch_count, 0) as patch_count
+             COALESCE(pr.patch_count, 0) as patch_count,
+             r.name as rig_name
       FROM player_rigs pr
       JOIN rigs r ON r.id = pr.rig_id
       WHERE pr.player_id = v_player.id AND pr.is_active = true
@@ -2043,18 +2344,69 @@ BEGIN
       -- Eliminar boosts expirados
       DELETE FROM rig_boosts WHERE player_rig_id = v_rig.id AND remaining_seconds <= 0;
 
-      -- Si condición llega a 0, apagar el rig (conservar temperatura para anti-exploit)
+      -- Si condición llega a 0: tiempo de vida expirado
+      -- Devolver todo lo instalado al inventario y destruir el rig
       IF (v_rig.condition - v_deterioration) <= 0 THEN
-        UPDATE player_rigs
-        SET is_active = false,
-            deactivated_at = NOW(),
-            activated_at = NULL
-        WHERE id = v_rig.id;
+
+        -- 1. Devolver cooling instalado al inventario del jugador
+        INSERT INTO player_inventory (player_id, item_type, item_id, quantity)
+        SELECT v_player.id, 'cooling', rc.cooling_item_id, 1
+        FROM rig_cooling rc
+        WHERE rc.player_rig_id = v_rig.id
+        ON CONFLICT (player_id, item_type, item_id)
+        DO UPDATE SET quantity = player_inventory.quantity + 1;
+
+        -- Destruir player_cooling_items modded asociados
+        DELETE FROM player_cooling_items
+        WHERE id IN (SELECT player_cooling_item_id FROM rig_cooling WHERE player_rig_id = v_rig.id AND player_cooling_item_id IS NOT NULL);
+
+        -- Eliminar cooling del rig
+        DELETE FROM rig_cooling WHERE player_rig_id = v_rig.id;
+
+        -- 2. Devolver boosts instalados al inventario del jugador
+        INSERT INTO player_boosts (player_id, boost_id, quantity)
+        SELECT v_player.id, rb.boost_item_id, rb.stack_count
+        FROM rig_boosts rb
+        WHERE rb.player_rig_id = v_rig.id AND rb.remaining_seconds > 0
+        ON CONFLICT (player_id, boost_id)
+        DO UPDATE SET quantity = player_boosts.quantity + EXCLUDED.quantity;
+
+        -- Eliminar boosts del rig
+        DELETE FROM rig_boosts WHERE player_rig_id = v_rig.id;
+
+        -- 3. Devolver el rig al inventario
+        INSERT INTO player_rig_inventory (player_id, rig_id, quantity)
+        VALUES (v_player.id, v_rig.rig_id, 1)
+        ON CONFLICT (player_id, rig_id)
+        DO UPDATE SET quantity = player_rig_inventory.quantity + 1;
+
+        -- 4. Liberar y degradar el slot
+        UPDATE player_slots
+        SET uses_remaining = GREATEST(0, uses_remaining - 1),
+            player_rig_id = NULL,
+            is_destroyed = CASE WHEN uses_remaining - 1 <= 0 THEN true ELSE is_destroyed END
+        WHERE player_rig_id = v_rig.id AND player_id = v_player.id AND NOT is_destroyed;
+
+        -- Decrementar slots si se destruyó
+        UPDATE players SET rig_slots = GREATEST(0, rig_slots - 1)
+        WHERE id = v_player.id
+          AND EXISTS (
+            SELECT 1 FROM player_slots
+            WHERE player_id = v_player.id AND player_rig_id IS NULL AND is_destroyed = true
+              AND uses_remaining = 0
+          );
+
+        -- 5. Eliminar el rig
+        DELETE FROM player_rigs WHERE id = v_rig.id;
+
+        -- 6. Evento: rig expirado
         INSERT INTO player_events (player_id, type, data)
-        VALUES (v_player.id, 'rig_broken', json_build_object(
+        VALUES (v_player.id, 'rig_expired', json_build_object(
           'rig_id', v_rig.id,
-          'reason', 'wear_and_tear'
+          'rig_name', v_rig.rig_name,
+          'reason', 'lifetime_expired'
         ));
+
       END IF;
     END LOOP;
 
@@ -3083,6 +3435,76 @@ BEGIN
       ORDER BY rc.installed_at DESC
     ) t
   );
+END;
+$$;
+
+-- =====================================================
+-- RIG POWER MODULE FUNCTIONS
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION install_power_to_rig(p_player_id UUID, p_rig_id UUID, p_power_name TEXT, p_power_supply NUMERIC)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rig player_rigs%ROWTYPE;
+BEGIN
+  SELECT * INTO v_rig FROM player_rigs WHERE id = p_rig_id AND player_id = p_player_id;
+  IF v_rig.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig not found or not owned');
+  END IF;
+
+  INSERT INTO rig_power (player_rig_id, player_id, power_name, power_supply, durability)
+  VALUES (p_rig_id, p_player_id, p_power_name, p_power_supply, 100);
+
+  UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+  RETURN json_build_object('success', true, 'power_name', p_power_name, 'power_supply', p_power_supply);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_rig_power(p_rig_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON)
+    FROM (
+      SELECT rp.id, rp.power_name, rp.power_supply, rp.durability, rp.installed_at
+      FROM rig_power rp
+      WHERE rp.player_rig_id = p_rig_id
+      ORDER BY rp.installed_at DESC
+    ) t
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION remove_power_from_rig(p_player_id UUID, p_rig_id UUID, p_power_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rig player_rigs%ROWTYPE;
+  v_power rig_power%ROWTYPE;
+BEGIN
+  SELECT * INTO v_rig FROM player_rigs WHERE id = p_rig_id AND player_id = p_player_id;
+  IF v_rig.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Rig not found');
+  END IF;
+
+  SELECT * INTO v_power FROM rig_power WHERE id = p_power_id AND player_rig_id = p_rig_id;
+  IF v_power.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Power module not found on this rig');
+  END IF;
+
+  DELETE FROM rig_power WHERE id = p_power_id;
+  UPDATE player_rigs SET last_modified_at = NOW() WHERE id = p_rig_id;
+
+  RETURN json_build_object('success', true, 'removed', v_power.power_name);
 END;
 $$;
 
@@ -5712,6 +6134,7 @@ BEGIN
           'acquired_at', pr.acquired_at,
           'activated_at', pr.activated_at,
           'deactivated_at', pr.deactivated_at,
+          'mining_mode', COALESCE(pr.mining_mode, 'pool'),
           'cooling_installed', (
             SELECT COALESCE(json_agg(json_build_object(
               'id', rc.id,
@@ -6640,6 +7063,18 @@ BEGIN
   UPDATE players SET ron_balance = COALESCE(ron_balance, 0) + v_withdrawal.amount WHERE id = v_withdrawal.player_id;
   INSERT INTO transactions (player_id, type, amount, currency, description) VALUES (v_withdrawal.player_id, 'withdrawal_failed', v_withdrawal.amount, 'ron', 'Retiro fallido - devuelto');
   RETURN json_build_object('success', true, 'refunded', v_withdrawal.amount);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION admin_start_processing(p_withdrawal_id UUID)
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_withdrawal ron_withdrawals%ROWTYPE;
+BEGIN
+  SELECT * INTO v_withdrawal FROM ron_withdrawals WHERE id = p_withdrawal_id FOR UPDATE;
+  IF v_withdrawal.id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Retiro no encontrado'); END IF;
+  IF v_withdrawal.status != 'pending' THEN RETURN json_build_object('success', false, 'error', 'El retiro no está pendiente, status actual: ' || v_withdrawal.status); END IF;
+  UPDATE ron_withdrawals SET status = 'processing' WHERE id = p_withdrawal_id;
+  RETURN json_build_object('success', true);
 END;
 $$;
 
@@ -8599,14 +9034,30 @@ BEGIN
   END IF;
 
   v_roll := random();
-  IF v_roll < gs_numeric('solo_bronze_prob') THEN
-    v_block_type := 'bronze'; v_num_seeds := gs_int('solo_bronze_seeds'); v_reward := gs_numeric('solo_bronze_reward');
-  ELSIF v_roll < gs_numeric('solo_silver_prob') THEN
-    v_block_type := 'silver'; v_num_seeds := gs_int('solo_silver_seeds'); v_reward := gs_numeric('solo_silver_reward');
-  ELSIF v_roll < gs_numeric('solo_gold_prob') THEN
-    v_block_type := 'gold'; v_num_seeds := gs_int('solo_gold_seeds'); v_reward := gs_numeric('solo_gold_reward');
+
+  -- Check if player has active Lucky Boost
+  IF (SELECT lucky_boost_until FROM players WHERE id = p_player_id) > NOW() THEN
+    -- Boosted probabilities: bronze=15%, silver=25%, gold=35%, diamond=25%
+    IF v_roll < 0.15 THEN
+      v_block_type := 'bronze'; v_num_seeds := gs_int('solo_bronze_seeds'); v_reward := gs_numeric('solo_bronze_reward');
+    ELSIF v_roll < 0.40 THEN
+      v_block_type := 'silver'; v_num_seeds := gs_int('solo_silver_seeds'); v_reward := gs_numeric('solo_silver_reward');
+    ELSIF v_roll < 0.75 THEN
+      v_block_type := 'gold'; v_num_seeds := gs_int('solo_gold_seeds'); v_reward := gs_numeric('solo_gold_reward');
+    ELSE
+      v_block_type := 'diamond'; v_num_seeds := gs_int('solo_diamond_seeds'); v_reward := gs_numeric('solo_diamond_reward');
+    END IF;
   ELSE
-    v_block_type := 'diamond'; v_num_seeds := gs_int('solo_diamond_seeds'); v_reward := gs_numeric('solo_diamond_reward');
+    -- Normal probabilities
+    IF v_roll < gs_numeric('solo_bronze_prob') THEN
+      v_block_type := 'bronze'; v_num_seeds := gs_int('solo_bronze_seeds'); v_reward := gs_numeric('solo_bronze_reward');
+    ELSIF v_roll < gs_numeric('solo_silver_prob') THEN
+      v_block_type := 'silver'; v_num_seeds := gs_int('solo_silver_seeds'); v_reward := gs_numeric('solo_silver_reward');
+    ELSIF v_roll < gs_numeric('solo_gold_prob') THEN
+      v_block_type := 'gold'; v_num_seeds := gs_int('solo_gold_seeds'); v_reward := gs_numeric('solo_gold_reward');
+    ELSE
+      v_block_type := 'diamond'; v_num_seeds := gs_int('solo_diamond_seeds'); v_reward := gs_numeric('solo_diamond_reward');
+    END IF;
   END IF;
 
   SELECT COALESCE(MAX(block_number), 0) + 1 INTO v_block_number
@@ -9037,7 +9488,55 @@ BEGIN
       'pool_size', gs_int('solo_pool_size'),
       'scan_divisor', gs_int('solo_scan_divisor'),
       'block_time_minutes', gs_int('solo_block_time_minutes')
-    )
+    ),
+    'lucky_boost_until', (SELECT lucky_boost_until FROM players WHERE id = p_player_id)
+  );
+END;
+$$;
+
+-- =====================================================
+-- LUCKY BOOST - Aumenta probabilidad Gold/Diamond
+-- =====================================================
+CREATE OR REPLACE FUNCTION activate_lucky_boost(p_player_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_cost NUMERIC := 10;
+  v_duration INTERVAL := '24 hours';
+  v_current_balance NUMERIC;
+  v_current_boost TIMESTAMPTZ;
+  v_new_boost TIMESTAMPTZ;
+BEGIN
+  SELECT ron_balance, lucky_boost_until INTO v_current_balance, v_current_boost
+  FROM players WHERE id = p_player_id;
+
+  IF v_current_balance IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Player not found');
+  END IF;
+
+  IF v_current_balance < v_cost THEN
+    RETURN json_build_object('success', false, 'error', 'Insufficient RON', 'required', v_cost, 'balance', v_current_balance);
+  END IF;
+
+  -- Extend from current boost end if still active, otherwise from now
+  IF v_current_boost IS NOT NULL AND v_current_boost > NOW() THEN
+    v_new_boost := v_current_boost + v_duration;
+  ELSE
+    v_new_boost := NOW() + v_duration;
+  END IF;
+
+  UPDATE players
+  SET ron_balance = ron_balance - v_cost,
+      lucky_boost_until = v_new_boost
+  WHERE id = p_player_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'lucky_boost_until', v_new_boost,
+    'ron_spent', v_cost,
+    'ron_balance', v_current_balance - v_cost
   );
 END;
 $$;
@@ -14352,29 +14851,21 @@ BEGIN
 
   -- Apply result based on type
   IF v_recipe.result_type = 'xp_grant' THEN
-    -- Tier Kit: Grant XP to target slot
-    IF p_target_slot_id IS NULL THEN
-      RETURN json_build_object('success', false, 'error', 'Target slot required for tier kit');
-    END IF;
+    -- Grant XP to player (not slot)
+    DECLARE
+      v_xp_result JSON;
+    BEGIN
+      v_xp_result := grant_player_xp(p_player_id, v_recipe.result_value::INTEGER, 'forge');
 
-    SELECT * INTO v_slot FROM player_slots
-    WHERE id = p_target_slot_id AND player_id = p_player_id AND NOT is_destroyed;
-
-    IF v_slot IS NULL THEN
-      RETURN json_build_object('success', false, 'error', 'Slot not found');
-    END IF;
-
-    UPDATE player_slots
-    SET xp = COALESCE(xp, 0) + v_recipe.result_value::INTEGER
-    WHERE id = p_target_slot_id;
-
-    RETURN json_build_object(
-      'success', true,
-      'type', 'xp_grant',
-      'xp_granted', v_recipe.result_value,
-      'slot_number', v_slot.slot_number,
-      'new_xp', COALESCE(v_slot.xp, 0) + v_recipe.result_value::INTEGER
-    );
+      RETURN json_build_object(
+        'success', true,
+        'type', 'xp_grant',
+        'xp_granted', v_recipe.result_value,
+        'new_level', (v_xp_result->>'new_level')::INTEGER,
+        'new_xp', (v_xp_result->>'new_xp')::INTEGER,
+        'leveled_up', (v_xp_result->>'leveled_up')::BOOLEAN
+      );
+    END;
 
   ELSIF v_recipe.result_type = 'rig_boost' THEN
     -- Rig Enhancement: Apply permanent boost
@@ -15346,16 +15837,15 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION use_exp_pack(p_player_id UUID, p_pack_id TEXT, p_slot_id UUID)
+CREATE OR REPLACE FUNCTION use_exp_pack(p_player_id UUID, p_pack_id TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
   v_pack exp_packs%ROWTYPE;
-  v_slot player_slots%ROWTYPE;
   v_inv_qty INTEGER;
-  v_new_xp INTEGER;
+  v_xp_result JSON;
 BEGIN
   -- Validar pack existe
   SELECT * INTO v_pack FROM exp_packs WHERE id = p_pack_id;
@@ -15372,14 +15862,6 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'No pack in inventory');
   END IF;
 
-  -- Validar slot existe y pertenece al jugador
-  SELECT * INTO v_slot FROM player_slots
-  WHERE id = p_slot_id AND player_id = p_player_id AND NOT is_destroyed;
-
-  IF v_slot IS NULL THEN
-    RETURN json_build_object('success', false, 'error', 'Slot not found');
-  END IF;
-
   -- Consumir 1 pack del inventario
   IF v_inv_qty = 1 THEN
     DELETE FROM player_inventory
@@ -15390,21 +15872,20 @@ BEGIN
     WHERE player_id = p_player_id AND item_type = 'exp_pack' AND item_id = p_pack_id;
   END IF;
 
-  -- Aplicar XP al slot
-  v_new_xp := COALESCE(v_slot.xp, 0) + v_pack.xp_amount;
-  UPDATE player_slots SET xp = v_new_xp WHERE id = p_slot_id;
+  -- Aplicar XP al player (no al slot)
+  v_xp_result := grant_player_xp(p_player_id, v_pack.xp_amount, 'exp_pack');
 
   -- Loguear transaccion
   INSERT INTO transactions (player_id, type, amount, currency, description)
   VALUES (p_player_id, 'exp_pack_used', 0, 'gamecoin',
-          'Usado ' || v_pack.name || ' en slot #' || v_slot.slot_number || ' (+' || v_pack.xp_amount || ' XP)');
+          'Usado ' || v_pack.name || ' (+' || v_pack.xp_amount || ' XP jugador)');
 
   RETURN json_build_object(
     'success', true,
     'xp_granted', v_pack.xp_amount,
-    'new_xp', v_new_xp,
-    'slot_number', v_slot.slot_number,
-    'slot_tier', COALESCE(v_slot.tier, 'basic')
+    'new_level', (v_xp_result->>'new_level')::INTEGER,
+    'new_xp', (v_xp_result->>'new_xp')::INTEGER,
+    'leveled_up', (v_xp_result->>'leveled_up')::BOOLEAN
   );
 END;
 $$;

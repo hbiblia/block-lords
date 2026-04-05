@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { supabase } from '@/utils/supabase';
-import { getPlayerRigs, getNetworkStats, getRecentMiningBlocks, getRigCooling, getRigBoosts, getPlayerSlotInfo, getPlayerBoosts, toggleRig as apiToggleRig, getPendingBlocks } from '@/utils/api';
+import { getPlayerRigs, getNetworkStats, getRecentMiningBlocks, getRigCooling, getRigBoosts, getPlayerSlotInfo, getPlayerBoosts, toggleRig as apiToggleRig, getPendingBlocks, buyRigSlot } from '@/utils/api';
+
 import { useAuthStore } from './auth';
 import { useNotificationsStore } from './notifications';
 import { useToastStore } from './toast';
@@ -687,7 +688,35 @@ export const useMiningStore = defineStore('mining', () => {
   }
 
 
+  async function buySlot() {
+    const authStore = useAuthStore();
+    const toastStore = useToastStore();
+    if (!authStore.player?.id) return { success: false, error: 'No player' };
+
+    loading.value = true;
+    try {
+      const result = await buyRigSlot(authStore.player.id);
+      if (result.success) {
+        playSound('success');
+        toastStore.success(i18n.global.t('toast.slotPurchased') || 'New slot acquired!','🛸');
+        await loadData();
+      } else {
+        playSound('error');
+        toastStore.error(result.error || 'Upgrade failed', '⚠️');
+      }
+      return result;
+    } catch (e: any) {
+      playSound('error');
+      console.error('Error buying slot:', e);
+      toastStore.error(e.message || 'Connection error', '⚠️');
+      return { success: false, error: e.message };
+    } finally {
+      loading.value = false;
+    }
+  }
+
   function clearState() {
+
     rigs.value = [];
     networkStats.value = DEFAULT_NETWORK_STATS;
     recentBlocks.value = [];
@@ -940,7 +969,9 @@ export const useMiningStore = defineStore('mining', () => {
     loadActiveBoosts,
     reloadRigs,
     toggleRig,
+    buySlot,
     clearState,
+
 
     // Nuevo sistema de shares
     currentMiningBlock,

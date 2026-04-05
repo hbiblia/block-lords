@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStreakStore } from '@/stores/streak';
 import { playSound } from '@/utils/sounds';
+import { X, Check } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const streakStore = useStreakStore();
@@ -163,9 +164,7 @@ function handleClose() {
             @click="handleClose"
             class="w-8 h-8 rounded-lg bg-bg-tertiary hover:bg-bg-secondary flex items-center justify-center transition-colors"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X :size="20" />
           </button>
         </div>
 
@@ -289,9 +288,7 @@ function handleClose() {
                     v-if="isCompleted(reward.day)"
                     class="absolute -top-1 -right-1 w-4 h-4 bg-status-success rounded-full flex items-center justify-center"
                   >
-                    <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Check :size="12" class="text-white" :stroke-width="3" />
                   </div>
                 </div>
               </div>

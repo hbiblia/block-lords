@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useSoloMiningStore } from '@/stores/solo-mining';
+import { X } from 'lucide-vue-next';
 
 defineProps<{ show: boolean }>();
 const emit = defineEmits<{ close: []; activated: [] }>();
@@ -34,7 +35,7 @@ async function handleActivate() {
               <span>⛏️</span> Solo Mining
             </h2>
             <button @click="emit('close')" class="text-text-muted hover:text-text-primary hover:bg-bg-secondary rounded-lg p-1.5 transition-colors">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              <X :size="20" />
             </button>
           </div>
 
