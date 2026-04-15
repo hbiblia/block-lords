@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, ref, provide, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRoute } from 'vue-router';
+// import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useGameTickStore } from '@/stores/game-tick';
 import { useStreakStore } from '@/stores/streak';
@@ -11,10 +11,10 @@ import { useMiningStore } from '@/stores/mining';
 import { useGiftsStore } from '@/stores/gifts';
 import { useMailStore } from '@/stores/mail';
 import { useDefenseStore } from '@/stores/defense';
-import { useToastStore } from '@/stores/toast';
+// import { useToastStore } from '@/stores/toast';
 import { formatCompact } from '@/utils/format';
 import { toggleLocale, getLocale } from '@/plugins/i18n';
-import { Pickaxe, Target, ShoppingCart, Swords, ArrowLeftRight, Package, Flame } from 'lucide-vue-next';
+import { Pickaxe, Target, Swords, ArrowLeftRight, Flame } from 'lucide-vue-next';
 
 const { t } = useI18n();
 const currentLocale = computed(() => getLocale());
@@ -31,15 +31,15 @@ const showGuide = ref(false);
 const showMail = ref(false);
 // const showHacker = ref(false); // disabled - reworking
 
-function openMarket() {
-  showMarket.value = true;
-}
+// function openMarket() {
+//   showMarket.value = true;
+// }
 function openExchange() {
   showExchange.value = true;
 }
-function openInventory() {
-  showInventory.value = true;
-}
+// function openInventory() {
+//   showInventory.value = true;
+// }
 function openForge() {
   showForge.value = true;
 }
@@ -51,7 +51,7 @@ function openDefense() {
 //   showScavenger.value = true;
 // }
 
-import NavBar from '@/components/NavBar.vue';
+// import NavBar from '@/components/NavBar.vue';
 import InfoBar from '@/components/InfoBar.vue';
 import UpdateNotificationModal from '@/components/UpdateNotificationModal.vue';
 import ConnectionLostModal from '@/components/ConnectionLostModal.vue';
@@ -71,12 +71,12 @@ import MailModal from '@/components/MailModal.vue';
 import MiningGuide from '@/components/MiningGuide.vue';
 import RewardCelebration from '@/components/RewardCelebration.vue';
 
-const route = useRoute();
+// const route = useRoute();
 const authStore = useAuthStore();
 const gameTickStore = useGameTickStore();
 
 // Hide navbar on home page when not authenticated
-const showNavBar = computed(() => authStore.isAuthenticated || route.path !== '/');
+// const showNavBar = computed(() => authStore.isAuthenticated || route.path !== '/');
 const streakStore = useStreakStore();
 const missionsStore = useMissionsStore();
 const pendingBlocksStore = usePendingBlocksStore();

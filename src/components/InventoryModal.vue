@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, type Component } from 'vue';
+import { ref, computed, watch, type Component } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useInventoryStore, type CoolingItem, type ModdedCoolingItem } from '@/stores/inventory';
@@ -10,7 +10,7 @@ import CoolingWorkshopModal from './CoolingWorkshopModal.vue';
 import {
   Zap, BatteryCharging, Signal, Rocket, Snowflake, Shield, Pickaxe,
   Wifi, Puzzle, HeartPulse, BookOpen, Package, Wrench, Trash2, X,
-  CreditCard, Heart, Square, Sparkles
+  CreditCard, Heart, Sparkles
 } from 'lucide-vue-next';
 
 const { t } = useI18n();

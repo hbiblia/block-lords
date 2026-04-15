@@ -96,8 +96,12 @@ router.beforeEach(async (to, _from, next) => {
   // Esperar a que auth esté inicializado
   await authStore.waitForInit();
 
+  // Rutas que siempre deben ser accesible para permitir login de admins
+  const isAuthRoute = ['login', 'auth-callback', 'setup-username'].includes(to.name as string);
+
   // Si estamos en mantenimiento y el usuario no es admin, redirigir a mantenimiento
-  if (maintenanceMode && to.name !== 'maintenance' && authStore.player?.role !== 'admin') {
+  // (a menos que sea la propia página de mantenimiento o una ruta de autenticación)
+  if (maintenanceMode && to.name !== 'maintenance' && authStore.player?.role !== 'admin' && !isAuthRoute) {
     next({ name: 'maintenance' });
     return;
   }

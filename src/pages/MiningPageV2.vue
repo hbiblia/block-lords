@@ -15,7 +15,7 @@ import {
   Rocket, Puzzle, Settings, Crown, Clover, CheckCircle, Medal, Flame,
   FlaskConical, Wrench, Cpu, Cable, Droplets, Disc, RotateCw, Dna,
   Thermometer, Network, Eye, Moon,
-  Users, Package, Lock, Globe, Timer, Search, CreditCard, BookOpen, Sticker, Pause,
+  Users, Package, Lock, Globe, Timer, CreditCard, BookOpen, Sticker, Pause,
   Inbox, ArrowDownToLine, Layers, Trash2, Archive
 } from 'lucide-vue-next';
 
@@ -118,10 +118,12 @@ function closeStory() {
 const menuModalOpen = ref(false);
 const menuModalTab = ref<'inventory' | 'market' | 'exchange'>('inventory');
 
+/*
 function selectMenu(tab: typeof activeTab.value) {
   activeTab.value = tab;
   menuOpen.value = false;
 }
+*/
 
 function closeMenu(e: MouseEvent) {
   const target = e.target as HTMLElement;
@@ -226,6 +228,7 @@ async function handleExchange() {
 }
 
 // Load data when switching to menu tabs
+/*
 function selectMenuWithLoad(tab: 'inventory' | 'market' | 'exchange') {
   menuModalTab.value = tab;
   menuModalOpen.value = true;
@@ -234,6 +237,7 @@ function selectMenuWithLoad(tab: 'inventory' | 'market' | 'exchange') {
   else if (tab === 'market') loadMarketData();
   else if (tab === 'exchange') loadExchangeRates();
 }
+*/
 
 function switchModalTab(tab: 'inventory' | 'market' | 'exchange') {
   menuModalTab.value = tab;
@@ -274,8 +278,8 @@ const configTab = ref<'status' | 'components'>('status');
 
 
 // Skill Tree State
-const researchPoints = ref(12);
-const unlockedNodes = ref<string[]>(['over_1', 'therm_1']);
+// const researchPoints = ref(12);
+// const unlockedNodes = ref<string[]>(['over_1', 'therm_1']);
 
 
 
@@ -318,11 +322,13 @@ const formatBoostTime = (seconds: number) => {
   return `${m}m ${s}s`;
 };
 
+/*
 const energyPct = computed(() => {
   const energy = authStore.player?.energy ?? 0;
   const max = authStore.effectiveMaxEnergy || 100;
   return Math.min(100, (energy / max) * 100);
 });
+*/
 
 const internetPct = computed(() => {
   const internet = authStore.player?.internet ?? 0;
@@ -333,7 +339,7 @@ const internetPct = computed(() => {
 // Mining Data
 const rigs = computed(() => miningStore.rigs);
 const currentMiningBlock = computed(() => miningStore.currentMiningBlock);
-const effectiveHashrate = computed(() => miningStore.effectiveHashrate);
+// const effectiveHashrate = computed(() => miningStore.effectiveHashrate);
 
 // Recommended Strategies logic
 const strategyTips = computed(() => {
@@ -402,38 +408,11 @@ async function handleStartAllHealthy() {
 }
 
 /** RESEARCH LOGIC **/
+/*
 const masteryBranches = [
-  {
-    id: 'overclock',
-    title: 'COMPUTATIONAL_FREQUENCY',
-    color: '#ff4444',
-    nodes: [
-      { id: 'over_1', tier: 1, name: 'CYCLE_OPTIMIZER', desc: '+10% Hashrate per node', cost: 5 },
-      { id: 'over_2', tier: 2, name: 'MULTI_THREAD_SCHEDULER', desc: '+25% Processing Depth', cost: 15 },
-      { id: 'over_3', tier: 3, name: 'QUANTUM_LOGIC_GATES', desc: '+50% Entropy Speed', cost: 40 }
-    ]
-  },
-  {
-    id: 'thermal',
-    title: 'CRYOGENIC_REGULATION',
-    color: '#f59e0b',
-    nodes: [
-      { id: 'therm_1', tier: 1, name: 'PASSIVE_HEAT_SINKS', desc: '-5°C Thermal Base', cost: 5 },
-      { id: 'therm_2', tier: 2, name: 'FLOW_FLUID_LOOP', desc: '-15°C Under Load', cost: 15 },
-      { id: 'therm_3', tier: 3, name: 'PHASE_CHANGE_CORE', desc: 'Immutable Cooling State', cost: 40 }
-    ]
-  },
-  {
-    id: 'integrity',
-    title: 'STRUCTURAL_STABILITY',
-    color: '#00ff88',
-    nodes: [
-      { id: 'integ_1', tier: 1, name: 'TITANIUM_CHASSIS', desc: '+20% Durability Buffer', cost: 5 },
-      { id: 'integ_2', tier: 2, name: 'SELF_HEALING_BUS', desc: 'Auto-repair 0.5%/hr', cost: 15 },
-      { id: 'integ_3', tier: 3, name: 'INFINITY_CYCLE', desc: 'No normal wear-and-tear', cost: 40 }
-    ]
-  }
+  ...
 ];
+*/
 
 // Forge & Crafting Logic (MASSIVE DATABASE - 100+ Recipes)
 const forgeSelection = ref<any[]>([null, null]);
@@ -447,13 +426,7 @@ const playerXp = computed(() => authStore.player?.xp ?? 0);
 const playerXpNeeded = computed(() => playerLevel.value * 200);
 const playerXpPct = computed(() => (playerXp.value / playerXpNeeded.value) * 100);
 
-const forgeTier = computed(() => {
-  if (playerLevel.value >= 50) return 5;
-  if (playerLevel.value >= 30) return 4;
-  if (playerLevel.value >= 15) return 3;
-  if (playerLevel.value >= 5) return 2;
-  return 1;
-});
+// const forgeTier = computed(() => { ... });
 
 const forgeRank = computed(() => {
   if (playerLevel.value >= 50) return 'OPERA_OMNIUM';
@@ -672,7 +645,7 @@ const generateRecipes = () => {
 };
 
 const forgeRecipes = generateRecipes();
-const unlockedCount = computed(() => 24); // Simulated unlock progress
+// const unlockedCount = computed(() => 24); // Simulated unlock progress
 
 const handleStartForge = async () => {
   if (!forgeResult.value) return;
@@ -926,7 +899,7 @@ async function executeInvAction(action: string, data: any) {
     if (action === 'install_rig') {
       const res = await inventoryStore.installRig(data.rigId);
       success = res.success;
-      if (success) await miningStore.fetchRigs();
+      if (success) await miningStore.loadData();
     } else if (action === 'delete_item') {
       const res = await inventoryStore.deleteItem(data.itemType, data.itemId, data.quantity ?? 1);
       success = res.success;
@@ -941,7 +914,7 @@ async function executeInvAction(action: string, data: any) {
     } else if (action === 'apply_patch') {
       const res = await applyRigPatch(authStore.player!.id, data.rigId);
       success = !!res?.success;
-      if (success) { await miningStore.fetchRigs(); await inventoryStore.refresh(); }
+      if (success) { await miningStore.loadData(); await inventoryStore.refresh(); }
     }
 
     if (success) {
@@ -1064,6 +1037,7 @@ const forgeProgress = ref(0);
 const forgeStepLabel = ref('');
 const forgingMap = ref<Record<string, { progress: number; label: string }>>({});
 
+/*
 function selectForForge(item: any) {
   if (forgeSelection.value[0]?.id === item.id) { forgeSelection.value[0] = null; return; }
   if (forgeSelection.value[1]?.id === item.id) { forgeSelection.value[1] = null; return; }
@@ -1071,6 +1045,7 @@ function selectForForge(item: any) {
   if (!forgeSelection.value[0]) forgeSelection.value[0] = item;
   else if (!forgeSelection.value[1]) forgeSelection.value[1] = item;
 }
+*/
 
 // Helper to check if player has an item for a recipe
 function hasItem(name: string) {
@@ -1108,6 +1083,7 @@ function getNodeTimeRemaining(rig: any) {
   return `${days}d ${h}h`;
 }
 
+/*
 function getNodeAbilities(rig: any) {
   // Based on installed components or tier
   return [
@@ -1116,6 +1092,7 @@ function getNodeAbilities(rig: any) {
     { type: 'stab', val: 'ECC', icon: Shield }
   ];
 }
+*/
 
 
 
@@ -1309,7 +1286,7 @@ const stakeLoading = ref(false);
 const selectedPlan = ref<string | null>(null);
 const stakeClaiming = ref(false);
 
-const stakeStatus = computed(() => stakeData.value?.status || null);
+// const stakeStatus = computed(() => stakeData.value?.status || null);
 
 const stakePendingLandwork = computed(() => {
   if (!stakeData.value || stakeData.value.status !== 'active') return 0;

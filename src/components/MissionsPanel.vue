@@ -29,6 +29,7 @@ function missionCategory(missionId: string): string {
   return 'daily';
 }
 
+/*
 function categoryColor(cat: string): string {
   switch (cat) {
     case 'daily': return 'bg-blue-500/20 text-blue-400';
@@ -38,6 +39,7 @@ function categoryColor(cat: string): string {
     default: return 'bg-bg-tertiary text-text-muted';
   }
 }
+*/
 const missionsStore = useMissionsStore();
 const streakStore = useStreakStore();
 

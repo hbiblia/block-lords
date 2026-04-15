@@ -13,7 +13,7 @@ import {
   Filler,
 } from 'chart.js';
 import { useRigStats, type RigSnapshot } from '@/composables/useRigStats';
-import { useI18n } from 'vue-i18n';
+// import { useI18n } from 'vue-i18n';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -42,7 +42,7 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-const { t } = useI18n();
+// const { t } = useI18n();
 const { getSnapshots, getSummary, rigSnapshots } = useRigStats();
 
 const updateKey = ref(0);

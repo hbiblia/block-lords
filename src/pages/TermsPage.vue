@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { FileCheck, UserCheck, AlertTriangle, Coins, Gamepad2, Scale, FileText } from 'lucide-vue-next';
+import { FileCheck, UserCheck, Coins, Gamepad2, Scale, FileText } from 'lucide-vue-next';
 
 const { t } = useI18n();
 

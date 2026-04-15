@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { Shield, Pickaxe, Store, Swords, AlertTriangle, Users, ScrollText } from 'lucide-vue-next';
+import { Shield, Pickaxe, Store, AlertTriangle, Users, ScrollText } from 'lucide-vue-next';
 
 const { t } = useI18n();
 

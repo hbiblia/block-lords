@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick, type Component } from 'vue';
+import { ref, computed, onMounted, watch, type Component } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useMarketStore } from '@/stores/market';

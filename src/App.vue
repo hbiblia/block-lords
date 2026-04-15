@@ -160,6 +160,8 @@ async function handleRetry() {
 </template>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
 /* Page transitions */
 .page-enter-active,
 .page-leave-active {
@@ -177,7 +179,6 @@ async function handleRetry() {
 }
 
 /* Kawaii Skeleton */
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
 
 .app-skel {
   position: fixed; inset: 0; z-index: 50;
