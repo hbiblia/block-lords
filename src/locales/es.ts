@@ -1,4 +1,4 @@
-﻿export default {
+export default {
   common: {
     loading: 'Cargando...',
     cancel: 'Cancelar',
@@ -723,6 +723,16 @@
   notFound: {
     message: 'Página no encontrada',
     backHome: 'Volver al inicio',
+  },
+  maintenance: {
+    title: 'Bajo Mantenimiento',
+    description: 'Estamos mejorando las minas de Block Lords para ofrecerte una mejor experiencia. Estaremos de vuelta muy pronto.',
+    status: 'Trabajando arduamente',
+    stateLabel: 'Estado',
+    stateValue: 'Actualizando',
+    timeLabel: 'Tiempo est.',
+    timeValue: 'Desconocido',
+    contact: 'Discord'
   },
 
   usernameSetup: {

@@ -691,4 +691,82 @@ async function handleLogout() {
 .backdrop-enter-from, .backdrop-leave-to {
   opacity: 0;
 }
+
+/* ===== DARK KAWAII MODE (default) ===== */
+:root:not(.kawaii-light) .nb-root {
+  background: #1a1528;
+  border-bottom-color: #4a3660;
+  box-shadow: 0 2px 8px rgba(26,21,40,0.3);
+}
+:root:not(.kawaii-light) .nb-logo-text { color: #f0e4ff; }
+:root:not(.kawaii-light) .nb-logo-dot { background: #7cc490; border-color: #5a9a6a; }
+:root:not(.kawaii-light) .nb-res-btn {
+  border-color: #4a3660; background: #231d35; color: #b8a0d0;
+}
+:root:not(.kawaii-light) .nb-res-btn-active { border-color: #5c4578; }
+:root:not(.kawaii-light) .nb-res-val { color: #ffe566; }
+:root:not(.kawaii-light) .nb-chevron { color: #8a70a8; }
+:root:not(.kawaii-light) .nb-resource-cell {
+  border-color: #4a3660; background: #231d35;
+}
+:root:not(.kawaii-light) .nb-rc-amber { color: #ffe566; }
+:root:not(.kawaii-light) .nb-rc-cyan { color: #c4a0e8; }
+:root:not(.kawaii-light) .nb-bar-cell {
+  border-color: #4a3660; background: #231d35;
+}
+:root:not(.kawaii-light) .nb-bar-track {
+  background: #2d2545; border-color: #4a3660;
+}
+:root:not(.kawaii-light) .nb-fill-amber { background: #ffe566; }
+:root:not(.kawaii-light) .nb-fill-cyan { background: #c4a0e8; }
+:root:not(.kawaii-light) .nb-fill-warning { background: #ffe566; }
+:root:not(.kawaii-light) .nb-bar-num { color: #b8a0d0; }
+:root:not(.kawaii-light) .nb-num-cyan { color: #c4a0e8; }
+:root:not(.kawaii-light) .nb-num-warning { color: #ffe566; }
+:root:not(.kawaii-light) .nb-icon-btn {
+  border-color: #4a3660; background: #231d35;
+}
+:root:not(.kawaii-light) .nb-icon-btn:hover {
+  border-color: #5c4578; background: #2d2545;
+}
+:root:not(.kawaii-light) .nb-profile-btn {
+  border-color: #4a3660; background: #231d35;
+}
+:root:not(.kawaii-light) .nb-profile-btn:hover,
+:root:not(.kawaii-light) .nb-profile-active {
+  border-color: #5c4578; background: #2d2545;
+}
+:root:not(.kawaii-light) .nb-avatar {
+  background: linear-gradient(135deg, #5c4578, #4a3660);
+}
+:root:not(.kawaii-light) .nb-username { color: #f0e4ff; }
+:root:not(.kawaii-light) .nb-dropdown {
+  background: #1f1833; border-color: #4a3660;
+  box-shadow: 3px 3px 0 rgba(74,54,96,0.3);
+}
+:root:not(.kawaii-light) .nb-dd-item { color: #b8a0d0; }
+:root:not(.kawaii-light) .nb-dd-item:hover { background: #2d2545; color: #f0e4ff; }
+:root:not(.kawaii-light) .nb-dd-danger { color: #e87c8a; }
+:root:not(.kawaii-light) .nb-dd-danger:hover { background: rgba(232,124,138,0.1); color: #e87c8a; }
+:root:not(.kawaii-light) .nb-lang-btn {
+  border-color: #4a3660; background: #231d35;
+}
+:root:not(.kawaii-light) .nb-lang-btn:hover { border-color: #5c4578; background: #2d2545; }
+:root:not(.kawaii-light) .nb-lang-code { color: #b8a0d0; }
+:root:not(.kawaii-light) .nb-login-btn {
+  background: #ffe566; border-color: #d4a017;
+}
+:root:not(.kawaii-light) .nb-login-btn:hover { background: #ffd700; }
+:root:not(.kawaii-light) .nb-login-text { color: #1a1528; }
+:root:not(.kawaii-light) .nb-mobile-backdrop {
+  background: rgba(26,21,40,0.7);
+}
+:root:not(.kawaii-light) .nb-mobile-panel {
+  background: #1f1833; border-color: #4a3660;
+  box-shadow: 3px 3px 0 rgba(74,54,96,0.3);
+}
+:root:not(.kawaii-light) .nb-mp-row { border-bottom-color: #3a2d50; }
+:root:not(.kawaii-light) .nb-mp-label { color: #b8a0d0; }
+:root:not(.kawaii-light) .nb-mp-bar-row { border-bottom-color: #3a2d50; }
+:root:not(.kawaii-light) .nb-mp-bar-num { color: #b8a0d0; }
 </style>

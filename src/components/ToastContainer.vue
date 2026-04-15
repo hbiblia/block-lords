@@ -74,10 +74,10 @@ function getTypeConfig(type: string) {
   min-width: 280px;
   max-width: 360px;
   cursor: pointer;
-  border: 2px solid #c4a0e8;
-  background: #fff;
+  border: 2px solid #4a3660;
+  background: #1f1833;
   border-radius: 12px;
-  box-shadow: 3px 3px 0 #e8d0f0;
+  box-shadow: 3px 3px 0 rgba(74,54,96,0.3);
   transition: all 0.2s;
   font-family: 'Nunito', 'Trebuchet MS', sans-serif;
 }
@@ -117,7 +117,7 @@ function getTypeConfig(type: string) {
 .th-dismiss {
   font-size: 0.55rem;
   font-weight: 900;
-  color: #9a80b8;
+  color: #8a70a8;
   cursor: pointer;
   opacity: 0.5;
   transition: 0.2s;
@@ -147,7 +147,7 @@ function getTypeConfig(type: string) {
 /* Progress bar */
 .th-progress {
   height: 3px;
-  background: #f0e8f8;
+  background: #2d2545;
   overflow: hidden;
   border-radius: 0 0 10px 10px;
 }

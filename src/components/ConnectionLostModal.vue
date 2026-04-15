@@ -54,7 +54,7 @@ function handleRefresh() {
 }
 .cl-card {
   position: relative; overflow: hidden;
-  background: #fff; border: 2px solid #ff7b7b; border-radius: 12px;
+  background: #1f1833; border: 2px solid #ff7b7b; border-radius: 12px;
   box-shadow: 3px 3px 0 #ffc0c0;
   font-family: 'Nunito', 'Trebuchet MS', sans-serif;
 }
@@ -77,7 +77,7 @@ function handleRefresh() {
   letter-spacing: 2px; text-transform: uppercase;
 }
 .cl-msg {
-  display: block; font-size: 0.8rem; font-weight: 700; color: #4a3a5c;
+  display: block; font-size: 0.8rem; font-weight: 700; color: #f0e4ff;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .cl-btn {

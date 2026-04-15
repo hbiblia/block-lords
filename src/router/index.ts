@@ -49,11 +49,6 @@ const router = createRouter({
       component: () => import('@/pages/MiningPage.vue'),
     },
     {
-      path: '/mining-v3',
-      name: 'mining-v3',
-      component: () => import('@/pages/MiningPageV3.vue'),
-    },
-    {
       path: '/market',
       name: 'market',
       component: () => import('@/pages/MarketPage.vue'),
@@ -82,6 +77,11 @@ const router = createRouter({
       component: () => import('@/pages/TermsPage.vue'),
     },
     {
+      path: '/maintenance',
+      name: 'maintenance',
+      component: () => import('@/pages/MaintenancePage.vue'),
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/pages/NotFoundPage.vue'),
@@ -91,15 +91,28 @@ const router = createRouter({
 
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore();
+  const maintenanceMode = import.meta.env.VITE_MAINTENANCE_MODE === 'true';
+
+  // Esperar a que auth esté inicializado
+  await authStore.waitForInit();
+
+  // Si estamos en mantenimiento y el usuario no es admin, redirigir a mantenimiento
+  if (maintenanceMode && to.name !== 'maintenance' && authStore.player?.role !== 'admin') {
+    next({ name: 'maintenance' });
+    return;
+  }
+
+  // Si NO estamos en mantenimiento e intentamos entrar a la ruta de mantenimiento, redirigir al home
+  if (!maintenanceMode && to.name === 'maintenance') {
+    next({ name: 'home' });
+    return;
+  }
 
   // Capturar código de referido de la URL si existe
   const refCode = to.query.ref as string | undefined;
   if (refCode && refCode.length >= 6) {
     localStorage.setItem('pendingReferralCode', refCode.toUpperCase());
   }
-
-  // Esperar a que auth esté inicializado antes de verificar
-  await authStore.waitForInit();
 
   // Permitir acceso al callback y setup sin restricciones
   if (to.name === 'auth-callback' || to.name === 'setup-username') {

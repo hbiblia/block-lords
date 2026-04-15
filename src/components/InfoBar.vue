@@ -222,7 +222,7 @@ onUnmounted(() => {
 <style scoped>
 .infobar-root {
   position: fixed; top: 0; left: 0; right: 0; z-index: 60;
-  border-bottom: 2px solid #c4a0e8;
+  border-bottom: 2px solid #4a3660;
   transition: all 0.3s;
   font-family: 'Nunito', 'Trebuchet MS', sans-serif;
 }
@@ -266,7 +266,7 @@ onUnmounted(() => {
 
 /* Type variants */
 .infobar-info {
-  background: #f0e4ff; border-color: #c4a0e8; color: #7b5ea7;
+  background: #2d2545; border-color: #c4a0e8; color: #b8a0d0;
 }
 .infobar-warning {
   background: #fff8e0; border-color: #e8c840; color: #8a6a10;

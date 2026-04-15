@@ -7,33 +7,33 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Paleta LootMine - Dark base + Amber accents
+        // Paleta Kawaii Dark - Purple base + Cute accents
         'bg': {
-          'primary': '#1a1b2e',
-          'secondary': '#252640',
-          'tertiary': '#2f3052',
-          'card': '#1e1f36',
+          'primary': '#1a1528',
+          'secondary': '#231d35',
+          'tertiary': '#2d2545',
+          'card': '#1f1833',
         },
         'accent': {
-          'primary': '#f59e0b',    // Amber
-          'secondary': '#d97706',  // Dark amber
-          'tertiary': '#06b6d4',   // Cyan
-          'gradient': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+          'primary': '#c4a0e8',    // Lavender
+          'secondary': '#b088d0',  // Purple
+          'tertiary': '#ffe566',   // Yellow cute
+          'gradient': 'linear-gradient(135deg, #c4a0e8 0%, #b088d0 100%)',
         },
         'text': {
-          'primary': '#ffffff',
-          'secondary': '#a1a1aa',
-          'muted': '#71717a',
+          'primary': '#f0e4ff',
+          'secondary': '#b8a0d0',
+          'muted': '#8a70a8',
         },
         'border': {
-          'DEFAULT': '#3f3f5c',
-          'light': '#4f4f6f',
+          'DEFAULT': '#4a3660',
+          'light': '#5c4578',
         },
         'status': {
-          'success': '#22c55e',
-          'warning': '#f59e0b',
-          'danger': '#ef4444',
-          'info': '#3b82f6',
+          'success': '#7cc490',
+          'warning': '#ffe566',
+          'danger': '#e87c8a',
+          'info': '#8ab4f8',
         },
         // Colores de reputación/rangos
         'rank': {
@@ -54,16 +54,18 @@ export default {
         '2xl': '1.5rem',
       },
       boxShadow: {
-        'glow': '0 0 20px rgba(245, 158, 11, 0.3)',
-        'glow-amber': '0 0 20px rgba(217, 119, 6, 0.3)',
+        'glow': '0 0 20px rgba(196, 160, 232, 0.3)',
+        'glow-amber': '0 0 20px rgba(176, 136, 208, 0.3)',
+        'glow-purple': '0 0 20px rgba(196, 160, 232, 0.4)',
         'card': '0 4px 20px rgba(0, 0, 0, 0.25)',
         'card-hover': '0 8px 30px rgba(0, 0, 0, 0.35)',
+        'kawaii': '3px 3px 0 rgba(196, 160, 232, 0.2)',
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(ellipse at center, var(--tw-gradient-stops))',
-        'gradient-primary': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-        'gradient-secondary': 'linear-gradient(135deg, #06b6d4 0%, #f59e0b 100%)',
-        'gradient-dark': 'linear-gradient(180deg, #1a1b2e 0%, #252640 100%)',
+        'gradient-primary': 'linear-gradient(135deg, #c4a0e8 0%, #b088d0 100%)',
+        'gradient-secondary': 'linear-gradient(135deg, #ffe566 0%, #c4a0e8 100%)',
+        'gradient-dark': 'linear-gradient(180deg, #1a1528 0%, #231d35 100%)',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -73,8 +75,8 @@ export default {
       },
       keyframes: {
         glow: {
-          'from': { boxShadow: '0 0 10px rgba(245, 158, 11, 0.3)' },
-          'to': { boxShadow: '0 0 25px rgba(245, 158, 11, 0.5)' },
+          'from': { boxShadow: '0 0 10px rgba(196, 160, 232, 0.3)' },
+          'to': { boxShadow: '0 0 25px rgba(196, 160, 232, 0.5)' },
         },
         float: {
           '0%, 100%': { transform: 'translateY(0)' },

@@ -181,8 +181,8 @@ async function handleRetry() {
 
 .app-skel {
   position: fixed; inset: 0; z-index: 50;
-  background: #f8e8f0;
-  background-image: radial-gradient(circle, #e8c8d8 1.5px, transparent 1.5px);
+  background: #1a1528;
+  background-image: radial-gradient(circle, #2d2545 1.5px, transparent 1.5px);
   background-size: 20px 20px;
   font-family: 'Nunito', 'Trebuchet MS', sans-serif;
   overflow: hidden;
@@ -190,7 +190,7 @@ async function handleRetry() {
 .app-skel-topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0.8rem 1.5rem;
-  background: #fff; border-bottom: 2px solid #c4a0e8;
+  background: #1f1833; border-bottom: 2px solid #4a3660;
 }
 .app-skel-brand { display: flex; align-items: center; gap: 8px; }
 .app-skel-body {
@@ -198,11 +198,11 @@ async function handleRetry() {
   display: flex; flex-direction: column; gap: 1rem;
 }
 .app-skel-card {
-  background: #fff; border: 2px solid #d0b8e8; border-radius: 14px;
-  padding: 1.2rem; box-shadow: 2px 2px 0 #e8d0f0;
+  background: #1f1833; border: 2px solid #4a3660; border-radius: 14px;
+  padding: 1.2rem; box-shadow: 2px 2px 0 rgba(74,54,96,0.3);
 }
 .app-skel-block {
-  background: linear-gradient(90deg, #e8d8f4 25%, #f0e4fa 50%, #e8d8f4 75%);
+  background: linear-gradient(90deg, #2d2545 25%, #3a2d50 50%, #2d2545 75%);
   background-size: 200% 100%;
   animation: app-skel-shimmer 1.5s ease infinite;
   border-radius: 6px; height: 12px;

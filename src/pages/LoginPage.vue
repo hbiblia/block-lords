@@ -61,20 +61,20 @@ async function handleGoogleLogin() {
 
 .login-page {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
-  background: #f8e8f0;
-  background-image: radial-gradient(circle, #e8c8d8 1.5px, transparent 1.5px);
+  background: #1a1528;
+  background-image: radial-gradient(circle, #2d2545 1.5px, transparent 1.5px);
   background-size: 20px 20px;
   padding: 2rem;
   font-family: 'Nunito', 'Trebuchet MS', sans-serif;
 }
 .login-card {
-  background: #fff; border: 2px solid #c4a0e8; border-radius: 16px;
-  box-shadow: 4px 4px 0 #e8d0f0; padding: 2.5rem 2rem;
+  background: #1f1833; border: 2px solid #4a3660; border-radius: 16px;
+  box-shadow: 4px 4px 0 rgba(74,54,96,0.3); padding: 2.5rem 2rem;
   max-width: 400px; width: 100%; text-align: center;
 }
 .login-icon { font-size: 3rem; margin-bottom: 0.8rem; }
-.login-title { font-size: 1.6rem; font-weight: 900; color: #4a3a5c; margin: 0 0 0.4rem; }
-.login-sub { font-size: 0.85rem; color: #9a80b8; margin: 0 0 1.5rem; }
+.login-title { font-size: 1.6rem; font-weight: 900; color: #f0e4ff; margin: 0 0 0.4rem; }
+.login-sub { font-size: 0.85rem; color: #8a70a8; margin: 0 0 1.5rem; }
 .login-error {
   background: #fff0f0; border: 2px solid #ff7b7b; border-radius: 8px;
   padding: 8px 14px; margin-bottom: 1rem;
@@ -82,12 +82,12 @@ async function handleGoogleLogin() {
 }
 .login-google {
   width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
-  padding: 14px; background: #fff; border: 2px solid #d0b8e8;
-  color: #4a3a5c; font-size: 0.9rem; font-weight: 800;
+  padding: 14px; background: #1f1833; border: 2px solid #5c4578;
+  color: #f0e4ff; font-size: 0.9rem; font-weight: 800;
   font-family: 'Nunito', sans-serif; cursor: pointer;
-  transition: 0.2s; border-radius: 10px; box-shadow: 2px 2px 0 #e8d0f0;
+  transition: 0.2s; border-radius: 10px; box-shadow: 2px 2px 0 rgba(74,54,96,0.3);
 }
 .login-google:hover { border-color: #b088d0; box-shadow: 3px 3px 0 #d8c0ee; transform: translateY(-2px); }
 .login-google:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-.login-terms { font-size: 0.65rem; color: #9a80b8; margin-top: 1.2rem; }
+.login-terms { font-size: 0.65rem; color: #8a70a8; margin-top: 1.2rem; }
 </style>

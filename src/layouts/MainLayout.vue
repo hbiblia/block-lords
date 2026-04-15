@@ -261,7 +261,7 @@ async function handleConnectionClick() {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col" style="background: #f8e8f0; background-image: radial-gradient(circle, #e8c8d8 1.5px, transparent 1.5px); background-size: 20px 20px;">
+  <div class="min-h-screen flex flex-col" style="background: #1a1528; background-image: radial-gradient(circle, #2d2545 1.5px, transparent 1.5px); background-size: 20px 20px;">
     <!-- InfoBar (announcements) -->
     <InfoBar />
 
@@ -627,7 +627,7 @@ async function handleConnectionClick() {
         </div>
         <div class="ft-links">
           <a
-            href="https://discord.gg/vFK8mB58"
+            href="https://discord.gg/dJKQDfxE"
             target="_blank"
             rel="noopener noreferrer"
             class="ft-link-btn"
@@ -651,26 +651,26 @@ async function handleConnectionClick() {
 .simple-topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0.8rem 1.5rem;
-  background: #fff;
-  border-bottom: 2px solid #c4a0e8;
+  background: #1f1833;
+  border-bottom: 2px solid #4a3660;
   font-family: 'Nunito', 'Trebuchet MS', sans-serif;
 }
 .stb-brand {
-  font-size: 1rem; font-weight: 900; color: #4a3a5c;
+  font-size: 1rem; font-weight: 900; color: #f0e4ff;
   letter-spacing: 2px; text-decoration: none;
 }
-.stb-brand:hover { color: #7b5ea7; }
+.stb-brand:hover { color: #c4a0e8; }
 .stb-actions { display: flex; align-items: center; gap: 0.5rem; }
 .stb-lang {
-  background: #f8f2ff; border: 2px solid #d0b8e8; border-radius: 8px;
+  background: #231d35; border: 2px solid #4a3660; border-radius: 8px;
   padding: 6px 12px; cursor: pointer; font-size: 0.7rem; font-weight: 800;
-  color: #7b5ea7; font-family: 'Nunito', sans-serif; transition: 0.2s;
+  color: #b8a0d0; font-family: 'Nunito', sans-serif; transition: 0.2s;
 }
-.stb-lang:hover { background: #ffe97a; border-color: #d4a017; color: #4a3a5c; }
+.stb-lang:hover { background: rgba(255,229,102,0.1); border-color: #ffe566; color: #ffe566; }
 .stb-play {
   background: #ffe566; border: 2px outset #d4a017; border-radius: 8px;
   padding: 6px 16px; font-size: 0.7rem; font-weight: 900;
-  color: #4a3a5c; font-family: 'Nunito', sans-serif; letter-spacing: 1.5px;
+  color: #1a1528; font-family: 'Nunito', sans-serif; letter-spacing: 1.5px;
   text-decoration: none; transition: 0.2s;
 }
 .stb-play:hover { background: #ffd700; border-style: inset; }
@@ -684,7 +684,7 @@ async function handleConnectionClick() {
 }
 .ft-line {
   height: 2px;
-  background: linear-gradient(90deg, transparent 0%, #e8d0f0 20%, #c4a0e8 50%, #e8d0f0 80%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, #3a2d50 20%, #4a3660 50%, #3a2d50 80%, transparent 100%);
 }
 .ft-inner {
   padding: 1.5rem 1rem;
@@ -695,10 +695,10 @@ async function handleConnectionClick() {
   font-size: 0.6rem; font-weight: 900; color: #c4a0e8; letter-spacing: 3px;
 }
 .ft-tagline {
-  font-size: 0.75rem; font-weight: 800; color: #7b5ea7; letter-spacing: 0.5px; margin: 0;
+  font-size: 0.75rem; font-weight: 800; color: #b8a0d0; letter-spacing: 0.5px; margin: 0;
 }
 .ft-desc {
-  font-size: 0.65rem; font-weight: 600; color: #9a80b8; max-width: 350px; line-height: 1.5; margin: 0;
+  font-size: 0.65rem; font-weight: 600; color: #8a70a8; max-width: 350px; line-height: 1.5; margin: 0;
 }
 .ft-links {
   display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; justify-content: center;
@@ -706,26 +706,26 @@ async function handleConnectionClick() {
 .ft-link-btn {
   display: inline-flex; align-items: center; gap: 0.35rem;
   padding: 0.35rem 0.8rem;
-  font-size: 0.65rem; font-weight: 800; color: #7b5ea7;
+  font-size: 0.65rem; font-weight: 800; color: #b8a0d0;
   letter-spacing: 1px;
-  text-decoration: none; background: #fff;
-  border: 2px solid #d0b8e8;
+  text-decoration: none; background: #1f1833;
+  border: 2px solid #4a3660;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   font-family: 'Nunito', sans-serif;
 }
 .ft-link-btn:hover {
-  color: #4a3a5c; border-color: #d4a017;
-  background: #ffe97a;
+  color: #ffe566; border-color: #ffe566;
+  background: rgba(255,229,102,0.1);
 }
 .ft-link-svg { width: 0.75rem; height: 0.75rem; }
 .ft-disclaimer {
-  font-size: 0.55rem; font-weight: 600; color: #9a80b8; font-style: italic;
+  font-size: 0.55rem; font-weight: 600; color: #8a70a8; font-style: italic;
   max-width: 400px; line-height: 1.4; margin: 0;
 }
 .ft-copy {
-  font-size: 0.55rem; font-weight: 900; color: #9a80b8; letter-spacing: 2px;
+  font-size: 0.55rem; font-weight: 900; color: #8a70a8; letter-spacing: 2px;
   font-family: 'Nunito', sans-serif; margin: 0;
 }
 

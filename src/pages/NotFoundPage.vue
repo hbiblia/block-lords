@@ -20,24 +20,24 @@ const { t } = useI18n();
 
 .nf-page {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
-  background: #f8e8f0;
-  background-image: radial-gradient(circle, #e8c8d8 1.5px, transparent 1.5px);
+  background: #1a1528;
+  background-image: radial-gradient(circle, #2d2545 1.5px, transparent 1.5px);
   background-size: 20px 20px;
   padding: 2rem;
   font-family: 'Nunito', 'Trebuchet MS', sans-serif;
 }
 .nf-card {
-  background: #fff; border: 2px solid #c4a0e8; border-radius: 16px;
-  box-shadow: 4px 4px 0 #e8d0f0; padding: 3rem 2rem;
+  background: #1f1833; border: 2px solid #4a3660; border-radius: 16px;
+  box-shadow: 4px 4px 0 rgba(74,54,96,0.3); padding: 3rem 2rem;
   max-width: 400px; width: 100%; text-align: center;
 }
-.nf-icon { font-size: 3rem; color: #d0b8e8; margin-bottom: 0.5rem; }
+.nf-icon { font-size: 3rem; color: #5c4578; margin-bottom: 0.5rem; }
 .nf-code { font-size: 3rem; font-weight: 900; color: #c4a0e8; margin: 0 0 0.5rem; letter-spacing: 4px; }
-.nf-msg { font-size: 0.9rem; color: #9a80b8; margin: 0 0 1.5rem; }
+.nf-msg { font-size: 0.9rem; color: #8a70a8; margin: 0 0 1.5rem; }
 .nf-btn {
   display: inline-block; padding: 12px 30px;
   background: #ffe566; border: 2px outset #d4a017;
-  color: #4a3a5c; font-size: 0.85rem; font-weight: 900;
+  color: #1a1528; font-size: 0.85rem; font-weight: 900;
   font-family: 'Nunito', sans-serif; letter-spacing: 1px;
   text-decoration: none; border-radius: 10px; transition: 0.2s;
 }

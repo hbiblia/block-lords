@@ -724,6 +724,16 @@ export default {
     message: 'Page not found',
     backHome: 'Back to home',
   },
+  maintenance: {
+    title: 'Under Maintenance',
+    description: 'We are improving the mines of Block Lords to offer you a better experience. We will be back very soon.',
+    status: 'Working hard',
+    stateLabel: 'Status',
+    stateValue: 'Updating',
+    timeLabel: 'Est. Time',
+    timeValue: 'Unknown',
+    contact: 'Discord'
+  },
 
   usernameSetup: {
     title: '🎮 Create your Character',
