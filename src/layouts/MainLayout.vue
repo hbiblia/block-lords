@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, ref, provide, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-// import { useRoute } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useGameTickStore } from '@/stores/game-tick';
 import { useStreakStore } from '@/stores/streak';
@@ -71,9 +71,11 @@ import MailModal from '@/components/MailModal.vue';
 import MiningGuide from '@/components/MiningGuide.vue';
 import RewardCelebration from '@/components/RewardCelebration.vue';
 
-// const route = useRoute();
+const route = useRoute();
 const authStore = useAuthStore();
 const gameTickStore = useGameTickStore();
+
+const isMaintenancePage = computed(() => route.name === 'maintenance');
 
 // Hide navbar on home page when not authenticated
 // const showNavBar = computed(() => authStore.isAuthenticated || route.path !== '/');
@@ -263,13 +265,13 @@ async function handleConnectionClick() {
 <template>
   <div class="min-h-screen flex flex-col" style="background: #1a1528; background-image: radial-gradient(circle, #2d2545 1.5px, transparent 1.5px); background-size: 20px 20px;">
     <!-- InfoBar (announcements) -->
-    <InfoBar />
+    <InfoBar v-if="!isMaintenancePage" />
 
     <!-- Update Notification Modal -->
     <UpdateNotificationModal />
 
     <!-- Simple Top Bar -->
-    <div class="simple-topbar">
+    <div v-if="!isMaintenancePage" class="simple-topbar">
       <RouterLink to="/" class="stb-brand">⛏️ LOOTMINE</RouterLink>
       <div class="stb-actions">
         <button class="stb-lang" @click="toggleLocale()">
@@ -377,7 +379,7 @@ async function handleConnectionClick() {
 
     <!-- Mobile Bottom Action Bar (disabled - integrated in MiningPageV2) -->
     <div
-      v-if="false"
+      v-if="false && !isMaintenancePage"
       class="fixed bottom-0 left-0 right-0 z-40 sm:left-auto sm:right-4 sm:w-auto"
     >
       <!-- Connection Status (mobile, above action bar) -->
@@ -462,7 +464,7 @@ async function handleConnectionClick() {
       </div>
 
       <!-- Desktop Floating Cards -->
-      <div class="hidden sm:flex flex-col justify-end gap-2 pb-4">
+      <div v-if="!isMaintenancePage" class="hidden sm:flex flex-col justify-end gap-2 pb-4">
         <transition
           enter-active-class="transition-all duration-200 ease-out"
           leave-active-class="transition-all duration-200 ease-in"
@@ -617,7 +619,7 @@ async function handleConnectionClick() {
     </div>
 
     <!-- Footer -->
-    <footer class="ft-root">
+    <footer v-if="!isMaintenancePage" class="ft-root">
       <div class="ft-line"></div>
       <div class="ft-inner">
         <div class="ft-brand">

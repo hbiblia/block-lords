@@ -1132,6 +1132,12 @@ onMounted(async () => {
             ➕ Nuevo Anuncio
           </button>
           <button
+            @click="router.push('/maintenance')"
+            class="px-4 py-2 rounded-lg font-medium bg-amber-600 hover:bg-amber-700 transition-colors flex items-center gap-2 text-sm border border-amber-400"
+          >
+            <span>🔧</span> Previsualizar Mant.
+          </button>
+          <button
             @click="openUpdateModal"
             class="px-4 py-2 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm border border-blue-400"
           >
